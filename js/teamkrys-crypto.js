@@ -1,0 +1,208 @@
+/**
+ * TeamKrys — Chiffrement AES-GCM (Web Crypto)
+ * -------------------------------------------
+ * Utilise l'API Web Crypto native du navigateur :
+ *   - algorithme AES-GCM
+ *   - clé AES de 256 bits (importée depuis la clé Base64 commune)
+ *   - IV aléatoire de 12 octets, régénéré à CHAQUE chiffrement
+ *   - encodage Base64 de l'IV et du ciphertext
+ *
+ * Ce module est isomorphe : il fonctionne dans le navigateur (Apps Script
+ * HtmlService) et dans Node 18+ (tests), car les deux exposent `crypto.subtle`.
+ */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) {
+    module.exports = api;
+  }
+  root.TeamKrysCrypto = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var ALGORITHM = 'AES-GCM';
+  var IV_LENGTH = 12; // 96 bits, recommandé pour AES-GCM.
+  var FORMAT = 'teamkrys-encrypted-state';
+
+  // Résolution du fournisseur Web Crypto (navigateur ou Node).
+  function getSubtle() {
+    var c = (typeof crypto !== 'undefined' && crypto) ||
+      (typeof globalThis !== 'undefined' && globalThis.crypto);
+    if (!c || !c.subtle) {
+      throw new Error('Web Crypto (crypto.subtle) indisponible dans cet environnement.');
+    }
+    return c;
+  }
+
+  var textEncoder = new TextEncoder();
+  var textDecoder = new TextDecoder();
+
+  // --- Encodage / décodage Base64 <-> octets ------------------------------
+
+  function bytesToBase64(bytes) {
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(bytes).toString('base64');
+    }
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBytes(base64) {
+    if (typeof Buffer !== 'undefined') {
+      return new Uint8Array(Buffer.from(base64, 'base64'));
+    }
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  function randomBytes(length) {
+    return getSubtle().getRandomValues(new Uint8Array(length));
+  }
+
+  // --- Clé -----------------------------------------------------------------
+
+  /**
+   * Importe la clé AES-256 depuis sa représentation Base64.
+   * @param {string} base64Key clé de 32 octets encodée en Base64.
+   * @returns {Promise<CryptoKey>}
+   */
+  function importKey(base64Key) {
+    var raw = base64ToBytes(base64Key);
+    if (raw.length !== 32) {
+      return Promise.reject(new Error(
+        'Clé AES invalide : ' + raw.length + ' octets au lieu de 32.'));
+    }
+    return getSubtle().subtle.importKey(
+      'raw',
+      raw,
+      { name: ALGORITHM },
+      false, // non exportable
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  // --- Chiffrement / déchiffrement bas niveau ------------------------------
+
+  /**
+   * Chiffre un texte UTF-8 avec un nouvel IV aléatoire.
+   * @returns {Promise<{iv: string, ciphertext: string}>} en Base64.
+   */
+  function encryptText(plaintext, base64Key) {
+    return importKey(base64Key).then(function (key) {
+      var iv = randomBytes(IV_LENGTH);
+      var data = textEncoder.encode(plaintext);
+      return getSubtle().subtle
+        .encrypt({ name: ALGORITHM, iv: iv }, key, data)
+        .then(function (buffer) {
+          return {
+            iv: bytesToBase64(iv),
+            ciphertext: bytesToBase64(new Uint8Array(buffer))
+          };
+        });
+    });
+  }
+
+  /**
+   * Déchiffre un ciphertext Base64 vers un texte UTF-8.
+   * Rejette si l'IV, le ciphertext ou la clé sont altérés (AES-GCM authentifié).
+   * @returns {Promise<string>}
+   */
+  function decryptText(ivBase64, ciphertextBase64, base64Key) {
+    return importKey(base64Key).then(function (key) {
+      var iv = base64ToBytes(ivBase64);
+      var ciphertext = base64ToBytes(ciphertextBase64);
+      return getSubtle().subtle
+        .decrypt({ name: ALGORITHM, iv: iv }, key, ciphertext)
+        .then(function (buffer) {
+          return textDecoder.decode(buffer);
+        });
+    });
+  }
+
+  // --- Objets métier -------------------------------------------------------
+
+  /**
+   * Chiffre un objet d'état (sérialisé en JSON) avec un nouvel IV.
+   * @returns {Promise<{iv: string, ciphertext: string}>}
+   */
+  function encryptState(stateObject, base64Key) {
+    var json;
+    try {
+      json = JSON.stringify(stateObject);
+    } catch (e) {
+      return Promise.reject(new Error('État non sérialisable en JSON.'));
+    }
+    return encryptText(json, base64Key);
+  }
+
+  /**
+   * Déchiffre puis parse un objet d'état.
+   * @returns {Promise<Object>}
+   */
+  function decryptState(ivBase64, ciphertextBase64, base64Key) {
+    return decryptText(ivBase64, ciphertextBase64, base64Key).then(function (json) {
+      return JSON.parse(json);
+    });
+  }
+
+  // --- Enveloppe -----------------------------------------------------------
+
+  /**
+   * Construit l'enveloppe chiffrée stockée sur Drive.
+   * Les métadonnées techniques restent en clair ; seules les données métier
+   * (dans le ciphertext) sont chiffrées.
+   */
+  function buildEnvelope(opts) {
+    return {
+      format: FORMAT,
+      envelopeVersion: opts.envelopeVersion,
+      schemaVersion: opts.schemaVersion,
+      revision: opts.revision,
+      updatedAt: opts.updatedAt,
+      encryption: {
+        algorithm: ALGORITHM,
+        iv: opts.iv,
+        ciphertext: opts.ciphertext
+      }
+    };
+  }
+
+  /**
+   * Valide la structure d'une enveloppe (sans la déchiffrer).
+   * @returns {boolean}
+   */
+  function isValidEnvelope(env) {
+    return !!env &&
+      env.format === FORMAT &&
+      typeof env.envelopeVersion === 'number' &&
+      typeof env.schemaVersion === 'number' &&
+      typeof env.revision === 'number' &&
+      typeof env.updatedAt === 'string' &&
+      !!env.encryption &&
+      env.encryption.algorithm === ALGORITHM &&
+      typeof env.encryption.iv === 'string' &&
+      typeof env.encryption.ciphertext === 'string';
+  }
+
+  return {
+    ALGORITHM: ALGORITHM,
+    IV_LENGTH: IV_LENGTH,
+    FORMAT: FORMAT,
+    bytesToBase64: bytesToBase64,
+    base64ToBytes: base64ToBytes,
+    randomBytes: randomBytes,
+    importKey: importKey,
+    encryptText: encryptText,
+    decryptText: decryptText,
+    encryptState: encryptState,
+    decryptState: decryptState,
+    buildEnvelope: buildEnvelope,
+    isValidEnvelope: isValidEnvelope
+  };
+});

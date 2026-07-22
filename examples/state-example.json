@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-07-01T09:00:00.000Z",
+  "topics": [
+    {
+      "id": "3f1c2b7a-1111-4a2b-9c3d-000000000001",
+      "title": "Horaires d'ouverture de l'été",
+      "description": "Discutons des horaires du magasin pour juillet-août.",
+      "createdBy": "a1000000-0000-4000-8000-000000000001",
+      "createdAt": "2026-07-01T09:05:00.000Z",
+      "messages": [
+        {
+          "id": "b1000000-0000-4000-8000-000000000001",
+          "body": "Je propose d'ouvrir plus tôt le samedi.",
+          "authorId": "a1000000-0000-4000-8000-000000000001",
+          "createdAt": "2026-07-01T09:06:00.000Z"
+        }
+      ],
+      "proposals": [
+        {
+          "id": "c1000000-0000-4000-8000-000000000001",
+          "title": "Ouverture 8h le samedi",
+          "authorId": "a1000000-0000-4000-8000-000000000001",
+          "createdAt": "2026-07-01T09:07:00.000Z",
+          "votes": [
+            { "participantId": "a1000000-0000-4000-8000-000000000001", "value": "up", "at": "2026-07-01T09:08:00.000Z" },
+            { "participantId": "a1000000-0000-4000-8000-000000000002", "value": "down", "at": "2026-07-01T09:10:00.000Z" }
+          ]
+        }
+      ]
+    }
+  ],
+  "participants": [
+    { "id": "a1000000-0000-4000-8000-000000000001", "displayName": "Alice", "firstSeenAt": "2026-07-01T09:00:00.000Z" },
+    { "id": "a1000000-0000-4000-8000-000000000002", "displayName": "Bruno", "firstSeenAt": "2026-07-01T09:09:00.000Z" }
+  ],
+  "history": [
+    {
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "at": "2026-07-01T09:05:00.000Z",
+      "participantId": "a1000000-0000-4000-8000-000000000001",
+      "action": "topic.create",
+      "details": { "topicId": "3f1c2b7a-1111-4a2b-9c3d-000000000001" }
+    }
+  ]
+}

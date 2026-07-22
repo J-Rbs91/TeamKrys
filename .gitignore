@@ -1,0 +1,16 @@
+# Dépendances
+node_modules/
+
+# clasp : contient le scriptId privé — ne pas versionner
+.clasp.json
+.clasprc.json
+
+# Ne jamais versionner de données réelles / sauvegardes de production
+*.enc.json
+!examples/*.enc.json
+teamkrys-data*.json
+backups/
+
+# Divers
+.DS_Store
+*.log

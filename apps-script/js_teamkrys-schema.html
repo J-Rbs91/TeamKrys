@@ -1,0 +1,133 @@
+<!-- FICHIER GÉNÉRÉ — ne pas éditer à la main.
+     Source : js/teamkrys-schema.js — régénérer avec `npm run build`. -->
+<script>
+/**
+ * TeamKrys — Schéma des données métier & validation
+ * -------------------------------------------------
+ * Décrit l'état déchiffré manipulé par l'application : topics, discussions,
+ * propositions, votes, participants et historique des actions.
+ *
+ * La validation reste volontairement légère (petite équipe de confiance) :
+ * elle vérifie la forme des données pour attraper une corruption / une
+ * incompatibilité de version, pas pour se défendre contre un attaquant.
+ */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) {
+    module.exports = api;
+  }
+  root.TeamKrysSchema = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var SCHEMA_VERSION = 1;
+
+  /**
+   * Construit un état initial vide et valide.
+   * @param {string} createdAt date ISO 8601.
+   */
+  function createEmptyState(createdAt) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      createdAt: createdAt,
+      topics: [],        // { id, title, description, createdBy, createdAt, messages, proposals }
+      participants: [],  // { id, displayName, firstSeenAt }
+      history: []        // { id, at, participantId, action, details }
+    };
+  }
+
+  function isString(v) { return typeof v === 'string'; }
+  function isArray(v) { return Array.isArray(v); }
+  function isObject(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+  function validateMessage(m, path, errors) {
+    if (!isObject(m)) { errors.push(path + ' : message invalide'); return; }
+    if (!isString(m.id)) errors.push(path + '.id manquant');
+    if (!isString(m.body)) errors.push(path + '.body manquant');
+    if (!isString(m.authorId)) errors.push(path + '.authorId manquant');
+    if (!isString(m.createdAt)) errors.push(path + '.createdAt manquant');
+  }
+
+  function validateVote(v, path, errors) {
+    if (!isObject(v)) { errors.push(path + ' : vote invalide'); return; }
+    if (!isString(v.participantId)) errors.push(path + '.participantId manquant');
+    // value : libre (par ex. "up"/"down" ou une note). On vérifie juste la présence.
+    if (typeof v.value === 'undefined') errors.push(path + '.value manquant');
+  }
+
+  function validateProposal(p, path, errors) {
+    if (!isObject(p)) { errors.push(path + ' : proposition invalide'); return; }
+    if (!isString(p.id)) errors.push(path + '.id manquant');
+    if (!isString(p.title)) errors.push(path + '.title manquant');
+    if (!isString(p.authorId)) errors.push(path + '.authorId manquant');
+    if (!isString(p.createdAt)) errors.push(path + '.createdAt manquant');
+    if (!isArray(p.votes)) {
+      errors.push(path + '.votes doit être un tableau');
+    } else {
+      p.votes.forEach(function (v, i) { validateVote(v, path + '.votes[' + i + ']', errors); });
+    }
+  }
+
+  function validateTopic(t, path, errors) {
+    if (!isObject(t)) { errors.push(path + ' : topic invalide'); return; }
+    if (!isString(t.id)) errors.push(path + '.id manquant');
+    if (!isString(t.title)) errors.push(path + '.title manquant');
+    if (!isString(t.description)) errors.push(path + '.description manquant');
+    if (!isString(t.createdBy)) errors.push(path + '.createdBy manquant');
+    if (!isString(t.createdAt)) errors.push(path + '.createdAt manquant');
+    if (!isArray(t.messages)) {
+      errors.push(path + '.messages doit être un tableau');
+    } else {
+      t.messages.forEach(function (m, i) { validateMessage(m, path + '.messages[' + i + ']', errors); });
+    }
+    if (!isArray(t.proposals)) {
+      errors.push(path + '.proposals doit être un tableau');
+    } else {
+      t.proposals.forEach(function (p, i) { validateProposal(p, path + '.proposals[' + i + ']', errors); });
+    }
+  }
+
+  function validateParticipant(p, path, errors) {
+    if (!isObject(p)) { errors.push(path + ' : participant invalide'); return; }
+    if (!isString(p.id)) errors.push(path + '.id manquant');
+    if (!isString(p.displayName)) errors.push(path + '.displayName manquant');
+  }
+
+  /**
+   * Valide un état complet.
+   * @returns {{valid: boolean, errors: string[]}}
+   */
+  function validateState(state) {
+    var errors = [];
+    if (!isObject(state)) {
+      return { valid: false, errors: ['état absent ou non-objet'] };
+    }
+    if (state.schemaVersion !== SCHEMA_VERSION) {
+      errors.push('schemaVersion incompatible : ' + state.schemaVersion +
+        ' (attendu ' + SCHEMA_VERSION + ')');
+    }
+    if (!isArray(state.topics)) {
+      errors.push('topics doit être un tableau');
+    } else {
+      state.topics.forEach(function (t, i) { validateTopic(t, 'topics[' + i + ']', errors); });
+    }
+    if (!isArray(state.participants)) {
+      errors.push('participants doit être un tableau');
+    } else {
+      state.participants.forEach(function (p, i) {
+        validateParticipant(p, 'participants[' + i + ']', errors);
+      });
+    }
+    if (!isArray(state.history)) {
+      errors.push('history doit être un tableau');
+    }
+    return { valid: errors.length === 0, errors: errors };
+  }
+
+  return {
+    SCHEMA_VERSION: SCHEMA_VERSION,
+    createEmptyState: createEmptyState,
+    validateState: validateState
+  };
+});
+</script>

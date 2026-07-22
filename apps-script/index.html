@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <?!= include('styles'); ?>
+  </head>
+  <body>
+    <header class="tk-header">
+      <h1>TeamKrys</h1>
+      <div class="tk-identity">
+        <span>Vous : <strong id="tk-current-name">…</strong></span>
+        <button id="tk-rename" type="button">Changer de nom</button>
+      </div>
+    </header>
+
+    <main class="tk-main">
+      <p id="tk-error" class="tk-error-banner" hidden></p>
+
+      <section class="tk-new">
+        <h2>Nouveau sujet</h2>
+        <form id="tk-new-topic">
+          <input id="tk-topic-title" type="text" placeholder="Titre du sujet" required />
+          <textarea id="tk-topic-desc" placeholder="Description (facultatif)"></textarea>
+          <button type="submit">Créer</button>
+        </form>
+      </section>
+
+      <section class="tk-list">
+        <h2>Sujets</h2>
+        <div id="tk-topics"><p class="tk-empty">Chargement…</p></div>
+      </section>
+    </main>
+
+    <footer class="tk-footer">
+      <p>
+        Application interne — les données sont chiffrées côté navigateur.
+        La clé est publique : ce chiffrement n'est pas un contrôle d'accès
+        (voir la documentation).
+      </p>
+    </footer>
+
+    <!-- Modules front-end (ordre = ordre de dépendance) -->
+    <?!= include('js_teamkrys-config'); ?>
+    <?!= include('js_teamkrys-crypto'); ?>
+    <?!= include('js_teamkrys-schema'); ?>
+    <?!= include('js_teamkrys-participant'); ?>
+    <?!= include('js_teamkrys-app'); ?>
+  </body>
+</html>

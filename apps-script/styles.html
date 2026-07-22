@@ -1,0 +1,59 @@
+<style>
+  :root {
+    --tk-bg: #f6f7f9;
+    --tk-card: #ffffff;
+    --tk-ink: #1f2933;
+    --tk-muted: #6b7280;
+    --tk-accent: #2563eb;
+    --tk-border: #e5e7eb;
+    --tk-danger: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--tk-ink);
+    background: var(--tk-bg);
+    line-height: 1.5;
+  }
+  .tk-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.5rem;
+    padding: 1rem 1.5rem; background: var(--tk-card);
+    border-bottom: 1px solid var(--tk-border);
+  }
+  .tk-header h1 { margin: 0; font-size: 1.4rem; }
+  .tk-identity { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
+  .tk-main { max-width: 780px; margin: 0 auto; padding: 1.5rem; }
+  h2 { font-size: 1.1rem; }
+  form { display: flex; flex-direction: column; gap: 0.5rem; max-width: 480px; }
+  input, textarea {
+    padding: 0.5rem; border: 1px solid var(--tk-border); border-radius: 6px;
+    font: inherit;
+  }
+  textarea { min-height: 60px; resize: vertical; }
+  button {
+    padding: 0.4rem 0.9rem; border: 1px solid var(--tk-accent);
+    background: var(--tk-accent); color: #fff; border-radius: 6px;
+    cursor: pointer; font: inherit;
+  }
+  button:hover { filter: brightness(1.05); }
+  .tk-vote { background: #fff; color: var(--tk-accent); padding: 0.15rem 0.5rem; }
+  .tk-topic {
+    background: var(--tk-card); border: 1px solid var(--tk-border);
+    border-radius: 8px; padding: 1rem; margin-bottom: 1rem;
+  }
+  .tk-topic h3 { margin-top: 0; }
+  .tk-topic h4 { margin-bottom: 0.25rem; color: var(--tk-muted); font-size: 0.85rem; text-transform: uppercase; }
+  .tk-topic ul { margin: 0 0 0.75rem; padding-left: 1.2rem; }
+  .tk-votes { color: var(--tk-muted); font-size: 0.85rem; margin: 0 0.4rem; }
+  .tk-empty { color: var(--tk-muted); font-style: italic; }
+  .tk-error-banner {
+    background: #fee2e2; color: var(--tk-danger);
+    border: 1px solid #fecaca; border-radius: 6px; padding: 0.6rem 0.8rem;
+  }
+  .tk-footer {
+    max-width: 780px; margin: 0 auto; padding: 1rem 1.5rem 2rem;
+    color: var(--tk-muted); font-size: 0.8rem;
+  }
+</style>

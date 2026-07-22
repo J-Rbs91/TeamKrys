@@ -1,0 +1,17 @@
+{
+  "name": "teamkrys",
+  "version": "1.0.0",
+  "description": "Application interne de discussion / propositions / votes, chiffrée côté navigateur (AES-GCM) et stockée sur Google Drive via Apps Script.",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "node scripts/build-includes.js",
+    "build:check": "node scripts/build-includes.js --check",
+    "gen:envelope": "node scripts/gen-initial-envelope.js",
+    "test": "node tests/run.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

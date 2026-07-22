@@ -1,0 +1,12 @@
+{
+  "format": "teamkrys-encrypted-state",
+  "envelopeVersion": 1,
+  "schemaVersion": 1,
+  "revision": 0,
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "encryption": {
+    "algorithm": "AES-GCM",
+    "iv": "oemwpM7iExFLvd74",
+    "ciphertext": "cZre2svGtFcUHo1gqWzGp8UIivRqSUewkzxCWDXcH35QLtlTkFVj628rKZTU9m19EDFJapuDkYiUFxC+0c5oIA7LhHDQUHbBo+ViUnePIENU6eBDVGsowhdd7gGVyggFZWuaSvFwG7Ra38CNAb3vXTLtHTOY"
+  }
+}
