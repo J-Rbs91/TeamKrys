@@ -209,6 +209,7 @@ const UI = (function () {
         type: "search",
         class: "input",
         placeholder: "Rechercher un sujet…",
+        "aria-label": "Rechercher un sujet",
         value: listState.search,
         "data-draft": "home-search",
         oninput: function (e) {
@@ -219,6 +220,7 @@ const UI = (function () {
     );
     const statusSel = el("select", {
       class: "select",
+      "aria-label": "Filtrer par statut",
       onchange: function (e) {
         listState.status = e.target.value;
         forceRerender();
@@ -232,6 +234,7 @@ const UI = (function () {
     ]);
     const sortSel = el("select", {
       class: "select",
+      "aria-label": "Trier les sujets",
       onchange: function (e) {
         listState.sort = e.target.value;
         forceRerender();
@@ -370,14 +373,12 @@ const UI = (function () {
       });
       descInput.value = t.description || "";
       return el("div", { class: "card" }, [
-        el("label", { class: "field-label", text: "Titre" }),
-        titleInput,
-        el("label", { class: "field-label", text: "Description" }),
-        descInput,
+        field("Titre", titleInput),
+        field("Description", descInput),
         el("div", { class: "row-actions" }, [
           el("button", { class: "btn btn-primary", onclick: function () {
             const title = Utils.clean(titleInput.value);
-            if (Utils.isBlank(title)) return toast("Le titre est obligatoire.", "error");
+            if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
             App.actions.updateTopic(t.id, title, Utils.clean(descInput.value));
             openEditors.delete(key);
             forceRerender();
@@ -446,7 +447,7 @@ const UI = (function () {
     if (openEditors.has(key) && isMine) {
       const ta = el("textarea", {
         class: "textarea", rows: 3, maxlength: Utils.LIMITS.message,
-        "data-draft": "edit-msg-" + m.id,
+        "aria-label": "Modifier le message", "data-draft": "edit-msg-" + m.id,
       });
       ta.value = m.text;
       return el("div", { class: "message editing" }, [
@@ -454,7 +455,7 @@ const UI = (function () {
         el("div", { class: "row-actions" }, [
           el("button", { class: "btn btn-sm btn-primary", onclick: function () {
             const text = Utils.clean(ta.value);
-            if (Utils.isBlank(text)) return toast("Le message est vide.", "error");
+            if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
             App.actions.updateMessage(t.id, m.id, text);
             openEditors.delete(key);
             forceRerender();
@@ -489,13 +490,13 @@ const UI = (function () {
   function newMessageForm(t) {
     const ta = el("textarea", {
       class: "textarea", rows: 2, placeholder: "Écrire un message…",
-      maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id,
+      "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id,
     });
     return el("div", { class: "new-message" }, [
       ta,
       el("button", { class: "btn btn-primary", onclick: function () {
         const text = Utils.clean(ta.value);
-        if (Utils.isBlank(text)) return toast("Le message est vide.", "error");
+        if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
         App.actions.createMessage(t.id, text);
         ta.value = "";
         forceRerender();
@@ -533,14 +534,12 @@ const UI = (function () {
         "data-draft": "edit-prop-desc-" + p.id,
       });
       descInput.value = p.description || "";
-      card.appendChild(el("label", { class: "field-label", text: "Titre" }));
-      card.appendChild(titleInput);
-      card.appendChild(el("label", { class: "field-label", text: "Description" }));
-      card.appendChild(descInput);
+      field("Titre", titleInput).forEach(function (n) { card.appendChild(n); });
+      field("Description", descInput).forEach(function (n) { card.appendChild(n); });
       card.appendChild(el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-sm btn-primary", onclick: function () {
           const title = Utils.clean(titleInput.value);
-          if (Utils.isBlank(title)) return toast("Le titre est obligatoire.", "error");
+          if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
           App.actions.updateProposal(t.id, p.id, title, Utils.clean(descInput.value));
           openEditors.delete(key);
           forceRerender();
@@ -623,6 +622,7 @@ const UI = (function () {
   function proposalStatusSelect(t, p) {
     const sel = el("select", {
       class: "select select-sm",
+      "aria-label": "Statut de la proposition",
       onchange: function (e) { App.actions.changeProposalStatus(t.id, p.id, e.target.value); },
     });
     Utils.PROPOSAL_STATUSES.forEach(function (st) {
@@ -637,6 +637,7 @@ const UI = (function () {
     const ta = el("textarea", {
       class: "textarea", rows: 5, maxlength: Utils.LIMITS.conclusion,
       placeholder: "Résumé des discussions, décisions attendues, actions…",
+      "aria-label": "Conclusion du sujet",
       "data-draft": "conclusion-" + t.id,
     });
     ta.value = t.conclusion || "";
@@ -781,12 +782,11 @@ const UI = (function () {
     });
     wrap.appendChild(el("div", { class: "card" }, [
       el("h2", { text: "Votre identité" }),
-      el("label", { class: "field-label", text: "Prénom" }),
-      nameInput,
+      field("Prénom", nameInput),
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-primary", onclick: function () {
           const name = Utils.clean(nameInput.value);
-          if (Utils.isBlank(name)) return toast("Le prénom est obligatoire.", "error");
+          if (Utils.isBlank(name)) return markInvalid(nameInput, "Le prénom est obligatoire.");
           App.updateProfileName(name);
           toast("Prénom mis à jour.", "ok");
         } }, "Enregistrer"),
@@ -865,11 +865,11 @@ const UI = (function () {
     const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, placeholder: "Titre du sujet" });
     const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription, placeholder: "Décrivez le problème, l'idée ou la question…" });
     modal("Nouveau sujet", [
-      el("label", { class: "field-label", text: "Titre" }), titleInput,
-      el("label", { class: "field-label", text: "Description" }), descInput,
+      field("Titre", titleInput),
+      field("Description", descInput),
     ], function () {
       const title = Utils.clean(titleInput.value);
-      if (Utils.isBlank(title)) { toast("Le titre est obligatoire.", "error"); return false; }
+      if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
       const id = App.actions.createTopic(title, Utils.clean(descInput.value));
       App.navigate("#/topic/" + id);
       return true;
@@ -882,11 +882,11 @@ const UI = (function () {
     const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.proposalDescription, placeholder: "Décrivez la solution…" });
     if (prefillDesc) descInput.value = prefillDesc;
     modal("Nouvelle proposition", [
-      el("label", { class: "field-label", text: "Titre" }), titleInput,
-      el("label", { class: "field-label", text: "Description" }), descInput,
+      field("Titre", titleInput),
+      field("Description", descInput),
     ], function () {
       const title = Utils.clean(titleInput.value);
-      if (Utils.isBlank(title)) { toast("Le titre est obligatoire.", "error"); return false; }
+      if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
       App.actions.createProposal(topicId, title, Utils.clean(descInput.value));
       forceRerender();
       return true;
@@ -895,7 +895,7 @@ const UI = (function () {
   }
 
   function askProfileName(onDone) {
-    const input = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, placeholder: "Votre prénom" });
+    const input = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, placeholder: "Votre prénom", "aria-label": "Votre prénom" });
     const overlay = el("div", { class: "modal-overlay" }, [
       el("div", { class: "modal" }, [
         el("h2", { text: "Bienvenue sur TeamKrys" }),
@@ -904,7 +904,7 @@ const UI = (function () {
         el("div", { class: "row-actions" }, [
           el("button", { class: "btn btn-primary", onclick: function () {
             const name = Utils.clean(input.value);
-            if (Utils.isBlank(name)) return toast("Merci d'indiquer un prénom.", "error");
+            if (Utils.isBlank(name)) return markInvalid(input, "Merci d'indiquer un prénom.");
             document.body.removeChild(overlay);
             onDone(name);
           } }, "Commencer"),
@@ -951,6 +951,36 @@ const UI = (function () {
   }
 
   // --- Petits composants ----------------------------------------------------
+
+  // Associe un <label> à son champ (attributs for/id) pour l'accessibilité.
+  let fieldSeq = 0;
+  function field(labelText, inputNode) {
+    if (!inputNode.id) inputNode.id = "fld-" + (++fieldSeq);
+    return [el("label", { class: "field-label", for: inputNode.id, text: labelText }), inputNode];
+  }
+
+  // Signale un champ invalide : message inline sous le champ (pas de toast
+  // trompeur), attributs ARIA, focus, effacement à la prochaine saisie.
+  function markInvalid(input, message) {
+    if (!input.id) input.id = "fld-" + (++fieldSeq);
+    input.classList.add("invalid");
+    input.setAttribute("aria-invalid", "true");
+    input.setAttribute("aria-describedby", input.id + "-err");
+    let err = input.nextSibling && input.nextSibling.className === "field-error" ? input.nextSibling : null;
+    if (!err) {
+      err = el("span", { class: "field-error", id: input.id + "-err", role: "alert" });
+      if (input.parentNode) input.parentNode.insertBefore(err, input.nextSibling);
+    }
+    err.textContent = message;
+    input.focus();
+    input.addEventListener("input", function clearInvalid() {
+      input.classList.remove("invalid");
+      input.removeAttribute("aria-invalid");
+      if (err) err.textContent = "";
+      input.removeEventListener("input", clearInvalid);
+    });
+    return false;
+  }
 
   function option(value, label, current) {
     const o = el("option", { value: value, text: label });

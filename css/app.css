@@ -82,6 +82,15 @@ html, body {
 .page-head h1 { font-size: 1.4rem; margin: 0; }
 
 h1, h2, h3, h4 { line-height: 1.25; }
+/* Les titres et textes doivent casser les mots trop longs (URL, références)
+   pour ne jamais provoquer de débordement horizontal sur mobile. */
+h1, h2, h3, h4,
+.card-title, .topic-title, .proposal-title, .prop-line-title,
+.card-desc, .message-body, .topic-desc, .proposal-desc, .pre {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.card-title, .topic-title, .proposal-title { min-width: 0; }
 .section-title { font-size: 1.1rem; margin: .5rem 0 -.25rem; color: var(--grey-700); }
 
 /* --- Cartes -------------------------------------------------------------- */
@@ -112,7 +121,9 @@ h1, h2, h3, h4 { line-height: 1.25; }
   color: var(--grey-900); font-size: .92rem; font-weight: 600; cursor: pointer;
 }
 .btn:hover { background: var(--grey-50); }
-.btn-sm { min-height: 36px; padding: .35rem .6rem; font-size: .85rem; }
+/* min-height à la cible tactile (44px) même pour les petits boutons ;
+   l'aspect "petit" reste porté par le padding et la taille de police. */
+.btn-sm { min-height: var(--tap); padding: .4rem .7rem; font-size: .85rem; }
 .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
 .btn-primary:hover { background: var(--blue-dark); }
 .btn-outline { background: var(--blue-soft); border-color: #bcd6fb; color: var(--blue-dark); }
@@ -124,11 +135,14 @@ h1, h2, h3, h4 { line-height: 1.25; }
 /* --- Formulaires --------------------------------------------------------- */
 
 .input, .textarea, .select {
-  width: 100%; padding: .6rem .7rem; border: 1px solid var(--grey-300);
+  width: 100%; min-height: var(--tap); padding: .6rem .7rem; border: 1px solid var(--grey-300);
   border-radius: 8px; font: inherit; color: var(--grey-900); background: var(--white);
 }
-.textarea { resize: vertical; min-height: 44px; }
+.textarea { resize: vertical; min-height: 64px; }
 .input:focus, .textarea:focus, .select:focus { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
+.input.invalid, .textarea.invalid { border-color: var(--red); outline-color: var(--red); }
+.field-error { display: block; color: var(--red); font-size: .8rem; font-weight: 600; margin-top: .2rem; }
+.field-error:empty { display: none; }
 .field-label { font-size: .82rem; font-weight: 600; color: var(--grey-500); }
 .field-label.inline { display: inline; margin-right: .3rem; }
 .select-sm { width: auto; padding: .35rem .5rem; }
@@ -196,7 +210,8 @@ h1, h2, h3, h4 { line-height: 1.25; }
 .ind-split { background: #fdf5e3; color: var(--amber); }
 .ind-majority-against { background: #fdeeee; color: var(--red); }
 .ind-none { background: var(--grey-100); color: var(--grey-500); }
-.vote-buttons { display: flex; gap: .4rem; flex-wrap: wrap; }
+.vote-buttons { display: flex; gap: .45rem; flex-wrap: wrap; }
+.vote-btn { min-height: var(--tap); padding: .5rem .95rem; }
 .vote-btn.active { color: #fff; }
 .vote-btn.vote-for { background: var(--green); border-color: var(--green); }
 .vote-btn.vote-against { background: var(--red); border-color: var(--red); }
@@ -217,8 +232,8 @@ h1, h2, h3, h4 { line-height: 1.25; }
 .prop-line-ind { font-size: .78rem; font-weight: 700; align-self: flex-start; padding: .1rem .4rem; border-radius: 6px; }
 .chip {
   border: 1px solid var(--grey-300); background: var(--white); border-radius: 999px;
-  padding: .4rem .7rem; font-size: .82rem; font-weight: 600; cursor: pointer; color: var(--grey-700);
-  min-height: 38px;
+  padding: .4rem .8rem; font-size: .82rem; font-weight: 600; cursor: pointer; color: var(--grey-700);
+  min-height: var(--tap);
 }
 .chip.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 

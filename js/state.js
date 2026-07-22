@@ -303,13 +303,18 @@ const State = (function () {
   }
 
   function indicator(forCount, against, total) {
+    // Aucun vote du tout.
     if (total === 0) return { key: "none", label: "Aucun vote" };
-    if (against === 0 && forCount > 0) return { key: "consensus", label: "Consensus favorable" };
-    if (forCount > against && Math.abs(forCount - against) > 1)
-      return { key: "majority-for", label: "Majorité favorable" };
-    if (against > forCount && Math.abs(against - forCount) > 1)
-      return { key: "majority-against", label: "Majorité défavorable" };
-    return { key: "split", label: "Avis partagés" };
+    var expressed = forCount + against; // hors abstentions
+    // Personne n'a exprimé Pour/Contre (uniquement des abstentions).
+    if (expressed === 0) return { key: "split", label: "Avis partagés" };
+    // Tous les votes exprimés sont favorables.
+    if (against === 0) return { key: "consensus", label: "Consensus favorable" };
+    // Égalité stricte entre Pour et Contre.
+    if (forCount === against) return { key: "split", label: "Avis partagés" };
+    // Majorité simple (le pourcentage favorable affiché reste cohérent).
+    if (forCount > against) return { key: "majority-for", label: "Majorité favorable" };
+    return { key: "majority-against", label: "Majorité défavorable" };
   }
 
   return {
