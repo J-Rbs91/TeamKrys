@@ -113,7 +113,17 @@ Résumé :
 
 ## Renseigner l'URL de l'API
 
-Ouvrez `js/config.js` et renseignez l'URL obtenue :
+**Le plus simple (recommandé, sans toucher au code) :** ouvrez l'application,
+allez dans **Paramètres → Connexion à l'équipe**, collez l'URL du script
+(terminant par `/exec`) dans le champ **« URL du script »**, puis cliquez
+**« Enregistrer et connecter »**. L'URL est mémorisée dans le navigateur et
+l'indicateur passe de « Mode local » à « À jour ». Un bouton **« Retirer »**
+permet de revenir au mode local. Chaque collaborateur saisit l'URL une fois sur
+son appareil.
+
+**Alternative (valeur par défaut pour tous) :** définissez l'URL dans
+`js/config.js` avant de publier, afin qu'elle soit préremplie pour tout le
+monde :
 
 ```js
 const CONFIG = {
@@ -122,7 +132,7 @@ const CONFIG = {
 };
 ```
 
-Rechargez l'application : l'indicateur passe de « Mode local » à « À jour ».
+> L'URL saisie dans les Paramètres est prioritaire sur celle de `config.js`.
 
 > Le fichier de **production** `teamkrys-data.json` n'est **pas** versionné
 > (voir `.gitignore`). Il vit uniquement dans votre Google Drive.

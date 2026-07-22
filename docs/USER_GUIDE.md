@@ -9,6 +9,15 @@ en discuter, proposer des solutions, voter et conclure — le tout au même endr
 afficher qui a écrit quoi. Vous pouvez le modifier à tout moment dans
 **Paramètres**.
 
+## Connecter l'application à l'équipe
+
+Pour partager les sujets avec vos collègues, il faut renseigner **une fois**
+l'URL du script (fournie par la personne qui a installé le backend) :
+**Paramètres → Connexion à l'équipe → collez l'URL dans « URL du script » →
+« Enregistrer et connecter »**. Un message confirme la connexion. Tant que ce
+n'est pas fait, une bannière « Application non connectée » s'affiche et les
+données restent locales à votre appareil.
+
 ## Créer un sujet
 
 1. Écran **Sujets** → bouton **« + Nouveau sujet »**.

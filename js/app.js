@@ -14,7 +14,12 @@ const App = (function () {
   function boot() {
     UI.mount(document.getElementById("app"));
 
-    DB.metaGet("profile").then(function (profile) {
+    // L'URL de l'API renseignée par l'utilisateur (Paramètres) est prioritaire
+    // sur la valeur par défaut de config.js.
+    DB.metaGet("apiUrl").then(function (url) {
+      if (url && String(url).trim()) CONFIG.API_URL = String(url).trim();
+      return DB.metaGet("profile");
+    }).then(function (profile) {
       if (profile && profile.id) {
         app.profile = profile;
         start(false);
@@ -27,6 +32,22 @@ const App = (function () {
         });
       }
     });
+  }
+
+  // Enregistre l'URL de l'API saisie par l'utilisateur, la persiste, et relance
+  // la synchronisation. Renvoie une promesse de test de connexion.
+  function setApiUrl(url) {
+    const clean = Utils.clean(url);
+    CONFIG.API_URL = clean;
+    return DB.metaSet("apiUrl", clean).then(function () {
+      Sync.emit();
+      if (CONFIG.isConfigured()) return Sync.syncNow();
+    });
+  }
+
+  function clearApiUrl() {
+    CONFIG.API_URL = "";
+    return DB.metaSet("apiUrl", "").then(function () { Sync.emit(); });
   }
 
   function start(isNewProfile) {
@@ -197,6 +218,8 @@ const App = (function () {
     boot: boot,
     navigate: navigate,
     updateProfileName: updateProfileName,
+    setApiUrl: setApiUrl,
+    clearApiUrl: clearApiUrl,
     applyUpdate: applyUpdate,
     get profile() { return app.profile; },
     get route() { return app.route; },

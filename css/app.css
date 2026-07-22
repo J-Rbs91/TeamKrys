@@ -249,6 +249,13 @@ h1, h2, h3, h4,
 
 .empty { text-align: center; color: var(--grey-500); padding: 2rem 1rem; background: var(--white); border: 1px dashed var(--grey-300); border-radius: var(--radius); }
 .banner { display: flex; align-items: center; justify-content: space-between; gap: .5rem; background: var(--blue-soft); border: 1px solid #bcd6fb; color: var(--blue-dark); padding: .6rem .8rem; border-radius: var(--radius); font-weight: 600; font-size: .9rem; }
+.banner-warn { background: #fdf5e3; border-color: #f0d9a6; color: var(--amber); }
+
+/* Carte de connexion à l'API (Paramètres) */
+.api-card { border-color: #bcd6fb; }
+.conn-status { font-size: .85rem; font-weight: 600; margin: 0; color: var(--grey-500); overflow-wrap: anywhere; }
+.conn-status.conn-ok { color: var(--green); }
+.conn-status.conn-err { color: var(--red); }
 
 /* --- Modales ------------------------------------------------------------- */
 

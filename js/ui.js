@@ -201,6 +201,7 @@ const UI = (function () {
     );
 
     if (updateAvailable) wrap.appendChild(updateBanner());
+    if (!CONFIG.isConfigured()) wrap.appendChild(connectBanner());
 
     // Filtres
     const controls = el("div", { class: "controls" });
@@ -775,6 +776,9 @@ const UI = (function () {
 
     if (updateAvailable) wrap.appendChild(updateBanner());
 
+    // Connexion à l'équipe (URL du script Apps Script)
+    wrap.appendChild(renderApiSettings());
+
     // Profil
     const nameInput = el("input", {
       class: "input", type: "text", maxlength: Utils.LIMITS.name,
@@ -813,6 +817,73 @@ const UI = (function () {
         ? "API configurée." : "API non configurée : mode local uniquement (voir README)." }),
     ]));
     return wrap;
+  }
+
+  function renderApiSettings() {
+    const urlInput = el("input", {
+      class: "input", type: "url", inputmode: "url", autocomplete: "off",
+      placeholder: "https://script.google.com/macros/s/…/exec",
+      "aria-label": "URL du script Google Apps Script",
+      value: CONFIG.API_URL || "",
+      "data-draft": "api-url",
+    });
+    // La ligne d'état reflète l'état réel de synchronisation (cohérent avec
+    // l'indicateur en haut), pas seulement "une URL est saisie".
+    const st = Sync.getStatus();
+    let cls = "conn-status", txt;
+    if (!CONFIG.isConfigured()) {
+      txt = "Non connecté (mode local).";
+    } else if (st.key === "up-to-date") {
+      cls += " conn-ok"; txt = "Connecté ✓ — synchronisé.";
+    } else if (st.key === "syncing" || st.key === "pending") {
+      cls += " conn-ok"; txt = "Connecté — synchronisation…";
+    } else if (st.key === "error") {
+      cls += " conn-err"; txt = "Erreur de connexion — vérifiez l'URL et le déploiement du script.";
+    } else if (st.key === "offline") {
+      txt = "URL enregistrée — hors connexion pour le moment.";
+    } else {
+      txt = "URL enregistrée.";
+    }
+    const statusLine = el("p", { class: cls, id: "api-conn-status", text: txt });
+
+    function save() {
+      const url = Utils.clean(urlInput.value);
+      if (Utils.isBlank(url) || url.slice(0, 4) !== "http") {
+        return markInvalid(urlInput, "Collez l'URL du script (elle commence par https:// et finit par /exec).");
+      }
+      statusLine.className = "conn-status";
+      statusLine.textContent = "Connexion en cours…";
+      // On enregistre l'URL, puis on teste la connexion ; enfin on rafraîchit la
+      // vue pour afficher l'état réel (l'indicateur en haut fait foi).
+      App.setApiUrl(url)
+        .then(function () { return Api.getRevision(); })
+        .then(function (info) {
+          toast("Connecté ✓ (révision " + (info && info.revision != null ? info.revision : "?") + ").", "ok");
+        })
+        .catch(function (e) {
+          toast("Échec de connexion : " + (e && e.message ? e.message : "vérifiez l'URL."), "error");
+        })
+        .then(function () { forceRerender(); });
+    }
+
+    return el("div", { class: "card api-card" }, [
+      el("h2", { text: "Connexion à l'équipe" }),
+      el("p", { class: "muted small", text:
+        "Collez l'URL de votre script Google Apps Script (déployé en application Web, se terminant par « /exec ») pour partager les sujets avec l'équipe. Sans cette URL, l'application reste en mode local sur cet appareil." }),
+      field("URL du script (…/exec)", urlInput),
+      statusLine,
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-primary", onclick: save }, "Enregistrer et connecter"),
+        CONFIG.isConfigured()
+          ? el("button", { class: "btn btn-ghost", onclick: function () {
+              App.clearApiUrl().then(function () {
+                toast("Connexion retirée (mode local).", "ok");
+                forceRerender();
+              });
+            } }, "Retirer")
+          : null,
+      ]),
+    ]);
   }
 
   function diagnosticsBlock(status) {
@@ -854,6 +925,13 @@ const UI = (function () {
     return el("div", { class: "banner no-print" }, [
       el("span", { text: "Une nouvelle version de TeamKrys est disponible." }),
       el("button", { class: "btn btn-sm btn-primary", onclick: function () { App.applyUpdate(); } }, "Mettre à jour"),
+    ]);
+  }
+
+  function connectBanner() {
+    return el("div", { class: "banner banner-warn no-print" }, [
+      el("span", { text: "Application non connectée à l'équipe (mode local)." }),
+      el("button", { class: "btn btn-sm btn-primary", onclick: function () { App.navigate("#/settings"); } }, "Connecter"),
     ]);
   }
 

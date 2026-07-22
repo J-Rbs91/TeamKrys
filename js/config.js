@@ -24,4 +24,4 @@ CONFIG.isConfigured = function () {
   return typeof CONFIG.API_URL === "string" && CONFIG.API_URL.trim().startsWith("http");
 };
 
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.2";
