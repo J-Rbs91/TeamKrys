@@ -1,0 +1,12 @@
+# Ne jamais versionner les données de production.
+teamkrys-data.json
+
+# Fichiers système / éditeurs
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# Dépendances éventuelles (l'application n'en utilise aucune)
+node_modules/
