@@ -5,29 +5,37 @@ en discuter, proposer des solutions, voter et conclure — le tout au même endr
 
 ## Première ouverture
 
-À la première ouverture, indiquez votre **prénom**. Il sert uniquement à
-afficher qui a écrit quoi. Vous pouvez le modifier à tout moment dans
-**Paramètres**.
+À la première ouverture, deux écrans s'enchaînent :
 
-## Connecter l'application à l'équipe
-
-Pour partager les sujets avec vos collègues, il faut renseigner **une fois**
-l'URL du script (fournie par la personne qui a installé le backend) :
-**Paramètres → Connexion à l'équipe → collez l'URL dans « URL du script » →
-« Enregistrer et connecter »**. Un message confirme la connexion. Tant que ce
-n'est pas fait, une bannière « Application non connectée » s'affiche et les
-données restent locales à votre appareil.
+1. **Connexion à l'équipe** : collez l'**URL du script** (fournie par la personne
+   qui a installé le backend) puis **« Enregistrer et continuer »**. Vous pouvez
+   aussi **« Continuer sans connexion (mode local) »** pour tester seul.
+2. **Nom d'utilisateur** : choisissez le nom qui signera vos messages. Modifiable
+   ensuite dans **Réglages** (icône ⚙ en haut à droite).
 
 ## Créer un sujet
 
-1. Écran **Sujets** → bouton **« + Nouveau sujet »**.
-2. Saisissez un **titre** et, si besoin, une **description** (le problème,
-   l'idée ou la question).
-3. Validez : vous arrivez sur la page du sujet.
+- **Aucun sujet ?** Le bouton **« Ajouter un sujet »** est au milieu de l'écran.
+- **Des sujets existent ?** Utilisez le bouton rond **« + »** en bas à droite.
+
+Une fenêtre s'ouvre avec trois champs :
+
+1. **Titre** (obligatoire) ;
+2. **Description** (facultative) ;
+3. **Nom** : pré-rempli avec le vôtre ; laissez-le vide pour publier en
+   **« Anonyme »**.
+
+Validez : vous arrivez sur l'écran **débat** du sujet.
+
+## L'écran débat
+
+Sélectionner un sujet ouvre l'écran **débat**, titré du nom du sujet. On y
+échange des messages, on propose des solutions et on vote. Deux accès mènent au
+travail de **Gemini** : **Résumé** et **Conclusion** (voir plus bas).
 
 ## Participer à une discussion
 
-Sur la page d'un sujet, sous **Discussion** :
+Sur l'écran débat, sous **Discussion** :
 
 - écrivez un message dans le champ en bas et cliquez **Publier** ;
 - vous pouvez **modifier vos propres messages** (mention « modifié ») ;
@@ -56,19 +64,37 @@ Chacun peut ajuster le **statut** d'une proposition : Solution retenue, À
 débattre en réunion, À mettre en œuvre, Solution écartée. TeamKrys repose sur la
 confiance : pas d'administrateur, pas de permissions.
 
-## Rédiger une conclusion
+## Résumé (Gemini)
 
-Sous **Conclusion**, résumez ce qui ressort : solutions retenues, points à
-débattre, décisions attendues, actions. Le texte est modifiable par tous ; la
-date et l'auteur de la dernière modification sont affichés. Quand le sujet est
-prêt, cliquez **« Marquer prêt pour la réunion »**.
+Depuis l'écran débat, ouvrez **Résumé**. Cliquez **« Générer avec Gemini »** :
+Gemini travaille **dans une feuille Google Sheets** pour résumer le point de vue
+de **chaque collaborateur** à partir de ses messages. Ce n'est **pas
+instantané** : revenez et cliquez **« ↻ Rafraîchir »** pour afficher les résumés
+(une carte par personne).
+
+## Conclusion (Gemini) et vote
+
+Depuis l'écran débat, ouvrez **Conclusion**. **« Générer avec Gemini »** regroupe
+et reformule les **propositions** du débat en plusieurs conclusions ; après un
+court instant, **« ↻ Rafraîchir »** les affiche.
+
+- **Votez** pour la conclusion que vous préférez (un seul choix ; voter pour une
+  autre déplace votre vote). La mieux votée porte l'étiquette **« En tête »**.
+- **« Ajouter une conclusion »** permet d'en proposer une à la main ; vous pouvez
+  la **modifier** ou la **supprimer** (vos conclusions uniquement).
+- Un nouveau **Rafraîchir** met à jour les conclusions de Gemini **sans effacer
+  les votes** déjà exprimés.
+
+> Gemini nécessite que l'application soit **connectée à l'équipe** et que la
+> fonction `=AI()` de Google Sheets soit disponible pour le compte du script.
+> En mode local, les boutons Gemini sont désactivés.
 
 ## Préparer la réunion
 
-Écran **Réunion** : synthèse de tous les sujets (conclusion, propositions
-retenues / à débattre / à mettre en œuvre, résultats des votes, points sans
-décision). Des **filtres** aident à cibler. Le bouton **« Imprimer la
-synthèse »** produit une feuille propre, sans boutons ni navigation.
+Depuis **Réglages → « Ouvrir la préparation de réunion »** : synthèse de tous les
+sujets (conclusion en tête des votes, propositions retenues / à débattre,
+résultats des votes). Des **filtres** aident à cibler. Le bouton **« Imprimer »**
+produit une feuille propre, sans boutons ni navigation.
 
 ## Savoir si l'application est synchronisée
 
@@ -79,7 +105,7 @@ Le bandeau en haut affiche en permanence l'état :
 - **Modifications en attente** : des actions locales restent à envoyer ;
 - **Hors connexion** : pas de réseau ;
 - **Erreur de synchronisation** : réessayez avec **« Synchroniser maintenant »**
-  (dans Paramètres) ;
+  (dans Réglages) ;
 - **Mode local** : l'URL de l'API n'est pas configurée.
 
 ## Hors connexion

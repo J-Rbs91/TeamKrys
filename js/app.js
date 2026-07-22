@@ -9,25 +9,62 @@ const App = (function () {
     actions: {},
   };
 
-  // --- Démarrage ------------------------------------------------------------
+  // --- Démarrage & accueil (onboarding) -------------------------------------
+
+  var LOCAL_ACCEPTED_KEY = "teamkrys.localAccepted";
+  var pendingNewProfile = false;
+
+  function localAccepted() {
+    try {
+      return window.localStorage.getItem(LOCAL_ACCEPTED_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setLocalAccepted() {
+    try {
+      window.localStorage.setItem(LOCAL_ACCEPTED_KEY, "1");
+    } catch (e) { /* stockage indisponible */ }
+  }
 
   function boot() {
     UI.mount(document.getElementById("app"));
 
     // L'URL de l'API a déjà été chargée depuis le localStorage par config.js.
     DB.metaGet("profile").then(function (profile) {
-      if (profile && profile.id) {
-        app.profile = profile;
-        start(false);
-      } else {
-        UI.askProfileName(function (name) {
-          app.profile = { id: Utils.uuid(), name: name };
-          DB.metaSet("profile", app.profile).then(function () {
-            start(true);
-          });
-        });
-      }
+      if (profile && profile.id) app.profile = profile;
+      resumeOnboarding();
     });
+  }
+
+  /**
+   * Séquence d'accueil demandée :
+   *   1) coller l'URL du script (ou choisir le mode local) ;
+   *   2) saisir le nom d'utilisateur ;
+   *   3) écran principal.
+   */
+  function resumeOnboarding() {
+    if (!CONFIG.isConfigured() && !localAccepted()) {
+      UI.showOnboardingUrl({
+        onSaved: function () { resumeOnboarding(); },
+        onLocal: function () { setLocalAccepted(); resumeOnboarding(); },
+      });
+      return;
+    }
+    if (!app.profile) {
+      UI.showOnboardingName(function (name) {
+        app.profile = { id: Utils.uuid(), name: name };
+        pendingNewProfile = true;
+        DB.metaSet("profile", app.profile).then(function () {
+          resumeOnboarding();
+        });
+      });
+      return;
+    }
+    var isNew = pendingNewProfile;
+    pendingNewProfile = false;
+    start(isNew);
   }
 
   // Enregistre l'URL de l'API saisie par l'utilisateur (uniquement dans le
@@ -47,6 +84,7 @@ const App = (function () {
   }
 
   function start(isNewProfile) {
+    UI.reveal();
     Sync.init({
       onChange: function (data) { UI.renderData(data); },
       onStatus: function (status) { UI.renderStatus(status); },
@@ -91,8 +129,12 @@ const App = (function () {
   function parseRoute() {
     const hash = location.hash || "#/";
     const parts = hash.replace(/^#\/?/, "").split("/");
-    if (parts[0] === "topic" && parts[1]) app.route = { name: "topic", id: decodeURIComponent(parts[1]) };
-    else if (parts[0] === "meeting") app.route = { name: "meeting", id: null };
+    if (parts[0] === "topic" && parts[1]) {
+      const id = decodeURIComponent(parts[1]);
+      if (parts[2] === "summary") app.route = { name: "summary", id: id };
+      else if (parts[2] === "conclusion") app.route = { name: "conclusion", id: id };
+      else app.route = { name: "topic", id: id };
+    } else if (parts[0] === "meeting") app.route = { name: "meeting", id: null };
     else if (parts[0] === "settings") app.route = { name: "settings", id: null };
     else app.route = { name: "home", id: null };
   }
@@ -123,9 +165,9 @@ const App = (function () {
   }
 
   app.actions = {
-    createTopic: function (title, description) {
+    createTopic: function (title, description, authorName) {
       const id = Utils.uuid();
-      dispatch("CREATE_TOPIC", { topicId: id, title: title, description: description });
+      dispatch("CREATE_TOPIC", { topicId: id, title: title, description: description, authorName: authorName });
       return id;
     },
     updateTopic: function (topicId, title, description) {
@@ -160,6 +202,48 @@ const App = (function () {
     updateConclusion: function (topicId, conclusion) {
       dispatch("UPDATE_CONCLUSION", { topicId: topicId, conclusion: conclusion });
     },
+    addConclusion: function (topicId, text) {
+      const id = Utils.uuid();
+      dispatch("ADD_CONCLUSION", { topicId: topicId, conclusionId: id, text: text });
+      return id;
+    },
+    updateConclusionItem: function (topicId, conclusionId, text) {
+      dispatch("UPDATE_CONCLUSION_ITEM", { topicId: topicId, conclusionId: conclusionId, text: text });
+    },
+    deleteConclusion: function (topicId, conclusionId) {
+      dispatch("DELETE_CONCLUSION", { topicId: topicId, conclusionId: conclusionId });
+    },
+    setConclusionVote: function (topicId, conclusionId) {
+      dispatch("SET_CONCLUSION_VOTE", { topicId: topicId, conclusionId: conclusionId });
+    },
+    removeConclusionVote: function (topicId) {
+      dispatch("REMOVE_CONCLUSION_VOTE", { topicId: topicId });
+    },
+  };
+
+  // --- Générations Gemini (feuille Google Sheet) ----------------------------
+
+  // Envoie d'abord la file d'actions en attente (pour que le serveur dispose
+  // des derniers messages / propositions), puis déclenche la génération ou la
+  // relecture. L'état renvoyé par le serveur devient la nouvelle base.
+  function ai(op, kind, topicId) {
+    if (!Api.isConfigured()) {
+      return Promise.resolve({ ok: false, error: "not-configured" });
+    }
+    return Sync.pushQueue()
+      .then(function () { return Api.postAi(op, kind, topicId); })
+      .then(function (res) {
+        if (res && res.state) Sync.ingestState(res.state);
+        return { ok: true, ai: res && res.ai };
+      })
+      .catch(function (e) {
+        return { ok: false, error: (e && e.message) || "Erreur IA." };
+      });
+  }
+
+  app.ai = {
+    generate: function (topicId, kind) { return ai("generate", kind, topicId); },
+    refresh: function (topicId, kind) { return ai("refresh", kind, topicId); },
   };
 
   // --- Service worker & mises à jour ----------------------------------------
@@ -220,6 +304,7 @@ const App = (function () {
     get profile() { return app.profile; },
     get route() { return app.route; },
     actions: app.actions,
+    ai: app.ai,
   };
 })();
 

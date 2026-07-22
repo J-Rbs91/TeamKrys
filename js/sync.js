@@ -50,6 +50,20 @@ const Sync = (function () {
     return viewState;
   }
 
+  /**
+   * Intègre un état renvoyé par le serveur (ex. réponse d'un appel IA) comme
+   * nouvelle base autoritaire, puis reconstruit la vue (base + file locale).
+   */
+  function ingestState(state) {
+    if (state && typeof state.revision === "number") {
+      baseState = state;
+      DB.saveState(baseState);
+      rebuildView();
+      lastError = null;
+      emit();
+    }
+  }
+
   // --- Dispatch d'une action locale ----------------------------------------
 
   /**
@@ -251,6 +265,7 @@ const Sync = (function () {
   return {
     init: init,
     getData: getData,
+    ingestState: ingestState,
     dispatch: dispatch,
     pushQueue: pushQueue,
     pull: pull,

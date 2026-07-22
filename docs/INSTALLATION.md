@@ -36,8 +36,14 @@ publication du frontend avec GitHub Pages.
 4. Relancez **`setupProject`** si nécessaire. Le journal (**Exécution →
    Journaux**) doit indiquer « Fichier créé : … ».
 
-> `setupProject()` crée un dossier `TeamKrys` et le fichier
-> `teamkrys-data.json`. Il n'écrase **jamais** un fichier existant.
+> `setupProject()` crée un dossier `TeamKrys`, le fichier
+> `teamkrys-data.json` **et** le classeur Google Sheets `TeamKrys — IA (Gemini)`
+> qui sert d'atelier à Gemini. Il n'écrase **jamais** un fichier existant.
+> Le journal affiche l'URL du classeur créé.
+
+> Le manifeste [`appsscript.json`](../apps-script/appsscript.json) déclare
+> désormais **deux** autorisations : Google Drive **et** Google Sheets. Lors de
+> la première exécution de `setupProject()`, acceptez les deux.
 
 ### 1.4 Déployer en application Web
 
@@ -111,6 +117,44 @@ Au premier lancement, saisissez votre prénom. L'indicateur doit passer à
 
 ---
 
+## 2bis. Gemini dans Google Sheets (résumés & conclusions)
+
+TeamKrys délègue à **Gemini** deux tâches, réalisées **dans le classeur Google
+Sheets** créé par `setupProject()` :
+
+- **Résumé** : le point de vue de chaque collaborateur, à partir de ses messages.
+- **Conclusion** : le regroupement et la reformulation des propositions du débat
+  en 2 à 4 conclusions, ensuite **votables** dans l'application.
+
+### Comment ça marche
+
+1. Depuis un sujet, l'utilisateur ouvre **Résumé** ou **Conclusion**, puis clique
+   **« Générer avec Gemini »**.
+2. Le backend recopie les données du sujet dans un onglet dédié du classeur
+   (`TK <identifiant du sujet>`) et y insère des formules **`=AI(...)`** — la
+   fonction Gemini native de Google Sheets.
+3. Google Sheets calcule les réponses **de son côté** (ce n'est pas instantané).
+4. L'utilisateur clique **« ↻ Rafraîchir »** : le backend relit les cellules
+   calculées et réinjecte les résultats dans le JSON (résumés, conclusions).
+
+### Pré-requis Gemini
+
+- La fonction **`=AI()`** de Google Sheets doit être **disponible et activée**
+  pour le compte Google qui exécute le script (offre Google Workspace incluant
+  Gemini, ou activation de « Gemini dans Google Workspace »). Aucune clé API
+  n'est nécessaire : tout passe par la feuille.
+- Si `=AI()` n'est pas disponible, les cellules restent vides ou en erreur ;
+  l'application affiche alors « Gemini calcule encore… ». Vérifiez l'accès à
+  Gemini pour Sheets sur le compte du script.
+- Le classeur peut être ouvert manuellement (URL dans le journal de
+  `setupProject()`) pour observer le travail de Gemini.
+
+> Les onglets `TK …` sont recyclés automatiquement au-delà de 40 sujets. Les
+> résultats, eux, sont **figés dans le JSON** au moment du rafraîchissement : ils
+> ne dépendent plus de la feuille ensuite.
+
+---
+
 ## 3. Mise à jour de l'application
 
 Quand vous modifiez le code frontend :
@@ -132,3 +176,5 @@ Quand vous modifiez le code frontend :
 | Indicateur « Mode local » | `API_URL` non renseignée dans `config.js`. |
 | Erreur de synchronisation | Vérifiez `?mode=revision`, l'accès « Tout le monde », et le déploiement à jour. |
 | Le service worker ne se met pas à jour | Bumpez `CACHE_VERSION`, videz le cache, rechargez. |
+| Gemini reste « en cours » | La fonction `=AI()` n'est pas active pour le compte, ou le calcul n'est pas fini : réessayez « Rafraîchir » après quelques instants ; ouvrez le classeur pour vérifier. |
+| « Autorisation requise » après mise à jour du code | Le scope Sheets a été ajouté : relancez `setupProject()` et acceptez les autorisations Drive **et** Sheets. |

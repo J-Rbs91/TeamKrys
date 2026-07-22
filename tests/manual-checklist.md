@@ -2,11 +2,21 @@
 
 À dérouler après déploiement. Cochez au fur et à mesure.
 
+## Accueil (onboarding)
+
+- [ ] Première ouverture : écran « Connexion à l'équipe » avec champ URL.
+- [ ] Coller une URL puis « Enregistrer et continuer » → écran du nom.
+- [ ] « Continuer sans connexion (mode local) » → écran du nom directement.
+- [ ] Saisie du nom d'utilisateur → écran principal.
+- [ ] Liste vide : bouton « Ajouter un sujet » centré au milieu de l'écran.
+- [ ] Liste non vide : bouton rond « + » en bas à droite (FAB).
+- [ ] Thème sombre automatique correct (système en mode sombre).
+
 ## Fonctionnel
 
-- [ ] Première ouverture : demande du prénom, création d'un profil local.
-- [ ] Modification du prénom depuis Paramètres.
-- [ ] Création d'un sujet (titre + description).
+- [ ] Modification du nom d'utilisateur depuis Réglages.
+- [ ] Création d'un sujet (titre obligatoire, description facultative, nom).
+- [ ] Nom laissé vide → auteur affiché « Anonyme ».
 - [ ] Édition du titre et de la description d'un sujet.
 - [ ] Ajout d'un message dans la discussion.
 - [ ] Modification de son propre message (mention « modifié »).
@@ -17,11 +27,26 @@
 - [ ] Retrait d'un vote.
 - [ ] Compteurs, pourcentage et indicateur corrects (consensus, majorité…).
 - [ ] Changement de statut d'une proposition (les 5 statuts).
-- [ ] Rédaction et enregistrement d'une conclusion (auteur + date affichés).
+- [ ] Après publication d'un message, le composeur se vide.
 - [ ] Changement de statut d'un sujet (Ouvert / Prêt / Traité / Archivé).
-- [ ] Recherche, filtre par statut et tri par activité.
-- [ ] Écran Réunion : synthèse correcte, filtres.
-- [ ] Bouton « Imprimer la synthèse » : rendu propre (sans boutons/navigation).
+- [ ] Recherche (au-delà de 6 sujets) et affichage/masquage des archivés.
+- [ ] Écran Réunion (via Réglages) : synthèse correcte, filtres.
+- [ ] Bouton « Imprimer » : rendu propre (sans boutons/navigation).
+
+## Gemini (Résumé & Conclusion — nécessite l'API + Sheets)
+
+- [ ] Écran « Résumé » : bouton « Générer avec Gemini » → statut « Gemini
+      travaille ».
+- [ ] Après quelques instants, « ↻ Rafraîchir » affiche un résumé par
+      collaborateur (carte avec initiale + nom).
+- [ ] Écran « Conclusion » : « Générer avec Gemini » puis « Rafraîchir » →
+      2 à 4 conclusions issues des propositions.
+- [ ] Vote pour une conclusion (choix unique) : voter pour une autre déplace le
+      vote ; « En tête » sur la mieux votée.
+- [ ] « Ajouter une conclusion » manuelle ; modification/suppression par son
+      auteur uniquement.
+- [ ] Un nouveau « Rafraîchir » conserve les votes déjà exprimés.
+- [ ] En mode local (sans API) : boutons Gemini désactivés + message d'invite.
 
 ## Synchronisation (nécessite l'API Apps Script)
 
