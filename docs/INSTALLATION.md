@@ -73,8 +73,9 @@ Deux possibilités :
 **a) Depuis l'application (recommandé).** Ouvrez TeamKrys → **Paramètres →
 Connexion à l'équipe**, collez l'URL du script (terminant par `/exec`) dans le
 champ **« URL du script »** et cliquez **« Enregistrer et connecter »**. L'URL
-est mémorisée dans le navigateur ; un test de connexion s'affiche. Chaque
-collaborateur le fait une fois sur son appareil. (Priorité sur `config.js`.)
+est conservée **uniquement dans le `localStorage` de l'appareil** (jamais dans
+le dépôt) ; un test de connexion s'affiche. Chaque collaborateur le fait une
+fois sur son appareil. (Priorité sur `config.js`.)
 
 **b) Valeur par défaut pour tous** dans [`js/config.js`](../js/config.js) avant
 publication :

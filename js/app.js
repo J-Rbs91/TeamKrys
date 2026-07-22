@@ -14,12 +14,8 @@ const App = (function () {
   function boot() {
     UI.mount(document.getElementById("app"));
 
-    // L'URL de l'API renseignée par l'utilisateur (Paramètres) est prioritaire
-    // sur la valeur par défaut de config.js.
-    DB.metaGet("apiUrl").then(function (url) {
-      if (url && String(url).trim()) CONFIG.API_URL = String(url).trim();
-      return DB.metaGet("profile");
-    }).then(function (profile) {
+    // L'URL de l'API a déjà été chargée depuis le localStorage par config.js.
+    DB.metaGet("profile").then(function (profile) {
       if (profile && profile.id) {
         app.profile = profile;
         start(false);
@@ -34,20 +30,20 @@ const App = (function () {
     });
   }
 
-  // Enregistre l'URL de l'API saisie par l'utilisateur, la persiste, et relance
-  // la synchronisation. Renvoie une promesse de test de connexion.
+  // Enregistre l'URL de l'API saisie par l'utilisateur (uniquement dans le
+  // localStorage de l'appareil, jamais dans le dépôt) et relance la
+  // synchronisation. Renvoie une promesse permettant de tester la connexion.
   function setApiUrl(url) {
-    const clean = Utils.clean(url);
-    CONFIG.API_URL = clean;
-    return DB.metaSet("apiUrl", clean).then(function () {
-      Sync.emit();
-      if (CONFIG.isConfigured()) return Sync.syncNow();
-    });
+    CONFIG.persistApiUrl(Utils.clean(url));
+    Sync.emit();
+    if (CONFIG.isConfigured()) return Sync.syncNow();
+    return Promise.resolve();
   }
 
   function clearApiUrl() {
-    CONFIG.API_URL = "";
-    return DB.metaSet("apiUrl", "").then(function () { Sync.emit(); });
+    CONFIG.persistApiUrl("");
+    Sync.emit();
+    return Promise.resolve();
   }
 
   function start(isNewProfile) {

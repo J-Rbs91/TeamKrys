@@ -116,10 +116,11 @@ Résumé :
 **Le plus simple (recommandé, sans toucher au code) :** ouvrez l'application,
 allez dans **Paramètres → Connexion à l'équipe**, collez l'URL du script
 (terminant par `/exec`) dans le champ **« URL du script »**, puis cliquez
-**« Enregistrer et connecter »**. L'URL est mémorisée dans le navigateur et
-l'indicateur passe de « Mode local » à « À jour ». Un bouton **« Retirer »**
-permet de revenir au mode local. Chaque collaborateur saisit l'URL une fois sur
-son appareil.
+**« Enregistrer et connecter »**. L'URL est conservée **uniquement dans le
+`localStorage` de votre appareil** — elle n'est jamais écrite dans le dépôt et
+reste donc secrète. L'indicateur passe de « Mode local » à « À jour ». Un bouton
+**« Retirer »** permet de revenir au mode local. Chaque collaborateur saisit
+l'URL une fois sur son appareil.
 
 **Alternative (valeur par défaut pour tous) :** définissez l'URL dans
 `js/config.js` avant de publier, afin qu'elle soit préremplie pour tout le
