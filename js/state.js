@@ -5,6 +5,11 @@
  * à celui du backend Google Apps Script (apps-script/Code.gs). Le frontend
  * l'utilise pour appliquer les actions de manière optimiste ; le serveur
  * fait autorité.
+ *
+ * Structure « Conclusion » (remplissage manuel) :
+ *  - `topic.conclusions` : conclusions candidates ajoutées par les collaborateurs,
+ *                          sur lesquelles on peut voter (choix unique par personne).
+ *  - `topic.conclusionVotes` : { participantId: conclusionId }.
  */
 const State = (function () {
   // Libellés français des statuts.
@@ -38,6 +43,16 @@ const State = (function () {
     };
   }
 
+  // Garantit la présence des champs Conclusion (migration douce).
+  function ensureTopicShape(t) {
+    if (!t) return t;
+    if (!t.messages) t.messages = [];
+    if (!t.proposals) t.proposals = [];
+    if (!t.conclusions) t.conclusions = [];
+    if (!t.conclusionVotes) t.conclusionVotes = {};
+    return t;
+  }
+
   // --- Recherche ------------------------------------------------------------
 
   function findTopic(data, topicId) {
@@ -55,6 +70,12 @@ const State = (function () {
   function findMessage(topic, messageId) {
     return topic.messages.find(function (m) {
       return m.id === messageId;
+    });
+  }
+
+  function findConclusion(topic, conclusionId) {
+    return (topic.conclusions || []).find(function (c) {
+      return c.id === conclusionId;
     });
   }
 
@@ -90,16 +111,32 @@ const State = (function () {
         if (!findTopic(data, p.topicId)) return err("Sujet introuvable.");
         if (Utils.TOPIC_STATUSES.indexOf(p.status) === -1) return err("Statut de sujet inconnu.");
         break;
-      case "CREATE_MESSAGE":
-        if (!findTopic(data, p.topicId)) return err("Sujet introuvable.");
+      case "CREATE_MESSAGE": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
         if (!p.messageId) return err("Identifiant de message manquant.");
         if (Utils.isBlank(p.text)) return err("Le message est vide.");
+        if (p.quoteId && !findMessage(t, p.quoteId)) return err("Message cité introuvable.");
         break;
+      }
+      case "SET_MESSAGE_SIGNATURE": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findMessage(t, p.messageId)) return err("Message introuvable.");
+        break;
+      }
       case "UPDATE_MESSAGE": {
         const t = findTopic(data, p.topicId);
         if (!t) return err("Sujet introuvable.");
         if (!findMessage(t, p.messageId)) return err("Message introuvable.");
         if (Utils.isBlank(p.text)) return err("Le message est vide.");
+        break;
+      }
+      case "SET_REACTION": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findMessage(t, p.messageId)) return err("Message introuvable.");
+        if (Utils.REACTIONS.indexOf(p.emoji) === -1) return err("Réaction inconnue.");
         break;
       }
       case "CREATE_PROPOSAL":
@@ -137,6 +174,37 @@ const State = (function () {
       case "UPDATE_CONCLUSION":
         if (!findTopic(data, p.topicId)) return err("Sujet introuvable.");
         break;
+      case "ADD_CONCLUSION": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!p.conclusionId) return err("Identifiant de conclusion manquant.");
+        if (Utils.isBlank(p.text)) return err("La conclusion est vide.");
+        break;
+      }
+      case "UPDATE_CONCLUSION_ITEM": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findConclusion(t, p.conclusionId)) return err("Conclusion introuvable.");
+        if (Utils.isBlank(p.text)) return err("La conclusion est vide.");
+        break;
+      }
+      case "DELETE_CONCLUSION": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findConclusion(t, p.conclusionId)) return err("Conclusion introuvable.");
+        break;
+      }
+      case "SET_CONCLUSION_VOTE": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findConclusion(t, p.conclusionId)) return err("Conclusion introuvable.");
+        break;
+      }
+      case "REMOVE_CONCLUSION_VOTE": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        break;
+      }
       default:
         return err("Type d'action inconnu : " + action.type);
     }
@@ -170,20 +238,24 @@ const State = (function () {
         break;
       }
       case "CREATE_TOPIC":
-        data.topics.push({
+        data.topics.push(ensureTopicShape({
           id: p.topicId,
           title: p.title,
           description: p.description || "",
           status: "open",
-          createdBy: author,
+          createdBy: p.anon
+            ? { id: "", name: "Anonyme" }
+            : { id: author.id, name: p.authorName ? p.authorName : author.name },
           createdAt: at,
           updatedAt: at,
           messages: [],
           proposals: [],
+          conclusions: [],
+          conclusionVotes: {},
           conclusion: "",
           conclusionUpdatedAt: null,
           conclusionUpdatedBy: null,
-        });
+        }));
         break;
       case "UPDATE_TOPIC": {
         const t = findTopic(data, p.topicId);
@@ -207,7 +279,38 @@ const State = (function () {
           text: p.text,
           createdAt: at,
           updatedAt: null,
+          reactions: {},
+          anon: false,
+          quoteId: p.quoteId || null,
         });
+        t.updatedAt = at;
+        break;
+      }
+      case "SET_MESSAGE_SIGNATURE": {
+        const t = findTopic(data, p.topicId);
+        const m = findMessage(t, p.messageId);
+        if (p.anon) {
+          // Anonyme : on retire toute trace d'identité du message partagé.
+          m.anon = true;
+          m.authorName = "Anonyme";
+          m.authorId = "";
+        } else {
+          // Signé : on restaure l'identité de l'auteur (celui qui bascule).
+          m.anon = false;
+          m.authorName = author.name;
+          m.authorId = author.id;
+        }
+        t.updatedAt = at;
+        break;
+      }
+      case "SET_REACTION": {
+        const t = findTopic(data, p.topicId);
+        const m = findMessage(t, p.messageId);
+        if (!m.reactions) m.reactions = {};
+        // Une réaction par personne et par message : re-cliquer sur la même
+        // réaction la retire (bascule), une autre remplace.
+        if (m.reactions[author.id] === p.emoji) delete m.reactions[author.id];
+        else m.reactions[author.id] = p.emoji;
         t.updatedAt = at;
         break;
       }
@@ -271,12 +374,71 @@ const State = (function () {
         t.updatedAt = at;
         break;
       }
+      case "ADD_CONCLUSION": {
+        const t = ensureTopicShape(findTopic(data, p.topicId));
+        t.conclusions.push({
+          id: p.conclusionId,
+          text: p.text,
+          source: "manual",
+          authorId: author.id,
+          authorName: author.name,
+          createdAt: at,
+          updatedAt: null,
+        });
+        t.updatedAt = at;
+        break;
+      }
+      case "UPDATE_CONCLUSION_ITEM": {
+        const t = ensureTopicShape(findTopic(data, p.topicId));
+        const c = findConclusion(t, p.conclusionId);
+        c.text = p.text;
+        c.updatedAt = at;
+        t.updatedAt = at;
+        break;
+      }
+      case "DELETE_CONCLUSION": {
+        const t = ensureTopicShape(findTopic(data, p.topicId));
+        t.conclusions = t.conclusions.filter(function (c) {
+          return c.id !== p.conclusionId;
+        });
+        Object.keys(t.conclusionVotes).forEach(function (pid) {
+          if (t.conclusionVotes[pid] === p.conclusionId) delete t.conclusionVotes[pid];
+        });
+        t.updatedAt = at;
+        break;
+      }
+      case "SET_CONCLUSION_VOTE": {
+        const t = ensureTopicShape(findTopic(data, p.topicId));
+        // Choix unique : une seule conclusion privilégiée par personne.
+        t.conclusionVotes[author.id] = p.conclusionId;
+        t.updatedAt = at;
+        break;
+      }
+      case "REMOVE_CONCLUSION_VOTE": {
+        const t = ensureTopicShape(findTopic(data, p.topicId));
+        delete t.conclusionVotes[author.id];
+        t.updatedAt = at;
+        break;
+      }
     }
     data.updatedAt = at;
     return data;
   }
 
-  // --- Analyse des votes ----------------------------------------------------
+  // --- Réactions emoji (messages) -------------------------------------------
+
+  /** Compte les réactions d'un message : { emoji: nombre }. */
+  function reactionSummary(message) {
+    const r = (message && message.reactions) || {};
+    const counts = {};
+    Object.keys(r).forEach(function (pid) {
+      const e = r[pid];
+      counts[e] = (counts[e] || 0) + 1;
+    });
+    return counts;
+  }
+
+  // --- Analyse des votes (propositions) -------------------------------------
 
   function tally(proposal) {
     const votes = proposal.votes || {};
@@ -303,18 +465,44 @@ const State = (function () {
   }
 
   function indicator(forCount, against, total) {
-    // Aucun vote du tout.
     if (total === 0) return { key: "none", label: "Aucun vote" };
-    var expressed = forCount + against; // hors abstentions
-    // Personne n'a exprimé Pour/Contre (uniquement des abstentions).
+    var expressed = forCount + against;
     if (expressed === 0) return { key: "split", label: "Avis partagés" };
-    // Tous les votes exprimés sont favorables.
     if (against === 0) return { key: "consensus", label: "Consensus favorable" };
-    // Égalité stricte entre Pour et Contre.
     if (forCount === against) return { key: "split", label: "Avis partagés" };
-    // Majorité simple (le pourcentage favorable affiché reste cohérent).
     if (forCount > against) return { key: "majority-for", label: "Majorité favorable" };
     return { key: "majority-against", label: "Majorité défavorable" };
+  }
+
+  // --- Analyse des votes (conclusions) --------------------------------------
+
+  /** Nombre de voix pour une conclusion donnée, et total exprimé sur le sujet. */
+  function conclusionTally(topic, conclusionId) {
+    const votes = topic.conclusionVotes || {};
+    let count = 0;
+    let total = 0;
+    Object.keys(votes).forEach(function (pid) {
+      total++;
+      if (votes[pid] === conclusionId) count++;
+    });
+    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+    return { count: count, total: total, pct: pct };
+  }
+
+  /** Conclusion la mieux votée d'un sujet (ou null si aucun vote). */
+  function leadingConclusion(topic) {
+    const list = topic.conclusions || [];
+    if (!list.length) return null;
+    let best = null;
+    let bestCount = -1;
+    list.forEach(function (c) {
+      const n = conclusionTally(topic, c.id).count;
+      if (n > bestCount) {
+        bestCount = n;
+        best = c;
+      }
+    });
+    return bestCount > 0 ? best : null;
   }
 
   return {
@@ -322,11 +510,16 @@ const State = (function () {
     PROPOSAL_STATUS_LABELS: PROPOSAL_STATUS_LABELS,
     VOTE_LABELS: VOTE_LABELS,
     emptyData: emptyData,
+    ensureTopicShape: ensureTopicShape,
     findTopic: findTopic,
     findProposal: findProposal,
     findMessage: findMessage,
+    findConclusion: findConclusion,
     validateAction: validateAction,
     applyAction: applyAction,
+    reactionSummary: reactionSummary,
     tally: tally,
+    conclusionTally: conclusionTally,
+    leadingConclusion: leadingConclusion,
   };
 })();

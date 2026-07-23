@@ -62,6 +62,33 @@ Ouvrez dans le navigateur `VOTRE_URL/exec?mode=revision`. Vous devez obtenir :
 {"revision":0,"updatedAt":"..."}
 ```
 
+### 1.6 Code d'accès (optionnel mais recommandé)
+
+Pour que l'URL seule ne suffise pas — et bloquer l'accès aux données à qui
+n'a pas le code — définissez un **code d'accès** côté script :
+
+1. Dans `Code.gs`, ouvrez la fonction **`setPassword()`** et renseignez la
+   variable `PASSWORD` (ex. `var PASSWORD = "777777";`).
+2. Sélectionnez `setPassword` dans la liste des fonctions et **Exécutez**.
+3. **Remettez `PASSWORD = ""`** dans le code et enregistrez (le code n'est pas
+   stocké en clair : seul son **hachage** est conservé dans les propriétés du
+   script). Le dépôt étant public, ne laissez jamais le code en clair dedans.
+4. Chaque collaborateur saisit ce code une fois à la connexion dans
+   l'application ; il lui est **redemandé à chaque ouverture** (protège un
+   téléphone égaré).
+
+Pour désactiver : exécutez **`clearPassword()`**.
+
+> Le code circule vers le script sous forme de **hachage** (jamais en clair) et
+> n'est **jamais stocké** sur l'appareil (seul un vérificateur local l'est).
+> Rappel : une application web ne peut pas être totalement inviolable sur un
+> téléphone **déverrouillé** — comptez aussi sur le verrouillage d'écran du
+> téléphone et n'y mettez pas de données sensibles.
+
+Vérification : `VOTRE_URL/exec?mode=revision` doit désormais répondre
+`{"ok":false,"error":"Code d'accès requis ou incorrect.","code":"auth"}`, et
+`...?mode=revision&auth=LE_HACHAGE` doit répondre normalement.
+
 ---
 
 ## 2. Frontend

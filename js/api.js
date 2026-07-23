@@ -9,13 +9,29 @@
  * "requêtes simples" et éviter les pré-vérifications CORS d'Apps Script.
  */
 const Api = (function () {
+  // Jeton d'authentification (hachage du mot de passe), gardé UNIQUEMENT en
+  // mémoire vive : jamais persisté, effacé au verrouillage / rechargement.
+  let authToken = null;
+  let onAuthErr = null;
+
+  function setAuthToken(token) { authToken = token || null; }
+  function clearAuthToken() { authToken = null; }
+  function hasToken() { return !!authToken; }
+  function onAuthError(fn) { onAuthErr = fn; }
+
   function isConfigured() {
     return CONFIG.isConfigured();
   }
 
+  // Ajoute le paramètre d'authentification à une URL si un jeton est présent.
+  function withAuth(url) {
+    if (!authToken) return url;
+    return url + (url.indexOf("?") === -1 ? "?" : "&") + "auth=" + encodeURIComponent(authToken);
+  }
+
   function withMode(mode) {
     const url = CONFIG.API_URL.trim();
-    return url + (url.indexOf("?") === -1 ? "?" : "&") + "mode=" + mode;
+    return withAuth(url + (url.indexOf("?") === -1 ? "?" : "&") + "mode=" + mode);
   }
 
   function getRevision() {
@@ -27,7 +43,7 @@ const Api = (function () {
   }
 
   function postAction(action) {
-    return request(CONFIG.API_URL.trim(), {
+    return request(withAuth(CONFIG.API_URL.trim()), {
       method: "POST",
       body: JSON.stringify(action),
       headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -53,6 +69,11 @@ const Api = (function () {
           throw makeError("parse", "Réponse serveur illisible.");
         }
         if (json && json.ok === false) {
+          // Mot de passe requis/incorrect : on prévient l'application pour
+          // qu'elle réaffiche l'écran de déverrouillage.
+          if (json.code === "auth" && typeof onAuthErr === "function") {
+            try { onAuthErr(); } catch (e) { /* pas bloquant */ }
+          }
           throw makeError("server", json.error || "Erreur serveur.", json);
         }
         return json;
@@ -77,5 +98,9 @@ const Api = (function () {
     getRevision: getRevision,
     getState: getState,
     postAction: postAction,
+    setAuthToken: setAuthToken,
+    clearAuthToken: clearAuthToken,
+    hasToken: hasToken,
+    onAuthError: onAuthError,
   };
 })();

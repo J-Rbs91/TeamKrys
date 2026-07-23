@@ -2,11 +2,21 @@
 
 À dérouler après déploiement. Cochez au fur et à mesure.
 
+## Accueil (onboarding)
+
+- [ ] Première ouverture : écran « Connexion à l'équipe » avec champ URL.
+- [ ] Coller une URL puis « Enregistrer et continuer » → écran du nom.
+- [ ] « Continuer sans connexion (mode local) » → écran du nom directement.
+- [ ] Saisie du nom d'utilisateur → écran principal.
+- [ ] Liste vide : bouton « Ajouter un sujet » centré au milieu de l'écran.
+- [ ] Liste non vide : bouton rond « + » en bas à droite (FAB).
+- [ ] Thème sombre automatique correct (système en mode sombre).
+
 ## Fonctionnel
 
-- [ ] Première ouverture : demande du prénom, création d'un profil local.
-- [ ] Modification du prénom depuis Paramètres.
-- [ ] Création d'un sujet (titre + description).
+- [ ] Modification du nom d'utilisateur depuis Réglages.
+- [ ] Création d'un sujet (titre obligatoire, description facultative, nom).
+- [ ] Nom laissé vide → auteur affiché « Anonyme ».
 - [ ] Édition du titre et de la description d'un sujet.
 - [ ] Ajout d'un message dans la discussion.
 - [ ] Modification de son propre message (mention « modifié »).
@@ -17,11 +27,44 @@
 - [ ] Retrait d'un vote.
 - [ ] Compteurs, pourcentage et indicateur corrects (consensus, majorité…).
 - [ ] Changement de statut d'une proposition (les 5 statuts).
-- [ ] Rédaction et enregistrement d'une conclusion (auteur + date affichés).
+- [ ] Après publication d'un message, le composeur se vide.
+- [ ] Réagir à un message (👌 💪 🤞 🤏 👎 💩) : le compteur s'affiche, ma
+      réaction est mise en évidence ; recliquer la retire ; changer d'emoji la
+      remplace.
+
+## Anonymat, signature, citation
+
+- [ ] Créer un sujet en laissant le nom vide → créateur affiché « Anonyme ».
+- [ ] Message signé de son nom par défaut.
+- [ ] « Rendre anonyme » → affiche « Anonyme » ; « Signer avec mon nom » → revient.
+- [ ] Modifier son message tant que personne n'a réagi.
+- [ ] Après une réaction d'une AUTRE personne : le message est verrouillé (🔒),
+      « Modifier » disparaît ; la signature reste modifiable.
+- [ ] « Citer » un message : bandeau de réponse, puis le nouveau message affiche
+      le message cité (clic → retour à l'original).
+
+## Code d'accès (verrouillage)
+
+- [ ] Script : `setPassword()` puis vérifier `?mode=revision` → erreur `auth`,
+      et `?mode=revision&auth=…` → réponse normale.
+- [ ] Connexion avec le bon code → accès ; mauvais code → « Code incorrect ».
+- [ ] À chaque ouverture (rechargement), l'écran de verrouillage réapparaît.
+- [ ] Reverrouillage après une longue mise en arrière-plan.
+- [ ] « Se déconnecter de l'équipe » oublie l'URL et le code.
+- [ ] `clearPassword()` : l'accès ne demande plus de code.
 - [ ] Changement de statut d'un sujet (Ouvert / Prêt / Traité / Archivé).
-- [ ] Recherche, filtre par statut et tri par activité.
-- [ ] Écran Réunion : synthèse correcte, filtres.
-- [ ] Bouton « Imprimer la synthèse » : rendu propre (sans boutons/navigation).
+- [ ] Recherche (au-delà de 6 sujets) et affichage/masquage des archivés.
+- [ ] Écran Réunion (via Réglages) : synthèse correcte, filtres.
+- [ ] Bouton « Imprimer » : rendu propre (sans boutons/navigation).
+
+## Conclusion
+
+- [ ] Écran « Conclusion » : « Ajouter une conclusion » (regroupe des
+      propositions).
+- [ ] Vote pour une conclusion (choix unique) : voter pour une autre déplace le
+      vote ; « En tête » sur la mieux votée.
+- [ ] Modification/suppression d'une conclusion par son auteur uniquement.
+- [ ] Supprimer une conclusion retire aussi les votes qui la visaient.
 
 ## Synchronisation (nécessite l'API Apps Script)
 

@@ -3,9 +3,16 @@
 **Outil interne, simple et mobile, de préparation de réunion pour l'équipe d'un magasin.**
 
 Avant une réunion, chaque membre de l'équipe peut créer des sujets, en discuter,
-proposer des solutions, voter, dégager les consensus et rédiger une conclusion.
-Pendant la réunion, l'écran **« Préparation de la réunion »** offre une synthèse
-imprimable de tous les sujets.
+proposer des solutions, voter, dégager les consensus et rédiger des conclusions.
+L'équipe regroupe les propositions en **conclusions votables**. Pendant la
+réunion, l'écran **« Préparation de la réunion »** offre une synthèse imprimable
+de tous les sujets.
+
+Interface volontairement **épurée** (inspiration Apple / Tesla), thème clair et
+sombre automatiques. Le parcours : on colle d'abord l'**URL du script**, on
+choisit un **nom d'utilisateur**, puis on accède à la **liste des sujets** ;
+chaque sujet ouvre un écran **débat** (messages horodatés et signés, modifiables
+par leur auteur) donnant accès à l'écran **Conclusion**.
 
 TeamKrys fonctionne **en ligne et hors connexion** (PWA). Il n'y a **ni compte,
 ni mot de passe, ni base de données, ni serveur** : les données partagées sont
@@ -33,13 +40,20 @@ script Google Apps Script.
 
 - **Sujets** : création, édition, statuts (`Ouvert`, `Prêt pour la réunion`,
   `Traité`, `Archivé`), recherche, filtre et tri.
-- **Discussion** : messages chronologiques, édition de ses propres messages,
-  mention « modifié ».
+- **Discussion** : messages chronologiques, **réactions emoji**
+  (👌 💪 🤞 🤏 👎 💩) façon WhatsApp, **citation** d'un message pour y répondre.
+- **Anonymat** : sujets et messages **signés (défaut) ou anonymes** — l'anonyme
+  n'enregistre aucune identité. Édition d'un message possible **tant que personne
+  n'y a réagi** (verrou ensuite) ; la signature reste modifiable après envoi.
+- **Code d'accès (optionnel)** : verrouille l'application par un code, redemandé
+  à chaque ouverture, et bloque l'accès aux données côté script.
 - **Propositions** : plusieurs solutions par sujet, créées directement ou
   depuis un message, avec statuts en français.
 - **Votes** : Pour / Contre / Abstention, un vote par personne, modifiable et
   retirable, comptage et indicateur automatique (consensus, majorité, etc.).
-- **Conclusion** : texte libre modifiable par tous, avec auteur et date.
+- **Conclusion** : l'équipe ajoute des conclusions (regroupant les propositions
+  du débat), **votables** (choix unique par personne), modifiables et
+  supprimables par leur auteur.
 - **Synthèse de réunion** : vue d'ensemble filtrable et **imprimable**.
 - **Hors connexion** : consultation et modifications possibles, envoyées
   automatiquement au retour du réseau (aucun texte perdu).

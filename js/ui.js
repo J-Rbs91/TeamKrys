@@ -1,19 +1,25 @@
 /**
- * Rendu de l'interface.
+ * Rendu de l'interface — style épuré (inspiration Apple / Tesla).
  *
  * Principes :
  *  - Aucun contenu utilisateur n'est inséré via innerHTML (texte brut only).
  *  - Le rendu complet de la vue est reconstruit quand les données changent,
  *    mais les textes en cours de saisie (attribut data-draft) et l'élément
  *    actif sont préservés : on ne perd jamais un texte rédigé.
+ *
+ * Parcours :
+ *   Accueil (coller l'URL) → nom d'utilisateur → liste des sujets
+ *   → écran « débat » d'un sujet → Conclusion.
  */
 const UI = (function () {
   const el = Utils.el;
-  let root, header, viewEl, badgeEl, toastEl;
+  let root, barLeft, barTitle, barRight, viewEl, badgeEl, toastEl;
 
   // État éphémère de l'interface (non persisté).
   const openEditors = new Set(); // clés "kind:id"
-  const listState = { search: "", status: "all", sort: "recent" };
+  const openPickers = new Set(); // sélecteurs de réaction ouverts ("react:msgId")
+  const quoting = {}; // topicId -> messageId cité en cours de rédaction
+  const listState = { search: "", showArchived: false };
   const meetingState = { filter: "all" };
   let lastSignature = null;
   let lastRoute = null;
@@ -24,41 +30,74 @@ const UI = (function () {
   function mount(container) {
     root = container;
     Utils.clear(root);
+    root.classList.add("pre-start");
 
-    header = el("header", { class: "app-header" }, [
-      el("button", { class: "brand", onclick: function () { App.navigate("#/"); } }, "TeamKrys"),
-      el("nav", { class: "app-nav" }, [
-        navLink("#/", "Sujets"),
-        navLink("#/meeting", "Réunion"),
-        navLink("#/settings", "Paramètres"),
-      ]),
-    ]);
+    barLeft = el("div", { class: "bar-left" });
+    barTitle = el("h1", { class: "bar-title" });
+    barRight = el("div", { class: "bar-right" });
+
+    const header = el("header", { class: "app-bar" }, [barLeft, barTitle, barRight]);
 
     badgeEl = el("button", {
       class: "sync-badge",
       title: "Synchroniser maintenant",
+      "aria-label": "État de synchronisation",
       onclick: function () { Sync.syncNow(); },
     });
-    const badgeWrap = el("div", { class: "sync-bar" }, [badgeEl]);
 
     viewEl = el("main", { id: "view", class: "view" });
     toastEl = el("div", { class: "toast-root", "aria-live": "polite" });
 
     root.appendChild(header);
-    root.appendChild(badgeWrap);
     root.appendChild(viewEl);
     root.appendChild(toastEl);
   }
 
-  function navLink(hash, label) {
-    return el("a", {
-      href: hash,
-      class: "nav-link",
-      onclick: function (e) {
-        e.preventDefault();
-        App.navigate(hash);
-      },
-    }, label);
+  // Quitte le mode « pré-démarrage » (onboarding terminé) : la barre du haut
+  // et l'interface principale deviennent visibles.
+  function reveal() {
+    if (root) root.classList.remove("pre-start");
+  }
+
+  // --- Barre supérieure contextuelle ---------------------------------------
+
+  function renderChrome(route) {
+    Utils.clear(barLeft);
+    Utils.clear(barTitle);
+    Utils.clear(barRight);
+
+    const backTo = function (hash, label) {
+      return el("button", { class: "icon-btn back-btn", "aria-label": label || "Retour", onclick: function () { App.navigate(hash); } }, [
+        el("span", { class: "chev", text: "‹" }),
+      ]);
+    };
+
+    let title = "Sujets";
+    if (route.name === "topic") { barLeft.appendChild(backTo("#/", "Retour aux sujets")); title = topicTitleFor(route.id); }
+    else if (route.name === "conclusion") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Conclusion"; }
+    else if (route.name === "meeting") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réunion"; }
+    else if (route.name === "settings") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réglages"; }
+    else {
+      // Accueil : marque discrète.
+      barLeft.appendChild(el("span", { class: "brand", text: "TeamKrys" }));
+      title = "";
+    }
+
+    if (title) barTitle.appendChild(document.createTextNode(title));
+
+    // À droite : badge de synchro + accès aux réglages (sauf en réglages).
+    barRight.appendChild(badgeEl);
+    if (route.name !== "settings") {
+      barRight.appendChild(el("button", {
+        class: "icon-btn", "aria-label": "Réglages", title: "Réglages",
+        onclick: function () { App.navigate("#/settings"); },
+      }, [el("span", { class: "gear", text: "⚙" })]));
+    }
+  }
+
+  function topicTitleFor(id) {
+    const t = State.findTopic(Sync.getData(), id);
+    return t ? t.title : "Sujet";
   }
 
   // --- Préservation des saisies --------------------------------------------
@@ -69,11 +108,7 @@ const UI = (function () {
     root.querySelectorAll("[data-draft]").forEach(function (node) {
       map[node.getAttribute("data-draft")] = node.value;
       if (node === document.activeElement) {
-        active = {
-          key: node.getAttribute("data-draft"),
-          start: node.selectionStart,
-          end: node.selectionEnd,
-        };
+        active = { key: node.getAttribute("data-draft"), start: node.selectionStart, end: node.selectionEnd };
       }
     });
     return { map: map, active: active };
@@ -84,8 +119,6 @@ const UI = (function () {
       const key = node.getAttribute("data-draft");
       if (Object.prototype.hasOwnProperty.call(snapshot.map, key)) {
         const val = snapshot.map[key];
-        // On ne restaure que si le champ neuf est vide (évite d'écraser une
-        // valeur pré-remplie légitime).
         if (node.value === "" && val) node.value = val;
       }
     });
@@ -93,16 +126,12 @@ const UI = (function () {
       const target = root.querySelector('[data-draft="' + cssEscape(snapshot.active.key) + '"]');
       if (target) {
         target.focus();
-        try {
-          target.setSelectionRange(snapshot.active.start, snapshot.active.end);
-        } catch (e) { /* champ non textuel */ }
+        try { target.setSelectionRange(snapshot.active.start, snapshot.active.end); } catch (e) { /* champ non textuel */ }
       }
     }
   }
 
-  function cssEscape(s) {
-    return String(s).replace(/["\\]/g, "\\$&");
-  }
+  function cssEscape(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
   // --- Rendu principal ------------------------------------------------------
 
@@ -110,7 +139,7 @@ const UI = (function () {
     const route = App.route;
     const signature = route.name + "|" + route.id + "|" + JSON.stringify(listState) +
       "|" + JSON.stringify(meetingState) + "|" + serialize(openEditors) +
-      "|" + (data.updatedAt || "") + "|" + (data.revision || 0) + "|" + dataSignature(data, route);
+      "|" + updateAvailable + "|" + (data.updatedAt || "") + "|" + (data.revision || 0) + "|" + dataSignature(data, route);
 
     if (signature === lastSignature && route.name === lastRoute) return;
     lastSignature = signature;
@@ -118,10 +147,11 @@ const UI = (function () {
 
     const snap = captureDrafts();
     Utils.clear(viewEl);
-    highlightNav(route.name);
+    renderChrome(route);
 
     let content;
     if (route.name === "topic") content = renderTopic(data, route.id);
+    else if (route.name === "conclusion") content = renderConclusion(data, route.id);
     else if (route.name === "meeting") content = renderMeeting(data);
     else if (route.name === "settings") content = renderSettings(data);
     else content = renderHome(data);
@@ -130,35 +160,19 @@ const UI = (function () {
     restoreDrafts(snap);
   }
 
-  function serialize(set) {
-    return Array.from(set).sort().join(",");
-  }
+  function serialize(set) { return Array.from(set).sort().join(","); }
 
-  // Signature minimale des données pertinentes pour la route (évite les
-  // rendus inutiles tout en captant les changements visibles).
   function dataSignature(data, route) {
-    if (route.name === "topic") {
+    if (route.name === "topic" || route.name === "conclusion") {
       const t = State.findTopic(data, route.id);
       return t ? JSON.stringify(t) : "none";
     }
-    // Vue liste / réunion : titres, statuts, activité, votes agrégés.
     return data.topics
       .map(function (t) {
-        return (
-          t.id + t.status + t.updatedAt + t.title + t.messages.length +
-          t.proposals.map(function (p) {
-            return p.status + Object.keys(p.votes).length;
-          }).join("")
-        );
+        return t.id + t.status + t.updatedAt + t.title + t.messages.length +
+          t.proposals.map(function (p) { return p.status + Object.keys(p.votes).length; }).join("");
       })
       .join("|");
-  }
-
-  function highlightNav(name) {
-    const map = { home: "#/", topic: "#/", meeting: "#/meeting", settings: "#/settings" };
-    header.querySelectorAll(".nav-link").forEach(function (a) {
-      a.classList.toggle("active", a.getAttribute("href") === map[name]);
-    });
   }
 
   // --- Badge de synchronisation --------------------------------------------
@@ -168,18 +182,25 @@ const UI = (function () {
     badgeEl.className = "sync-badge status-" + status.key;
     Utils.clear(badgeEl);
     badgeEl.appendChild(el("span", { class: "dot" }));
-    let text = status.label;
-    if (status.pendingCount > 0) text += " (" + status.pendingCount + ")";
-    badgeEl.appendChild(el("span", { text: text }));
-
-    // Met à jour le diagnostic si la vue Paramètres est ouverte.
+    let text = shortStatus(status);
+    if (status.pendingCount > 0) text += " · " + status.pendingCount;
+    badgeEl.appendChild(el("span", { class: "sync-text", text: text }));
     updateDiagnostics(status);
   }
 
-  function setUpdateAvailable(v) {
-    updateAvailable = v;
-    forceRerender();
+  function shortStatus(status) {
+    switch (status.key) {
+      case "up-to-date": return "À jour";
+      case "syncing": return "Sync…";
+      case "pending": return "En attente";
+      case "offline": return "Hors ligne";
+      case "error": return "Erreur";
+      case "local": return "Local";
+      default: return status.label;
+    }
   }
+
+  function setUpdateAvailable(v) { updateAvailable = v; forceRerender(); }
 
   function forceRerender() {
     lastSignature = null;
@@ -187,119 +208,213 @@ const UI = (function () {
   }
 
   // ==========================================================================
+  //  ONBOARDING — 1) URL du script   2) nom d'utilisateur
+  // ==========================================================================
+
+  function showOnboardingUrl(handlers) {
+    const urlInput = el("input", {
+      class: "input input-lg", type: "url", inputmode: "url", autocomplete: "off",
+      placeholder: "https://script.google.com/…/exec",
+      "aria-label": "URL du script Google Apps Script",
+    });
+    const codeInput = el("input", {
+      class: "input input-lg", type: "password", inputmode: "numeric", autocomplete: "off",
+      placeholder: "Code d'accès (optionnel)", "aria-label": "Code d'accès",
+    });
+    const statusLine = el("p", { class: "onb-status" });
+
+    const saveBtn = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Enregistrer et continuer");
+    saveBtn.addEventListener("click", function () {
+      const url = Utils.clean(urlInput.value);
+      if (Utils.isBlank(url) || url.slice(0, 4) !== "http") {
+        return markInvalid(urlInput, "Collez l'URL du script (elle commence par https:// et finit par /exec).");
+      }
+      const code = codeInput.value || "";
+      saveBtn.disabled = true;
+      statusLine.className = "onb-status";
+      statusLine.textContent = "Connexion en cours…";
+      App.connect(url, code).then(function (res) {
+        if (res.ok) {
+          removeOverlay(overlay);
+          if (handlers && handlers.onSaved) handlers.onSaved();
+          return;
+        }
+        saveBtn.disabled = false;
+        statusLine.className = "onb-status err";
+        if (res.code === "auth") {
+          statusLine.textContent = code
+            ? "Code d'accès incorrect."
+            : "Cette équipe demande un code d'accès. Saisissez-le ci-dessus.";
+        } else {
+          statusLine.textContent = "Échec : " + (res.error || "vérifiez l'URL et le déploiement.");
+        }
+      });
+    });
+
+    const overlay = el("div", { class: "onboarding" }, [
+      el("div", { class: "onb-card" }, [
+        el("div", { class: "onb-logo", text: "TeamKrys" }),
+        el("h2", { class: "onb-title", text: "Connexion à l'équipe" }),
+        el("p", { class: "onb-sub", text: "Collez l'URL du script Google Apps Script de votre équipe. Ajoutez un code d'accès si votre équipe en utilise un." }),
+        urlInput,
+        codeInput,
+        statusLine,
+        saveBtn,
+        el("button", { class: "btn btn-text btn-block", onclick: function () {
+          removeOverlay(overlay);
+          if (handlers && handlers.onLocal) handlers.onLocal();
+        } }, "Continuer sans connexion (mode local)"),
+      ]),
+    ]);
+    document.body.appendChild(overlay);
+    setTimeout(function () { urlInput.focus(); }, 40);
+    codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") saveBtn.click(); });
+  }
+
+  // Écran de déverrouillage (code d'accès), redemandé à chaque ouverture.
+  let lockShown = false;
+  function showLock(handlers) {
+    if (lockShown) return; // un seul verrou à la fois
+    lockShown = true;
+    const codeInput = el("input", {
+      class: "input input-lg lock-code", type: "password", inputmode: "numeric",
+      autocomplete: "off", placeholder: "Code d'accès", "aria-label": "Code d'accès",
+    });
+    const statusLine = el("p", { class: "onb-status" });
+    const unlockBtn = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Déverrouiller");
+    unlockBtn.addEventListener("click", function () {
+      const code = codeInput.value || "";
+      if (!code) return markInvalid(codeInput, "Saisissez votre code d'accès.");
+      unlockBtn.disabled = true;
+      statusLine.className = "onb-status";
+      statusLine.textContent = "Vérification…";
+      App.unlock(code).then(function (res) {
+        if (res.ok) {
+          lockShown = false;
+          removeOverlay(overlay);
+          if (handlers && handlers.onUnlock) handlers.onUnlock();
+          return;
+        }
+        unlockBtn.disabled = false;
+        statusLine.className = "onb-status err";
+        statusLine.textContent = res.code === "auth" || res.code === undefined
+          ? "Code d'accès incorrect." : ("Échec : " + (res.error || "réessayez."));
+        codeInput.select();
+      });
+    });
+
+    const overlay = el("div", { class: "onboarding lock-screen" }, [
+      el("div", { class: "onb-card" }, [
+        el("div", { class: "lock-icon", text: "🔒" }),
+        el("h2", { class: "onb-title", text: "Application verrouillée" }),
+        el("p", { class: "onb-sub", text: "Saisissez le code d'accès pour continuer." }),
+        codeInput,
+        statusLine,
+        unlockBtn,
+        el("button", { class: "btn btn-text btn-block", onclick: function () {
+          if (!window.confirm("Se déconnecter de l'équipe sur cet appareil ? L'URL et le code seront oubliés.")) return;
+          lockShown = false;
+          removeOverlay(overlay);
+          if (handlers && handlers.onLogout) handlers.onLogout();
+        } }, "Se déconnecter de l'équipe"),
+      ]),
+    ]);
+    document.body.appendChild(overlay);
+    setTimeout(function () { codeInput.focus(); }, 40);
+    codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") unlockBtn.click(); });
+  }
+
+  function showOnboardingName(onDone) {
+    const input = el("input", {
+      class: "input input-lg", type: "text", maxlength: Utils.LIMITS.name,
+      placeholder: "Votre prénom", "aria-label": "Votre prénom",
+    });
+    const confirm = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Commencer");
+    confirm.addEventListener("click", function () {
+      const name = Utils.clean(input.value);
+      if (Utils.isBlank(name)) return markInvalid(input, "Merci d'indiquer un prénom.");
+      removeOverlay(overlay);
+      onDone(name);
+    });
+    const overlay = el("div", { class: "onboarding" }, [
+      el("div", { class: "onb-card" }, [
+        el("div", { class: "onb-logo", text: "TeamKrys" }),
+        el("h2", { class: "onb-title", text: "Bienvenue" }),
+        el("p", { class: "onb-sub", text: "Quel nom souhaitez-vous utiliser dans l'application ?" }),
+        input,
+        confirm,
+      ]),
+    ]);
+    document.body.appendChild(overlay);
+    setTimeout(function () { input.focus(); }, 40);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") confirm.click(); });
+  }
+
+  function removeOverlay(node) { if (node && node.parentNode) node.parentNode.removeChild(node); }
+
+  // ==========================================================================
   //  VUE : Accueil / liste des sujets
   // ==========================================================================
 
   function renderHome(data) {
-    const wrap = el("section", { class: "page" });
-
-    wrap.appendChild(
-      el("div", { class: "page-head" }, [
-        el("h1", { text: "Sujets à préparer" }),
-        el("button", { class: "btn btn-primary", onclick: showNewTopic }, "+ Nouveau sujet"),
-      ])
-    );
+    const wrap = el("section", { class: "page home" });
 
     if (updateAvailable) wrap.appendChild(updateBanner());
     if (!CONFIG.isConfigured()) wrap.appendChild(connectBanner());
 
-    // Filtres
-    const controls = el("div", { class: "controls" });
-    controls.appendChild(
-      el("input", {
-        type: "search",
-        class: "input",
-        placeholder: "Rechercher un sujet…",
-        "aria-label": "Rechercher un sujet",
-        value: listState.search,
-        "data-draft": "home-search",
-        oninput: function (e) {
-          listState.search = e.target.value;
-          forceRerender();
-        },
-      })
-    );
-    const statusSel = el("select", {
-      class: "select",
-      "aria-label": "Filtrer par statut",
-      onchange: function (e) {
-        listState.status = e.target.value;
-        forceRerender();
-      },
-    }, [
-      option("all", "Tous les statuts", listState.status),
-      option("open", "Ouverts", listState.status),
-      option("ready", "Prêts", listState.status),
-      option("closed", "Traités", listState.status),
-      option("archived", "Archivés", listState.status),
-    ]);
-    const sortSel = el("select", {
-      class: "select",
-      "aria-label": "Trier les sujets",
-      onchange: function (e) {
-        listState.sort = e.target.value;
-        forceRerender();
-      },
-    }, [
-      option("recent", "Activité récente", listState.sort),
-      option("created", "Date de création", listState.sort),
-      option("title", "Titre", listState.sort),
-    ]);
-    controls.appendChild(statusSel);
-    controls.appendChild(sortSel);
-    wrap.appendChild(controls);
+    const visible = data.topics.filter(function (t) {
+      return listState.showArchived ? true : t.status !== "archived";
+    });
 
-    // Liste filtrée
-    let topics = data.topics.slice();
+    // Aucun sujet : bouton d'ajout centré au milieu de l'écran.
+    if (data.topics.length === 0) {
+      wrap.appendChild(el("div", { class: "empty-hero" }, [
+        el("h2", { class: "hero-title", text: "Aucun sujet" }),
+        el("p", { class: "hero-sub", text: "Créez le premier sujet à préparer avec l'équipe." }),
+        el("button", { class: "btn btn-primary btn-lg", onclick: showNewTopic }, [plusGlyph(), " Ajouter un sujet"]),
+      ]));
+      return wrap;
+    }
+
+    // Recherche discrète lorsqu'il y a beaucoup de sujets.
+    if (data.topics.length > 6) {
+      wrap.appendChild(el("input", {
+        type: "search", class: "input search-field", placeholder: "Rechercher un sujet…",
+        "aria-label": "Rechercher un sujet", value: listState.search, "data-draft": "home-search",
+        oninput: function (e) { listState.search = e.target.value; forceRerender(); },
+      }));
+    }
+
+    let topics = visible.slice();
     const q = Utils.clean(listState.search).toLowerCase();
     if (q) {
       topics = topics.filter(function (t) {
-        return (
-          (t.title || "").toLowerCase().indexOf(q) !== -1 ||
-          (t.description || "").toLowerCase().indexOf(q) !== -1
-        );
+        return (t.title || "").toLowerCase().indexOf(q) !== -1 || (t.description || "").toLowerCase().indexOf(q) !== -1;
       });
     }
-    if (listState.status !== "all") {
-      topics = topics.filter(function (t) {
-        return t.status === listState.status;
-      });
-    } else {
-      // Par défaut, on masque les archivés dans la liste "Tous".
-      topics = topics.filter(function (t) {
-        return t.status !== "archived";
-      });
-    }
-    topics.sort(sorter(listState.sort));
+    topics.sort(function (a, b) { return (b.updatedAt || "").localeCompare(a.updatedAt || ""); });
 
     if (topics.length === 0) {
-      wrap.appendChild(emptyState("Aucun sujet à afficher. Créez le premier sujet de la réunion."));
+      wrap.appendChild(emptyState("Aucun sujet ne correspond."));
     } else {
       const list = el("div", { class: "topic-list" });
-      topics.forEach(function (t) {
-        list.appendChild(topicCard(t));
-      });
+      topics.forEach(function (t) { list.appendChild(topicCard(t)); });
       wrap.appendChild(list);
     }
+
+    const archivedCount = data.topics.filter(function (t) { return t.status === "archived"; }).length;
+    if (archivedCount > 0) {
+      wrap.appendChild(el("button", { class: "btn btn-text btn-block", onclick: function () {
+        listState.showArchived = !listState.showArchived; forceRerender();
+      } }, listState.showArchived ? "Masquer les archivés" : (archivedCount + " sujet(s) archivé(s)")));
+    }
+
+    // Bouton rond « + » en bas à droite.
+    wrap.appendChild(el("button", { class: "fab", "aria-label": "Ajouter un sujet", onclick: showNewTopic }, [plusGlyph()]));
     return wrap;
   }
 
-  function sorter(mode) {
-    if (mode === "created")
-      return function (a, b) {
-        return (b.createdAt || "").localeCompare(a.createdAt || "");
-      };
-    if (mode === "title")
-      return function (a, b) {
-        return (a.title || "").localeCompare(b.title || "", "fr");
-      };
-    return function (a, b) {
-      return (b.updatedAt || "").localeCompare(a.updatedAt || "");
-    };
-  }
-
   function topicCard(t) {
-    const tallies = t.proposals.map(State.tally);
     const nbVoting = t.proposals.filter(function (p) { return p.status === "voting"; }).length;
     return el("button", {
       class: "card topic-card",
@@ -309,22 +424,22 @@ const UI = (function () {
         el("h2", { class: "card-title", text: t.title }),
         topicBadge(t.status),
       ]),
-      t.description ? el("p", { class: "card-desc", text: shorten(t.description, 160) }) : null,
+      t.description ? el("p", { class: "card-desc", text: shorten(t.description, 140) }) : null,
       el("div", { class: "card-meta" }, [
-        metaItem("💬", t.messages.length + " message" + plural(t.messages.length)),
-        metaItem("💡", t.proposals.length + " proposition" + plural(t.proposals.length)),
-        nbVoting ? metaItem("🗳️", nbVoting + " en vote") : null,
-        el("span", { class: "meta-author", text: "par " + t.createdBy.name }),
+        metaItem(t.messages.length + " message" + plural(t.messages.length)),
+        metaItem(t.proposals.length + " proposition" + plural(t.proposals.length)),
+        nbVoting ? metaItem(nbVoting + " en vote") : null,
+        el("span", { class: "meta-author", text: t.createdBy.name }),
       ]),
     ]);
   }
 
   // ==========================================================================
-  //  VUE : Détail d'un sujet
+  //  VUE : Débat (détail d'un sujet)
   // ==========================================================================
 
   function renderTopic(data, topicId) {
-    const t = State.findTopic(data, topicId);
+    const t = State.ensureTopicShape(State.findTopic(data, topicId));
     if (!t) {
       return el("section", { class: "page" }, [
         el("p", { class: "empty", text: "Sujet introuvable." }),
@@ -333,45 +448,42 @@ const UI = (function () {
     }
 
     const wrap = el("section", { class: "page topic-detail" });
-    wrap.appendChild(
-      el("div", { class: "back-row" }, [
-        el("button", { class: "btn btn-ghost", onclick: function () { App.navigate("#/"); } }, "← Sujets"),
-        topicBadge(t.status),
-      ])
-    );
 
-    // 1. Titre + description (+ édition)
+    // En-tête : description + méta + édition.
     wrap.appendChild(renderTopicHeader(t));
 
-    // Actions de statut
-    wrap.appendChild(renderStatusActions(t));
+    // Accès Conclusion.
+    wrap.appendChild(el("div", { class: "nav-tiles" }, [
+      navTileBtn("✓", "Conclusion", "Regrouper les propositions et voter", "#/topic/" + t.id + "/conclusion"),
+    ]));
 
-    // 2. Discussion
+    // Discussion.
     wrap.appendChild(sectionTitle("Discussion"));
     wrap.appendChild(renderMessages(t));
 
-    // 3. Propositions + 4. Votes
+    // Propositions & votes (matière première des conclusions).
     wrap.appendChild(sectionTitle("Propositions"));
     wrap.appendChild(renderProposals(t));
 
-    // 5. Conclusion
-    wrap.appendChild(sectionTitle("Conclusion"));
-    wrap.appendChild(renderConclusion(t));
-
     return wrap;
+  }
+
+  function navTileBtn(icon, title, sub, hash) {
+    return el("button", { class: "nav-tile", onclick: function () { App.navigate(hash); } }, [
+      el("span", { class: "nav-tile-icon", text: icon }),
+      el("span", { class: "nav-tile-texts" }, [
+        el("span", { class: "nav-tile-title", text: title }),
+        el("span", { class: "nav-tile-sub", text: sub }),
+      ]),
+      el("span", { class: "chev", text: "›" }),
+    ]);
   }
 
   function renderTopicHeader(t) {
     const key = "topic:" + t.id;
     if (openEditors.has(key)) {
-      const titleInput = el("input", {
-        class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle,
-        value: t.title, "data-draft": "edit-topic-title-" + t.id,
-      });
-      const descInput = el("textarea", {
-        class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription,
-        "data-draft": "edit-topic-desc-" + t.id,
-      });
+      const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, value: t.title, "data-draft": "edit-topic-title-" + t.id });
+      const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription, "data-draft": "edit-topic-desc-" + t.id });
       descInput.value = t.description || "";
       return el("div", { class: "card" }, [
         field("Titre", titleInput),
@@ -381,48 +493,40 @@ const UI = (function () {
             const title = Utils.clean(titleInput.value);
             if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
             App.actions.updateTopic(t.id, title, Utils.clean(descInput.value));
-            openEditors.delete(key);
-            forceRerender();
+            openEditors.delete(key); forceRerender();
           } }, "Enregistrer"),
-          el("button", { class: "btn btn-ghost", onclick: function () {
-            openEditors.delete(key);
-            forceRerender();
-          } }, "Annuler"),
+          el("button", { class: "btn btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
         ]),
       ]);
     }
-    return el("div", { class: "card" }, [
-      el("div", { class: "card-top" }, [
-        el("h1", { class: "topic-title", text: t.title }),
-        el("button", { class: "btn btn-ghost btn-sm", onclick: function () {
-          openEditors.add(key);
-          forceRerender();
-        } }, "Modifier"),
-      ]),
+    return el("div", { class: "card topic-head-card" }, [
       t.description
         ? el("p", { class: "topic-desc pre", text: t.description })
         : el("p", { class: "muted", text: "Aucune description." }),
-      el("p", { class: "byline", text: "Créé par " + t.createdBy.name + " · " + Utils.formatDate(t.createdAt) }),
+      el("div", { class: "topic-head-foot" }, [
+        el("span", { class: "byline", text: "Créé par " + t.createdBy.name + " · " + Utils.formatDate(t.createdAt) }),
+        topicBadge(t.status),
+      ]),
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost btn-sm", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier"),
+        statusMenuBtn(t),
+      ]),
     ]);
   }
 
-  function renderStatusActions(t) {
-    const row = el("div", { class: "status-actions" });
+  function statusMenuBtn(t) {
     const options = [
       { s: "open", label: "Rouvrir" },
       { s: "ready", label: "Prêt pour la réunion" },
       { s: "closed", label: "Marquer traité" },
       { s: "archived", label: "Archiver" },
     ];
-    options.forEach(function (o) {
-      if (t.status === o.s) return;
-      row.appendChild(
-        el("button", { class: "btn btn-sm", onclick: function () {
-          App.actions.changeTopicStatus(t.id, o.s);
-        } }, o.label)
-      );
-    });
-    return row;
+    const sel = el("select", { class: "select select-sm", "aria-label": "Changer le statut", onchange: function (e) {
+      if (e.target.value) { App.actions.changeTopicStatus(t.id, e.target.value); }
+    } });
+    sel.appendChild(el("option", { value: "", text: "Changer le statut…" }));
+    options.forEach(function (o) { if (t.status !== o.s) sel.appendChild(el("option", { value: o.s, text: o.label })); });
+    return sel;
   }
 
   // --- Messages -------------------------------------------------------------
@@ -435,21 +539,44 @@ const UI = (function () {
     t.messages
       .slice()
       .sort(function (a, b) { return (a.createdAt || "").localeCompare(b.createdAt || ""); })
-      .forEach(function (m) {
-        box.appendChild(messageItem(t, m));
-      });
+      .forEach(function (m) { box.appendChild(messageItem(t, m)); });
     box.appendChild(newMessageForm(t));
     return box;
   }
 
+  // Vrai si quelqu'un d'AUTRE que moi a réagi (verrouille l'édition).
+  function othersReacted(m) {
+    const r = m.reactions || {};
+    const me = App.profile ? App.profile.id : null;
+    return Object.keys(r).some(function (pid) { return pid !== me; });
+  }
+
+  function scrollToMessage(id) {
+    const n = document.getElementById("msg-" + id);
+    if (!n) return;
+    n.scrollIntoView({ behavior: "smooth", block: "center" });
+    n.classList.add("flash");
+    setTimeout(function () { n.classList.remove("flash"); }, 1300);
+  }
+
+  // Bloc « message cité » affiché au-dessus d'un message.
+  function quotedPreview(t, m) {
+    if (!m.quoteId) return null;
+    const q = State.findMessage(t, m.quoteId);
+    if (!q) return el("div", { class: "quoted quoted-missing", text: "Message cité indisponible" });
+    return el("button", { class: "quoted", onclick: function () { scrollToMessage(q.id); } }, [
+      el("span", { class: "quoted-author", text: q.anon ? "Anonyme" : q.authorName }),
+      el("span", { class: "quoted-text", text: shorten(q.text, 90) }),
+    ]);
+  }
+
   function messageItem(t, m) {
     const key = "msg:" + m.id;
-    const isMine = m.authorId === App.profile.id;
-    if (openEditors.has(key) && isMine) {
-      const ta = el("textarea", {
-        class: "textarea", rows: 3, maxlength: Utils.LIMITS.message,
-        "aria-label": "Modifier le message", "data-draft": "edit-msg-" + m.id,
-      });
+    const owns = App.ownsMessage(m);
+    const locked = othersReacted(m); // édition bloquée dès qu'un autre a réagi
+
+    if (openEditors.has(key) && owns && !locked) {
+      const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.message, "aria-label": "Modifier le message", "data-draft": "edit-msg-" + m.id });
       ta.value = m.text;
       return el("div", { class: "message editing" }, [
         ta,
@@ -458,48 +585,118 @@ const UI = (function () {
             const text = Utils.clean(ta.value);
             if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
             App.actions.updateMessage(t.id, m.id, text);
-            openEditors.delete(key);
-            forceRerender();
+            openEditors.delete(key); forceRerender();
           } }, "Enregistrer"),
-          el("button", { class: "btn btn-sm btn-ghost", onclick: function () {
-            openEditors.delete(key);
-            forceRerender();
-          } }, "Annuler"),
+          el("button", { class: "btn btn-sm btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
         ]),
       ]);
     }
-    return el("div", { class: "message" }, [
+
+    return el("div", { id: "msg-" + m.id, class: "message" + (owns ? " mine" : "") + (m.anon ? " anon" : "") }, [
       el("div", { class: "message-head" }, [
-        el("span", { class: "author", text: m.authorName }),
+        el("span", { class: "author" }, [
+          m.anon ? el("span", { class: "anon-badge", text: "🕶️ " }) : null,
+          el("span", { text: m.anon ? "Anonyme" : m.authorName }),
+          owns ? el("span", { class: "you-tag", text: " · vous" }) : null,
+        ]),
         el("span", { class: "date", text: Utils.formatDate(m.createdAt) + (m.updatedAt ? " · modifié" : "") }),
       ]),
+      quotedPreview(t, m),
       el("div", { class: "message-body pre", text: m.text }),
+      reactionsBar(t, m),
       el("div", { class: "message-actions" }, [
-        el("button", { class: "link-btn", onclick: function () {
-          showNewProposal(t.id, m.text);
-        } }, "Créer une proposition"),
-        isMine
-          ? el("button", { class: "link-btn", onclick: function () {
-              openEditors.add(key);
-              forceRerender();
-            } }, "Modifier")
-          : null,
+        el("button", { class: "link-btn", onclick: function () { startQuote(t.id, m.id); } }, "Citer"),
+        el("button", { class: "link-btn", onclick: function () { showNewProposal(t.id, m.text); } }, "Proposition"),
+        owns && !locked ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
+        owns && locked ? el("span", { class: "muted small locked-note", title: "Un message ne peut plus être modifié une fois qu'une réaction y a été ajoutée.", text: "🔒 réactions" }) : null,
+        owns ? el("button", { class: "link-btn", onclick: function () {
+          App.actions.setMessageSignature(t.id, m.id, !m.anon);
+          toast(m.anon ? "Message signé de votre nom." : "Message rendu anonyme.", "ok");
+        } }, m.anon ? "Signer avec mon nom" : "Rendre anonyme") : null,
       ]),
     ]);
   }
 
-  function newMessageForm(t) {
-    const ta = el("textarea", {
-      class: "textarea", rows: 2, placeholder: "Écrire un message…",
-      "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id,
+  function startQuote(topicId, messageId) {
+    quoting[topicId] = messageId;
+    forceRerender();
+    setTimeout(function () {
+      const ta = root.querySelector('[data-draft="new-msg-' + cssEscape(topicId) + '"]');
+      if (ta) ta.focus();
+    }, 30);
+  }
+
+  // Barre de réactions emoji d'un message (façon WhatsApp / Facebook).
+  function reactionsBar(t, m) {
+    const counts = State.reactionSummary(m);
+    const mine = (m.reactions || {})[App.profile.id] || null;
+    const pickerKey = "react:" + m.id;
+    const pickerOpen = openPickers.has(pickerKey);
+
+    const chips = [];
+    Utils.REACTIONS.forEach(function (e) {
+      const c = counts[e] || 0;
+      if (c > 0) {
+        chips.push(el("button", {
+          class: "reaction-chip" + (mine === e ? " mine" : ""),
+          title: "Réagir " + e,
+          onclick: function () { App.actions.setReaction(t.id, m.id, e); },
+        }, [el("span", { class: "r-emoji", text: e }), el("span", { class: "r-count", text: String(c) })]));
+      }
     });
+    chips.push(el("button", {
+      class: "reaction-add" + (pickerOpen ? " open" : ""),
+      "aria-label": "Ajouter une réaction",
+      onclick: function () {
+        if (pickerOpen) openPickers.delete(pickerKey); else openPickers.add(pickerKey);
+        forceRerender();
+      },
+    }, mine ? "+" : "🙂"));
+
+    const wrap = el("div", { class: "reactions-wrap" }, [el("div", { class: "reactions" }, chips)]);
+
+    if (pickerOpen) {
+      wrap.appendChild(el("div", { class: "reaction-picker" }, Utils.REACTIONS.map(function (e) {
+        return el("button", {
+          class: "reaction-opt" + (mine === e ? " mine" : ""),
+          onclick: function () {
+            App.actions.setReaction(t.id, m.id, e);
+            openPickers.delete(pickerKey);
+            forceRerender();
+          },
+        }, e);
+      })));
+    }
+    return wrap;
+  }
+
+  function newMessageForm(t) {
+    const ta = el("textarea", { class: "textarea", rows: 2, placeholder: "Écrire un message…", "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id });
+
+    // Bandeau « en réponse à … » si un message est cité.
+    const qid = quoting[t.id];
+    const q = qid ? State.findMessage(t, qid) : null;
+    const banner = q ? el("div", { class: "reply-banner" }, [
+      el("span", { class: "reply-to" }, [
+        el("span", { class: "reply-mark", text: "↩︎ " }),
+        el("span", { class: "reply-author", text: (q.anon ? "Anonyme" : q.authorName) + " : " }),
+        el("span", { class: "reply-text", text: shorten(q.text, 70) }),
+      ]),
+      el("button", { class: "reply-cancel", "aria-label": "Annuler la citation", onclick: function () { delete quoting[t.id]; forceRerender(); } }, "✕"),
+    ]) : null;
+
     return el("div", { class: "new-message" }, [
+      banner,
       ta,
       el("button", { class: "btn btn-primary", onclick: function () {
         const text = Utils.clean(ta.value);
         if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
-        App.actions.createMessage(t.id, text);
+        const useQuote = quoting[t.id] || null;
+        // Vide le champ AVANT le dispatch : le rendu synchrone déclenché par le
+        // dispatch ne doit pas restaurer le message déjà publié dans le composeur.
         ta.value = "";
+        delete quoting[t.id];
+        App.actions.createMessage(t.id, text, useQuote);
         forceRerender();
       } }, "Publier"),
     ]);
@@ -509,31 +706,18 @@ const UI = (function () {
 
   function renderProposals(t) {
     const box = el("div", { class: "proposals" });
-    box.appendChild(
-      el("button", { class: "btn btn-outline", onclick: function () { showNewProposal(t.id, ""); } }, "+ Nouvelle proposition")
-    );
-    if (t.proposals.length === 0) {
-      box.appendChild(el("p", { class: "muted", text: "Aucune proposition." }));
-    }
-    t.proposals.forEach(function (p) {
-      box.appendChild(proposalCard(t, p));
-    });
+    box.appendChild(el("button", { class: "btn btn-outline", onclick: function () { showNewProposal(t.id, ""); } }, [plusGlyph(), " Nouvelle proposition"]));
+    if (t.proposals.length === 0) box.appendChild(el("p", { class: "muted", text: "Aucune proposition." }));
+    t.proposals.forEach(function (p) { box.appendChild(proposalCard(t, p)); });
     return box;
   }
 
   function proposalCard(t, p) {
     const key = "prop:" + p.id;
     const card = el("div", { class: "card proposal" });
-
     if (openEditors.has(key)) {
-      const titleInput = el("input", {
-        class: "input", type: "text", value: p.title,
-        maxlength: Utils.LIMITS.proposalTitle, "data-draft": "edit-prop-title-" + p.id,
-      });
-      const descInput = el("textarea", {
-        class: "textarea", rows: 3, maxlength: Utils.LIMITS.proposalDescription,
-        "data-draft": "edit-prop-desc-" + p.id,
-      });
+      const titleInput = el("input", { class: "input", type: "text", value: p.title, maxlength: Utils.LIMITS.proposalTitle, "data-draft": "edit-prop-title-" + p.id });
+      const descInput = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.proposalDescription, "data-draft": "edit-prop-desc-" + p.id });
       descInput.value = p.description || "";
       field("Titre", titleInput).forEach(function (n) { card.appendChild(n); });
       field("Description", descInput).forEach(function (n) { card.appendChild(n); });
@@ -542,13 +726,9 @@ const UI = (function () {
           const title = Utils.clean(titleInput.value);
           if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
           App.actions.updateProposal(t.id, p.id, title, Utils.clean(descInput.value));
-          openEditors.delete(key);
-          forceRerender();
+          openEditors.delete(key); forceRerender();
         } }, "Enregistrer"),
-        el("button", { class: "btn btn-sm btn-ghost", onclick: function () {
-          openEditors.delete(key);
-          forceRerender();
-        } }, "Annuler"),
+        el("button", { class: "btn btn-sm btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
       ]));
       return card;
     }
@@ -559,18 +739,11 @@ const UI = (function () {
     ]));
     if (p.description) card.appendChild(el("p", { class: "proposal-desc pre", text: p.description }));
     card.appendChild(el("p", { class: "byline", text: "Proposé par " + p.authorName + " · " + Utils.formatDate(p.createdAt) }));
-
-    // Votes
     card.appendChild(voteBlock(t, p));
-
-    // Statut de la proposition (modifiable par tous)
     card.appendChild(el("div", { class: "proposal-footer" }, [
       el("label", { class: "field-label inline", text: "Statut :" }),
       proposalStatusSelect(t, p),
-      el("button", { class: "btn btn-ghost btn-sm", onclick: function () {
-        openEditors.add(key);
-        forceRerender();
-      } }, "Modifier"),
+      el("button", { class: "btn btn-ghost btn-sm", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier"),
     ]));
     return card;
   }
@@ -578,31 +751,23 @@ const UI = (function () {
   function voteBlock(t, p) {
     const s = State.tally(p);
     const myVote = p.votes[App.profile.id] || null;
-
     const bar = el("div", { class: "vote-bar" }, [
       s.total ? el("span", { class: "seg seg-for", style: "flex:" + s.for }) : null,
       s.total ? el("span", { class: "seg seg-against", style: "flex:" + s.against }) : null,
       s.total ? el("span", { class: "seg seg-abstain", style: "flex:" + s.abstain }) : null,
     ]);
-
     const buttons = el("div", { class: "vote-buttons" }, [
       voteBtn("Pour", "for", myVote, t, p),
       voteBtn("Contre", "against", myVote, t, p),
       voteBtn("Abstention", "abstain", myVote, t, p),
-      myVote
-        ? el("button", { class: "btn btn-sm btn-ghost", onclick: function () {
-            App.actions.removeVote(t.id, p.id);
-          } }, "Retirer mon vote")
-        : null,
+      myVote ? el("button", { class: "btn btn-sm btn-ghost", onclick: function () { App.actions.removeVote(t.id, p.id); } }, "Retirer") : null,
     ]);
-
     return el("div", { class: "vote-block" }, [
       bar,
       el("div", { class: "vote-stats" }, [
-        el("span", { class: "v-for", text: "Pour : " + s.for }),
-        el("span", { class: "v-against", text: "Contre : " + s.against }),
-        el("span", { class: "v-abstain", text: "Abstentions : " + s.abstain }),
-        el("span", { class: "v-total", text: "Votants : " + s.total }),
+        el("span", { class: "v-for", text: "Pour " + s.for }),
+        el("span", { class: "v-against", text: "Contre " + s.against }),
+        el("span", { class: "v-abstain", text: "Abst. " + s.abstain }),
         el("span", { class: "v-pct", text: s.expressed ? s.favorablePct + "% favorables" : "" }),
       ]),
       el("div", { class: "vote-indicator ind-" + s.indicator.key, text: s.indicator.label }),
@@ -621,132 +786,129 @@ const UI = (function () {
   }
 
   function proposalStatusSelect(t, p) {
-    const sel = el("select", {
-      class: "select select-sm",
-      "aria-label": "Statut de la proposition",
-      onchange: function (e) { App.actions.changeProposalStatus(t.id, p.id, e.target.value); },
-    });
-    Utils.PROPOSAL_STATUSES.forEach(function (st) {
-      sel.appendChild(option(st, State.PROPOSAL_STATUS_LABELS[st], p.status));
-    });
+    const sel = el("select", { class: "select select-sm", "aria-label": "Statut de la proposition", onchange: function (e) { App.actions.changeProposalStatus(t.id, p.id, e.target.value); } });
+    Utils.PROPOSAL_STATUSES.forEach(function (st) { sel.appendChild(option(st, State.PROPOSAL_STATUS_LABELS[st], p.status)); });
     return sel;
   }
 
-  // --- Conclusion -----------------------------------------------------------
+  // ==========================================================================
+  //  VUE : Conclusion — conclusions ajoutées par l'équipe + vote
+  // ==========================================================================
 
-  function renderConclusion(t) {
-    const ta = el("textarea", {
-      class: "textarea", rows: 5, maxlength: Utils.LIMITS.conclusion,
-      placeholder: "Résumé des discussions, décisions attendues, actions…",
-      "aria-label": "Conclusion du sujet",
-      "data-draft": "conclusion-" + t.id,
-    });
-    ta.value = t.conclusion || "";
-    const info = t.conclusionUpdatedAt
-      ? "Dernière modification par " + (t.conclusionUpdatedBy ? t.conclusionUpdatedBy.name : "?") +
-        " · " + Utils.formatDate(t.conclusionUpdatedAt)
-      : "Aucune conclusion pour l'instant.";
-    return el("div", { class: "card conclusion" }, [
-      ta,
-      el("p", { class: "byline", text: info }),
-      el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-primary", onclick: function () {
-          App.actions.updateConclusion(t.id, Utils.clean(ta.value));
-          toast("Conclusion enregistrée.", "ok");
-        } }, "Enregistrer la conclusion"),
-        t.status !== "ready"
-          ? el("button", { class: "btn btn-outline", onclick: function () {
-              App.actions.changeTopicStatus(t.id, "ready");
-            } }, "Marquer prêt pour la réunion")
-          : null,
+  function renderConclusion(data, topicId) {
+    const t = State.ensureTopicShape(State.findTopic(data, topicId));
+    if (!t) return notFound();
+    const wrap = el("section", { class: "page ai-page" });
+
+    wrap.appendChild(el("p", { class: "ai-topic-name", text: t.title }));
+    wrap.appendChild(el("p", { class: "ai-lead", text: "Regroupez les propositions du débat en conclusions, puis votez pour celle que vous préférez." }));
+
+    wrap.appendChild(el("button", { class: "btn btn-primary btn-block", onclick: function () { showAddConclusion(t.id); } }, [plusGlyph(), " Ajouter une conclusion"]));
+
+    const list = t.conclusions || [];
+    const leading = State.leadingConclusion(t);
+    const myVote = t.conclusionVotes[App.profile.id] || null;
+
+    if (list.length === 0) {
+      wrap.appendChild(emptyState("Aucune conclusion pour l'instant. Ajoutez-en une à partir des propositions du débat."));
+    } else {
+      const box = el("div", { class: "conclusion-list" });
+      list.forEach(function (c) { box.appendChild(conclusionCard(t, c, myVote, leading)); });
+      wrap.appendChild(box);
+    }
+    return wrap;
+  }
+
+  function conclusionCard(t, c, myVote, leading) {
+    const key = "concl:" + c.id;
+    const tally = State.conclusionTally(t, c.id);
+    const mine = myVote === c.id;
+    const canEdit = c.authorId === App.profile.id;
+
+    if (openEditors.has(key) && canEdit) {
+      const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.conclusion, "data-draft": "edit-concl-" + c.id });
+      ta.value = c.text;
+      return el("div", { class: "card conclusion-card" }, [
+        ta,
+        el("div", { class: "row-actions" }, [
+          el("button", { class: "btn btn-sm btn-primary", onclick: function () {
+            const text = Utils.clean(ta.value);
+            if (Utils.isBlank(text)) return markInvalid(ta, "La conclusion est vide.");
+            App.actions.updateConclusionItem(t.id, c.id, text);
+            openEditors.delete(key); forceRerender();
+          } }, "Enregistrer"),
+          el("button", { class: "btn btn-sm btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
+        ]),
+      ]);
+    }
+
+    return el("div", { class: "card conclusion-card" + (mine ? " chosen" : "") }, [
+      el("div", { class: "conclusion-top" }, [
+        el("span", { class: "src-badge src-manual", text: c.authorName || "Proposé" }),
+        leading && leading.id === c.id && tally.count > 0 ? el("span", { class: "lead-badge", text: "En tête" }) : null,
+      ]),
+      el("p", { class: "conclusion-text pre", text: c.text }),
+      el("div", { class: "conclusion-foot" }, [
+        el("button", { class: "btn btn-sm vote-choice" + (mine ? " active" : ""), onclick: function () {
+          if (mine) App.actions.removeConclusionVote(t.id);
+          else App.actions.setConclusionVote(t.id, c.id);
+        } }, mine ? "✓ Votre choix" : "Voter"),
+        el("span", { class: "vote-count", text: tally.count + " voix" + (tally.total ? " · " + tally.pct + "%" : "") }),
+        canEdit ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
+        canEdit ? el("button", { class: "link-btn danger", onclick: function () { App.actions.deleteConclusion(t.id, c.id); forceRerender(); } }, "Supprimer") : null,
       ]),
     ]);
   }
 
   // ==========================================================================
-  //  VUE : Synthèse de réunion
+  //  VUE : Synthèse de réunion (conservée, accessible depuis les Réglages)
   // ==========================================================================
 
   function renderMeeting(data) {
     const wrap = el("section", { class: "page meeting" });
     wrap.appendChild(el("div", { class: "page-head" }, [
-      el("h1", { text: "Préparation de la réunion" }),
-      el("button", { class: "btn btn-primary no-print", onclick: function () { window.print(); } }, "Imprimer la synthèse"),
+      el("h2", { text: "Préparation de la réunion" }),
+      el("button", { class: "btn btn-primary no-print", onclick: function () { window.print(); } }, "Imprimer"),
     ]));
 
-    const filters = [
-      ["all", "Tout"],
-      ["open", "Sujets ouverts"],
-      ["ready", "Sujets prêts"],
-      ["closed", "Sujets clôturés"],
-      ["selected", "Propositions retenues"],
-      ["debate", "Propositions à débattre"],
-      ["novote", "Propositions sans vote"],
-    ];
+    const filters = [["all", "Tout"], ["open", "Ouverts"], ["ready", "Prêts"], ["closed", "Clôturés"]];
     const fbar = el("div", { class: "controls no-print" });
     filters.forEach(function (f) {
-      fbar.appendChild(el("button", {
-        class: "chip" + (meetingState.filter === f[0] ? " active" : ""),
-        onclick: function () { meetingState.filter = f[0]; forceRerender(); },
-      }, f[1]));
+      fbar.appendChild(el("button", { class: "chip" + (meetingState.filter === f[0] ? " active" : ""), onclick: function () { meetingState.filter = f[0]; forceRerender(); } }, f[1]));
     });
     wrap.appendChild(fbar);
 
     let topics = data.topics.filter(function (t) { return t.status !== "archived"; });
     const f = meetingState.filter;
-    if (f === "open" || f === "ready" || f === "closed") {
-      topics = topics.filter(function (t) { return t.status === f; });
-    }
-    topics.sort(sorter("recent"));
+    if (f === "open" || f === "ready" || f === "closed") topics = topics.filter(function (t) { return t.status === f; });
+    topics.sort(function (a, b) { return (b.updatedAt || "").localeCompare(a.updatedAt || ""); });
 
-    if (topics.length === 0) {
-      wrap.appendChild(emptyState("Aucun sujet à synthétiser."));
-      return wrap;
-    }
-
-    topics.forEach(function (t) {
-      const block = meetingBlock(t, f);
-      if (block) wrap.appendChild(block);
-    });
+    if (topics.length === 0) { wrap.appendChild(emptyState("Aucun sujet à synthétiser.")); return wrap; }
+    topics.forEach(function (t) { wrap.appendChild(meetingBlock(State.ensureTopicShape(t))); });
     return wrap;
   }
 
-  function meetingBlock(t, filter) {
+  function meetingBlock(t) {
     const selected = t.proposals.filter(function (p) { return p.status === "selected"; });
     const debate = t.proposals.filter(function (p) { return p.status === "debate"; });
-    const implement = t.proposals.filter(function (p) { return p.status === "implemented"; });
-    const noVote = t.proposals.filter(function (p) { return Object.keys(p.votes).length === 0; });
-
-    if (filter === "selected" && selected.length === 0) return null;
-    if (filter === "debate" && debate.length === 0) return null;
-    if (filter === "novote" && noVote.length === 0) return null;
-
     const block = el("article", { class: "card meeting-block" });
-    block.appendChild(el("div", { class: "card-top" }, [
-      el("h2", { class: "card-title", text: t.title }),
-      topicBadge(t.status),
-    ]));
+    block.appendChild(el("div", { class: "card-top" }, [el("h3", { class: "card-title", text: t.title }), topicBadge(t.status)]));
     if (t.description) block.appendChild(el("p", { class: "card-desc", text: shorten(t.description, 220) }));
 
+    const leading = State.leadingConclusion(t);
     block.appendChild(el("h4", { class: "mini-title", text: "Conclusion" }));
-    block.appendChild(
-      t.conclusion
-        ? el("p", { class: "pre", text: t.conclusion })
-        : el("p", { class: "muted", text: "— (à rédiger)" })
-    );
+    if (leading) {
+      const tally = State.conclusionTally(t, leading.id);
+      block.appendChild(el("p", { class: "pre", text: leading.text }));
+      block.appendChild(el("p", { class: "byline", text: (leading.authorName || "Proposé") + " · " + tally.count + " voix" }));
+    } else if (t.conclusion) {
+      block.appendChild(el("p", { class: "pre", text: t.conclusion }));
+    } else {
+      block.appendChild(el("p", { class: "muted", text: "— (à rédiger)" }));
+    }
 
     block.appendChild(proposalSummary("Solutions retenues", selected));
     block.appendChild(proposalSummary("À débattre en réunion", debate));
-    block.appendChild(proposalSummary("À mettre en œuvre", implement));
-
-    // Points encore sans décision : propositions en vote.
-    const undecided = t.proposals.filter(function (p) { return p.status === "voting"; });
-    if (undecided.length) {
-      block.appendChild(proposalSummary("Points encore sans décision", undecided));
-    }
-    if (noVote.length) {
-      block.appendChild(el("p", { class: "muted small", text: noVote.length + " proposition(s) sans vote." }));
-    }
     return block;
   }
 
@@ -757,64 +919,52 @@ const UI = (function () {
       const s = State.tally(p);
       box.appendChild(el("div", { class: "prop-line" }, [
         el("span", { class: "prop-line-title", text: p.title }),
-        el("span", { class: "prop-line-votes", text:
-          "Pour " + s.for + " · Contre " + s.against + " · Abst. " + s.abstain +
-          (s.expressed ? " · " + s.favorablePct + "%" : "") }),
-        el("span", { class: "prop-line-ind ind-" + s.indicator.key, text: s.indicator.label }),
+        el("span", { class: "prop-line-votes", text: "Pour " + s.for + " · Contre " + s.against + (s.expressed ? " · " + s.favorablePct + "%" : "") }),
       ]));
     });
     return box;
   }
 
   // ==========================================================================
-  //  VUE : Paramètres & diagnostic
+  //  VUE : Réglages & diagnostic
   // ==========================================================================
 
   function renderSettings(data) {
     const wrap = el("section", { class: "page settings" });
-    wrap.appendChild(el("h1", { text: "Paramètres" }));
-
     if (updateAvailable) wrap.appendChild(updateBanner());
 
-    // Connexion à l'équipe (URL du script Apps Script)
     wrap.appendChild(renderApiSettings());
 
-    // Profil
-    const nameInput = el("input", {
-      class: "input", type: "text", maxlength: Utils.LIMITS.name,
-      value: App.profile.name, "data-draft": "settings-name",
-    });
+    const nameInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, value: App.profile.name, "data-draft": "settings-name" });
     wrap.appendChild(el("div", { class: "card" }, [
       el("h2", { text: "Votre identité" }),
-      field("Prénom", nameInput),
+      field("Nom d'utilisateur", nameInput),
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-primary", onclick: function () {
           const name = Utils.clean(nameInput.value);
-          if (Utils.isBlank(name)) return markInvalid(nameInput, "Le prénom est obligatoire.");
-          App.updateProfileName(name);
-          toast("Prénom mis à jour.", "ok");
+          if (Utils.isBlank(name)) return markInvalid(nameInput, "Le nom est obligatoire.");
+          App.updateProfileName(name); toast("Nom mis à jour.", "ok");
         } }, "Enregistrer"),
       ]),
-      el("p", { class: "muted small", text: "Identifiant local : " + App.profile.id }),
     ]));
 
-    // Synchronisation
+    wrap.appendChild(el("div", { class: "card" }, [
+      el("h2", { text: "Réunion" }),
+      el("p", { class: "muted small", text: "Synthèse imprimable de tous les sujets." }),
+      el("button", { class: "btn btn-outline", onclick: function () { App.navigate("#/meeting"); } }, "Ouvrir la préparation de réunion"),
+    ]));
+
     const status = Sync.getStatus();
     wrap.appendChild(el("div", { class: "card" }, [
       el("h2", { text: "Synchronisation" }),
-      el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-primary", onclick: function () { Sync.syncNow(); } }, "Synchroniser maintenant"),
-      ]),
+      el("div", { class: "row-actions" }, [el("button", { class: "btn btn-primary", onclick: function () { Sync.syncNow(); } }, "Synchroniser maintenant")]),
       diagnosticsBlock(status),
     ]));
 
-    // À propos
     wrap.appendChild(el("div", { class: "card" }, [
       el("h2", { text: "À propos" }),
-      el("p", { text: "TeamKrys — outil interne de préparation de réunion." }),
+      el("p", { text: "TeamKrys — préparation de réunion : sujets, discussion, propositions, résumés et conclusions votables." }),
       el("p", { class: "muted small", text: "Version " + APP_VERSION }),
-      el("p", { class: "muted small", text: CONFIG.isConfigured()
-        ? "API configurée." : "API non configurée : mode local uniquement (voir README)." }),
     ]));
     return wrap;
   }
@@ -822,66 +972,51 @@ const UI = (function () {
   function renderApiSettings() {
     const urlInput = el("input", {
       class: "input", type: "url", inputmode: "url", autocomplete: "off",
-      placeholder: "https://script.google.com/macros/s/…/exec",
-      "aria-label": "URL du script Google Apps Script",
-      value: CONFIG.API_URL || "",
-      "data-draft": "api-url",
+      placeholder: "https://script.google.com/…/exec", "aria-label": "URL du script Google Apps Script",
+      value: CONFIG.API_URL || "", "data-draft": "api-url",
     });
-    // La ligne d'état reflète l'état réel de synchronisation (cohérent avec
-    // l'indicateur en haut), pas seulement "une URL est saisie".
+    const codeInput = el("input", {
+      class: "input", type: "password", inputmode: "numeric", autocomplete: "off",
+      placeholder: CONFIG.hasPassword() ? "Code d'accès (déjà défini)" : "Code d'accès (optionnel)",
+      "aria-label": "Code d'accès",
+    });
     const st = Sync.getStatus();
     let cls = "conn-status", txt;
-    if (!CONFIG.isConfigured()) {
-      txt = "Non connecté (mode local).";
-    } else if (st.key === "up-to-date") {
-      cls += " conn-ok"; txt = "Connecté ✓ — synchronisé.";
-    } else if (st.key === "syncing" || st.key === "pending") {
-      cls += " conn-ok"; txt = "Connecté — synchronisation…";
-    } else if (st.key === "error") {
-      cls += " conn-err"; txt = "Erreur de connexion — vérifiez l'URL et le déploiement du script.";
-    } else if (st.key === "offline") {
-      txt = "URL enregistrée — hors connexion pour le moment.";
-    } else {
-      txt = "URL enregistrée.";
-    }
-    const statusLine = el("p", { class: cls, id: "api-conn-status", text: txt });
+    if (!CONFIG.isConfigured()) txt = "Non connecté (mode local).";
+    else if (st.key === "up-to-date") { cls += " conn-ok"; txt = "Connecté ✓ — synchronisé."; }
+    else if (st.key === "syncing" || st.key === "pending") { cls += " conn-ok"; txt = "Connecté — synchronisation…"; }
+    else if (st.key === "error") { cls += " conn-err"; txt = "Erreur de connexion — vérifiez l'URL et le déploiement."; }
+    else if (st.key === "offline") txt = "URL enregistrée — hors connexion.";
+    else txt = "URL enregistrée.";
+    const statusLine = el("p", { class: cls, text: txt });
 
     function save() {
       const url = Utils.clean(urlInput.value);
-      if (Utils.isBlank(url) || url.slice(0, 4) !== "http") {
-        return markInvalid(urlInput, "Collez l'URL du script (elle commence par https:// et finit par /exec).");
-      }
+      if (Utils.isBlank(url) || url.slice(0, 4) !== "http") return markInvalid(urlInput, "Collez l'URL du script (https:// … /exec).");
       statusLine.className = "conn-status";
       statusLine.textContent = "Connexion en cours…";
-      // On enregistre l'URL, puis on teste la connexion ; enfin on rafraîchit la
-      // vue pour afficher l'état réel (l'indicateur en haut fait foi).
-      App.setApiUrl(url)
-        .then(function () { return Api.getRevision(); })
-        .then(function (info) {
-          toast("Connecté ✓ (révision " + (info && info.revision != null ? info.revision : "?") + ").", "ok");
-        })
-        .catch(function (e) {
-          toast("Échec de connexion : " + (e && e.message ? e.message : "vérifiez l'URL."), "error");
-        })
-        .then(function () { forceRerender(); });
+      App.connect(url, codeInput.value || "").then(function (res) {
+        if (res.ok) toast("Connecté ✓ (révision " + (res.revision != null ? res.revision : "?") + ").", "ok");
+        else if (res.code === "auth") toast(codeInput.value ? "Code d'accès incorrect." : "Cette équipe demande un code d'accès.", "error");
+        else toast("Échec : " + (res.error || "vérifiez l'URL."), "error");
+        forceRerender();
+      });
     }
 
     return el("div", { class: "card api-card" }, [
       el("h2", { text: "Connexion à l'équipe" }),
-      el("p", { class: "muted small", text:
-        "Collez l'URL de votre script Google Apps Script (déployé en application Web, se terminant par « /exec ») pour partager les sujets avec l'équipe. Sans cette URL, l'application reste en mode local sur cet appareil." }),
-      field("URL du script (…/exec)", urlInput),
+      el("p", { class: "muted small", text: "URL du script Google Apps Script (déployé en application Web, terminant par « /exec »). Conservée uniquement sur cet appareil." }),
+      field("URL du script", urlInput),
+      field("Code d'accès", codeInput),
+      el("p", { class: "muted small", text: CONFIG.hasPassword()
+        ? "🔒 Cet appareil est verrouillé par un code, redemandé à chaque ouverture."
+        : "Ajoutez un code pour verrouiller l'application sur cet appareil (redemandé à chaque ouverture). Pour bloquer aussi l'accès aux données, définissez le même code sur le script (voir docs/INSTALLATION.md)." }),
       statusLine,
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-primary", onclick: save }, "Enregistrer et connecter"),
-        CONFIG.isConfigured()
-          ? el("button", { class: "btn btn-ghost", onclick: function () {
-              App.clearApiUrl().then(function () {
-                toast("Connexion retirée (mode local).", "ok");
-                forceRerender();
-              });
-            } }, "Retirer")
-          : null,
+        CONFIG.isConfigured() ? el("button", { class: "btn btn-ghost", onclick: function () {
+          App.clearApiUrl().then(function () { toast("Connexion retirée (mode local).", "ok"); forceRerender(); });
+        } }, "Retirer") : null,
       ]),
     ]);
   }
@@ -892,8 +1027,7 @@ const UI = (function () {
       diagRow("Statut réseau", status.online ? "En ligne" : "Hors connexion", "diag-online"),
       diagRow("État", status.label, "diag-state"),
       diagRow("Dernière synchronisation", status.lastSyncAt ? Utils.formatDate(status.lastSyncAt) : "—", "diag-sync"),
-      diagRow("Révision locale", String(status.localRevision), "diag-localrev"),
-      diagRow("Révision distante", String(status.remoteRevision), "diag-remoterev"),
+      diagRow("Révision", String(status.localRevision), "diag-localrev"),
       diagRow("Actions en attente", String(status.pendingCount), "diag-pending"),
       diagRow("Dernière erreur", status.lastError ? status.lastError.message : "Aucune", "diag-error"),
     ]);
@@ -908,47 +1042,49 @@ const UI = (function () {
 
   function updateDiagnostics(status) {
     if (!root) return;
-    const set = function (id, val) {
-      const n = root.querySelector("#" + id);
-      if (n) n.textContent = val;
-    };
+    const set = function (id, val) { const n = root.querySelector("#" + id); if (n) n.textContent = val; };
     set("diag-online", status.online ? "En ligne" : "Hors connexion");
     set("diag-state", status.label);
     set("diag-sync", status.lastSyncAt ? Utils.formatDate(status.lastSyncAt) : "—");
     set("diag-localrev", String(status.localRevision));
-    set("diag-remoterev", String(status.remoteRevision));
     set("diag-pending", String(status.pendingCount));
     set("diag-error", status.lastError ? status.lastError.message : "Aucune");
   }
 
   function updateBanner() {
     return el("div", { class: "banner no-print" }, [
-      el("span", { text: "Une nouvelle version de TeamKrys est disponible." }),
+      el("span", { text: "Une nouvelle version est disponible." }),
       el("button", { class: "btn btn-sm btn-primary", onclick: function () { App.applyUpdate(); } }, "Mettre à jour"),
     ]);
   }
 
   function connectBanner() {
     return el("div", { class: "banner banner-warn no-print" }, [
-      el("span", { text: "Application non connectée à l'équipe (mode local)." }),
+      el("span", { text: "Mode local (non connecté à l'équipe)." }),
       el("button", { class: "btn btn-sm btn-primary", onclick: function () { App.navigate("#/settings"); } }, "Connecter"),
     ]);
   }
 
   // ==========================================================================
-  //  Modales (nouveau sujet / nouvelle proposition) & profil initial
+  //  Modales
   // ==========================================================================
 
   function showNewTopic() {
     const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, placeholder: "Titre du sujet" });
-    const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription, placeholder: "Décrivez le problème, l'idée ou la question…" });
+    const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription, placeholder: "Description (facultative)" });
+    const nameInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, placeholder: "Anonyme" });
+    nameInput.value = App.profile ? App.profile.name : "";
     modal("Nouveau sujet", [
-      field("Titre", titleInput),
+      field("Titre *", titleInput),
       field("Description", descInput),
+      field("Nom (laisser vide = Anonyme)", nameInput),
+      el("p", { class: "muted small", text: "Un sujet anonyme n'enregistre aucune identité : idéal pour aborder un sujet délicat sans être « celui qui a mis les pieds dans le plat »." }),
     ], function () {
       const title = Utils.clean(titleInput.value);
       if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-      const id = App.actions.createTopic(title, Utils.clean(descInput.value));
+      const name = Utils.clean(nameInput.value);
+      const anon = Utils.isBlank(name);
+      const id = App.actions.createTopic(title, Utils.clean(descInput.value), anon ? "Anonyme" : name, anon);
       App.navigate("#/topic/" + id);
       return true;
     });
@@ -959,10 +1095,7 @@ const UI = (function () {
     const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.proposalTitle, placeholder: "Titre de la proposition" });
     const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.proposalDescription, placeholder: "Décrivez la solution…" });
     if (prefillDesc) descInput.value = prefillDesc;
-    modal("Nouvelle proposition", [
-      field("Titre", titleInput),
-      field("Description", descInput),
-    ], function () {
+    modal("Nouvelle proposition", [field("Titre *", titleInput), field("Description", descInput)], function () {
       const title = Utils.clean(titleInput.value);
       if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
       App.actions.createProposal(topicId, title, Utils.clean(descInput.value));
@@ -972,28 +1105,16 @@ const UI = (function () {
     setTimeout(function () { titleInput.focus(); }, 30);
   }
 
-  function askProfileName(onDone) {
-    const input = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, placeholder: "Votre prénom", "aria-label": "Votre prénom" });
-    const overlay = el("div", { class: "modal-overlay" }, [
-      el("div", { class: "modal" }, [
-        el("h2", { text: "Bienvenue sur TeamKrys" }),
-        el("p", { text: "Quel est votre prénom ?" }),
-        input,
-        el("div", { class: "row-actions" }, [
-          el("button", { class: "btn btn-primary", onclick: function () {
-            const name = Utils.clean(input.value);
-            if (Utils.isBlank(name)) return markInvalid(input, "Merci d'indiquer un prénom.");
-            document.body.removeChild(overlay);
-            onDone(name);
-          } }, "Commencer"),
-        ]),
-      ]),
-    ]);
-    document.body.appendChild(overlay);
-    setTimeout(function () { input.focus(); }, 30);
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") overlay.querySelector(".btn-primary").click();
+  function showAddConclusion(topicId) {
+    const ta = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.conclusion, placeholder: "Votre conclusion…" });
+    modal("Ajouter une conclusion", [field("Conclusion", ta)], function () {
+      const text = Utils.clean(ta.value);
+      if (Utils.isBlank(text)) return markInvalid(ta, "La conclusion est vide.");
+      App.actions.addConclusion(topicId, text);
+      forceRerender();
+      return true;
     });
+    setTimeout(function () { ta.focus(); }, 30);
   }
 
   function modal(title, body, onConfirm) {
@@ -1003,9 +1124,7 @@ const UI = (function () {
       el("h2", { text: title }),
       el("div", { class: "modal-body" }, body),
       el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-primary", onclick: function () {
-          if (onConfirm() !== false) close();
-        } }, "Valider"),
+        el("button", { class: "btn btn-primary", onclick: function () { if (onConfirm() !== false) close(); } }, "Valider"),
         el("button", { class: "btn btn-ghost", onclick: close }, "Annuler"),
       ]),
     ]);
@@ -1019,26 +1138,21 @@ const UI = (function () {
   function toast(message, kind) {
     const t = el("div", { class: "toast toast-" + (kind || "info"), text: message });
     toastEl.appendChild(t);
-    setTimeout(function () {
-      t.classList.add("show");
-    }, 10);
+    setTimeout(function () { t.classList.add("show"); }, 10);
     setTimeout(function () {
       t.classList.remove("show");
       setTimeout(function () { if (t.parentNode) toastEl.removeChild(t); }, 300);
-    }, 3200);
+    }, 3600);
   }
 
   // --- Petits composants ----------------------------------------------------
 
-  // Associe un <label> à son champ (attributs for/id) pour l'accessibilité.
   let fieldSeq = 0;
   function field(labelText, inputNode) {
     if (!inputNode.id) inputNode.id = "fld-" + (++fieldSeq);
     return [el("label", { class: "field-label", for: inputNode.id, text: labelText }), inputNode];
   }
 
-  // Signale un champ invalide : message inline sous le champ (pas de toast
-  // trompeur), attributs ARIA, focus, effacement à la prochaine saisie.
   function markInvalid(input, message) {
     if (!input.id) input.id = "fld-" + (++fieldSeq);
     input.classList.add("invalid");
@@ -1066,34 +1180,31 @@ const UI = (function () {
     return o;
   }
 
-  function topicBadge(status) {
-    return el("span", { class: "badge badge-topic badge-" + status, text: State.TOPIC_STATUS_LABELS[status] || status });
+  function plusGlyph() { return el("span", { class: "plus-glyph", text: "+" }); }
+  function notFound() {
+    return el("section", { class: "page" }, [
+      el("p", { class: "empty", text: "Sujet introuvable." }),
+      el("button", { class: "btn", onclick: function () { App.navigate("#/"); } }, "← Retour"),
+    ]);
   }
-  function proposalBadge(status) {
-    return el("span", { class: "badge badge-prop badge-" + status, text: State.PROPOSAL_STATUS_LABELS[status] || status });
-  }
-  function sectionTitle(text) {
-    return el("h2", { class: "section-title", text: text });
-  }
-  function metaItem(icon, text) {
-    return el("span", { class: "meta-item", text: icon + " " + text });
-  }
-  function emptyState(text) {
-    return el("div", { class: "empty", text: text });
-  }
-  function shorten(s, n) {
-    s = String(s || "");
-    return s.length > n ? s.slice(0, n - 1) + "…" : s;
-  }
+  function topicBadge(status) { return el("span", { class: "badge badge-topic badge-" + status, text: State.TOPIC_STATUS_LABELS[status] || status }); }
+  function proposalBadge(status) { return el("span", { class: "badge badge-prop badge-" + status, text: State.PROPOSAL_STATUS_LABELS[status] || status }); }
+  function sectionTitle(text) { return el("h2", { class: "section-title", text: text }); }
+  function metaItem(text) { return el("span", { class: "meta-item", text: text }); }
+  function emptyState(text) { return el("div", { class: "empty", text: text }); }
+  function shorten(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
   function plural(n) { return n > 1 ? "s" : ""; }
 
   return {
     mount: mount,
+    reveal: reveal,
     renderData: renderData,
     renderStatus: renderStatus,
     setUpdateAvailable: setUpdateAvailable,
     forceRerender: forceRerender,
-    askProfileName: askProfileName,
+    showOnboardingUrl: showOnboardingUrl,
+    showOnboardingName: showOnboardingName,
+    showLock: showLock,
     toast: toast,
   };
 })();

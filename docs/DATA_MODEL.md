@@ -31,6 +31,8 @@
   "updatedAt": "date ISO",
   "messages": [],
   "proposals": [],
+  "conclusions": [],
+  "conclusionVotes": {},
   "conclusion": "",
   "conclusionUpdatedAt": null,
   "conclusionUpdatedBy": null
@@ -38,6 +40,31 @@
 ```
 
 Statuts : `open`, `ready`, `closed`, `archived`.
+
+`createdBy.name` peut valoir `"Anonyme"` (choisi à la création via le champ
+« nom »), tout en conservant l'`id` local de l'auteur.
+
+Champs « Conclusion » (remplissage manuel) :
+
+- `conclusions` : `[{ id, text, source, authorId, authorName, createdAt, updatedAt }]`
+  — conclusions ajoutées par les collaborateurs (`source` vaut toujours
+  `"manual"`), modifiables/supprimables par leur auteur.
+- `conclusionVotes` : `{ participantId: conclusionId }` — **choix unique** par
+  personne (voter pour une conclusion remplace le vote précédent).
+
+### Conclusion (candidate votable)
+
+```json
+{
+  "id": "uuid",
+  "text": "Conclusion proposée",
+  "source": "manual",
+  "authorId": "uuid-local",
+  "authorName": "Prénom",
+  "createdAt": "date ISO",
+  "updatedAt": "date ISO"
+}
+```
 
 ### Message
 
@@ -48,9 +75,24 @@ Statuts : `open`, `ready`, `closed`, `archived`.
   "authorName": "Prénom",
   "text": "Contenu du message",
   "createdAt": "date ISO",
-  "updatedAt": null
+  "updatedAt": null,
+  "reactions": { "uuid-personne": "👌" },
+  "anon": false,
+  "quoteId": null
 }
 ```
+
+- `reactions` associe à chaque personne **une** réaction emoji parmi
+  `👌 💪 🤞 🤏 👎 💩` (une par personne et par message ; recliquer la même la retire).
+- `anon` : si `true`, le message est **anonyme** — `authorName` vaut `"Anonyme"`
+  et `authorId` est vidé (`""`), afin qu'aucune identité ne subsiste dans le
+  fichier partagé. L'auteur conserve ses droits d'édition/signature grâce à un
+  suivi **local** (sur son appareil, non partagé).
+- `quoteId` : identifiant d'un autre message du sujet **cité** (ou `null`).
+
+> Un message est modifiable par son auteur **tant qu'aucune autre personne n'y a
+> réagi** (verrou UI). Un sujet créé en anonyme a de même `createdBy` = `{ id:"",
+> name:"Anonyme" }`.
 
 ### Proposition
 
@@ -102,17 +144,24 @@ Le frontend n'envoie jamais tout le JSON : il envoie une **action**. Format :
 |---|---|
 | `REGISTER_PARTICIPANT` | `{}` (auteur pris dans `participant`) |
 | `UPDATE_PARTICIPANT` | `{}` |
-| `CREATE_TOPIC` | `{ topicId, title, description }` |
+| `CREATE_TOPIC` | `{ topicId, title, description, authorName?, anon? }` (si `anon`, aucune identité enregistrée) |
 | `UPDATE_TOPIC` | `{ topicId, title, description }` |
 | `CHANGE_TOPIC_STATUS` | `{ topicId, status }` |
-| `CREATE_MESSAGE` | `{ topicId, messageId, text }` |
+| `CREATE_MESSAGE` | `{ topicId, messageId, text, quoteId? }` |
 | `UPDATE_MESSAGE` | `{ topicId, messageId, text }` |
+| `SET_MESSAGE_SIGNATURE` | `{ topicId, messageId, anon }` (signer / rendre anonyme) |
+| `SET_REACTION` | `{ topicId, messageId, emoji }` (bascule la réaction de l'auteur) |
 | `CREATE_PROPOSAL` | `{ topicId, proposalId, title, description }` |
 | `UPDATE_PROPOSAL` | `{ topicId, proposalId, title, description }` |
 | `CHANGE_PROPOSAL_STATUS` | `{ topicId, proposalId, status }` |
 | `SET_VOTE` | `{ topicId, proposalId, vote }` |
 | `REMOVE_VOTE` | `{ topicId, proposalId }` |
-| `UPDATE_CONCLUSION` | `{ topicId, conclusion }` |
+| `UPDATE_CONCLUSION` | `{ topicId, conclusion }` (héritage : conclusion libre) |
+| `ADD_CONCLUSION` | `{ topicId, conclusionId, text }` (conclusion manuelle) |
+| `UPDATE_CONCLUSION_ITEM` | `{ topicId, conclusionId, text }` (auteur uniquement) |
+| `DELETE_CONCLUSION` | `{ topicId, conclusionId }` (auteur uniquement) |
+| `SET_CONCLUSION_VOTE` | `{ topicId, conclusionId }` (choix unique) |
+| `REMOVE_CONCLUSION_VOTE` | `{ topicId }` |
 
 ### Traitement serveur (`applyAction`)
 
@@ -131,6 +180,19 @@ Le frontend n'envoie jamais tout le JSON : il envoie une **action**. Format :
 - `POST` (corps = action) →
   `{ "ok": true, "revision": n, "state": {…}, "duplicate": false }`
   ou `{ "ok": false, "error": "message" }`
+
+### Code d'accès (authentification)
+
+Si un code d'accès est configuré (`setPassword()` côté script), **chaque**
+requête doit fournir un jeton d'authentification, sinon la réponse est
+`{ "ok": false, "error": "Code d'accès requis ou incorrect.", "code": "auth" }`.
+
+- Le jeton est `SHA-256("srv|" + sel + "|" + code)` en hexadécimal, envoyé en
+  paramètre `auth` (ex. `?mode=revision&auth=…`).
+- Le serveur stocke uniquement le **hachage** du code (jamais le code en clair).
+- L'appareil ne stocke jamais le code : seulement un **vérificateur** distinct,
+  `SHA-256("lock|" + sel + "|" + code)`, pour valider le déverrouillage local
+  (y compris hors connexion) sans permettre de reconstituer le jeton serveur.
 
 ---
 

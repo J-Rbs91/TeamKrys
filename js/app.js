@@ -9,30 +9,168 @@ const App = (function () {
     actions: {},
   };
 
-  // --- Démarrage ------------------------------------------------------------
+  // --- Démarrage & accueil (onboarding) -------------------------------------
+
+  var LOCAL_ACCEPTED_KEY = "teamkrys.localAccepted";
+  var OWNED_KEY = "teamkrys.ownedMsgs";
+  var pendingNewProfile = false;
+
+  // Messages créés depuis CET appareil. Permet à l'auteur de modifier / signer
+  // ses messages MÊME anonymes (le message anonyme ne stocke plus son identité).
+  var ownedMsgs = (function () {
+    try { return new Set(JSON.parse(window.localStorage.getItem(OWNED_KEY) || "[]")); }
+    catch (e) { return new Set(); }
+  })();
+
+  function rememberOwnMessage(id) {
+    ownedMsgs.add(id);
+    try { window.localStorage.setItem(OWNED_KEY, JSON.stringify(Array.from(ownedMsgs))); }
+    catch (e) { /* stockage indisponible */ }
+  }
+
+  // Vrai si le message a été rédigé depuis cet appareil (signé ou anonyme).
+  function ownsMessage(m) {
+    if (!m) return false;
+    if (ownedMsgs.has(m.id)) return true;
+    return !!(app.profile && m.authorId && m.authorId === app.profile.id);
+  }
+
+  function localAccepted() {
+    try {
+      return window.localStorage.getItem(LOCAL_ACCEPTED_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setLocalAccepted() {
+    try {
+      window.localStorage.setItem(LOCAL_ACCEPTED_KEY, "1");
+    } catch (e) { /* stockage indisponible */ }
+  }
 
   function boot() {
     UI.mount(document.getElementById("app"));
 
     // L'URL de l'API a déjà été chargée depuis le localStorage par config.js.
     DB.metaGet("profile").then(function (profile) {
-      if (profile && profile.id) {
-        app.profile = profile;
-        start(false);
-      } else {
-        UI.askProfileName(function (name) {
-          app.profile = { id: Utils.uuid(), name: name };
-          DB.metaSet("profile", app.profile).then(function () {
-            start(true);
-          });
-        });
-      }
+      if (profile && profile.id) app.profile = profile;
+      resumeOnboarding();
     });
   }
 
-  // Enregistre l'URL de l'API saisie par l'utilisateur (uniquement dans le
-  // localStorage de l'appareil, jamais dans le dépôt) et relance la
-  // synchronisation. Renvoie une promesse permettant de tester la connexion.
+  /**
+   * Séquence d'accueil demandée :
+   *   1) coller l'URL du script + mot de passe éventuel (ou mode local) ;
+   *   2) déverrouillage par mot de passe si l'appareil en a un (à chaque ouverture) ;
+   *   3) saisir le nom d'utilisateur ;
+   *   4) écran principal.
+   */
+  function resumeOnboarding() {
+    if (!CONFIG.isConfigured() && !localAccepted()) {
+      UI.showOnboardingUrl({
+        onSaved: function () { resumeOnboarding(); },
+        onLocal: function () { setLocalAccepted(); resumeOnboarding(); },
+      });
+      return;
+    }
+    // Verrou : mot de passe redemandé à chaque ouverture tant que le jeton
+    // n'est pas en mémoire (rechargement = nouvelle saisie obligatoire).
+    if (CONFIG.isConfigured() && CONFIG.hasPassword() && !Api.hasToken()) {
+      UI.showLock({
+        onUnlock: function () { resumeOnboarding(); },
+        onLogout: function () { logoutTeam(); resumeOnboarding(); },
+      });
+      return;
+    }
+    if (!app.profile) {
+      UI.showOnboardingName(function (name) {
+        app.profile = { id: Utils.uuid(), name: name };
+        pendingNewProfile = true;
+        DB.metaSet("profile", app.profile).then(function () {
+          resumeOnboarding();
+        });
+      });
+      return;
+    }
+    var isNew = pendingNewProfile;
+    pendingNewProfile = false;
+    start(isNew);
+  }
+
+  // --- Connexion / mot de passe --------------------------------------------
+
+  // Enregistre l'URL et, si un mot de passe est fourni, dérive le jeton serveur
+  // (envoyé aux requêtes) et le vérificateur local (validation du verrou).
+  // Aucun mot de passe n'est stocké : seul le vérificateur (un hachage) l'est.
+  // Renvoie une promesse { ok } ou { ok:false, code, error }.
+  function connect(url, password) {
+    CONFIG.persistApiUrl(Utils.clean(url));
+    var pw = password || "";
+    var derive = pw
+      ? Promise.all([Utils.sha256Hex(CONFIG.serverTokenInput(pw)), Utils.sha256Hex(CONFIG.verifierInput(pw))])
+      : Promise.resolve([null, null]);
+
+    return derive.then(function (res) {
+      Api.setAuthToken(res[0]); // null s'il n'y a pas de mot de passe
+      if (!CONFIG.isConfigured()) return { ok: false, error: "URL invalide." };
+      return Api.getRevision()
+        .then(function (info) {
+          CONFIG.setVerifier(pw ? res[1] : "");
+          Sync.emit();
+          return { ok: true, revision: info && info.revision };
+        })
+        .catch(function (e) {
+          var code = e && e.data && e.data.code;
+          if (code === "auth") Api.clearAuthToken();
+          return { ok: false, code: code, error: (e && e.message) || "Échec de connexion." };
+        });
+    });
+  }
+
+  // Déverrouille l'application avec le mot de passe saisi.
+  //  - Si un vérificateur local existe : validation locale (fonctionne hors
+  //    connexion), puis mise en mémoire du jeton serveur.
+  //  - Sinon (ex. l'équipe a activé le mot de passe après coup) : on établit la
+  //    connexion comme à l'accueil (validation en ligne + enregistrement).
+  function unlock(password) {
+    if (!CONFIG.hasPassword()) {
+      return connect(CONFIG.API_URL, password).then(function (res) {
+        return { ok: !!res.ok, code: res.code };
+      });
+    }
+    return Utils.sha256Hex(CONFIG.verifierInput(password)).then(function (v) {
+      if (v !== CONFIG.getVerifier()) return { ok: false };
+      return Utils.sha256Hex(CONFIG.serverTokenInput(password)).then(function (tok) {
+        Api.setAuthToken(tok);
+        Sync.emit();
+        return { ok: true };
+      });
+    });
+  }
+
+  // Reverrouille (inactivité, ou mot de passe exigé par le serveur en cours de
+  // session) : efface le jeton et réaffiche l'écran de déverrouillage.
+  function relock() {
+    if (!CONFIG.isConfigured() || !CONFIG.hasPassword()) return;
+    Api.clearAuthToken();
+    Sync.stopPolling();
+    Sync.emit();
+    UI.showLock({
+      onUnlock: function () { Sync.startPolling(); Sync.syncNow(); },
+      onLogout: function () { logoutTeam(); location.reload(); },
+    });
+  }
+
+  // Déconnecte l'appareil de l'équipe (efface URL + vérificateur + jeton).
+  function logoutTeam() {
+    Api.clearAuthToken();
+    CONFIG.setVerifier("");
+    CONFIG.persistApiUrl("");
+    try { window.localStorage.removeItem(LOCAL_ACCEPTED_KEY); } catch (e) { /* ignore */ }
+    Sync.emit();
+  }
+
   function setApiUrl(url) {
     CONFIG.persistApiUrl(Utils.clean(url));
     Sync.emit();
@@ -41,12 +179,19 @@ const App = (function () {
   }
 
   function clearApiUrl() {
-    CONFIG.persistApiUrl("");
-    Sync.emit();
+    logoutTeam();
     return Promise.resolve();
   }
 
+  var startWired = false;
+  var hiddenAt = null;
+
   function start(isNewProfile) {
+    UI.reveal();
+
+    // Le serveur exige un mot de passe (ou il a changé) : reverrouiller.
+    Api.onAuthError(function () { relock(); });
+
     Sync.init({
       onChange: function (data) { UI.renderData(data); },
       onStatus: function (status) { UI.renderStatus(status); },
@@ -60,6 +205,11 @@ const App = (function () {
       Sync.syncNow();
     });
 
+    // Écouteurs globaux enregistrés une seule fois (start() peut être rappelé
+    // après un déverrouillage).
+    if (startWired) { registerServiceWorker(); return; }
+    startWired = true;
+
     window.addEventListener("hashchange", function () {
       parseRoute();
       UI.renderData(Sync.getData());
@@ -72,7 +222,19 @@ const App = (function () {
     window.addEventListener("offline", function () { Sync.emit(); });
 
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") Sync.syncNow();
+      if (document.visibilityState === "hidden") {
+        hiddenAt = new Date().getTime();
+        return;
+      }
+      // Retour au premier plan : reverrouiller après une longue inactivité.
+      if (CONFIG.hasPassword() && Api.hasToken() && hiddenAt &&
+          (new Date().getTime() - hiddenAt) > CONFIG.LOCK_IDLE_MS) {
+        hiddenAt = null;
+        relock();
+        return;
+      }
+      hiddenAt = null;
+      Sync.syncNow();
     });
 
     registerServiceWorker();
@@ -91,8 +253,11 @@ const App = (function () {
   function parseRoute() {
     const hash = location.hash || "#/";
     const parts = hash.replace(/^#\/?/, "").split("/");
-    if (parts[0] === "topic" && parts[1]) app.route = { name: "topic", id: decodeURIComponent(parts[1]) };
-    else if (parts[0] === "meeting") app.route = { name: "meeting", id: null };
+    if (parts[0] === "topic" && parts[1]) {
+      const id = decodeURIComponent(parts[1]);
+      if (parts[2] === "conclusion") app.route = { name: "conclusion", id: id };
+      else app.route = { name: "topic", id: id };
+    } else if (parts[0] === "meeting") app.route = { name: "meeting", id: null };
     else if (parts[0] === "settings") app.route = { name: "settings", id: null };
     else app.route = { name: "home", id: null };
   }
@@ -123,9 +288,9 @@ const App = (function () {
   }
 
   app.actions = {
-    createTopic: function (title, description) {
+    createTopic: function (title, description, authorName, anon) {
       const id = Utils.uuid();
-      dispatch("CREATE_TOPIC", { topicId: id, title: title, description: description });
+      dispatch("CREATE_TOPIC", { topicId: id, title: title, description: description, authorName: authorName, anon: !!anon });
       return id;
     },
     updateTopic: function (topicId, title, description) {
@@ -134,11 +299,20 @@ const App = (function () {
     changeTopicStatus: function (topicId, status) {
       dispatch("CHANGE_TOPIC_STATUS", { topicId: topicId, status: status });
     },
-    createMessage: function (topicId, text) {
-      dispatch("CREATE_MESSAGE", { topicId: topicId, messageId: Utils.uuid(), text: text });
+    createMessage: function (topicId, text, quoteId) {
+      const id = Utils.uuid();
+      rememberOwnMessage(id);
+      dispatch("CREATE_MESSAGE", { topicId: topicId, messageId: id, text: text, quoteId: quoteId || null });
+      return id;
     },
     updateMessage: function (topicId, messageId, text) {
       dispatch("UPDATE_MESSAGE", { topicId: topicId, messageId: messageId, text: text });
+    },
+    setMessageSignature: function (topicId, messageId, anon) {
+      dispatch("SET_MESSAGE_SIGNATURE", { topicId: topicId, messageId: messageId, anon: !!anon });
+    },
+    setReaction: function (topicId, messageId, emoji) {
+      dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: emoji });
     },
     createProposal: function (topicId, title, description) {
       const id = Utils.uuid();
@@ -159,6 +333,23 @@ const App = (function () {
     },
     updateConclusion: function (topicId, conclusion) {
       dispatch("UPDATE_CONCLUSION", { topicId: topicId, conclusion: conclusion });
+    },
+    addConclusion: function (topicId, text) {
+      const id = Utils.uuid();
+      dispatch("ADD_CONCLUSION", { topicId: topicId, conclusionId: id, text: text });
+      return id;
+    },
+    updateConclusionItem: function (topicId, conclusionId, text) {
+      dispatch("UPDATE_CONCLUSION_ITEM", { topicId: topicId, conclusionId: conclusionId, text: text });
+    },
+    deleteConclusion: function (topicId, conclusionId) {
+      dispatch("DELETE_CONCLUSION", { topicId: topicId, conclusionId: conclusionId });
+    },
+    setConclusionVote: function (topicId, conclusionId) {
+      dispatch("SET_CONCLUSION_VOTE", { topicId: topicId, conclusionId: conclusionId });
+    },
+    removeConclusionVote: function (topicId) {
+      dispatch("REMOVE_CONCLUSION_VOTE", { topicId: topicId });
     },
   };
 
@@ -216,6 +407,10 @@ const App = (function () {
     updateProfileName: updateProfileName,
     setApiUrl: setApiUrl,
     clearApiUrl: clearApiUrl,
+    connect: connect,
+    unlock: unlock,
+    logoutTeam: logoutTeam,
+    ownsMessage: ownsMessage,
     applyUpdate: applyUpdate,
     get profile() { return app.profile; },
     get route() { return app.route; },

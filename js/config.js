@@ -51,4 +51,53 @@ CONFIG.persistApiUrl = function (url) {
   }
 };
 
-const APP_VERSION = "1.0.3";
+/* -------------------------------------------------------------- Mot de passe
+ * Verrouillage optionnel de l'application par mot de passe.
+ *
+ * - Le mot de passe lui-même n'est JAMAIS stocké sur l'appareil.
+ * - On conserve seulement un « vérificateur » : un hachage SHA-256 dérivé du
+ *   mot de passe, qui permet de valider la saisie à l'écran de déverrouillage
+ *   (y compris hors connexion) sans révéler le mot de passe ni le jeton serveur.
+ * - Le jeton envoyé au script (auth) est un hachage DIFFÉRENT du même mot de
+ *   passe : disposer du vérificateur ne permet pas de reconstituer ce jeton.
+ * - Le sel est public (partagé client/serveur) ; il évite les tables
+ *   arc-en-ciel triviales sur le hachage stocké.
+ */
+CONFIG.PW_SALT = "teamkrys-v1";
+CONFIG.PW_VERIFIER_KEY = "teamkrys.pwVerifier";
+
+// Chaînes hachées (doivent être identiques côté script Apps Script).
+CONFIG.serverTokenInput = function (password) { return "srv|" + CONFIG.PW_SALT + "|" + password; };
+CONFIG.verifierInput = function (password) { return "lock|" + CONFIG.PW_SALT + "|" + password; };
+
+CONFIG.hasPassword = function () {
+  try {
+    return !!window.localStorage.getItem(CONFIG.PW_VERIFIER_KEY);
+  } catch (e) {
+    return false;
+  }
+};
+
+CONFIG.getVerifier = function () {
+  try {
+    return window.localStorage.getItem(CONFIG.PW_VERIFIER_KEY) || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+// Enregistre (ou efface avec une valeur vide) le vérificateur local.
+CONFIG.setVerifier = function (hash) {
+  try {
+    if (hash) window.localStorage.setItem(CONFIG.PW_VERIFIER_KEY, hash);
+    else window.localStorage.removeItem(CONFIG.PW_VERIFIER_KEY);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Délai d'inactivité (onglet masqué) au-delà duquel on reverrouille, en ms.
+CONFIG.LOCK_IDLE_MS = 3 * 60 * 1000;
+
+const APP_VERSION = "1.4.0";
