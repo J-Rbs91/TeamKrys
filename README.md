@@ -1,4 +1,4 @@
-# TeamKrys
+# BrainstO.
 
 **Outil interne, simple et mobile, de préparation de réunion pour l'équipe d'un magasin.**
 
@@ -14,7 +14,7 @@ choisit un **nom d'utilisateur**, puis on accède à la **liste des sujets** ;
 chaque sujet ouvre un écran **débat** (messages horodatés et signés, modifiables
 par leur auteur) donnant accès à l'écran **Conclusion**.
 
-TeamKrys fonctionne **en ligne et hors connexion** (PWA). Il n'y a **ni compte,
+BrainstO. fonctionne **en ligne et hors connexion** (PWA). Il n'y a **ni compte,
 ni mot de passe, ni base de données, ni serveur** : les données partagées sont
 stockées dans un simple fichier JSON sur Google Drive, lu et écrit par un petit
 script Google Apps Script.
@@ -62,7 +62,7 @@ script Google Apps Script.
 ## Architecture
 
 ```
-Application TeamKrys (PWA statique, GitHub Pages)
+Application BrainstO. (PWA statique, GitHub Pages)
         │  HTML / CSS / JavaScript
         ├── Service worker (cache hors connexion)
         ├── IndexedDB (cache des données + identité locale)

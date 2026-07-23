@@ -1,6 +1,6 @@
 {
-  "name": "TeamKrys — Préparation de réunion",
-  "short_name": "TeamKrys",
+  "name": "BrainstO. — Préparation de réunion",
+  "short_name": "BrainstO.",
   "description": "Outil interne de préparation de réunion pour l'équipe du magasin.",
   "start_url": "./index.html",
   "scope": "./",

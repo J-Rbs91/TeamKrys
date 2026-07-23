@@ -255,7 +255,8 @@ const App = (function () {
     const parts = hash.replace(/^#\/?/, "").split("/");
     if (parts[0] === "topic" && parts[1]) {
       const id = decodeURIComponent(parts[1]);
-      if (parts[2] === "conclusion") app.route = { name: "conclusion", id: id };
+      if (parts[2] === "proposals") app.route = { name: "proposals", id: id };
+      else if (parts[2] === "conclusion") app.route = { name: "conclusion", id: id };
       else app.route = { name: "topic", id: id };
     } else if (parts[0] === "meeting") app.route = { name: "meeting", id: null };
     else if (parts[0] === "settings") app.route = { name: "settings", id: null };

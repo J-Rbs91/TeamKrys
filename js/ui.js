@@ -16,14 +16,15 @@ const UI = (function () {
   let root, barLeft, barTitle, barRight, viewEl, badgeEl, toastEl;
 
   // État éphémère de l'interface (non persisté).
-  const openEditors = new Set(); // clés "kind:id"
-  const openPickers = new Set(); // sélecteurs de réaction ouverts ("react:msgId")
+  const openEditors = new Set(); // clés "kind:id" (édition de proposition)
   const quoting = {}; // topicId -> messageId cité en cours de rédaction
   const listState = { search: "", showArchived: false };
   const meetingState = { filter: "all" };
   let lastSignature = null;
   let lastRoute = null;
   let updateAvailable = false;
+  let lastChatTopic = null;      // dernier sujet ouvert en chat (pour défiler en bas)
+  let pendingScrollBottom = false;
 
   // --- Montage --------------------------------------------------------------
 
@@ -73,17 +74,31 @@ const UI = (function () {
     };
 
     let title = "Sujets";
-    if (route.name === "topic") { barLeft.appendChild(backTo("#/", "Retour aux sujets")); title = topicTitleFor(route.id); }
+    let titleTap = null; // action au tap sur le titre (infos du sujet)
+    if (route.name === "topic") {
+      barLeft.appendChild(backTo("#/", "Retour aux sujets"));
+      title = topicTitleFor(route.id);
+      const t = State.findTopic(Sync.getData(), route.id);
+      if (t) titleTap = function () { showTopicInfo(State.ensureTopicShape(t)); };
+    }
+    else if (route.name === "proposals") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Propositions"; }
     else if (route.name === "conclusion") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Conclusion"; }
     else if (route.name === "meeting") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réunion"; }
     else if (route.name === "settings") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réglages"; }
     else {
       // Accueil : marque discrète.
-      barLeft.appendChild(el("span", { class: "brand", text: "TeamKrys" }));
+      barLeft.appendChild(el("span", { class: "brand", text: "BrainstO." }));
       title = "";
     }
 
-    if (title) barTitle.appendChild(document.createTextNode(title));
+    if (title && titleTap) {
+      barTitle.appendChild(el("button", { class: "bar-title-btn", onclick: titleTap, title: "Infos du sujet" }, [
+        el("span", { text: title }),
+        el("span", { class: "bar-title-info", text: " ⓘ" }),
+      ]));
+    } else if (title) {
+      barTitle.appendChild(document.createTextNode(title));
+    }
 
     // À droite : badge de synchro + accès aux réglages (sauf en réglages).
     barRight.appendChild(badgeEl);
@@ -151,6 +166,7 @@ const UI = (function () {
 
     let content;
     if (route.name === "topic") content = renderTopic(data, route.id);
+    else if (route.name === "proposals") content = renderProposalsScreen(data, route.id);
     else if (route.name === "conclusion") content = renderConclusion(data, route.id);
     else if (route.name === "meeting") content = renderMeeting(data);
     else if (route.name === "settings") content = renderSettings(data);
@@ -158,12 +174,18 @@ const UI = (function () {
 
     if (content) viewEl.appendChild(content);
     restoreDrafts(snap);
+
+    if (route.name !== "topic") lastChatTopic = null;
+    if (pendingScrollBottom) {
+      pendingScrollBottom = false;
+      setTimeout(function () { window.scrollTo({ top: document.body.scrollHeight }); }, 0);
+    }
   }
 
   function serialize(set) { return Array.from(set).sort().join(","); }
 
   function dataSignature(data, route) {
-    if (route.name === "topic" || route.name === "conclusion") {
+    if (route.name === "topic" || route.name === "proposals" || route.name === "conclusion") {
       const t = State.findTopic(data, route.id);
       return t ? JSON.stringify(t) : "none";
     }
@@ -253,7 +275,7 @@ const UI = (function () {
 
     const overlay = el("div", { class: "onboarding" }, [
       el("div", { class: "onb-card" }, [
-        el("div", { class: "onb-logo", text: "TeamKrys" }),
+        el("div", { class: "onb-logo", text: "BrainstO." }),
         el("h2", { class: "onb-title", text: "Connexion à l'équipe" }),
         el("p", { class: "onb-sub", text: "Collez l'URL du script Google Apps Script de votre équipe. Ajoutez un code d'accès si votre équipe en utilise un." }),
         urlInput,
@@ -338,7 +360,7 @@ const UI = (function () {
     });
     const overlay = el("div", { class: "onboarding" }, [
       el("div", { class: "onb-card" }, [
-        el("div", { class: "onb-logo", text: "TeamKrys" }),
+        el("div", { class: "onb-logo", text: "BrainstO." }),
         el("h2", { class: "onb-title", text: "Bienvenue" }),
         el("p", { class: "onb-sub", text: "Quel nom souhaitez-vous utiliser dans l'application ?" }),
         input,
@@ -440,108 +462,95 @@ const UI = (function () {
 
   function renderTopic(data, topicId) {
     const t = State.ensureTopicShape(State.findTopic(data, topicId));
-    if (!t) {
-      return el("section", { class: "page" }, [
-        el("p", { class: "empty", text: "Sujet introuvable." }),
-        el("button", { class: "btn", onclick: function () { App.navigate("#/"); } }, "← Retour"),
-      ]);
-    }
+    if (!t) return notFound();
 
-    const wrap = el("section", { class: "page topic-detail" });
+    const wrap = el("section", { class: "page chat-page" });
 
-    // En-tête : description + méta + édition.
-    wrap.appendChild(renderTopicHeader(t));
-
-    // Accès Conclusion.
-    wrap.appendChild(el("div", { class: "nav-tiles" }, [
-      navTileBtn("✓", "Conclusion", "Regrouper les propositions et voter", "#/topic/" + t.id + "/conclusion"),
+    // Barre d'accès compacte (hors du fil de discussion) : Propositions / Conclusion.
+    const propN = t.proposals.length;
+    const conclN = t.conclusions.length;
+    wrap.appendChild(el("div", { class: "chat-toolbar" }, [
+      el("button", { class: "toolbar-chip", onclick: function () { App.navigate("#/topic/" + t.id + "/proposals"); } },
+        [el("span", { class: "tc-emoji", text: "💡" }), "Propositions", propN ? el("span", { class: "tc-count", text: String(propN) }) : null]),
+      el("button", { class: "toolbar-chip", onclick: function () { App.navigate("#/topic/" + t.id + "/conclusion"); } },
+        [el("span", { class: "tc-emoji", text: "✓" }), "Conclusion", conclN ? el("span", { class: "tc-count", text: String(conclN) }) : null]),
     ]));
 
-    // Discussion.
-    wrap.appendChild(sectionTitle("Discussion"));
-    wrap.appendChild(renderMessages(t));
+    // Fil de discussion (bulles) + barre de saisie (façon messagerie de groupe).
+    wrap.appendChild(renderChat(t));
+    wrap.appendChild(composerBar(t));
 
-    // Propositions & votes (matière première des conclusions).
-    wrap.appendChild(sectionTitle("Propositions"));
-    wrap.appendChild(renderProposals(t));
-
+    // Défile en bas à l'ouverture du sujet.
+    if (lastChatTopic !== t.id) { lastChatTopic = t.id; pendingScrollBottom = true; }
     return wrap;
   }
 
-  function navTileBtn(icon, title, sub, hash) {
-    return el("button", { class: "nav-tile", onclick: function () { App.navigate(hash); } }, [
-      el("span", { class: "nav-tile-icon", text: icon }),
-      el("span", { class: "nav-tile-texts" }, [
-        el("span", { class: "nav-tile-title", text: title }),
-        el("span", { class: "nav-tile-sub", text: sub }),
-      ]),
-      el("span", { class: "chev", text: "›" }),
-    ]);
+  // Écran secondaire : propositions & votes (sorties du chat).
+  function renderProposalsScreen(data, topicId) {
+    const t = State.ensureTopicShape(State.findTopic(data, topicId));
+    if (!t) return notFound();
+    const wrap = el("section", { class: "page ai-page" });
+    wrap.appendChild(el("p", { class: "ai-topic-name", text: t.title }));
+    wrap.appendChild(el("p", { class: "ai-lead", text: "Les propositions issues du débat, avec les votes." }));
+    wrap.appendChild(renderProposals(t));
+    return wrap;
   }
 
-  function renderTopicHeader(t) {
-    const key = "topic:" + t.id;
-    if (openEditors.has(key)) {
-      const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, value: t.title, "data-draft": "edit-topic-title-" + t.id });
-      const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription, "data-draft": "edit-topic-desc-" + t.id });
-      descInput.value = t.description || "";
-      return el("div", { class: "card" }, [
-        field("Titre", titleInput),
-        field("Description", descInput),
-        el("div", { class: "row-actions" }, [
-          el("button", { class: "btn btn-primary", onclick: function () {
-            const title = Utils.clean(titleInput.value);
-            if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-            App.actions.updateTopic(t.id, title, Utils.clean(descInput.value));
-            openEditors.delete(key); forceRerender();
-          } }, "Enregistrer"),
-          el("button", { class: "btn btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
-        ]),
-      ]);
-    }
-    return el("div", { class: "card topic-head-card" }, [
-      t.description
-        ? el("p", { class: "topic-desc pre", text: t.description })
-        : el("p", { class: "muted", text: "Aucune description." }),
-      el("div", { class: "topic-head-foot" }, [
-        el("span", { class: "byline", text: "Créé par " + t.createdBy.name + " · " + Utils.formatDate(t.createdAt) }),
-        topicBadge(t.status),
-      ]),
-      el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-ghost btn-sm", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier"),
-        statusMenuBtn(t),
-      ]),
-    ]);
+  // Fiche « infos du sujet » (description, statut, édition) — ouverte en tapant
+  // le titre dans la barre du haut, comme les infos d'un groupe.
+  function showTopicInfo(t) {
+    openSheet(function (close) {
+      const statusRow = el("div", { class: "sheet-status" }, Utils.TOPIC_STATUSES.map(function (s) {
+        return el("button", { class: "chip" + (t.status === s ? " active" : ""), onclick: function () {
+          App.actions.changeTopicStatus(t.id, s); close(); forceRerender();
+        } }, State.TOPIC_STATUS_LABELS[s]);
+      }));
+      return [
+        el("h2", { class: "sheet-title", text: t.title }),
+        t.description ? el("p", { class: "pre", text: t.description }) : el("p", { class: "muted", text: "Aucune description." }),
+        el("p", { class: "byline", text: "Créé par " + t.createdBy.name + " · " + Utils.formatDate(t.createdAt) }),
+        el("div", { class: "field-label", text: "Statut" }),
+        statusRow,
+        el("button", { class: "btn btn-outline btn-block", onclick: function () { close(); showEditTopic(t); } }, "Modifier le sujet"),
+      ];
+    });
   }
 
-  function statusMenuBtn(t) {
-    const options = [
-      { s: "open", label: "Rouvrir" },
-      { s: "ready", label: "Prêt pour la réunion" },
-      { s: "closed", label: "Marquer traité" },
-      { s: "archived", label: "Archiver" },
-    ];
-    const sel = el("select", { class: "select select-sm", "aria-label": "Changer le statut", onchange: function (e) {
-      if (e.target.value) { App.actions.changeTopicStatus(t.id, e.target.value); }
-    } });
-    sel.appendChild(el("option", { value: "", text: "Changer le statut…" }));
-    options.forEach(function (o) { if (t.status !== o.s) sel.appendChild(el("option", { value: o.s, text: o.label })); });
-    return sel;
+  function showEditTopic(t) {
+    const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, value: t.title });
+    const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription });
+    descInput.value = t.description || "";
+    modal("Modifier le sujet", [field("Titre *", titleInput), field("Description", descInput)], function () {
+      const title = Utils.clean(titleInput.value);
+      if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
+      App.actions.updateTopic(t.id, title, Utils.clean(descInput.value));
+      forceRerender();
+      return true;
+    });
+    setTimeout(function () { titleInput.focus(); }, 30);
   }
 
-  // --- Messages -------------------------------------------------------------
+  // --- Fil de discussion (chat) ---------------------------------------------
 
-  function renderMessages(t) {
-    const box = el("div", { class: "messages" });
+  // Identité d'expéditeur pour regrouper les bulles consécutives.
+  function senderKey(m) {
+    if (App.ownsMessage(m)) return "me";
+    return m.anon ? "anon" : (m.authorId || ("n:" + m.authorName));
+  }
+
+  function renderChat(t) {
+    const chat = el("div", { class: "chat" });
     if (t.messages.length === 0) {
-      box.appendChild(el("p", { class: "muted", text: "Aucun message pour le moment." }));
+      chat.appendChild(el("div", { class: "chat-empty", text: "Démarrez la conversation 👋" }));
+      return chat;
     }
-    t.messages
-      .slice()
-      .sort(function (a, b) { return (a.createdAt || "").localeCompare(b.createdAt || ""); })
-      .forEach(function (m) { box.appendChild(messageItem(t, m)); });
-    box.appendChild(newMessageForm(t));
-    return box;
+    const msgs = t.messages.slice().sort(function (a, b) { return (a.createdAt || "").localeCompare(b.createdAt || ""); });
+    msgs.forEach(function (m, i) {
+      const prev = msgs[i - 1];
+      const startGroup = !prev || senderKey(prev) !== senderKey(m);
+      chat.appendChild(messageBubble(t, m, startGroup));
+    });
+    return chat;
   }
 
   // Vrai si quelqu'un d'AUTRE que moi a réagi (verrouille l'édition).
@@ -559,62 +568,93 @@ const UI = (function () {
     setTimeout(function () { n.classList.remove("flash"); }, 1300);
   }
 
-  // Bloc « message cité » affiché au-dessus d'un message.
-  function quotedPreview(t, m) {
+  // Bloc « message cité » à l'intérieur d'une bulle.
+  function bubbleQuote(t, m) {
     if (!m.quoteId) return null;
     const q = State.findMessage(t, m.quoteId);
-    if (!q) return el("div", { class: "quoted quoted-missing", text: "Message cité indisponible" });
-    return el("button", { class: "quoted", onclick: function () { scrollToMessage(q.id); } }, [
-      el("span", { class: "quoted-author", text: q.anon ? "Anonyme" : q.authorName }),
-      el("span", { class: "quoted-text", text: shorten(q.text, 90) }),
+    if (!q) return el("div", { class: "bubble-quote missing", text: "Message cité indisponible" });
+    return el("button", { class: "bubble-quote", onclick: function (e) { e.stopPropagation(); scrollToMessage(q.id); } }, [
+      el("span", { class: "bq-author", text: q.anon ? "Anonyme" : q.authorName }),
+      el("span", { class: "bq-text", text: shorten(q.text, 80) }),
     ]);
   }
 
-  function messageItem(t, m) {
-    const key = "msg:" + m.id;
+  // Pastilles de réactions sous une bulle (tap = bascule ma réaction).
+  function bubbleReactions(t, m) {
+    const counts = State.reactionSummary(m);
+    const mine = (m.reactions || {})[App.profile.id] || null;
+    const chips = [];
+    Utils.REACTIONS.forEach(function (e) {
+      const c = counts[e] || 0;
+      if (c > 0) {
+        chips.push(el("button", {
+          class: "reaction-chip" + (mine === e ? " mine" : ""),
+          onclick: function () { App.actions.setReaction(t.id, m.id, e); },
+        }, [el("span", { class: "r-emoji", text: e }), c > 1 ? el("span", { class: "r-count", text: String(c) }) : null]));
+      }
+    });
+    if (!chips.length) return null;
+    return el("div", { class: "bubble-reactions" }, chips);
+  }
+
+  // Une bulle de message (façon messagerie de groupe).
+  function messageBubble(t, m, startGroup) {
     const owns = App.ownsMessage(m);
-    const locked = othersReacted(m); // édition bloquée dès qu'un autre a réagi
-
-    if (openEditors.has(key) && owns && !locked) {
-      const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.message, "aria-label": "Modifier le message", "data-draft": "edit-msg-" + m.id });
-      ta.value = m.text;
-      return el("div", { class: "message editing" }, [
-        ta,
-        el("div", { class: "row-actions" }, [
-          el("button", { class: "btn btn-sm btn-primary", onclick: function () {
-            const text = Utils.clean(ta.value);
-            if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
-            App.actions.updateMessage(t.id, m.id, text);
-            openEditors.delete(key); forceRerender();
-          } }, "Enregistrer"),
-          el("button", { class: "btn btn-sm btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
-        ]),
-      ]);
+    const bubble = el("div", { class: "bubble" + (owns ? " out" : " in") + (m.anon ? " anon" : "") });
+    if (!owns && startGroup) {
+      bubble.appendChild(el("div", { class: "bubble-author" }, [
+        m.anon ? el("span", { class: "anon-badge", text: "🕶️ " }) : null,
+        el("span", { text: m.anon ? "Anonyme" : m.authorName }),
+      ]));
     }
+    const bq = bubbleQuote(t, m);
+    if (bq) bubble.appendChild(bq);
+    bubble.appendChild(el("div", { class: "bubble-text pre", text: m.text }));
+    bubble.appendChild(el("div", { class: "bubble-meta" }, [
+      m.updatedAt ? el("span", { class: "edited", text: "modifié · " }) : null,
+      el("span", { text: Utils.formatTime(m.createdAt) }),
+    ]));
+    // Tap sur la bulle : menu d'actions (réagir, citer, modifier…).
+    bubble.addEventListener("click", function () { showMessageMenu(t, m); });
 
-    return el("div", { id: "msg-" + m.id, class: "message" + (owns ? " mine" : "") + (m.anon ? " anon" : "") }, [
-      el("div", { class: "message-head" }, [
-        el("span", { class: "author" }, [
-          m.anon ? el("span", { class: "anon-badge", text: "🕶️ " }) : null,
-          el("span", { text: m.anon ? "Anonyme" : m.authorName }),
-          owns ? el("span", { class: "you-tag", text: " · vous" }) : null,
-        ]),
-        el("span", { class: "date", text: Utils.formatDate(m.createdAt) + (m.updatedAt ? " · modifié" : "") }),
-      ]),
-      quotedPreview(t, m),
-      el("div", { class: "message-body pre", text: m.text }),
-      reactionsBar(t, m),
-      el("div", { class: "message-actions" }, [
-        el("button", { class: "link-btn", onclick: function () { startQuote(t.id, m.id); } }, "Citer"),
-        el("button", { class: "link-btn", onclick: function () { showNewProposal(t.id, m.text); } }, "Proposition"),
-        owns && !locked ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
-        owns && locked ? el("span", { class: "muted small locked-note", title: "Un message ne peut plus être modifié une fois qu'une réaction y a été ajoutée.", text: "🔒 réactions" }) : null,
-        owns ? el("button", { class: "link-btn", onclick: function () {
-          App.actions.setMessageSignature(t.id, m.id, !m.anon);
-          toast(m.anon ? "Message signé de votre nom." : "Message rendu anonyme.", "ok");
-        } }, m.anon ? "Signer avec mon nom" : "Rendre anonyme") : null,
-      ]),
+    return el("div", { id: "msg-" + m.id, class: "msg-row " + (owns ? "right" : "left") + (startGroup ? " group-start" : "") }, [
+      el("div", { class: "bubble-stack" }, [bubble, bubbleReactions(t, m)]),
     ]);
+  }
+
+  // Menu d'actions d'un message (feuille du bas, façon appui long WhatsApp).
+  function showMessageMenu(t, m) {
+    const owns = App.ownsMessage(m);
+    const locked = othersReacted(m);
+    const mine = (m.reactions || {})[App.profile.id] || null;
+    openSheet(function (close) {
+      const emojiRow = el("div", { class: "sheet-emojis" }, Utils.REACTIONS.map(function (e) {
+        return el("button", { class: "sheet-emoji" + (mine === e ? " mine" : ""), onclick: function () { App.actions.setReaction(t.id, m.id, e); close(); } }, e);
+      }));
+      const rows = [emojiRow];
+      rows.push(sheetRow("↩︎", "Citer", function () { close(); startQuote(t.id, m.id); }));
+      rows.push(sheetRow("💡", "Créer une proposition", function () { close(); showNewProposal(t.id, m.text); }));
+      if (owns && !locked) rows.push(sheetRow("✏️", "Modifier", function () { close(); showEditMessage(t, m); }));
+      if (owns && locked) rows.push(el("div", { class: "sheet-note", text: "🔒 Modification bloquée : une réaction a été ajoutée." }));
+      if (owns) rows.push(sheetRow(m.anon ? "🙂" : "🕶️", m.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
+        close(); App.actions.setMessageSignature(t.id, m.id, !m.anon);
+        toast(m.anon ? "Message signé de votre nom." : "Message rendu anonyme.", "ok");
+      }));
+      return rows;
+    });
+  }
+
+  function showEditMessage(t, m) {
+    const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.message });
+    ta.value = m.text;
+    modal("Modifier le message", [field("Message", ta)], function () {
+      const text = Utils.clean(ta.value);
+      if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
+      App.actions.updateMessage(t.id, m.id, text);
+      forceRerender();
+      return true;
+    });
+    setTimeout(function () { ta.focus(); }, 30);
   }
 
   function startQuote(topicId, messageId) {
@@ -626,79 +666,37 @@ const UI = (function () {
     }, 30);
   }
 
-  // Barre de réactions emoji d'un message (façon WhatsApp / Facebook).
-  function reactionsBar(t, m) {
-    const counts = State.reactionSummary(m);
-    const mine = (m.reactions || {})[App.profile.id] || null;
-    const pickerKey = "react:" + m.id;
-    const pickerOpen = openPickers.has(pickerKey);
+  // Barre de saisie (collée en bas, façon messagerie).
+  function composerBar(t) {
+    const ta = el("textarea", { class: "composer-input", rows: 1, placeholder: "Message", "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id });
 
-    const chips = [];
-    Utils.REACTIONS.forEach(function (e) {
-      const c = counts[e] || 0;
-      if (c > 0) {
-        chips.push(el("button", {
-          class: "reaction-chip" + (mine === e ? " mine" : ""),
-          title: "Réagir " + e,
-          onclick: function () { App.actions.setReaction(t.id, m.id, e); },
-        }, [el("span", { class: "r-emoji", text: e }), el("span", { class: "r-count", text: String(c) })]));
-      }
-    });
-    chips.push(el("button", {
-      class: "reaction-add" + (pickerOpen ? " open" : ""),
-      "aria-label": "Ajouter une réaction",
-      onclick: function () {
-        if (pickerOpen) openPickers.delete(pickerKey); else openPickers.add(pickerKey);
-        forceRerender();
-      },
-    }, mine ? "+" : "🙂"));
-
-    const wrap = el("div", { class: "reactions-wrap" }, [el("div", { class: "reactions" }, chips)]);
-
-    if (pickerOpen) {
-      wrap.appendChild(el("div", { class: "reaction-picker" }, Utils.REACTIONS.map(function (e) {
-        return el("button", {
-          class: "reaction-opt" + (mine === e ? " mine" : ""),
-          onclick: function () {
-            App.actions.setReaction(t.id, m.id, e);
-            openPickers.delete(pickerKey);
-            forceRerender();
-          },
-        }, e);
-      })));
-    }
-    return wrap;
-  }
-
-  function newMessageForm(t) {
-    const ta = el("textarea", { class: "textarea", rows: 2, placeholder: "Écrire un message…", "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id });
-
-    // Bandeau « en réponse à … » si un message est cité.
     const qid = quoting[t.id];
     const q = qid ? State.findMessage(t, qid) : null;
-    const banner = q ? el("div", { class: "reply-banner" }, [
+    const preview = q ? el("div", { class: "composer-reply" }, [
       el("span", { class: "reply-to" }, [
-        el("span", { class: "reply-mark", text: "↩︎ " }),
         el("span", { class: "reply-author", text: (q.anon ? "Anonyme" : q.authorName) + " : " }),
-        el("span", { class: "reply-text", text: shorten(q.text, 70) }),
+        el("span", { class: "reply-text", text: shorten(q.text, 60) }),
       ]),
       el("button", { class: "reply-cancel", "aria-label": "Annuler la citation", onclick: function () { delete quoting[t.id]; forceRerender(); } }, "✕"),
     ]) : null;
 
-    return el("div", { class: "new-message" }, [
-      banner,
-      ta,
-      el("button", { class: "btn btn-primary", onclick: function () {
-        const text = Utils.clean(ta.value);
-        if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
-        const useQuote = quoting[t.id] || null;
-        // Vide le champ AVANT le dispatch : le rendu synchrone déclenché par le
-        // dispatch ne doit pas restaurer le message déjà publié dans le composeur.
-        ta.value = "";
-        delete quoting[t.id];
-        App.actions.createMessage(t.id, text, useQuote);
-        forceRerender();
-      } }, "Publier"),
+    function send() {
+      const text = Utils.clean(ta.value);
+      if (Utils.isBlank(text)) { ta.focus(); return; }
+      const useQuote = quoting[t.id] || null;
+      ta.value = "";
+      delete quoting[t.id];
+      App.actions.createMessage(t.id, text, useQuote);
+      pendingScrollBottom = true;
+      forceRerender();
+    }
+
+    return el("div", { class: "composer" }, [
+      preview,
+      el("div", { class: "composer-row" }, [
+        ta,
+        el("button", { class: "composer-send", "aria-label": "Envoyer", onclick: send }, "➤"),
+      ]),
     ]);
   }
 
@@ -963,7 +961,7 @@ const UI = (function () {
 
     wrap.appendChild(el("div", { class: "card" }, [
       el("h2", { text: "À propos" }),
-      el("p", { text: "TeamKrys — préparation de réunion : sujets, discussion, propositions, résumés et conclusions votables." }),
+      el("p", { text: "BrainstO. — préparation de réunion : sujets, discussion, propositions, résumés et conclusions votables." }),
       el("p", { class: "muted small", text: "Version " + APP_VERSION }),
     ]));
     return wrap;
@@ -1131,6 +1129,24 @@ const UI = (function () {
     overlay.appendChild(box);
     overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
     document.body.appendChild(overlay);
+  }
+
+  // Feuille du bas (action sheet) : `builder(close)` renvoie les nœuds à afficher.
+  function openSheet(builder) {
+    const overlay = el("div", { class: "modal-overlay sheet-overlay" });
+    const close = function () { if (overlay.parentNode) document.body.removeChild(overlay); };
+    const box = el("div", { class: "sheet" }, builder(close));
+    overlay.appendChild(box);
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
+    document.body.appendChild(overlay);
+    return close;
+  }
+
+  function sheetRow(icon, label, onclick) {
+    return el("button", { class: "sheet-row", onclick: onclick }, [
+      el("span", { class: "sheet-row-icon", text: icon }),
+      el("span", { text: label }),
+    ]);
   }
 
   // --- Toasts ---------------------------------------------------------------
