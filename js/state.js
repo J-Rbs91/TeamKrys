@@ -111,11 +111,20 @@ const State = (function () {
         if (!findTopic(data, p.topicId)) return err("Sujet introuvable.");
         if (Utils.TOPIC_STATUSES.indexOf(p.status) === -1) return err("Statut de sujet inconnu.");
         break;
-      case "CREATE_MESSAGE":
-        if (!findTopic(data, p.topicId)) return err("Sujet introuvable.");
+      case "CREATE_MESSAGE": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
         if (!p.messageId) return err("Identifiant de message manquant.");
         if (Utils.isBlank(p.text)) return err("Le message est vide.");
+        if (p.quoteId && !findMessage(t, p.quoteId)) return err("Message cité introuvable.");
         break;
+      }
+      case "SET_MESSAGE_SIGNATURE": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findMessage(t, p.messageId)) return err("Message introuvable.");
+        break;
+      }
       case "UPDATE_MESSAGE": {
         const t = findTopic(data, p.topicId);
         if (!t) return err("Sujet introuvable.");
@@ -234,7 +243,9 @@ const State = (function () {
           title: p.title,
           description: p.description || "",
           status: "open",
-          createdBy: { id: author.id, name: p.authorName ? p.authorName : author.name },
+          createdBy: p.anon
+            ? { id: "", name: "Anonyme" }
+            : { id: author.id, name: p.authorName ? p.authorName : author.name },
           createdAt: at,
           updatedAt: at,
           messages: [],
@@ -269,7 +280,26 @@ const State = (function () {
           createdAt: at,
           updatedAt: null,
           reactions: {},
+          anon: false,
+          quoteId: p.quoteId || null,
         });
+        t.updatedAt = at;
+        break;
+      }
+      case "SET_MESSAGE_SIGNATURE": {
+        const t = findTopic(data, p.topicId);
+        const m = findMessage(t, p.messageId);
+        if (p.anon) {
+          // Anonyme : on retire toute trace d'identité du message partagé.
+          m.anon = true;
+          m.authorName = "Anonyme";
+          m.authorId = "";
+        } else {
+          // Signé : on restaure l'identité de l'auteur (celui qui bascule).
+          m.anon = false;
+          m.authorName = author.name;
+          m.authorId = author.id;
+        }
         t.updatedAt = at;
         break;
       }

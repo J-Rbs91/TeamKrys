@@ -40,8 +40,11 @@ script Google Apps Script.
 
 - **Sujets** : création, édition, statuts (`Ouvert`, `Prêt pour la réunion`,
   `Traité`, `Archivé`), recherche, filtre et tri.
-- **Discussion** : messages chronologiques, édition de ses propres messages,
-  mention « modifié », **réactions emoji** (👌 💪 🤞 🤏 👎 💩) façon WhatsApp.
+- **Discussion** : messages chronologiques, **réactions emoji**
+  (👌 💪 🤞 🤏 👎 💩) façon WhatsApp, **citation** d'un message pour y répondre.
+- **Anonymat** : sujets et messages **signés (défaut) ou anonymes** — l'anonyme
+  n'enregistre aucune identité. Édition d'un message possible **tant que personne
+  n'y a réagi** (verrou ensuite) ; la signature reste modifiable après envoi.
 - **Code d'accès (optionnel)** : verrouille l'application par un code, redemandé
   à chaque ouverture, et bloque l'accès aux données côté script.
 - **Propositions** : plusieurs solutions par sujet, créées directement ou

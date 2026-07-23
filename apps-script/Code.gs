@@ -271,11 +271,20 @@ function validateAction(action, data) {
       if (!findTopic(data, p.topicId)) return fail("Sujet introuvable.");
       if (TOPIC_STATUSES.indexOf(p.status) === -1) return fail("Statut de sujet inconnu.");
       break;
-    case "CREATE_MESSAGE":
-      if (!findTopic(data, p.topicId)) return fail("Sujet introuvable.");
+    case "CREATE_MESSAGE": {
+      var tcm = findTopic(data, p.topicId);
+      if (!tcm) return fail("Sujet introuvable.");
       if (!p.messageId) return fail("Identifiant de message manquant.");
       if (isBlank(p.text)) return fail("Message vide.");
+      if (p.quoteId && !findMessage(tcm, p.quoteId)) return fail("Message cité introuvable.");
       break;
+    }
+    case "SET_MESSAGE_SIGNATURE": {
+      var tms = findTopic(data, p.topicId);
+      if (!tms) return fail("Sujet introuvable.");
+      if (!findMessage(tms, p.messageId)) return fail("Message introuvable.");
+      break;
+    }
     case "UPDATE_MESSAGE": {
       var tm = findTopic(data, p.topicId);
       if (!tm) return fail("Sujet introuvable.");
@@ -385,7 +394,8 @@ function reduce(data, action) {
     case "CREATE_TOPIC":
       data.topics.push(ensureTopicShape({
         id: p.topicId, title: p.title, description: p.description || "",
-        status: "open", createdBy: { id: author.id, name: p.authorName ? p.authorName : author.name },
+        status: "open",
+        createdBy: p.anon ? { id: "", name: "Anonyme" } : { id: author.id, name: p.authorName ? p.authorName : author.name },
         createdAt: at, updatedAt: at,
         messages: [], proposals: [], conclusions: [],
         conclusionVotes: {},
@@ -404,7 +414,8 @@ function reduce(data, action) {
       t = findTopic(data, p.topicId);
       t.messages.push({
         id: p.messageId, authorId: author.id, authorName: author.name,
-        text: p.text, createdAt: at, updatedAt: null, reactions: {}
+        text: p.text, createdAt: at, updatedAt: null, reactions: {},
+        anon: false, quoteId: p.quoteId || null
       });
       t.updatedAt = at;
       break;
@@ -412,6 +423,16 @@ function reduce(data, action) {
       t = findTopic(data, p.topicId);
       m = findMessage(t, p.messageId);
       m.text = p.text; m.updatedAt = at; t.updatedAt = at;
+      break;
+    case "SET_MESSAGE_SIGNATURE":
+      t = findTopic(data, p.topicId);
+      m = findMessage(t, p.messageId);
+      if (p.anon) {
+        m.anon = true; m.authorName = "Anonyme"; m.authorId = "";
+      } else {
+        m.anon = false; m.authorName = author.name; m.authorId = author.id;
+      }
+      t.updatedAt = at;
       break;
     case "SET_REACTION":
       t = findTopic(data, p.topicId);

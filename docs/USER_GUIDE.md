@@ -33,8 +33,9 @@ Une fenêtre s'ouvre avec trois champs :
 
 1. **Titre** (obligatoire) ;
 2. **Description** (facultative) ;
-3. **Nom** : pré-rempli avec le vôtre ; laissez-le vide pour publier en
-   **« Anonyme »**.
+3. **Nom** : pré-rempli avec le vôtre ; laissez-le vide pour créer le sujet en
+   **« Anonyme »** (aucune identité n'est alors enregistrée — idéal pour aborder
+   un sujet qui fâche sans être « celui qui a mis les pieds dans le plat »).
 
 Validez : vous arrivez sur l'écran **débat** du sujet.
 
@@ -49,11 +50,33 @@ l'écran **Conclusion** (voir plus bas).
 Sur l'écran débat, sous **Discussion** :
 
 - écrivez un message dans le champ en bas et cliquez **Publier** ;
-- vous pouvez **modifier vos propres messages** (mention « modifié ») ;
 - **réagissez** à un message avec un emoji (👌 💪 🤞 🤏 👎 💩) : cliquez le bouton
   🙂 sous le message, choisissez une réaction ; recliquer la retire. Une seule
   réaction par personne et par message ; le compteur s'affiche à côté ;
-- un bouton **« Créer une proposition »** transforme un message en proposition.
+- un bouton **« Proposition »** transforme un message en proposition.
+
+### Signer ou rester anonyme
+
+Un message est **signé de votre nom par défaut**. Juste après l'avoir publié,
+le bouton **« Rendre anonyme »** apparaît sur votre message : il masque votre
+identité (le message affiche « Anonyme » et n'enregistre plus qui l'a écrit).
+Vous pouvez **rebasculer** avec **« Signer avec mon nom »** — pratique en cas
+d'erreur. C'est utile pour donner un avis délicat sans crainte de reproches.
+
+### Modifier un message
+
+Vous pouvez **modifier vos propres messages** (mention « modifié ») **tant que
+personne n'y a réagi**. Dès qu'une autre personne ajoute une réaction, le
+message est **verrouillé** (indicateur 🔒) : il ne peut plus être modifié, pour
+éviter de changer un propos que d'autres ont déjà commenté. La signature
+(nom/anonyme), elle, reste modifiable.
+
+### Citer un message
+
+Pour répondre à un message précis ou y faire référence, cliquez **« Citer »** :
+un bandeau « en réponse à … » apparaît au-dessus du champ de saisie. Publiez
+votre message : il affichera le message cité en en-tête (cliquable pour revenir
+à l'original). Utile quand la conversation part dans tous les sens.
 
 ## Créer une proposition
 

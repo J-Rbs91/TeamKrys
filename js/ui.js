@@ -18,6 +18,7 @@ const UI = (function () {
   // État éphémère de l'interface (non persisté).
   const openEditors = new Set(); // clés "kind:id"
   const openPickers = new Set(); // sélecteurs de réaction ouverts ("react:msgId")
+  const quoting = {}; // topicId -> messageId cité en cours de rédaction
   const listState = { search: "", showArchived: false };
   const meetingState = { filter: "all" };
   let lastSignature = null;
@@ -543,10 +544,38 @@ const UI = (function () {
     return box;
   }
 
+  // Vrai si quelqu'un d'AUTRE que moi a réagi (verrouille l'édition).
+  function othersReacted(m) {
+    const r = m.reactions || {};
+    const me = App.profile ? App.profile.id : null;
+    return Object.keys(r).some(function (pid) { return pid !== me; });
+  }
+
+  function scrollToMessage(id) {
+    const n = document.getElementById("msg-" + id);
+    if (!n) return;
+    n.scrollIntoView({ behavior: "smooth", block: "center" });
+    n.classList.add("flash");
+    setTimeout(function () { n.classList.remove("flash"); }, 1300);
+  }
+
+  // Bloc « message cité » affiché au-dessus d'un message.
+  function quotedPreview(t, m) {
+    if (!m.quoteId) return null;
+    const q = State.findMessage(t, m.quoteId);
+    if (!q) return el("div", { class: "quoted quoted-missing", text: "Message cité indisponible" });
+    return el("button", { class: "quoted", onclick: function () { scrollToMessage(q.id); } }, [
+      el("span", { class: "quoted-author", text: q.anon ? "Anonyme" : q.authorName }),
+      el("span", { class: "quoted-text", text: shorten(q.text, 90) }),
+    ]);
+  }
+
   function messageItem(t, m) {
     const key = "msg:" + m.id;
-    const isMine = m.authorId === App.profile.id;
-    if (openEditors.has(key) && isMine) {
+    const owns = App.ownsMessage(m);
+    const locked = othersReacted(m); // édition bloquée dès qu'un autre a réagi
+
+    if (openEditors.has(key) && owns && !locked) {
       const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.message, "aria-label": "Modifier le message", "data-draft": "edit-msg-" + m.id });
       ta.value = m.text;
       return el("div", { class: "message editing" }, [
@@ -562,18 +591,39 @@ const UI = (function () {
         ]),
       ]);
     }
-    return el("div", { class: "message" + (isMine ? " mine" : "") }, [
+
+    return el("div", { id: "msg-" + m.id, class: "message" + (owns ? " mine" : "") + (m.anon ? " anon" : "") }, [
       el("div", { class: "message-head" }, [
-        el("span", { class: "author", text: m.authorName }),
+        el("span", { class: "author" }, [
+          m.anon ? el("span", { class: "anon-badge", text: "🕶️ " }) : null,
+          el("span", { text: m.anon ? "Anonyme" : m.authorName }),
+          owns ? el("span", { class: "you-tag", text: " · vous" }) : null,
+        ]),
         el("span", { class: "date", text: Utils.formatDate(m.createdAt) + (m.updatedAt ? " · modifié" : "") }),
       ]),
+      quotedPreview(t, m),
       el("div", { class: "message-body pre", text: m.text }),
       reactionsBar(t, m),
       el("div", { class: "message-actions" }, [
-        el("button", { class: "link-btn", onclick: function () { showNewProposal(t.id, m.text); } }, "Créer une proposition"),
-        isMine ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
+        el("button", { class: "link-btn", onclick: function () { startQuote(t.id, m.id); } }, "Citer"),
+        el("button", { class: "link-btn", onclick: function () { showNewProposal(t.id, m.text); } }, "Proposition"),
+        owns && !locked ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
+        owns && locked ? el("span", { class: "muted small locked-note", title: "Un message ne peut plus être modifié une fois qu'une réaction y a été ajoutée.", text: "🔒 réactions" }) : null,
+        owns ? el("button", { class: "link-btn", onclick: function () {
+          App.actions.setMessageSignature(t.id, m.id, !m.anon);
+          toast(m.anon ? "Message signé de votre nom." : "Message rendu anonyme.", "ok");
+        } }, m.anon ? "Signer avec mon nom" : "Rendre anonyme") : null,
       ]),
     ]);
+  }
+
+  function startQuote(topicId, messageId) {
+    quoting[topicId] = messageId;
+    forceRerender();
+    setTimeout(function () {
+      const ta = root.querySelector('[data-draft="new-msg-' + cssEscape(topicId) + '"]');
+      if (ta) ta.focus();
+    }, 30);
   }
 
   // Barre de réactions emoji d'un message (façon WhatsApp / Facebook).
@@ -622,16 +672,31 @@ const UI = (function () {
 
   function newMessageForm(t) {
     const ta = el("textarea", { class: "textarea", rows: 2, placeholder: "Écrire un message…", "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id });
+
+    // Bandeau « en réponse à … » si un message est cité.
+    const qid = quoting[t.id];
+    const q = qid ? State.findMessage(t, qid) : null;
+    const banner = q ? el("div", { class: "reply-banner" }, [
+      el("span", { class: "reply-to" }, [
+        el("span", { class: "reply-mark", text: "↩︎ " }),
+        el("span", { class: "reply-author", text: (q.anon ? "Anonyme" : q.authorName) + " : " }),
+        el("span", { class: "reply-text", text: shorten(q.text, 70) }),
+      ]),
+      el("button", { class: "reply-cancel", "aria-label": "Annuler la citation", onclick: function () { delete quoting[t.id]; forceRerender(); } }, "✕"),
+    ]) : null;
+
     return el("div", { class: "new-message" }, [
+      banner,
       ta,
       el("button", { class: "btn btn-primary", onclick: function () {
         const text = Utils.clean(ta.value);
         if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
-        // Vide le champ AVANT le dispatch : le dispatch déclenche un rendu
-        // synchrone, et la préservation des brouillons ne doit pas restaurer
-        // le message déjà publié dans le composeur.
+        const useQuote = quoting[t.id] || null;
+        // Vide le champ AVANT le dispatch : le rendu synchrone déclenché par le
+        // dispatch ne doit pas restaurer le message déjà publié dans le composeur.
         ta.value = "";
-        App.actions.createMessage(t.id, text);
+        delete quoting[t.id];
+        App.actions.createMessage(t.id, text, useQuote);
         forceRerender();
       } }, "Publier"),
     ]);
@@ -1013,11 +1078,13 @@ const UI = (function () {
       field("Titre *", titleInput),
       field("Description", descInput),
       field("Nom (laisser vide = Anonyme)", nameInput),
+      el("p", { class: "muted small", text: "Un sujet anonyme n'enregistre aucune identité : idéal pour aborder un sujet délicat sans être « celui qui a mis les pieds dans le plat »." }),
     ], function () {
       const title = Utils.clean(titleInput.value);
       if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-      const author = Utils.clean(nameInput.value) || "Anonyme";
-      const id = App.actions.createTopic(title, Utils.clean(descInput.value), author);
+      const name = Utils.clean(nameInput.value);
+      const anon = Utils.isBlank(name);
+      const id = App.actions.createTopic(title, Utils.clean(descInput.value), anon ? "Anonyme" : name, anon);
       App.navigate("#/topic/" + id);
       return true;
     });

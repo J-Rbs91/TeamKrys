@@ -76,12 +76,23 @@ Champs « Conclusion » (remplissage manuel) :
   "text": "Contenu du message",
   "createdAt": "date ISO",
   "updatedAt": null,
-  "reactions": { "uuid-personne": "👌" }
+  "reactions": { "uuid-personne": "👌" },
+  "anon": false,
+  "quoteId": null
 }
 ```
 
-`reactions` associe à chaque personne **une** réaction emoji parmi
-`👌 💪 🤞 🤏 👎 💩` (une par personne et par message ; recliquer la même la retire).
+- `reactions` associe à chaque personne **une** réaction emoji parmi
+  `👌 💪 🤞 🤏 👎 💩` (une par personne et par message ; recliquer la même la retire).
+- `anon` : si `true`, le message est **anonyme** — `authorName` vaut `"Anonyme"`
+  et `authorId` est vidé (`""`), afin qu'aucune identité ne subsiste dans le
+  fichier partagé. L'auteur conserve ses droits d'édition/signature grâce à un
+  suivi **local** (sur son appareil, non partagé).
+- `quoteId` : identifiant d'un autre message du sujet **cité** (ou `null`).
+
+> Un message est modifiable par son auteur **tant qu'aucune autre personne n'y a
+> réagi** (verrou UI). Un sujet créé en anonyme a de même `createdBy` = `{ id:"",
+> name:"Anonyme" }`.
 
 ### Proposition
 
@@ -133,11 +144,12 @@ Le frontend n'envoie jamais tout le JSON : il envoie une **action**. Format :
 |---|---|
 | `REGISTER_PARTICIPANT` | `{}` (auteur pris dans `participant`) |
 | `UPDATE_PARTICIPANT` | `{}` |
-| `CREATE_TOPIC` | `{ topicId, title, description, authorName? }` |
+| `CREATE_TOPIC` | `{ topicId, title, description, authorName?, anon? }` (si `anon`, aucune identité enregistrée) |
 | `UPDATE_TOPIC` | `{ topicId, title, description }` |
 | `CHANGE_TOPIC_STATUS` | `{ topicId, status }` |
-| `CREATE_MESSAGE` | `{ topicId, messageId, text }` |
+| `CREATE_MESSAGE` | `{ topicId, messageId, text, quoteId? }` |
 | `UPDATE_MESSAGE` | `{ topicId, messageId, text }` |
+| `SET_MESSAGE_SIGNATURE` | `{ topicId, messageId, anon }` (signer / rendre anonyme) |
 | `SET_REACTION` | `{ topicId, messageId, emoji }` (bascule la réaction de l'auteur) |
 | `CREATE_PROPOSAL` | `{ topicId, proposalId, title, description }` |
 | `UPDATE_PROPOSAL` | `{ topicId, proposalId, title, description }` |

@@ -12,7 +12,28 @@ const App = (function () {
   // --- Démarrage & accueil (onboarding) -------------------------------------
 
   var LOCAL_ACCEPTED_KEY = "teamkrys.localAccepted";
+  var OWNED_KEY = "teamkrys.ownedMsgs";
   var pendingNewProfile = false;
+
+  // Messages créés depuis CET appareil. Permet à l'auteur de modifier / signer
+  // ses messages MÊME anonymes (le message anonyme ne stocke plus son identité).
+  var ownedMsgs = (function () {
+    try { return new Set(JSON.parse(window.localStorage.getItem(OWNED_KEY) || "[]")); }
+    catch (e) { return new Set(); }
+  })();
+
+  function rememberOwnMessage(id) {
+    ownedMsgs.add(id);
+    try { window.localStorage.setItem(OWNED_KEY, JSON.stringify(Array.from(ownedMsgs))); }
+    catch (e) { /* stockage indisponible */ }
+  }
+
+  // Vrai si le message a été rédigé depuis cet appareil (signé ou anonyme).
+  function ownsMessage(m) {
+    if (!m) return false;
+    if (ownedMsgs.has(m.id)) return true;
+    return !!(app.profile && m.authorId && m.authorId === app.profile.id);
+  }
 
   function localAccepted() {
     try {
@@ -267,9 +288,9 @@ const App = (function () {
   }
 
   app.actions = {
-    createTopic: function (title, description, authorName) {
+    createTopic: function (title, description, authorName, anon) {
       const id = Utils.uuid();
-      dispatch("CREATE_TOPIC", { topicId: id, title: title, description: description, authorName: authorName });
+      dispatch("CREATE_TOPIC", { topicId: id, title: title, description: description, authorName: authorName, anon: !!anon });
       return id;
     },
     updateTopic: function (topicId, title, description) {
@@ -278,11 +299,17 @@ const App = (function () {
     changeTopicStatus: function (topicId, status) {
       dispatch("CHANGE_TOPIC_STATUS", { topicId: topicId, status: status });
     },
-    createMessage: function (topicId, text) {
-      dispatch("CREATE_MESSAGE", { topicId: topicId, messageId: Utils.uuid(), text: text });
+    createMessage: function (topicId, text, quoteId) {
+      const id = Utils.uuid();
+      rememberOwnMessage(id);
+      dispatch("CREATE_MESSAGE", { topicId: topicId, messageId: id, text: text, quoteId: quoteId || null });
+      return id;
     },
     updateMessage: function (topicId, messageId, text) {
       dispatch("UPDATE_MESSAGE", { topicId: topicId, messageId: messageId, text: text });
+    },
+    setMessageSignature: function (topicId, messageId, anon) {
+      dispatch("SET_MESSAGE_SIGNATURE", { topicId: topicId, messageId: messageId, anon: !!anon });
     },
     setReaction: function (topicId, messageId, emoji) {
       dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: emoji });
@@ -383,6 +410,7 @@ const App = (function () {
     connect: connect,
     unlock: unlock,
     logoutTeam: logoutTeam,
+    ownsMessage: ownsMessage,
     applyUpdate: applyUpdate,
     get profile() { return app.profile; },
     get route() { return app.route; },

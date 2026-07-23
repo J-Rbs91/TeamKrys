@@ -32,6 +32,17 @@
       réaction est mise en évidence ; recliquer la retire ; changer d'emoji la
       remplace.
 
+## Anonymat, signature, citation
+
+- [ ] Créer un sujet en laissant le nom vide → créateur affiché « Anonyme ».
+- [ ] Message signé de son nom par défaut.
+- [ ] « Rendre anonyme » → affiche « Anonyme » ; « Signer avec mon nom » → revient.
+- [ ] Modifier son message tant que personne n'a réagi.
+- [ ] Après une réaction d'une AUTRE personne : le message est verrouillé (🔒),
+      « Modifier » disparaît ; la signature reste modifiable.
+- [ ] « Citer » un message : bandeau de réponse, puis le nouveau message affiche
+      le message cité (clic → retour à l'original).
+
 ## Code d'accès (verrouillage)
 
 - [ ] Script : `setPassword()` puis vérifier `?mode=revision` → erreur `auth`,
