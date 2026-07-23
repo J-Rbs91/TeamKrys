@@ -131,8 +131,7 @@ const App = (function () {
     const parts = hash.replace(/^#\/?/, "").split("/");
     if (parts[0] === "topic" && parts[1]) {
       const id = decodeURIComponent(parts[1]);
-      if (parts[2] === "summary") app.route = { name: "summary", id: id };
-      else if (parts[2] === "conclusion") app.route = { name: "conclusion", id: id };
+      if (parts[2] === "conclusion") app.route = { name: "conclusion", id: id };
       else app.route = { name: "topic", id: id };
     } else if (parts[0] === "meeting") app.route = { name: "meeting", id: null };
     else if (parts[0] === "settings") app.route = { name: "settings", id: null };
@@ -221,31 +220,6 @@ const App = (function () {
     },
   };
 
-  // --- Générations Gemini (feuille Google Sheet) ----------------------------
-
-  // Envoie d'abord la file d'actions en attente (pour que le serveur dispose
-  // des derniers messages / propositions), puis déclenche la génération ou la
-  // relecture. L'état renvoyé par le serveur devient la nouvelle base.
-  function ai(op, kind, topicId) {
-    if (!Api.isConfigured()) {
-      return Promise.resolve({ ok: false, error: "not-configured" });
-    }
-    return Sync.pushQueue()
-      .then(function () { return Api.postAi(op, kind, topicId); })
-      .then(function (res) {
-        if (res && res.state) Sync.ingestState(res.state);
-        return { ok: true, ai: res && res.ai };
-      })
-      .catch(function (e) {
-        return { ok: false, error: (e && e.message) || "Erreur IA." };
-      });
-  }
-
-  app.ai = {
-    generate: function (topicId, kind) { return ai("generate", kind, topicId); },
-    refresh: function (topicId, kind) { return ai("refresh", kind, topicId); },
-  };
-
   // --- Service worker & mises à jour ----------------------------------------
 
   let waitingWorker = null;
@@ -304,7 +278,6 @@ const App = (function () {
     get profile() { return app.profile; },
     get route() { return app.route; },
     actions: app.actions,
-    ai: app.ai,
   };
 })();
 

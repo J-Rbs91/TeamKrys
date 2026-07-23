@@ -9,7 +9,7 @@
  *
  * Parcours :
  *   Accueil (coller l'URL) → nom d'utilisateur → liste des sujets
- *   → écran « débat » d'un sujet → Résumé (Gemini) / Conclusion (Gemini).
+ *   → écran « débat » d'un sujet → Conclusion.
  */
 const UI = (function () {
   const el = Utils.el;
@@ -17,7 +17,6 @@ const UI = (function () {
 
   // État éphémère de l'interface (non persisté).
   const openEditors = new Set(); // clés "kind:id"
-  const aiBusy = new Set(); // clés "kind:op" en cours (résumé/conclusion)
   const listState = { search: "", showArchived: false };
   const meetingState = { filter: "all" };
   let lastSignature = null;
@@ -73,7 +72,6 @@ const UI = (function () {
 
     let title = "Sujets";
     if (route.name === "topic") { barLeft.appendChild(backTo("#/", "Retour aux sujets")); title = topicTitleFor(route.id); }
-    else if (route.name === "summary") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Résumé"; }
     else if (route.name === "conclusion") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Conclusion"; }
     else if (route.name === "meeting") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réunion"; }
     else if (route.name === "settings") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réglages"; }
@@ -138,7 +136,7 @@ const UI = (function () {
   function renderData(data) {
     const route = App.route;
     const signature = route.name + "|" + route.id + "|" + JSON.stringify(listState) +
-      "|" + JSON.stringify(meetingState) + "|" + serialize(openEditors) + "|" + serialize(aiBusy) +
+      "|" + JSON.stringify(meetingState) + "|" + serialize(openEditors) +
       "|" + updateAvailable + "|" + (data.updatedAt || "") + "|" + (data.revision || 0) + "|" + dataSignature(data, route);
 
     if (signature === lastSignature && route.name === lastRoute) return;
@@ -151,7 +149,6 @@ const UI = (function () {
 
     let content;
     if (route.name === "topic") content = renderTopic(data, route.id);
-    else if (route.name === "summary") content = renderSummary(data, route.id);
     else if (route.name === "conclusion") content = renderConclusion(data, route.id);
     else if (route.name === "meeting") content = renderMeeting(data);
     else if (route.name === "settings") content = renderSettings(data);
@@ -164,7 +161,7 @@ const UI = (function () {
   function serialize(set) { return Array.from(set).sort().join(","); }
 
   function dataSignature(data, route) {
-    if (route.name === "topic" || route.name === "summary" || route.name === "conclusion") {
+    if (route.name === "topic" || route.name === "conclusion") {
       const t = State.findTopic(data, route.id);
       return t ? JSON.stringify(t) : "none";
     }
@@ -389,10 +386,9 @@ const UI = (function () {
     // En-tête : description + méta + édition.
     wrap.appendChild(renderTopicHeader(t));
 
-    // Accès Résumé / Conclusion (Gemini).
-    wrap.appendChild(el("div", { class: "gemini-nav" }, [
-      geminiNavBtn("Résumé", "Points de vue des collaborateurs", "#/topic/" + t.id + "/summary"),
-      geminiNavBtn("Conclusion", "Propositions regroupées & vote", "#/topic/" + t.id + "/conclusion"),
+    // Accès Conclusion.
+    wrap.appendChild(el("div", { class: "nav-tiles" }, [
+      navTileBtn("✓", "Conclusion", "Regrouper les propositions et voter", "#/topic/" + t.id + "/conclusion"),
     ]));
 
     // Discussion.
@@ -406,12 +402,12 @@ const UI = (function () {
     return wrap;
   }
 
-  function geminiNavBtn(title, sub, hash) {
-    return el("button", { class: "gemini-btn", onclick: function () { App.navigate(hash); } }, [
-      el("span", { class: "gemini-spark", text: "✦" }),
-      el("span", { class: "gemini-texts" }, [
-        el("span", { class: "gemini-title", text: title }),
-        el("span", { class: "gemini-sub", text: sub }),
+  function navTileBtn(icon, title, sub, hash) {
+    return el("button", { class: "nav-tile", onclick: function () { App.navigate(hash); } }, [
+      el("span", { class: "nav-tile-icon", text: icon }),
+      el("span", { class: "nav-tile-texts" }, [
+        el("span", { class: "nav-tile-title", text: title }),
+        el("span", { class: "nav-tile-sub", text: sub }),
       ]),
       el("span", { class: "chev", text: "›" }),
     ]);
@@ -621,42 +617,7 @@ const UI = (function () {
   }
 
   // ==========================================================================
-  //  VUE : Résumé (Gemini) — point de vue de chaque collaborateur
-  // ==========================================================================
-
-  function renderSummary(data, topicId) {
-    const t = State.ensureTopicShape(State.findTopic(data, topicId));
-    if (!t) return notFound();
-    const wrap = el("section", { class: "page ai-page" });
-
-    wrap.appendChild(el("p", { class: "ai-topic-name", text: t.title }));
-    wrap.appendChild(el("p", { class: "ai-lead", text: "Gemini résume, dans votre feuille Google Sheet, le point de vue de chaque collaborateur à partir de ses messages." }));
-
-    wrap.appendChild(aiControls(t, "summary"));
-
-    const summaries = t.summaries || [];
-    if (summaries.length === 0) {
-      wrap.appendChild(emptyState(t.ai.summary.status === "pending"
-        ? "Gemini travaille. Cliquez « Rafraîchir » dans quelques instants."
-        : "Aucun résumé pour l'instant. Cliquez « Générer avec Gemini »."));
-    } else {
-      const list = el("div", { class: "summary-list" });
-      summaries.forEach(function (sm) {
-        list.appendChild(el("div", { class: "card summary-card" }, [
-          el("div", { class: "summary-head" }, [
-            el("span", { class: "avatar", text: initial(sm.name) }),
-            el("span", { class: "summary-name", text: sm.name }),
-          ]),
-          el("p", { class: "summary-text pre", text: sm.text }),
-        ]));
-      });
-      wrap.appendChild(list);
-    }
-    return wrap;
-  }
-
-  // ==========================================================================
-  //  VUE : Conclusion (Gemini) — regroupement + vote + ajout manuel
+  //  VUE : Conclusion — conclusions ajoutées par l'équipe + vote
   // ==========================================================================
 
   function renderConclusion(data, topicId) {
@@ -665,20 +626,16 @@ const UI = (function () {
     const wrap = el("section", { class: "page ai-page" });
 
     wrap.appendChild(el("p", { class: "ai-topic-name", text: t.title }));
-    wrap.appendChild(el("p", { class: "ai-lead", text: "Gemini regroupe et reformule les propositions du débat en conclusions. Votez pour celle que vous préférez, ou ajoutez la vôtre." }));
+    wrap.appendChild(el("p", { class: "ai-lead", text: "Regroupez les propositions du débat en conclusions, puis votez pour celle que vous préférez." }));
 
-    wrap.appendChild(aiControls(t, "conclusion"));
-
-    wrap.appendChild(el("button", { class: "btn btn-outline btn-block", onclick: function () { showAddConclusion(t.id); } }, [plusGlyph(), " Ajouter une conclusion"]));
+    wrap.appendChild(el("button", { class: "btn btn-primary btn-block", onclick: function () { showAddConclusion(t.id); } }, [plusGlyph(), " Ajouter une conclusion"]));
 
     const list = t.conclusions || [];
     const leading = State.leadingConclusion(t);
     const myVote = t.conclusionVotes[App.profile.id] || null;
 
     if (list.length === 0) {
-      wrap.appendChild(emptyState(t.ai.conclusion.status === "pending"
-        ? "Gemini travaille. Cliquez « Rafraîchir » dans quelques instants."
-        : "Aucune conclusion pour l'instant."));
+      wrap.appendChild(emptyState("Aucune conclusion pour l'instant. Ajoutez-en une à partir des propositions du débat."));
     } else {
       const box = el("div", { class: "conclusion-list" });
       list.forEach(function (c) { box.appendChild(conclusionCard(t, c, myVote, leading)); });
@@ -691,8 +648,7 @@ const UI = (function () {
     const key = "concl:" + c.id;
     const tally = State.conclusionTally(t, c.id);
     const mine = myVote === c.id;
-    const isAi = c.source === "ai";
-    const canEdit = !isAi && c.authorId === App.profile.id;
+    const canEdit = c.authorId === App.profile.id;
 
     if (openEditors.has(key) && canEdit) {
       const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.conclusion, "data-draft": "edit-concl-" + c.id });
@@ -713,7 +669,7 @@ const UI = (function () {
 
     return el("div", { class: "card conclusion-card" + (mine ? " chosen" : "") }, [
       el("div", { class: "conclusion-top" }, [
-        el("span", { class: "src-badge " + (isAi ? "src-ai" : "src-manual"), text: isAi ? "✦ Gemini" : (c.authorName || "Manuel") }),
+        el("span", { class: "src-badge src-manual", text: c.authorName || "Proposé" }),
         leading && leading.id === c.id && tally.count > 0 ? el("span", { class: "lead-badge", text: "En tête" }) : null,
       ]),
       el("p", { class: "conclusion-text pre", text: c.text }),
@@ -727,72 +683,6 @@ const UI = (function () {
         canEdit ? el("button", { class: "link-btn danger", onclick: function () { App.actions.deleteConclusion(t.id, c.id); forceRerender(); } }, "Supprimer") : null,
       ]),
     ]);
-  }
-
-  // --- Contrôles IA communs (Générer / Rafraîchir + statut) -----------------
-
-  function aiControls(t, kind) {
-    const aiState = t.ai[kind] || { status: "idle" };
-    const genKey = kind + ":generate";
-    const refKey = kind + ":refresh";
-    const busyGen = aiBusy.has(genKey);
-    const busyRef = aiBusy.has(refKey);
-    const configured = CONFIG.isConfigured();
-
-    const genBtn = el("button", {
-      class: "btn btn-primary", disabled: (busyGen || !configured) ? true : false,
-      onclick: function () { runAi(t.id, kind, "generate"); },
-    }, busyGen ? "Envoi…" : "Générer avec Gemini");
-
-    const refBtn = el("button", {
-      class: "btn", disabled: (busyRef || !configured) ? true : false,
-      onclick: function () { runAi(t.id, kind, "refresh"); },
-    }, busyRef ? "Lecture…" : "↻ Rafraîchir");
-
-    const rows = [el("div", { class: "row-actions ai-actions" }, [genBtn, refBtn])];
-
-    if (!configured) {
-      rows.push(el("p", { class: "ai-status warn", text: "Connectez l'application à l'équipe (Réglages) pour utiliser Gemini." }));
-    } else {
-      rows.push(el("div", { class: "ai-status ai-" + aiState.status }, [
-        el("span", { class: "ai-dot" }),
-        el("span", { text: aiStatusText(aiState) }),
-      ]));
-    }
-    return el("div", { class: "card ai-controls" }, rows);
-  }
-
-  function aiStatusText(aiState) {
-    const base = State.AI_STATUS_LABELS[aiState.status] || aiState.status;
-    if (aiState.status === "pending") return base + " Cliquez « Rafraîchir » pour relire.";
-    if ((aiState.status === "ready" || aiState.status === "partial") && aiState.updatedAt) {
-      return base + " · " + Utils.formatTime(aiState.updatedAt) + (aiState.message ? " — " + aiState.message : "");
-    }
-    return aiState.message ? base + " — " + aiState.message : base;
-  }
-
-  function runAi(topicId, kind, op) {
-    const k = kind + ":" + op;
-    if (aiBusy.has(k)) return;
-    aiBusy.add(k);
-    forceRerender();
-    const call = op === "generate" ? App.ai.generate(topicId, kind) : App.ai.refresh(topicId, kind);
-    call.then(function (res) {
-      aiBusy.delete(k);
-      if (!res || !res.ok) {
-        const msg = (res && res.error) === "not-configured"
-          ? "Connectez l'application à l'équipe pour utiliser Gemini."
-          : "Gemini : " + ((res && res.error) || "échec.");
-        toast(msg, "error");
-      } else if (op === "generate") {
-        toast("Demande envoyée à Gemini. Rafraîchissez dans quelques instants.", "ok");
-      } else {
-        const ai = res.ai || {};
-        if (ai.status === "pending") toast("Gemini n'a pas encore fini. Réessayez le rafraîchissement.", "info");
-        else toast("Résultats mis à jour.", "ok");
-      }
-      forceRerender();
-    });
   }
 
   // ==========================================================================
@@ -835,7 +725,7 @@ const UI = (function () {
     if (leading) {
       const tally = State.conclusionTally(t, leading.id);
       block.appendChild(el("p", { class: "pre", text: leading.text }));
-      block.appendChild(el("p", { class: "byline", text: (leading.source === "ai" ? "Gemini" : leading.authorName) + " · " + tally.count + " voix" }));
+      block.appendChild(el("p", { class: "byline", text: (leading.authorName || "Proposé") + " · " + tally.count + " voix" }));
     } else if (t.conclusion) {
       block.appendChild(el("p", { class: "pre", text: t.conclusion }));
     } else {
@@ -898,7 +788,7 @@ const UI = (function () {
 
     wrap.appendChild(el("div", { class: "card" }, [
       el("h2", { text: "À propos" }),
-      el("p", { text: "TeamKrys — préparation de réunion, avec résumés et conclusions générés par Gemini dans Google Sheets." }),
+      el("p", { text: "TeamKrys — préparation de réunion : sujets, discussion, propositions, résumés et conclusions votables." }),
       el("p", { class: "muted small", text: "Version " + APP_VERSION }),
     ]));
     return wrap;
@@ -1104,7 +994,6 @@ const UI = (function () {
   }
 
   function plusGlyph() { return el("span", { class: "plus-glyph", text: "+" }); }
-  function initial(name) { return (String(name || "?").trim().charAt(0) || "?").toUpperCase(); }
   function notFound() {
     return el("section", { class: "page" }, [
       el("p", { class: "empty", text: "Sujet introuvable." }),

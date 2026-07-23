@@ -6,14 +6,10 @@
  * l'utilise pour appliquer les actions de manière optimiste ; le serveur
  * fait autorité.
  *
- * Nouveautés « IA » :
- *  - `topic.summaries`   : résumés par collaborateur, produits par Gemini dans
- *                          la feuille Google Sheet (lecture seule côté client).
- *  - `topic.conclusions` : conclusions candidates (regroupées/reformulées par
- *                          Gemini, ou ajoutées manuellement), sur lesquelles on
- *                          peut voter (choix unique par personne).
+ * Structure « Conclusion » (remplissage manuel) :
+ *  - `topic.conclusions` : conclusions candidates ajoutées par les collaborateurs,
+ *                          sur lesquelles on peut voter (choix unique par personne).
  *  - `topic.conclusionVotes` : { participantId: conclusionId }.
- *  - `topic.ai`          : état des générations Gemini (résumé / conclusion).
  */
 const State = (function () {
   // Libellés français des statuts.
@@ -38,15 +34,6 @@ const State = (function () {
     abstain: "Abstention",
   };
 
-  // Statuts d'une génération Gemini.
-  const AI_STATUS_LABELS = {
-    idle: "Pas encore généré",
-    pending: "Gemini travaille…",
-    ready: "Généré par Gemini",
-    partial: "Génération partielle",
-    error: "Échec de la génération",
-  };
-
   function emptyData() {
     return {
       revision: 0,
@@ -56,22 +43,14 @@ const State = (function () {
     };
   }
 
-  // Garantit la présence des champs « IA » sur un sujet (migration douce).
+  // Garantit la présence des champs Conclusion (migration douce).
   function ensureTopicShape(t) {
     if (!t) return t;
     if (!t.messages) t.messages = [];
     if (!t.proposals) t.proposals = [];
-    if (!t.summaries) t.summaries = [];
     if (!t.conclusions) t.conclusions = [];
     if (!t.conclusionVotes) t.conclusionVotes = {};
-    if (!t.ai) t.ai = { summary: emptyAiState(), conclusion: emptyAiState() };
-    if (!t.ai.summary) t.ai.summary = emptyAiState();
-    if (!t.ai.conclusion) t.ai.conclusion = emptyAiState();
     return t;
-  }
-
-  function emptyAiState() {
-    return { status: "idle", updatedAt: null, message: "" };
   }
 
   // --- Recherche ------------------------------------------------------------
@@ -253,10 +232,8 @@ const State = (function () {
           updatedAt: at,
           messages: [],
           proposals: [],
-          summaries: [],
           conclusions: [],
           conclusionVotes: {},
-          ai: { summary: emptyAiState(), conclusion: emptyAiState() },
           conclusion: "",
           conclusionUpdatedAt: null,
           conclusionUpdatedBy: null,
@@ -470,7 +447,6 @@ const State = (function () {
     TOPIC_STATUS_LABELS: TOPIC_STATUS_LABELS,
     PROPOSAL_STATUS_LABELS: PROPOSAL_STATUS_LABELS,
     VOTE_LABELS: VOTE_LABELS,
-    AI_STATUS_LABELS: AI_STATUS_LABELS,
     emptyData: emptyData,
     ensureTopicShape: ensureTopicShape,
     findTopic: findTopic,

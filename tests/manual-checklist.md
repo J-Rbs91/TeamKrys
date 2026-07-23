@@ -33,20 +33,14 @@
 - [ ] Écran Réunion (via Réglages) : synthèse correcte, filtres.
 - [ ] Bouton « Imprimer » : rendu propre (sans boutons/navigation).
 
-## Gemini (Résumé & Conclusion — nécessite l'API + Sheets)
+## Conclusion
 
-- [ ] Écran « Résumé » : bouton « Générer avec Gemini » → statut « Gemini
-      travaille ».
-- [ ] Après quelques instants, « ↻ Rafraîchir » affiche un résumé par
-      collaborateur (carte avec initiale + nom).
-- [ ] Écran « Conclusion » : « Générer avec Gemini » puis « Rafraîchir » →
-      2 à 4 conclusions issues des propositions.
+- [ ] Écran « Conclusion » : « Ajouter une conclusion » (regroupe des
+      propositions).
 - [ ] Vote pour une conclusion (choix unique) : voter pour une autre déplace le
       vote ; « En tête » sur la mieux votée.
-- [ ] « Ajouter une conclusion » manuelle ; modification/suppression par son
-      auteur uniquement.
-- [ ] Un nouveau « Rafraîchir » conserve les votes déjà exprimés.
-- [ ] En mode local (sans API) : boutons Gemini désactivés + message d'invite.
+- [ ] Modification/suppression d'une conclusion par son auteur uniquement.
+- [ ] Supprimer une conclusion retire aussi les votes qui la visaient.
 
 ## Synchronisation (nécessite l'API Apps Script)
 

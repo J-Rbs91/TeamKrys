@@ -34,20 +34,6 @@ const Api = (function () {
     });
   }
 
-  /**
-   * Génération / relecture Gemini (dans la feuille Google Sheet).
-   *   op   : "generate" (insère les formules =AI) ou "refresh" (relit)
-   *   kind : "summary" ou "conclusion"
-   * Renvoie { ok, revision, ai, state }.
-   */
-  function postAi(op, kind, topicId) {
-    return request(withMode("ai"), {
-      method: "POST",
-      body: JSON.stringify({ op: op, kind: kind, topicId: topicId }),
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-    });
-  }
-
   function request(url, options) {
     if (!isConfigured()) {
       return Promise.reject(makeError("not-configured", "API non configurée."));
@@ -91,6 +77,5 @@ const Api = (function () {
     getRevision: getRevision,
     getState: getState,
     postAction: postAction,
-    postAi: postAi,
   };
 })();

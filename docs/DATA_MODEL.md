@@ -31,13 +31,8 @@
   "updatedAt": "date ISO",
   "messages": [],
   "proposals": [],
-  "summaries": [],
   "conclusions": [],
   "conclusionVotes": {},
-  "ai": {
-    "summary":    { "status": "idle", "updatedAt": null, "message": "" },
-    "conclusion": { "status": "idle", "updatedAt": null, "message": "" }
-  },
   "conclusion": "",
   "conclusionUpdatedAt": null,
   "conclusionUpdatedBy": null
@@ -49,33 +44,23 @@ Statuts : `open`, `ready`, `closed`, `archived`.
 `createdBy.name` peut valoir `"Anonyme"` (choisi à la création via le champ
 « nom »), tout en conservant l'`id` local de l'auteur.
 
-Champs « IA » (Gemini) :
+Champs « Conclusion » (remplissage manuel) :
 
-- `summaries` : `[{ name, text, updatedAt }]` — un résumé par collaborateur,
-  produit par Gemini (lecture seule côté client, remplacé à chaque rafraîchi).
-- `conclusions` : `[{ id, text, source, authorName, authorId?, createdAt, updatedAt }]`
-  — conclusions candidates. `source` vaut `"ai"` (générée par Gemini) ou
-  `"manual"` (ajoutée par un collaborateur, modifiable/supprimable par son auteur).
+- `conclusions` : `[{ id, text, source, authorId, authorName, createdAt, updatedAt }]`
+  — conclusions ajoutées par les collaborateurs (`source` vaut toujours
+  `"manual"`), modifiables/supprimables par leur auteur.
 - `conclusionVotes` : `{ participantId: conclusionId }` — **choix unique** par
   personne (voter pour une conclusion remplace le vote précédent).
-- `ai.summary` / `ai.conclusion` : état de génération. `status` ∈ `idle`,
-  `pending` (Gemini calcule), `ready`, `partial` (certaines cellules prêtes),
-  `error`.
-
-### Résumé (Gemini)
-
-```json
-{ "name": "Prénom", "text": "Synthèse du point de vue…", "updatedAt": "date ISO" }
-```
 
 ### Conclusion (candidate votable)
 
 ```json
 {
   "id": "uuid",
-  "text": "Conclusion reformulée",
-  "source": "ai",
-  "authorName": "Gemini",
+  "text": "Conclusion proposée",
+  "source": "manual",
+  "authorId": "uuid-local",
+  "authorName": "Prénom",
   "createdAt": "date ISO",
   "updatedAt": "date ISO"
 }
@@ -178,23 +163,6 @@ Le frontend n'envoie jamais tout le JSON : il envoie une **action**. Format :
 - `POST` (corps = action) →
   `{ "ok": true, "revision": n, "state": {…}, "duplicate": false }`
   ou `{ "ok": false, "error": "message" }`
-
-### Points de terminaison IA (Gemini dans Google Sheets)
-
-Ces appels ne passent **pas** par la file d'actions hors ligne : ils opèrent
-côté serveur, sur le classeur Google Sheets, et ne sont donc disponibles qu'en
-ligne.
-
-- `POST ?mode=ai` avec le corps `{ "op": "generate", "kind": "summary"|"conclusion", "topicId": "…" }`
-  → recopie les données du sujet dans l'onglet `TK <topicId>` et y insère les
-  formules `=AI(...)`. Marque `ai.<kind>.status = "pending"`.
-- `POST ?mode=ai` avec `{ "op": "refresh", "kind": …, "topicId": … }`
-  → relit les cellules `=AI` calculées et réinjecte les résultats
-  (`summaries` ou `conclusions`), en **conservant les votes** existants
-  (correspondance par texte normalisé) et les conclusions manuelles.
-
-Réponse : `{ "ok": true, "revision": n, "ai": { "kind", "status", … }, "state": {…} }`.
-Le client intègre le `state` renvoyé comme nouvelle base autoritaire.
 
 ---
 

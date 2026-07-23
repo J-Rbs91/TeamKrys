@@ -3,9 +3,8 @@
 **Outil interne, simple et mobile, de préparation de réunion pour l'équipe d'un magasin.**
 
 Avant une réunion, chaque membre de l'équipe peut créer des sujets, en discuter,
-proposer des solutions, voter, dégager les consensus et rédiger une conclusion.
-**Gemini**, via une **feuille Google Sheets**, résume le point de vue de chaque
-collaborateur et regroupe les propositions en conclusions votables. Pendant la
+proposer des solutions, voter, dégager les consensus et rédiger des conclusions.
+L'équipe regroupe les propositions en **conclusions votables**. Pendant la
 réunion, l'écran **« Préparation de la réunion »** offre une synthèse imprimable
 de tous les sujets.
 
@@ -13,7 +12,7 @@ Interface volontairement **épurée** (inspiration Apple / Tesla), thème clair 
 sombre automatiques. Le parcours : on colle d'abord l'**URL du script**, on
 choisit un **nom d'utilisateur**, puis on accède à la **liste des sujets** ;
 chaque sujet ouvre un écran **débat** (messages horodatés et signés, modifiables
-par leur auteur) donnant accès aux écrans **Résumé** et **Conclusion**.
+par leur auteur) donnant accès à l'écran **Conclusion**.
 
 TeamKrys fonctionne **en ligne et hors connexion** (PWA). Il n'y a **ni compte,
 ni mot de passe, ni base de données, ni serveur** : les données partagées sont
@@ -47,11 +46,9 @@ script Google Apps Script.
   depuis un message, avec statuts en français.
 - **Votes** : Pour / Contre / Abstention, un vote par personne, modifiable et
   retirable, comptage et indicateur automatique (consensus, majorité, etc.).
-- **Résumé (Gemini)** : synthèse du point de vue de **chaque collaborateur** sur
-  le sujet, générée par Gemini **dans une feuille Google Sheets**.
-- **Conclusion (Gemini)** : regroupement et reformulation des propositions du
-  débat en plusieurs conclusions, **votables** (choix unique par personne) ;
-  possibilité d'**ajouter** une conclusion manuellement.
+- **Conclusion** : l'équipe ajoute des conclusions (regroupant les propositions
+  du débat), **votables** (choix unique par personne), modifiables et
+  supprimables par leur auteur.
 - **Synthèse de réunion** : vue d'ensemble filtrable et **imprimable**.
 - **Hors connexion** : consultation et modifications possibles, envoyées
   automatiquement au retour du réseau (aucun texte perdu).
@@ -191,11 +188,6 @@ jamais perdu.
 - Résolution de conflits volontairement simple (dernière écriture appliquée par
   action ; pas de fusion de texte).
 - Quotas Google Apps Script : suffisants pour une petite équipe.
-- **Gemini** : les résumés et conclusions nécessitent que la fonction `=AI()` de
-  Google Sheets soit disponible pour le compte qui héberge le script (offre
-  Google Workspace avec Gemini). Les résultats ne sont **pas instantanés** : ils
-  apparaissent après un clic sur **« Rafraîchir »**. Voir
-  [`docs/INSTALLATION.md`](docs/INSTALLATION.md#2bis-gemini-dans-google-sheets-résumés--conclusions).
 
 ## Documentation complémentaire
 

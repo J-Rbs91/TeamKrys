@@ -30,8 +30,8 @@ Validez : vous arrivez sur l'écran **débat** du sujet.
 ## L'écran débat
 
 Sélectionner un sujet ouvre l'écran **débat**, titré du nom du sujet. On y
-échange des messages, on propose des solutions et on vote. Deux accès mènent au
-travail de **Gemini** : **Résumé** et **Conclusion** (voir plus bas).
+échange des messages, on propose des solutions et on vote. Un bouton mène à
+l'écran **Conclusion** (voir plus bas).
 
 ## Participer à une discussion
 
@@ -64,30 +64,15 @@ Chacun peut ajuster le **statut** d'une proposition : Solution retenue, À
 débattre en réunion, À mettre en œuvre, Solution écartée. TeamKrys repose sur la
 confiance : pas d'administrateur, pas de permissions.
 
-## Résumé (Gemini)
+## Conclusion et vote
 
-Depuis l'écran débat, ouvrez **Résumé**. Cliquez **« Générer avec Gemini »** :
-Gemini travaille **dans une feuille Google Sheets** pour résumer le point de vue
-de **chaque collaborateur** à partir de ses messages. Ce n'est **pas
-instantané** : revenez et cliquez **« ↻ Rafraîchir »** pour afficher les résumés
-(une carte par personne).
+Depuis l'écran débat, ouvrez **Conclusion**.
 
-## Conclusion (Gemini) et vote
-
-Depuis l'écran débat, ouvrez **Conclusion**. **« Générer avec Gemini »** regroupe
-et reformule les **propositions** du débat en plusieurs conclusions ; après un
-court instant, **« ↻ Rafraîchir »** les affiche.
-
+- **« Ajouter une conclusion »** : proposez une conclusion qui regroupe et
+  reformule les **propositions** du débat.
 - **Votez** pour la conclusion que vous préférez (un seul choix ; voter pour une
   autre déplace votre vote). La mieux votée porte l'étiquette **« En tête »**.
-- **« Ajouter une conclusion »** permet d'en proposer une à la main ; vous pouvez
-  la **modifier** ou la **supprimer** (vos conclusions uniquement).
-- Un nouveau **Rafraîchir** met à jour les conclusions de Gemini **sans effacer
-  les votes** déjà exprimés.
-
-> Gemini nécessite que l'application soit **connectée à l'équipe** et que la
-> fonction `=AI()` de Google Sheets soit disponible pour le compte du script.
-> En mode local, les boutons Gemini sont désactivés.
+- Vous pouvez **modifier** ou **supprimer** **vos** conclusions.
 
 ## Préparer la réunion
 
