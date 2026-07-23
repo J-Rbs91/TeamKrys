@@ -75,9 +75,13 @@ Champs « Conclusion » (remplissage manuel) :
   "authorName": "Prénom",
   "text": "Contenu du message",
   "createdAt": "date ISO",
-  "updatedAt": null
+  "updatedAt": null,
+  "reactions": { "uuid-personne": "👌" }
 }
 ```
+
+`reactions` associe à chaque personne **une** réaction emoji parmi
+`👌 💪 🤞 🤏 👎 💩` (une par personne et par message ; recliquer la même la retire).
 
 ### Proposition
 
@@ -134,6 +138,7 @@ Le frontend n'envoie jamais tout le JSON : il envoie une **action**. Format :
 | `CHANGE_TOPIC_STATUS` | `{ topicId, status }` |
 | `CREATE_MESSAGE` | `{ topicId, messageId, text }` |
 | `UPDATE_MESSAGE` | `{ topicId, messageId, text }` |
+| `SET_REACTION` | `{ topicId, messageId, emoji }` (bascule la réaction de l'auteur) |
 | `CREATE_PROPOSAL` | `{ topicId, proposalId, title, description }` |
 | `UPDATE_PROPOSAL` | `{ topicId, proposalId, title, description }` |
 | `CHANGE_PROPOSAL_STATUS` | `{ topicId, proposalId, status }` |
@@ -163,6 +168,19 @@ Le frontend n'envoie jamais tout le JSON : il envoie une **action**. Format :
 - `POST` (corps = action) →
   `{ "ok": true, "revision": n, "state": {…}, "duplicate": false }`
   ou `{ "ok": false, "error": "message" }`
+
+### Code d'accès (authentification)
+
+Si un code d'accès est configuré (`setPassword()` côté script), **chaque**
+requête doit fournir un jeton d'authentification, sinon la réponse est
+`{ "ok": false, "error": "Code d'accès requis ou incorrect.", "code": "auth" }`.
+
+- Le jeton est `SHA-256("srv|" + sel + "|" + code)` en hexadécimal, envoyé en
+  paramètre `auth` (ex. `?mode=revision&auth=…`).
+- Le serveur stocke uniquement le **hachage** du code (jamais le code en clair).
+- L'appareil ne stocke jamais le code : seulement un **vérificateur** distinct,
+  `SHA-256("lock|" + sel + "|" + code)`, pour valider le déverrouillage local
+  (y compris hors connexion) sans permettre de reconstituer le jeton serveur.
 
 ---
 

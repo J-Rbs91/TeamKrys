@@ -40,15 +40,25 @@ const App = (function () {
 
   /**
    * Séquence d'accueil demandée :
-   *   1) coller l'URL du script (ou choisir le mode local) ;
-   *   2) saisir le nom d'utilisateur ;
-   *   3) écran principal.
+   *   1) coller l'URL du script + mot de passe éventuel (ou mode local) ;
+   *   2) déverrouillage par mot de passe si l'appareil en a un (à chaque ouverture) ;
+   *   3) saisir le nom d'utilisateur ;
+   *   4) écran principal.
    */
   function resumeOnboarding() {
     if (!CONFIG.isConfigured() && !localAccepted()) {
       UI.showOnboardingUrl({
         onSaved: function () { resumeOnboarding(); },
         onLocal: function () { setLocalAccepted(); resumeOnboarding(); },
+      });
+      return;
+    }
+    // Verrou : mot de passe redemandé à chaque ouverture tant que le jeton
+    // n'est pas en mémoire (rechargement = nouvelle saisie obligatoire).
+    if (CONFIG.isConfigured() && CONFIG.hasPassword() && !Api.hasToken()) {
+      UI.showLock({
+        onUnlock: function () { resumeOnboarding(); },
+        onLogout: function () { logoutTeam(); resumeOnboarding(); },
       });
       return;
     }
@@ -67,9 +77,79 @@ const App = (function () {
     start(isNew);
   }
 
-  // Enregistre l'URL de l'API saisie par l'utilisateur (uniquement dans le
-  // localStorage de l'appareil, jamais dans le dépôt) et relance la
-  // synchronisation. Renvoie une promesse permettant de tester la connexion.
+  // --- Connexion / mot de passe --------------------------------------------
+
+  // Enregistre l'URL et, si un mot de passe est fourni, dérive le jeton serveur
+  // (envoyé aux requêtes) et le vérificateur local (validation du verrou).
+  // Aucun mot de passe n'est stocké : seul le vérificateur (un hachage) l'est.
+  // Renvoie une promesse { ok } ou { ok:false, code, error }.
+  function connect(url, password) {
+    CONFIG.persistApiUrl(Utils.clean(url));
+    var pw = password || "";
+    var derive = pw
+      ? Promise.all([Utils.sha256Hex(CONFIG.serverTokenInput(pw)), Utils.sha256Hex(CONFIG.verifierInput(pw))])
+      : Promise.resolve([null, null]);
+
+    return derive.then(function (res) {
+      Api.setAuthToken(res[0]); // null s'il n'y a pas de mot de passe
+      if (!CONFIG.isConfigured()) return { ok: false, error: "URL invalide." };
+      return Api.getRevision()
+        .then(function (info) {
+          CONFIG.setVerifier(pw ? res[1] : "");
+          Sync.emit();
+          return { ok: true, revision: info && info.revision };
+        })
+        .catch(function (e) {
+          var code = e && e.data && e.data.code;
+          if (code === "auth") Api.clearAuthToken();
+          return { ok: false, code: code, error: (e && e.message) || "Échec de connexion." };
+        });
+    });
+  }
+
+  // Déverrouille l'application avec le mot de passe saisi.
+  //  - Si un vérificateur local existe : validation locale (fonctionne hors
+  //    connexion), puis mise en mémoire du jeton serveur.
+  //  - Sinon (ex. l'équipe a activé le mot de passe après coup) : on établit la
+  //    connexion comme à l'accueil (validation en ligne + enregistrement).
+  function unlock(password) {
+    if (!CONFIG.hasPassword()) {
+      return connect(CONFIG.API_URL, password).then(function (res) {
+        return { ok: !!res.ok, code: res.code };
+      });
+    }
+    return Utils.sha256Hex(CONFIG.verifierInput(password)).then(function (v) {
+      if (v !== CONFIG.getVerifier()) return { ok: false };
+      return Utils.sha256Hex(CONFIG.serverTokenInput(password)).then(function (tok) {
+        Api.setAuthToken(tok);
+        Sync.emit();
+        return { ok: true };
+      });
+    });
+  }
+
+  // Reverrouille (inactivité, ou mot de passe exigé par le serveur en cours de
+  // session) : efface le jeton et réaffiche l'écran de déverrouillage.
+  function relock() {
+    if (!CONFIG.isConfigured() || !CONFIG.hasPassword()) return;
+    Api.clearAuthToken();
+    Sync.stopPolling();
+    Sync.emit();
+    UI.showLock({
+      onUnlock: function () { Sync.startPolling(); Sync.syncNow(); },
+      onLogout: function () { logoutTeam(); location.reload(); },
+    });
+  }
+
+  // Déconnecte l'appareil de l'équipe (efface URL + vérificateur + jeton).
+  function logoutTeam() {
+    Api.clearAuthToken();
+    CONFIG.setVerifier("");
+    CONFIG.persistApiUrl("");
+    try { window.localStorage.removeItem(LOCAL_ACCEPTED_KEY); } catch (e) { /* ignore */ }
+    Sync.emit();
+  }
+
   function setApiUrl(url) {
     CONFIG.persistApiUrl(Utils.clean(url));
     Sync.emit();
@@ -78,13 +158,19 @@ const App = (function () {
   }
 
   function clearApiUrl() {
-    CONFIG.persistApiUrl("");
-    Sync.emit();
+    logoutTeam();
     return Promise.resolve();
   }
 
+  var startWired = false;
+  var hiddenAt = null;
+
   function start(isNewProfile) {
     UI.reveal();
+
+    // Le serveur exige un mot de passe (ou il a changé) : reverrouiller.
+    Api.onAuthError(function () { relock(); });
+
     Sync.init({
       onChange: function (data) { UI.renderData(data); },
       onStatus: function (status) { UI.renderStatus(status); },
@@ -98,6 +184,11 @@ const App = (function () {
       Sync.syncNow();
     });
 
+    // Écouteurs globaux enregistrés une seule fois (start() peut être rappelé
+    // après un déverrouillage).
+    if (startWired) { registerServiceWorker(); return; }
+    startWired = true;
+
     window.addEventListener("hashchange", function () {
       parseRoute();
       UI.renderData(Sync.getData());
@@ -110,7 +201,19 @@ const App = (function () {
     window.addEventListener("offline", function () { Sync.emit(); });
 
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") Sync.syncNow();
+      if (document.visibilityState === "hidden") {
+        hiddenAt = new Date().getTime();
+        return;
+      }
+      // Retour au premier plan : reverrouiller après une longue inactivité.
+      if (CONFIG.hasPassword() && Api.hasToken() && hiddenAt &&
+          (new Date().getTime() - hiddenAt) > CONFIG.LOCK_IDLE_MS) {
+        hiddenAt = null;
+        relock();
+        return;
+      }
+      hiddenAt = null;
+      Sync.syncNow();
     });
 
     registerServiceWorker();
@@ -180,6 +283,9 @@ const App = (function () {
     },
     updateMessage: function (topicId, messageId, text) {
       dispatch("UPDATE_MESSAGE", { topicId: topicId, messageId: messageId, text: text });
+    },
+    setReaction: function (topicId, messageId, emoji) {
+      dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: emoji });
     },
     createProposal: function (topicId, title, description) {
       const id = Utils.uuid();
@@ -274,6 +380,9 @@ const App = (function () {
     updateProfileName: updateProfileName,
     setApiUrl: setApiUrl,
     clearApiUrl: clearApiUrl,
+    connect: connect,
+    unlock: unlock,
+    logoutTeam: logoutTeam,
     applyUpdate: applyUpdate,
     get profile() { return app.profile; },
     get route() { return app.route; },

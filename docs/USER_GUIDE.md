@@ -8,10 +8,21 @@ en discuter, proposer des solutions, voter et conclure — le tout au même endr
 À la première ouverture, deux écrans s'enchaînent :
 
 1. **Connexion à l'équipe** : collez l'**URL du script** (fournie par la personne
-   qui a installé le backend) puis **« Enregistrer et continuer »**. Vous pouvez
-   aussi **« Continuer sans connexion (mode local) »** pour tester seul.
+   qui a installé le backend), et le **code d'accès** si votre équipe en utilise
+   un, puis **« Enregistrer et continuer »**. Vous pouvez aussi **« Continuer
+   sans connexion (mode local) »** pour tester seul.
 2. **Nom d'utilisateur** : choisissez le nom qui signera vos messages. Modifiable
    ensuite dans **Réglages** (icône ⚙ en haut à droite).
+
+### Verrouillage par code
+
+Si un code d'accès est configuré, l'application se **verrouille à chaque
+ouverture** : un écran demande le code avant d'afficher quoi que ce soit. Le
+code n'est **jamais enregistré** sur l'appareil ; on ne conserve qu'un
+« vérificateur » permettant de le contrôler (y compris hors connexion).
+L'application se reverrouille aussi après une longue période en arrière-plan.
+Le bouton **« Se déconnecter de l'équipe »** oublie l'URL et le code sur
+l'appareil.
 
 ## Créer un sujet
 
@@ -39,6 +50,9 @@ Sur l'écran débat, sous **Discussion** :
 
 - écrivez un message dans le champ en bas et cliquez **Publier** ;
 - vous pouvez **modifier vos propres messages** (mention « modifié ») ;
+- **réagissez** à un message avec un emoji (👌 💪 🤞 🤏 👎 💩) : cliquez le bouton
+  🙂 sous le message, choisissez une réaction ; recliquer la retire. Une seule
+  réaction par personne et par message ; le compteur s'affiche à côté ;
 - un bouton **« Créer une proposition »** transforme un message en proposition.
 
 ## Créer une proposition

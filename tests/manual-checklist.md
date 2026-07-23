@@ -28,6 +28,19 @@
 - [ ] Compteurs, pourcentage et indicateur corrects (consensus, majorité…).
 - [ ] Changement de statut d'une proposition (les 5 statuts).
 - [ ] Après publication d'un message, le composeur se vide.
+- [ ] Réagir à un message (👌 💪 🤞 🤏 👎 💩) : le compteur s'affiche, ma
+      réaction est mise en évidence ; recliquer la retire ; changer d'emoji la
+      remplace.
+
+## Code d'accès (verrouillage)
+
+- [ ] Script : `setPassword()` puis vérifier `?mode=revision` → erreur `auth`,
+      et `?mode=revision&auth=…` → réponse normale.
+- [ ] Connexion avec le bon code → accès ; mauvais code → « Code incorrect ».
+- [ ] À chaque ouverture (rechargement), l'écran de verrouillage réapparaît.
+- [ ] Reverrouillage après une longue mise en arrière-plan.
+- [ ] « Se déconnecter de l'équipe » oublie l'URL et le code.
+- [ ] `clearPassword()` : l'accès ne demande plus de code.
 - [ ] Changement de statut d'un sujet (Ouvert / Prêt / Traité / Archivé).
 - [ ] Recherche (au-delà de 6 sujets) et affichage/masquage des archivés.
 - [ ] Écran Réunion (via Réglages) : synthèse correcte, filtres.

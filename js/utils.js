@@ -21,6 +21,23 @@ const Utils = (function () {
     return new Date().toISOString();
   }
 
+  // --- Hachage (Web Crypto) -------------------------------------------------
+
+  /**
+   * SHA-256 d'une chaîne, renvoyé en hexadécimal minuscule (Promise<string>).
+   * Doit produire exactement le même résultat que la fonction sha256Hex()
+   * du script Apps Script (UTF-8, hex minuscule).
+   */
+  function sha256Hex(str) {
+    var enc = new TextEncoder().encode(String(str));
+    return window.crypto.subtle.digest("SHA-256", enc).then(function (buf) {
+      var bytes = Array.prototype.slice.call(new Uint8Array(buf));
+      return bytes
+        .map(function (b) { return ("0" + b.toString(16)).slice(-2); })
+        .join("");
+    });
+  }
+
   // --- Dates ----------------------------------------------------------------
 
   function formatDate(iso) {
@@ -58,6 +75,9 @@ const Utils = (function () {
   const TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
   const PROPOSAL_STATUSES = ["voting", "selected", "debate", "implemented", "rejected"];
   const VOTES = ["for", "against", "abstain"];
+
+  // Réactions emoji disponibles sur les messages (façon WhatsApp / Facebook).
+  const REACTIONS = ["👌", "💪", "🤞", "🤏", "👎", "💩"];
 
   /** Nettoie une chaîne : trim, et renvoie "" si vide. */
   function clean(value) {
@@ -121,12 +141,14 @@ const Utils = (function () {
   return {
     uuid: uuid,
     nowIso: nowIso,
+    sha256Hex: sha256Hex,
     formatDate: formatDate,
     formatTime: formatTime,
     LIMITS: LIMITS,
     TOPIC_STATUSES: TOPIC_STATUSES,
     PROPOSAL_STATUSES: PROPOSAL_STATUSES,
     VOTES: VOTES,
+    REACTIONS: REACTIONS,
     clean: clean,
     isBlank: isBlank,
     within: within,

@@ -17,11 +17,60 @@
 var FILE_NAME = "teamkrys-data.json";
 var FOLDER_NAME = "TeamKrys";
 var PROP_FILE_ID = "TEAMKRYS_FILE_ID";
+var PROP_PWHASH = "TEAMKRYS_PWHASH";
+var PW_SALT = "teamkrys-v1"; // sel public (identique côté application)
 var MAX_PROCESSED = 500;
 
 var TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
 var PROPOSAL_STATUSES = ["voting", "selected", "debate", "implemented", "rejected"];
 var VOTES = ["for", "against", "abstain"];
+var REACTIONS = ["👌", "💪", "🤞", "🤏", "👎", "💩"];
+
+/* --------------------------------------------------------- Mot de passe
+
+   Protège l'accès aux données : si un mot de passe est configuré, chaque
+   requête doit fournir le bon jeton (auth). Le mot de passe n'est jamais
+   stocké en clair : seul son hachage l'est.
+
+   Installation : renseignez PASSWORD ci-dessous, exécutez setPassword() une
+   fois, puis REMETTEZ PASSWORD à "" (le hachage reste enregistré).
+   Pour désactiver : exécutez clearPassword().
+*/
+
+function setPassword() {
+  var PASSWORD = ""; // <-- mettez votre code/mot de passe ici, exécutez, puis remettez ""
+  if (!PASSWORD) {
+    return logResult("Renseignez PASSWORD dans setPassword(), exécutez, puis remettez \"\".");
+  }
+  var hash = sha256Hex("srv|" + PW_SALT + "|" + PASSWORD);
+  PropertiesService.getScriptProperties().setProperty(PROP_PWHASH, hash);
+  return logResult("Mot de passe enregistré. Retirez maintenant la valeur de PASSWORD dans le code.");
+}
+
+function clearPassword() {
+  PropertiesService.getScriptProperties().deleteProperty(PROP_PWHASH);
+  return logResult("Mot de passe supprimé : l'accès ne demande plus de code.");
+}
+
+// Vérifie le jeton d'authentification s'il y a un mot de passe configuré.
+function requireAuth(e) {
+  var stored = PropertiesService.getScriptProperties().getProperty(PROP_PWHASH);
+  if (!stored) return { ok: true }; // pas de mot de passe : accès libre
+  var token = (e && e.parameter && e.parameter.auth) || "";
+  if (token && token === stored) return { ok: true };
+  return { ok: false, error: "Code d'accès requis ou incorrect.", code: "auth" };
+}
+
+// SHA-256 en hexadécimal minuscule (identique à Utils.sha256Hex côté client).
+function sha256Hex(str) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, str, Utilities.Charset.UTF_8);
+  var out = "";
+  for (var i = 0; i < bytes.length; i++) {
+    var v = bytes[i] < 0 ? bytes[i] + 256 : bytes[i];
+    out += ("0" + v.toString(16)).slice(-2);
+  }
+  return out;
+}
 
 /* ------------------------------------------------------------------ Setup */
 
@@ -81,6 +130,8 @@ function emptyData() {
 
 function doGet(e) {
   try {
+    var auth = requireAuth(e);
+    if (!auth.ok) return createJsonResponse(auth);
     var mode = (e && e.parameter && e.parameter.mode) || "state";
     if (mode === "revision") {
       return createJsonResponse(getRevision());
@@ -93,6 +144,8 @@ function doGet(e) {
 
 function doPost(e) {
   try {
+    var auth = requireAuth(e);
+    if (!auth.ok) return createJsonResponse(auth);
     var body = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
     var action = JSON.parse(body);
     return createJsonResponse(applyAction(action));
@@ -230,6 +283,13 @@ function validateAction(action, data) {
       if (isBlank(p.text)) return fail("Message vide.");
       break;
     }
+    case "SET_REACTION": {
+      var tsr = findTopic(data, p.topicId);
+      if (!tsr) return fail("Sujet introuvable.");
+      if (!findMessage(tsr, p.messageId)) return fail("Message introuvable.");
+      if (REACTIONS.indexOf(p.emoji) === -1) return fail("Réaction inconnue.");
+      break;
+    }
     case "CREATE_PROPOSAL":
       if (!findTopic(data, p.topicId)) return fail("Sujet introuvable.");
       if (!p.proposalId) return fail("Identifiant de proposition manquant.");
@@ -344,7 +404,7 @@ function reduce(data, action) {
       t = findTopic(data, p.topicId);
       t.messages.push({
         id: p.messageId, authorId: author.id, authorName: author.name,
-        text: p.text, createdAt: at, updatedAt: null
+        text: p.text, createdAt: at, updatedAt: null, reactions: {}
       });
       t.updatedAt = at;
       break;
@@ -352,6 +412,14 @@ function reduce(data, action) {
       t = findTopic(data, p.topicId);
       m = findMessage(t, p.messageId);
       m.text = p.text; m.updatedAt = at; t.updatedAt = at;
+      break;
+    case "SET_REACTION":
+      t = findTopic(data, p.topicId);
+      m = findMessage(t, p.messageId);
+      if (!m.reactions) m.reactions = {};
+      if (m.reactions[author.id] === p.emoji) delete m.reactions[author.id];
+      else m.reactions[author.id] = p.emoji;
+      t.updatedAt = at;
       break;
     case "CREATE_PROPOSAL":
       t = findTopic(data, p.topicId);

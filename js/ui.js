@@ -17,6 +17,7 @@ const UI = (function () {
 
   // État éphémère de l'interface (non persisté).
   const openEditors = new Set(); // clés "kind:id"
+  const openPickers = new Set(); // sélecteurs de réaction ouverts ("react:msgId")
   const listState = { search: "", showArchived: false };
   const meetingState = { filter: "all" };
   let lastSignature = null;
@@ -215,6 +216,10 @@ const UI = (function () {
       placeholder: "https://script.google.com/…/exec",
       "aria-label": "URL du script Google Apps Script",
     });
+    const codeInput = el("input", {
+      class: "input input-lg", type: "password", inputmode: "numeric", autocomplete: "off",
+      placeholder: "Code d'accès (optionnel)", "aria-label": "Code d'accès",
+    });
     const statusLine = el("p", { class: "onb-status" });
 
     const saveBtn = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Enregistrer et continuer");
@@ -223,28 +228,35 @@ const UI = (function () {
       if (Utils.isBlank(url) || url.slice(0, 4) !== "http") {
         return markInvalid(urlInput, "Collez l'URL du script (elle commence par https:// et finit par /exec).");
       }
+      const code = codeInput.value || "";
       saveBtn.disabled = true;
       statusLine.className = "onb-status";
       statusLine.textContent = "Connexion en cours…";
-      App.setApiUrl(url)
-        .then(function () { return Api.getRevision(); })
-        .then(function () {
+      App.connect(url, code).then(function (res) {
+        if (res.ok) {
           removeOverlay(overlay);
           if (handlers && handlers.onSaved) handlers.onSaved();
-        })
-        .catch(function (e) {
-          saveBtn.disabled = false;
-          statusLine.className = "onb-status err";
-          statusLine.textContent = "Échec : " + ((e && e.message) || "vérifiez l'URL et le déploiement.");
-        });
+          return;
+        }
+        saveBtn.disabled = false;
+        statusLine.className = "onb-status err";
+        if (res.code === "auth") {
+          statusLine.textContent = code
+            ? "Code d'accès incorrect."
+            : "Cette équipe demande un code d'accès. Saisissez-le ci-dessus.";
+        } else {
+          statusLine.textContent = "Échec : " + (res.error || "vérifiez l'URL et le déploiement.");
+        }
+      });
     });
 
     const overlay = el("div", { class: "onboarding" }, [
       el("div", { class: "onb-card" }, [
         el("div", { class: "onb-logo", text: "TeamKrys" }),
         el("h2", { class: "onb-title", text: "Connexion à l'équipe" }),
-        el("p", { class: "onb-sub", text: "Collez l'URL du script Google Apps Script de votre équipe pour partager les sujets. Elle se termine par « /exec »." }),
+        el("p", { class: "onb-sub", text: "Collez l'URL du script Google Apps Script de votre équipe. Ajoutez un code d'accès si votre équipe en utilise un." }),
         urlInput,
+        codeInput,
         statusLine,
         saveBtn,
         el("button", { class: "btn btn-text btn-block", onclick: function () {
@@ -255,7 +267,60 @@ const UI = (function () {
     ]);
     document.body.appendChild(overlay);
     setTimeout(function () { urlInput.focus(); }, 40);
-    urlInput.addEventListener("keydown", function (e) { if (e.key === "Enter") saveBtn.click(); });
+    codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") saveBtn.click(); });
+  }
+
+  // Écran de déverrouillage (code d'accès), redemandé à chaque ouverture.
+  let lockShown = false;
+  function showLock(handlers) {
+    if (lockShown) return; // un seul verrou à la fois
+    lockShown = true;
+    const codeInput = el("input", {
+      class: "input input-lg lock-code", type: "password", inputmode: "numeric",
+      autocomplete: "off", placeholder: "Code d'accès", "aria-label": "Code d'accès",
+    });
+    const statusLine = el("p", { class: "onb-status" });
+    const unlockBtn = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Déverrouiller");
+    unlockBtn.addEventListener("click", function () {
+      const code = codeInput.value || "";
+      if (!code) return markInvalid(codeInput, "Saisissez votre code d'accès.");
+      unlockBtn.disabled = true;
+      statusLine.className = "onb-status";
+      statusLine.textContent = "Vérification…";
+      App.unlock(code).then(function (res) {
+        if (res.ok) {
+          lockShown = false;
+          removeOverlay(overlay);
+          if (handlers && handlers.onUnlock) handlers.onUnlock();
+          return;
+        }
+        unlockBtn.disabled = false;
+        statusLine.className = "onb-status err";
+        statusLine.textContent = res.code === "auth" || res.code === undefined
+          ? "Code d'accès incorrect." : ("Échec : " + (res.error || "réessayez."));
+        codeInput.select();
+      });
+    });
+
+    const overlay = el("div", { class: "onboarding lock-screen" }, [
+      el("div", { class: "onb-card" }, [
+        el("div", { class: "lock-icon", text: "🔒" }),
+        el("h2", { class: "onb-title", text: "Application verrouillée" }),
+        el("p", { class: "onb-sub", text: "Saisissez le code d'accès pour continuer." }),
+        codeInput,
+        statusLine,
+        unlockBtn,
+        el("button", { class: "btn btn-text btn-block", onclick: function () {
+          if (!window.confirm("Se déconnecter de l'équipe sur cet appareil ? L'URL et le code seront oubliés.")) return;
+          lockShown = false;
+          removeOverlay(overlay);
+          if (handlers && handlers.onLogout) handlers.onLogout();
+        } }, "Se déconnecter de l'équipe"),
+      ]),
+    ]);
+    document.body.appendChild(overlay);
+    setTimeout(function () { codeInput.focus(); }, 40);
+    codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") unlockBtn.click(); });
   }
 
   function showOnboardingName(onDone) {
@@ -503,11 +568,56 @@ const UI = (function () {
         el("span", { class: "date", text: Utils.formatDate(m.createdAt) + (m.updatedAt ? " · modifié" : "") }),
       ]),
       el("div", { class: "message-body pre", text: m.text }),
+      reactionsBar(t, m),
       el("div", { class: "message-actions" }, [
         el("button", { class: "link-btn", onclick: function () { showNewProposal(t.id, m.text); } }, "Créer une proposition"),
         isMine ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
       ]),
     ]);
+  }
+
+  // Barre de réactions emoji d'un message (façon WhatsApp / Facebook).
+  function reactionsBar(t, m) {
+    const counts = State.reactionSummary(m);
+    const mine = (m.reactions || {})[App.profile.id] || null;
+    const pickerKey = "react:" + m.id;
+    const pickerOpen = openPickers.has(pickerKey);
+
+    const chips = [];
+    Utils.REACTIONS.forEach(function (e) {
+      const c = counts[e] || 0;
+      if (c > 0) {
+        chips.push(el("button", {
+          class: "reaction-chip" + (mine === e ? " mine" : ""),
+          title: "Réagir " + e,
+          onclick: function () { App.actions.setReaction(t.id, m.id, e); },
+        }, [el("span", { class: "r-emoji", text: e }), el("span", { class: "r-count", text: String(c) })]));
+      }
+    });
+    chips.push(el("button", {
+      class: "reaction-add" + (pickerOpen ? " open" : ""),
+      "aria-label": "Ajouter une réaction",
+      onclick: function () {
+        if (pickerOpen) openPickers.delete(pickerKey); else openPickers.add(pickerKey);
+        forceRerender();
+      },
+    }, mine ? "+" : "🙂"));
+
+    const wrap = el("div", { class: "reactions-wrap" }, [el("div", { class: "reactions" }, chips)]);
+
+    if (pickerOpen) {
+      wrap.appendChild(el("div", { class: "reaction-picker" }, Utils.REACTIONS.map(function (e) {
+        return el("button", {
+          class: "reaction-opt" + (mine === e ? " mine" : ""),
+          onclick: function () {
+            App.actions.setReaction(t.id, m.id, e);
+            openPickers.delete(pickerKey);
+            forceRerender();
+          },
+        }, e);
+      })));
+    }
+    return wrap;
   }
 
   function newMessageForm(t) {
@@ -800,6 +910,11 @@ const UI = (function () {
       placeholder: "https://script.google.com/…/exec", "aria-label": "URL du script Google Apps Script",
       value: CONFIG.API_URL || "", "data-draft": "api-url",
     });
+    const codeInput = el("input", {
+      class: "input", type: "password", inputmode: "numeric", autocomplete: "off",
+      placeholder: CONFIG.hasPassword() ? "Code d'accès (déjà défini)" : "Code d'accès (optionnel)",
+      "aria-label": "Code d'accès",
+    });
     const st = Sync.getStatus();
     let cls = "conn-status", txt;
     if (!CONFIG.isConfigured()) txt = "Non connecté (mode local).";
@@ -815,17 +930,22 @@ const UI = (function () {
       if (Utils.isBlank(url) || url.slice(0, 4) !== "http") return markInvalid(urlInput, "Collez l'URL du script (https:// … /exec).");
       statusLine.className = "conn-status";
       statusLine.textContent = "Connexion en cours…";
-      App.setApiUrl(url)
-        .then(function () { return Api.getRevision(); })
-        .then(function (info) { toast("Connecté ✓ (révision " + (info && info.revision != null ? info.revision : "?") + ").", "ok"); })
-        .catch(function (e) { toast("Échec : " + ((e && e.message) || "vérifiez l'URL."), "error"); })
-        .then(function () { forceRerender(); });
+      App.connect(url, codeInput.value || "").then(function (res) {
+        if (res.ok) toast("Connecté ✓ (révision " + (res.revision != null ? res.revision : "?") + ").", "ok");
+        else if (res.code === "auth") toast(codeInput.value ? "Code d'accès incorrect." : "Cette équipe demande un code d'accès.", "error");
+        else toast("Échec : " + (res.error || "vérifiez l'URL."), "error");
+        forceRerender();
+      });
     }
 
     return el("div", { class: "card api-card" }, [
       el("h2", { text: "Connexion à l'équipe" }),
       el("p", { class: "muted small", text: "URL du script Google Apps Script (déployé en application Web, terminant par « /exec »). Conservée uniquement sur cet appareil." }),
       field("URL du script", urlInput),
+      field("Code d'accès", codeInput),
+      el("p", { class: "muted small", text: CONFIG.hasPassword()
+        ? "🔒 Cet appareil est verrouillé par un code, redemandé à chaque ouverture."
+        : "Ajoutez un code pour verrouiller l'application sur cet appareil (redemandé à chaque ouverture). Pour bloquer aussi l'accès aux données, définissez le même code sur le script (voir docs/INSTALLATION.md)." }),
       statusLine,
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-primary", onclick: save }, "Enregistrer et connecter"),
@@ -1017,6 +1137,7 @@ const UI = (function () {
     forceRerender: forceRerender,
     showOnboardingUrl: showOnboardingUrl,
     showOnboardingName: showOnboardingName,
+    showLock: showLock,
     toast: toast,
   };
 })();

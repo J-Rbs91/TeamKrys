@@ -123,6 +123,13 @@ const State = (function () {
         if (Utils.isBlank(p.text)) return err("Le message est vide.");
         break;
       }
+      case "SET_REACTION": {
+        const t = findTopic(data, p.topicId);
+        if (!t) return err("Sujet introuvable.");
+        if (!findMessage(t, p.messageId)) return err("Message introuvable.");
+        if (Utils.REACTIONS.indexOf(p.emoji) === -1) return err("Réaction inconnue.");
+        break;
+      }
       case "CREATE_PROPOSAL":
         if (!findTopic(data, p.topicId)) return err("Sujet introuvable.");
         if (!p.proposalId) return err("Identifiant de proposition manquant.");
@@ -261,7 +268,19 @@ const State = (function () {
           text: p.text,
           createdAt: at,
           updatedAt: null,
+          reactions: {},
         });
+        t.updatedAt = at;
+        break;
+      }
+      case "SET_REACTION": {
+        const t = findTopic(data, p.topicId);
+        const m = findMessage(t, p.messageId);
+        if (!m.reactions) m.reactions = {};
+        // Une réaction par personne et par message : re-cliquer sur la même
+        // réaction la retire (bascule), une autre remplace.
+        if (m.reactions[author.id] === p.emoji) delete m.reactions[author.id];
+        else m.reactions[author.id] = p.emoji;
         t.updatedAt = at;
         break;
       }
@@ -376,6 +395,19 @@ const State = (function () {
     return data;
   }
 
+  // --- Réactions emoji (messages) -------------------------------------------
+
+  /** Compte les réactions d'un message : { emoji: nombre }. */
+  function reactionSummary(message) {
+    const r = (message && message.reactions) || {};
+    const counts = {};
+    Object.keys(r).forEach(function (pid) {
+      const e = r[pid];
+      counts[e] = (counts[e] || 0) + 1;
+    });
+    return counts;
+  }
+
   // --- Analyse des votes (propositions) -------------------------------------
 
   function tally(proposal) {
@@ -455,6 +487,7 @@ const State = (function () {
     findConclusion: findConclusion,
     validateAction: validateAction,
     applyAction: applyAction,
+    reactionSummary: reactionSummary,
     tally: tally,
     conclusionTally: conclusionTally,
     leadingConclusion: leadingConclusion,

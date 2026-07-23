@@ -41,7 +41,9 @@ script Google Apps Script.
 - **Sujets** : création, édition, statuts (`Ouvert`, `Prêt pour la réunion`,
   `Traité`, `Archivé`), recherche, filtre et tri.
 - **Discussion** : messages chronologiques, édition de ses propres messages,
-  mention « modifié ».
+  mention « modifié », **réactions emoji** (👌 💪 🤞 🤏 👎 💩) façon WhatsApp.
+- **Code d'accès (optionnel)** : verrouille l'application par un code, redemandé
+  à chaque ouverture, et bloque l'accès aux données côté script.
 - **Propositions** : plusieurs solutions par sujet, créées directement ou
   depuis un message, avec statuts en français.
 - **Votes** : Pour / Contre / Abstention, un vote par personne, modifiable et
