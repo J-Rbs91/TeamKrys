@@ -65,19 +65,23 @@ Ouvrez dans le navigateur `VOTRE_URL/exec?mode=revision`. Vous devez obtenir :
 ### 1.6 Code d'accès (optionnel mais recommandé)
 
 Pour que l'URL seule ne suffise pas — et bloquer l'accès aux données à qui
-n'a pas le code — définissez un **code d'accès** côté script :
+n'a pas le code — définissez un **code d'accès** côté script.
 
-1. Dans `Code.gs`, ouvrez la fonction **`setPassword()`** et renseignez la
-   variable `PASSWORD` (ex. `var PASSWORD = "777777";`).
-2. Sélectionnez `setPassword` dans la liste des fonctions et **Exécutez**.
-3. **Remettez `PASSWORD = ""`** dans le code et enregistrez (le code n'est pas
-   stocké en clair : seul son **hachage** est conservé dans les propriétés du
-   script). Le dépôt étant public, ne laissez jamais le code en clair dedans.
-4. Chaque collaborateur saisit ce code une fois à la connexion dans
-   l'application ; il lui est **redemandé à chaque ouverture** (protège un
-   téléphone égaré).
+**Méthode recommandée (`setPassword`).** Dans `Code.gs`, ouvrez la fonction
+`setPassword()`, renseignez `PASSWORD` avec votre code, **exécutez-la une fois**,
+puis **remettez `PASSWORD = ""`** et enregistrez. Le code n'est jamais stocké en
+clair : seul son **hachage** est conservé dans les propriétés du script (privé).
+Pour désactiver : exécutez `clearPassword()`.
 
-Pour désactiver : exécutez **`clearPassword()`**.
+**Méthode alternative (constante `PW_HASH`).** Vous pouvez aussi coller le
+**hachage** de votre code dans la constante `PW_HASH` en haut de `Code.gs`
+(laissée vide dans le dépôt). ⚠️ **Ne committez JAMAIS ce hachage dans un dépôt
+public** : le hachage d'un code court (ex. 6 chiffres) se retrouve en une
+seconde. Renseignez `PW_HASH` uniquement dans **votre** projet Apps Script privé,
+et gardez-le vide partout ailleurs.
+
+> Chaque collaborateur saisit le code une fois à la connexion ; il lui est
+> **redemandé à chaque ouverture** (protège un téléphone égaré).
 
 > Le code circule vers le script sous forme de **hachage** (jamais en clair) et
 > n'est **jamais stocké** sur l'appareil (seul un vérificateur local l'est).

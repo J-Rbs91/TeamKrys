@@ -21,6 +21,12 @@ var PROP_PWHASH = "TEAMKRYS_PWHASH";
 var PW_SALT = "teamkrys-v1"; // sel public (identique côté application)
 var MAX_PROCESSED = 500;
 
+// Code d'accès (optionnel). Pour activer SANS toucher aux propriétés du script,
+// collez ici le HACHAGE de votre code (jamais le code en clair) :
+//   PW_HASH = sha256Hex("srv|" + PW_SALT + "|" + VOTRE_CODE)
+// Laissez "" pour ne pas exiger de code (ou utilisez setPassword() à la place).
+var PW_HASH = "";
+
 var TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
 var PROPOSAL_STATUSES = ["voting", "selected", "debate", "implemented", "rejected"];
 var VOTES = ["for", "against", "abstain"];
@@ -32,9 +38,12 @@ var REACTIONS = ["👌", "💪", "🤞", "🤏", "👎", "💩"];
    requête doit fournir le bon jeton (auth). Le mot de passe n'est jamais
    stocké en clair : seul son hachage l'est.
 
-   Installation : renseignez PASSWORD ci-dessous, exécutez setPassword() une
-   fois, puis REMETTEZ PASSWORD à "" (le hachage reste enregistré).
-   Pour désactiver : exécutez clearPassword().
+   Deux façons d'activer un code d'accès :
+    - Le plus simple : renseignez la constante PW_HASH ci-dessus avec le hachage
+      de votre code (rien d'autre à faire).
+    - Ou : renseignez PASSWORD dans setPassword(), exécutez-la une fois, puis
+      remettez PASSWORD à "" (le hachage est enregistré dans les propriétés).
+   Pour désactiver la seconde méthode : exécutez clearPassword().
 */
 
 function setPassword() {
@@ -52,10 +61,11 @@ function clearPassword() {
   return logResult("Mot de passe supprimé : l'accès ne demande plus de code.");
 }
 
-// Vérifie le jeton d'authentification s'il y a un mot de passe configuré.
+// Vérifie le jeton d'authentification s'il y a un code d'accès configuré.
+// Priorité à la constante PW_HASH ; sinon, hachage enregistré via setPassword().
 function requireAuth(e) {
-  var stored = PropertiesService.getScriptProperties().getProperty(PROP_PWHASH);
-  if (!stored) return { ok: true }; // pas de mot de passe : accès libre
+  var stored = PW_HASH || PropertiesService.getScriptProperties().getProperty(PROP_PWHASH);
+  if (!stored) return { ok: true }; // pas de code : accès libre
   var token = (e && e.parameter && e.parameter.auth) || "";
   if (token && token === stored) return { ok: true };
   return { ok: false, error: "Code d'accès requis ou incorrect.", code: "auth" };
