@@ -1,6 +1,6 @@
-# Guide utilisateur TeamKrys
+# Guide utilisateur BrainstO.
 
-TeamKrys sert à **préparer les réunions de l'équipe** : rassembler les sujets,
+BrainstO. sert à **préparer les réunions de l'équipe** : rassembler les sujets,
 en discuter, proposer des solutions, voter et conclure — le tout au même endroit.
 
 ## Première ouverture
@@ -39,44 +39,48 @@ Une fenêtre s'ouvre avec trois champs :
 
 Validez : vous arrivez sur l'écran **débat** du sujet.
 
-## L'écran débat
+## L'écran débat = une conversation de groupe
 
-Sélectionner un sujet ouvre l'écran **débat**, titré du nom du sujet. On y
-échange des messages, on propose des solutions et on vote. Un bouton mène à
-l'écran **Conclusion** (voir plus bas).
+Sélectionner un sujet ouvre l'écran **débat**, présenté comme une **messagerie
+de groupe** (façon WhatsApp) : vos messages à droite, ceux des autres à gauche
+avec leur nom. La **barre de saisie est en bas** ; tapez votre message et
+appuyez sur le bouton d'envoi **➤**.
 
-## Participer à une discussion
+En haut de l'écran, deux raccourcis mènent hors du fil : **💡 Propositions** et
+**✓ Conclusion**. Tapez le **titre** (en haut, avec ⓘ) pour ouvrir les **infos
+du sujet** (description, statut, modification). Le **bouton retour** (‹) en haut
+à gauche ramène toujours à la liste des sujets.
 
-Sur l'écran débat, sous **Discussion** :
+## Participer à la discussion
 
-- écrivez un message dans le champ en bas et cliquez **Publier** ;
-- **réagissez** à un message avec un emoji (👌 💪 🤞 🤏 👎 💩) : cliquez le bouton
-  🙂 sous le message, choisissez une réaction ; recliquer la retire. Une seule
-  réaction par personne et par message ; le compteur s'affiche à côté ;
-- un bouton **« Proposition »** transforme un message en proposition.
+- Écrivez dans la barre du bas et envoyez avec **➤**.
+- **Appuyez sur un message** pour ouvrir son menu : **réagir** (👌 💪 🤞 🤏 👎 💩),
+  **Citer**, **Créer une proposition**, et — pour vos messages — **Modifier**,
+  **Rendre anonyme / Signer**.
+- Les **réactions** s'affichent en petites pastilles sous la bulle (une réaction
+  par personne ; retapez la même pour la retirer).
 
 ### Signer ou rester anonyme
 
-Un message est **signé de votre nom par défaut**. Juste après l'avoir publié,
-le bouton **« Rendre anonyme »** apparaît sur votre message : il masque votre
-identité (le message affiche « Anonyme » et n'enregistre plus qui l'a écrit).
-Vous pouvez **rebasculer** avec **« Signer avec mon nom »** — pratique en cas
-d'erreur. C'est utile pour donner un avis délicat sans crainte de reproches.
+Un message est **signé de votre nom par défaut**. Dans le menu du message
+(appui sur la bulle), **« Rendre anonyme »** masque votre identité (le message
+affiche « Anonyme » et n'enregistre plus qui l'a écrit) ; **« Signer avec mon
+nom »** revient en arrière — pratique en cas d'erreur. Idéal pour un avis
+délicat sans crainte de reproches.
 
 ### Modifier un message
 
-Vous pouvez **modifier vos propres messages** (mention « modifié ») **tant que
-personne n'y a réagi**. Dès qu'une autre personne ajoute une réaction, le
-message est **verrouillé** (indicateur 🔒) : il ne peut plus être modifié, pour
-éviter de changer un propos que d'autres ont déjà commenté. La signature
-(nom/anonyme), elle, reste modifiable.
+Vous pouvez **modifier vos messages** **tant que personne n'y a réagi**. Dès
+qu'une autre personne ajoute une réaction, le message est **verrouillé** (🔒) :
+plus modifiable, pour ne pas changer un propos déjà commenté. La signature
+(nom/anonyme) reste, elle, modifiable.
 
 ### Citer un message
 
-Pour répondre à un message précis ou y faire référence, cliquez **« Citer »** :
-un bandeau « en réponse à … » apparaît au-dessus du champ de saisie. Publiez
-votre message : il affichera le message cité en en-tête (cliquable pour revenir
-à l'original). Utile quand la conversation part dans tous les sens.
+Dans le menu d'un message, choisissez **« Citer »** : un aperçu « en réponse
+à … » apparaît au-dessus de la barre de saisie. Votre message affichera alors le
+message cité (cliquable pour revenir à l'original) — pratique quand la
+conversation part dans tous les sens.
 
 ## Créer une proposition
 
@@ -98,7 +102,7 @@ Sous chaque proposition :
   vote) se mettent à jour immédiatement.
 
 Chacun peut ajuster le **statut** d'une proposition : Solution retenue, À
-débattre en réunion, À mettre en œuvre, Solution écartée. TeamKrys repose sur la
+débattre en réunion, À mettre en œuvre, Solution écartée. BrainstO. repose sur la
 confiance : pas d'administrateur, pas de permissions.
 
 ## Conclusion et vote
@@ -140,5 +144,5 @@ texte n'est perdu, même si vous fermez et rouvrez l'application.
 ## Mise à jour
 
 Quand une nouvelle version est publiée, un bandeau **« Une nouvelle version de
-TeamKrys est disponible »** apparaît. Cliquez **« Mettre à jour »** : vos données
+BrainstO. est disponible »** apparaît. Cliquez **« Mettre à jour »** : vos données
 locales et vos actions en attente sont conservées.

@@ -1,4 +1,4 @@
-# Installation de TeamKrys
+# Installation de BrainstO.
 
 Ce guide détaille le déploiement complet : backend Google Apps Script, puis
 publication du frontend avec GitHub Pages.
@@ -12,7 +12,7 @@ publication du frontend avec GitHub Pages.
 1. Ouvrez <https://script.google.com> et connectez-vous avec le compte Google
    qui hébergera le fichier de données.
 2. **Nouveau projet**.
-3. Renommez-le `TeamKrys` (facultatif).
+3. Renommez-le `BrainstO.` (facultatif).
 
 ### 1.2 Copier le code
 
@@ -31,7 +31,7 @@ publication du frontend avec GitHub Pages.
 3. Une fenêtre d'autorisation apparaît :
    - **Vérifier les autorisations** → choisissez votre compte ;
    - un avertissement « Google n'a pas validé cette application » peut
-     s'afficher : **Paramètres avancés → Accéder à TeamKrys (non sécurisé)** ;
+     s'afficher : **Paramètres avancés → Accéder à BrainstO. (non sécurisé)** ;
    - **Autoriser** l'accès à Google Drive.
 4. Relancez **`setupProject`** si nécessaire. Le journal (**Exécution →
    Journaux**) doit indiquer « Fichier créé : … ».
@@ -44,7 +44,7 @@ publication du frontend avec GitHub Pages.
 1. **Déployer → Nouveau déploiement**.
 2. **Type** (roue crantée) → **Application Web**.
 3. Réglages :
-   - **Description** : `TeamKrys API` ;
+   - **Description** : `BrainstO. API` ;
    - **Exécuter en tant que** : **Moi** ;
    - **Qui a accès** : **Tout le monde**.
 4. **Déployer**, autorisez si demandé.
@@ -97,7 +97,7 @@ Vérification : `VOTRE_URL/exec?mode=revision` doit désormais répondre
 
 Deux possibilités :
 
-**a) Depuis l'application (recommandé).** Ouvrez TeamKrys → **Paramètres →
+**a) Depuis l'application (recommandé).** Ouvrez BrainstO. → **Réglages →
 Connexion à l'équipe**, collez l'URL du script (terminant par `/exec`) dans le
 champ **« URL du script »** et cliquez **« Enregistrer et connecter »**. L'URL
 est conservée **uniquement dans le `localStorage` de l'appareil** (jamais dans
@@ -145,7 +145,7 @@ Quand vous modifiez le code frontend :
 1. Incrémentez `APP_VERSION` dans `js/config.js` **et** `CACHE_VERSION` dans
    `service-worker.js`.
 2. Poussez sur GitHub.
-3. Les utilisateurs verront « Une nouvelle version de TeamKrys est disponible »
+3. Les utilisateurs verront « Une nouvelle version de BrainstO. est disponible »
    avec un bouton **Mettre à jour**. Les données locales et les actions en
    attente sont **conservées**.
 

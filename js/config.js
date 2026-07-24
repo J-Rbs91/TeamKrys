@@ -100,4 +100,4 @@ CONFIG.setVerifier = function (hash) {
 // Délai d'inactivité (onglet masqué) au-delà duquel on reverrouille, en ms.
 CONFIG.LOCK_IDLE_MS = 3 * 60 * 1000;
 
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
