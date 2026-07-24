@@ -1,131 +1,150 @@
-/**
- * Stockage local avec IndexedDB.
+/* BrainstO. — persistance locale (IndexedDB).
  *
- * Trois usages :
- *  - "meta"    : paires clé/valeur (profil local, dernière erreur, horodatage…)
- *  - "state"   : dernière version connue des données partagées (cache)
- *  - "actions" : file locale des actions en attente d'envoi au serveur
+ * Deux magasins :
+ *  - « queue » : file d'actions en attente d'envoi, clé « seq » AUTO-INCRÉMENTÉE
+ *    (l'ordre d'envoi est donc garanti même après un redémarrage).
+ *  - « meta »  : dernier état serveur connu, pour un démarrage hors ligne.
  *
- * IndexedDB n'est jamais supprimée lors d'une mise à jour de l'application :
- * les données locales et les actions en attente sont conservées.
+ * Le service worker ne touche JAMAIS à ces données.
  */
-const DB = (function () {
-  const DB_NAME = "teamkrys";
-  const DB_VERSION = 1;
-  let dbPromise = null;
+(function (root) {
+  "use strict";
 
-  function open() {
-    if (dbPromise) return dbPromise;
+  var DB_NAME = "brainsto";
+  var DB_VERSION = 1;
+  var STORE_QUEUE = "queue";
+  var STORE_META = "meta";
+
+  var DB = {};
+  var dbPromise = null;
+
+  /* Repli mémoire si IndexedDB est indisponible (navigation privée, etc.). */
+  var memory = { available: true, seq: 0, queue: [], meta: {} };
+
+  function openDatabase() {
+    if (dbPromise) { return dbPromise; }
     dbPromise = new Promise(function (resolve, reject) {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = function () {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("meta")) {
-          db.createObjectStore("meta"); // clé explicite
+      if (!root.indexedDB) { reject(new Error("IndexedDB indisponible")); return; }
+      var request = root.indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = function () {
+        var db = request.result;
+        if (!db.objectStoreNames.contains(STORE_QUEUE)) {
+          db.createObjectStore(STORE_QUEUE, { keyPath: "seq", autoIncrement: true });
         }
-        if (!db.objectStoreNames.contains("state")) {
-          db.createObjectStore("state"); // clé explicite ("current")
-        }
-        if (!db.objectStoreNames.contains("actions")) {
-          // seq auto-incrémenté => ordre de création préservé
-          db.createObjectStore("actions", { keyPath: "seq", autoIncrement: true });
+        if (!db.objectStoreNames.contains(STORE_META)) {
+          db.createObjectStore(STORE_META, { keyPath: "key" });
         }
       };
-      req.onsuccess = function () {
-        resolve(req.result);
-      };
-      req.onerror = function () {
-        reject(req.error);
-      };
+      request.onsuccess = function () { resolve(request.result); };
+      request.onerror = function () { reject(request.error || new Error("Ouverture IndexedDB refusée")); };
+      request.onblocked = function () { reject(new Error("IndexedDB bloquée par un autre onglet")); };
+    }).catch(function (error) {
+      memory.available = false;
+      return null;
     });
     return dbPromise;
   }
 
-  function tx(store, mode) {
-    return open().then(function (db) {
-      return db.transaction(store, mode).objectStore(store);
-    });
-  }
+  DB.open = function () { return openDatabase(); };
 
-  function asPromise(request) {
-    return new Promise(function (resolve, reject) {
-      request.onsuccess = function () {
-        resolve(request.result);
-      };
-      request.onerror = function () {
-        reject(request.error);
-      };
-    });
-  }
+  DB.isPersistent = function () { return memory.available; };
 
-  // --- meta (clé/valeur) ----------------------------------------------------
-
-  function metaGet(key) {
-    return tx("meta", "readonly").then(function (s) {
-      return asPromise(s.get(key));
-    });
-  }
-
-  function metaSet(key, value) {
-    return tx("meta", "readwrite").then(function (s) {
-      return asPromise(s.put(value, key));
-    });
-  }
-
-  // --- state (cache des données partagées) ---------------------------------
-
-  function loadState() {
-    return tx("state", "readonly").then(function (s) {
-      return asPromise(s.get("current"));
-    });
-  }
-
-  function saveState(state) {
-    return tx("state", "readwrite").then(function (s) {
-      return asPromise(s.put(state, "current"));
-    });
-  }
-
-  // --- actions (file d'attente) --------------------------------------------
-
-  function enqueueAction(action) {
-    return tx("actions", "readwrite").then(function (s) {
-      return asPromise(s.add({ actionId: action.actionId, action: action }));
-    });
-  }
-
-  /** Renvoie les actions en attente, triées par ordre de création (seq). */
-  function listActions() {
-    return tx("actions", "readonly").then(function (s) {
-      return asPromise(s.getAll()).then(function (rows) {
-        rows.sort(function (a, b) {
-          return a.seq - b.seq;
-        });
-        return rows;
+  function withStore(storeName, mode, work) {
+    return openDatabase().then(function (db) {
+      if (!db) { return work(null); }
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(storeName, mode);
+        var store = tx.objectStore(storeName);
+        var result;
+        try { result = work(store); } catch (e) { reject(e); return; }
+        /* On attend la FIN de la transaction : une clé auto-incrémentée n'est
+         * réellement acquise qu'à ce moment (sinon action orpheline). */
+        tx.oncomplete = function () { resolve(result && result.value !== undefined ? result.value : result); };
+        tx.onerror = function () { reject(tx.error || new Error("Transaction IndexedDB échouée")); };
+        tx.onabort = function () { reject(tx.error || new Error("Transaction IndexedDB annulée")); };
       });
     });
   }
 
-  function countActions() {
-    return tx("actions", "readonly").then(function (s) {
-      return asPromise(s.count());
-    });
-  }
+  /* --------------------------------------------------------- File d'actions --- */
 
-  function removeAction(seq) {
-    return tx("actions", "readwrite").then(function (s) {
-      return asPromise(s.delete(seq));
+  /* Ajoute une action et ne résout QU'APRÈS attribution définitive de la clé. */
+  DB.enqueue = function (action) {
+    return withStore(STORE_QUEUE, "readwrite", function (store) {
+      if (!store) {
+        memory.seq += 1;
+        var entry = { seq: memory.seq, action: action };
+        memory.queue.push(entry);
+        return { value: entry };
+      }
+      var box = { value: null };
+      var request = store.add({ action: action });
+      request.onsuccess = function () { box.value = { seq: request.result, action: action }; };
+      return box;
     });
-  }
-
-  return {
-    metaGet: metaGet,
-    metaSet: metaSet,
-    loadState: loadState,
-    saveState: saveState,
-    enqueueAction: enqueueAction,
-    listActions: listActions,
-    countActions: countActions,
-    removeAction: removeAction,
   };
-})();
+
+  DB.queued = function () {
+    return withStore(STORE_QUEUE, "readonly", function (store) {
+      if (!store) { return { value: memory.queue.slice() }; }
+      var box = { value: [] };
+      var request = store.openCursor();
+      request.onsuccess = function () {
+        var cursor = request.result;
+        if (!cursor) { return; }
+        box.value.push({ seq: cursor.key, action: cursor.value.action });
+        cursor.continue();
+      };
+      return box;
+    });
+  };
+
+  DB.dequeue = function (seq) {
+    return withStore(STORE_QUEUE, "readwrite", function (store) {
+      if (!store) {
+        memory.queue = memory.queue.filter(function (e) { return e.seq !== seq; });
+        return { value: true };
+      }
+      store.delete(seq);
+      return { value: true };
+    });
+  };
+
+  DB.clearQueue = function () {
+    return withStore(STORE_QUEUE, "readwrite", function (store) {
+      if (!store) { memory.queue = []; return { value: true }; }
+      store.clear();
+      return { value: true };
+    });
+  };
+
+  /* -------------------------------------------------------------- État --- */
+
+  DB.saveState = function (state) {
+    return withStore(STORE_META, "readwrite", function (store) {
+      if (!store) { memory.meta.state = state; return { value: true }; }
+      store.put({ key: "state", value: state });
+      return { value: true };
+    });
+  };
+
+  DB.loadState = function () {
+    return withStore(STORE_META, "readonly", function (store) {
+      if (!store) { return { value: memory.meta.state || null }; }
+      var box = { value: null };
+      var request = store.get("state");
+      request.onsuccess = function () { box.value = request.result ? request.result.value : null; };
+      return box;
+    });
+  };
+
+  DB.clearState = function () {
+    return withStore(STORE_META, "readwrite", function (store) {
+      if (!store) { memory.meta = {}; return { value: true }; }
+      store.delete("state");
+      return { value: true };
+    });
+  };
+
+  root.DB = DB;
+})(typeof globalThis !== "undefined" ? globalThis : this);

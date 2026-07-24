@@ -1,106 +1,103 @@
-/**
- * Communication avec le backend Google Apps Script.
+/* BrainstO. — accès au backend Google Apps Script.
  *
- * - GET  ?mode=revision  -> { revision, updatedAt }
- * - GET  ?mode=state     -> état complet
- * - POST (corps = action) -> { ok, state, revision, duplicate }
- *
- * Les requêtes POST envoient le corps en text/plain pour rester des
- * "requêtes simples" et éviter les pré-vérifications CORS d'Apps Script.
+ * ⚠️ PIÈGE CORS : le POST part en « text/plain;charset=utf-8 » pour rester une
+ * requête SIMPLE. Avec « application/json », le navigateur envoie un préflight
+ * OPTIONS auquel Apps Script ne sait pas répondre → la requête échoue.
+ * Le jeton d'authentification voyage donc en paramètre d'URL, pas en en-tête.
  */
-const Api = (function () {
-  // Jeton d'authentification (hachage du mot de passe), gardé UNIQUEMENT en
-  // mémoire vive : jamais persisté, effacé au verrouillage / rechargement.
-  let authToken = null;
-  let onAuthErr = null;
+(function (root) {
+  "use strict";
 
-  function setAuthToken(token) { authToken = token || null; }
-  function clearAuthToken() { authToken = null; }
-  function hasToken() { return !!authToken; }
-  function onAuthError(fn) { onAuthErr = fn; }
+  var Api = {};
 
-  function isConfigured() {
-    return CONFIG.isConfigured();
+  function apiError(kind, message, code) {
+    var error = new Error(message);
+    error.kind = kind;     // "network" | "auth" | "server"
+    error.code = code || null;
+    return error;
   }
 
-  // Ajoute le paramètre d'authentification à une URL si un jeton est présent.
-  function withAuth(url) {
-    if (!authToken) return url;
-    return url + (url.indexOf("?") === -1 ? "?" : "&") + "auth=" + encodeURIComponent(authToken);
+  Api.isNetworkError = function (error) { return !!error && error.kind === "network"; };
+  Api.isAuthError = function (error) { return !!error && error.kind === "auth"; };
+
+  function withTimeout(promise, controller) {
+    var timer = setTimeout(function () {
+      try { controller.abort(); } catch (e) { /* ignoré */ }
+    }, CONFIG.REQUEST_TIMEOUT_MS);
+    return promise.then(
+      function (value) { clearTimeout(timer); return value; },
+      function (error) { clearTimeout(timer); throw error; }
+    );
   }
 
-  function withMode(mode) {
-    const url = CONFIG.API_URL.trim();
-    return withAuth(url + (url.indexOf("?") === -1 ? "?" : "&") + "mode=" + mode);
+  function buildUrl(baseUrl, params) {
+    var url = String(baseUrl || "").trim();
+    if (!url) { throw apiError("server", "Aucune URL de script enregistrée."); }
+    var parts = [];
+    Object.keys(params).forEach(function (key) {
+      if (params[key] === null || params[key] === undefined) { return; }
+      parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(params[key]));
+    });
+    return url + (url.indexOf("?") >= 0 ? "&" : "?") + parts.join("&");
   }
 
-  function getRevision() {
-    return request(withMode("revision"), { method: "GET" });
-  }
-
-  function getState() {
-    return request(withMode("state"), { method: "GET" });
-  }
-
-  function postAction(action) {
-    return request(withAuth(CONFIG.API_URL.trim()), {
-      method: "POST",
-      body: JSON.stringify(action),
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+  function parse(response) {
+    return response.text().then(function (text) {
+      var data;
+      try { data = JSON.parse(text); }
+      catch (e) {
+        throw apiError("server",
+          "Réponse illisible du serveur. Vérifiez que l'URL se termine par /exec " +
+          "et que le déploiement est accessible à « Tout le monde ».");
+      }
+      if (!data || data.ok !== true) {
+        var message = (data && data.error) || "Le serveur a refusé la demande.";
+        var code = data && data.code ? data.code : null;
+        throw apiError(code === "auth" ? "auth" : "server", message, code);
+      }
+      return data;
     });
   }
 
-  function request(url, options) {
-    if (!isConfigured()) {
-      return Promise.reject(makeError("not-configured", "API non configurée."));
+  function send(url, options) {
+    var controller = new AbortController();
+    var request;
+    try {
+      request = fetch(url, Object.assign({ signal: controller.signal, redirect: "follow" }, options));
+    } catch (e) {
+      return Promise.reject(apiError("network", "Requête impossible."));
     }
-    return fetch(url, options)
-      .then(function (res) {
-        if (!res.ok) {
-          throw makeError("http", "Réponse serveur : " + res.status);
+    return withTimeout(request, controller).then(function (response) {
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw apiError("auth", "Accès refusé par le serveur.", "auth");
         }
-        return res.text();
-      })
-      .then(function (text) {
-        let json;
-        try {
-          json = JSON.parse(text);
-        } catch (e) {
-          throw makeError("parse", "Réponse serveur illisible.");
-        }
-        if (json && json.ok === false) {
-          // Mot de passe requis/incorrect : on prévient l'application pour
-          // qu'elle réaffiche l'écran de déverrouillage.
-          if (json.code === "auth" && typeof onAuthErr === "function") {
-            try { onAuthErr(); } catch (e) { /* pas bloquant */ }
-          }
-          throw makeError("server", json.error || "Erreur serveur.", json);
-        }
-        return json;
-      })
-      .catch(function (e) {
-        if (e && e.__apiError) throw e;
-        // TypeError de fetch => problème réseau
-        throw makeError("network", "Connexion indisponible.");
-      });
+        throw apiError("network", "Le serveur a répondu " + response.status + ".");
+      }
+      return parse(response);
+    }, function (error) {
+      if (error && error.kind) { throw error; }
+      throw apiError("network", "Connexion impossible. Vérifiez votre réseau.");
+    });
   }
 
-  function makeError(kind, message, data) {
-    const e = new Error(message);
-    e.__apiError = true;
-    e.kind = kind;
-    if (data) e.data = data;
-    return e;
-  }
-
-  return {
-    isConfigured: isConfigured,
-    getRevision: getRevision,
-    getState: getState,
-    postAction: postAction,
-    setAuthToken: setAuthToken,
-    clearAuthToken: clearAuthToken,
-    hasToken: hasToken,
-    onAuthError: onAuthError,
+  /* Léger : appelé en boucle. */
+  Api.getRevision = function (baseUrl, token) {
+    return send(buildUrl(baseUrl, { mode: "revision", auth: token || "" }), { method: "GET" });
   };
-})();
+
+  /* Lourd : appelé uniquement quand la révision a changé. */
+  Api.getState = function (baseUrl, token) {
+    return send(buildUrl(baseUrl, { mode: "state", auth: token || "" }), { method: "GET" });
+  };
+
+  Api.postAction = function (baseUrl, token, action) {
+    return send(buildUrl(baseUrl, { auth: token || "" }), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(action)
+    });
+  };
+
+  root.Api = Api;
+})(typeof globalThis !== "undefined" ? globalThis : this);

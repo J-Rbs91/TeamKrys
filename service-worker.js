@@ -1,42 +1,40 @@
-/**
- * Service worker de TeamKrys.
+/* BrainstO. — service worker.
  *
- * - Précache la "coquille" de l'application (HTML, CSS, JS, icônes).
- * - Sert les fichiers statiques hors connexion (cache d'abord).
- * - Ne met JAMAIS en cache les appels à l'API Apps Script (autre origine).
- * - Ne touche JAMAIS à IndexedDB : les données locales et la file d'actions
- *   sont conservées lors des mises à jour.
- *
- * IMPORTANT : à chaque publication d'une nouvelle version des fichiers,
- * incrémentez CACHE_VERSION (idéalement en accord avec APP_VERSION du
- * frontend) afin que la mise à jour soit détectée.
+ * ⚠️ Incrémenter CACHE_VERSION EN MÊME TEMPS que CONFIG.APP_VERSION (js/config.js).
+ * Règles :
+ *  - la coquille statique est précachée puis servie en cache-first ;
+ *  - la navigation est servie en network-first (repli sur la coquille) ;
+ *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
+ *  - IndexedDB n'est jamais touchée par le service worker.
  */
-const CACHE_VERSION = "1.5.0";
-const CACHE_NAME = "teamkrys-" + CACHE_VERSION;
+var CACHE_VERSION = "brainsto-v1.0.0";
 
-const ASSETS = [
+var SHELL = [
   "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./css/app.css",
-  "./js/config.js",
-  "./js/utils.js",
-  "./js/state.js",
-  "./js/database.js",
-  "./js/api.js",
-  "./js/sync.js",
-  "./js/ui.js",
-  "./js/app.js",
-  "./assets/icons/icon.svg",
-  "./assets/icons/icon-192.png",
-  "./assets/icons/icon-512.png",
-  "./assets/icons/icon-maskable-512.png",
+  "index.html",
+  "manifest.webmanifest",
+  "css/app.css",
+  "js/config.js",
+  "js/utils.js",
+  "js/state.js",
+  "js/database.js",
+  "js/api.js",
+  "js/sync.js",
+  "js/ui.js",
+  "js/app.js",
+  "assets/icons/icon.svg",
+  "assets/icons/icon-192.png",
+  "assets/icons/icon-512.png",
+  "assets/icons/icon-maskable-512.png"
 ];
 
 self.addEventListener("install", function (event) {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(ASSETS);
+    caches.open(CACHE_VERSION).then(function (cache) {
+      /* addAll échoue en bloc si une ressource manque : on tolère les absences. */
+      return Promise.all(SHELL.map(function (path) {
+        return cache.add(new Request(path, { cache: "reload" })).catch(function () { return null; });
+      }));
     })
   );
 });
@@ -44,60 +42,52 @@ self.addEventListener("install", function (event) {
 self.addEventListener("activate", function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
-      return Promise.all(
-        keys.map(function (key) {
-          if (key !== CACHE_NAME) return caches.delete(key);
-        })
-      );
-    }).then(function () {
-      return self.clients.claim();
-    })
+      return Promise.all(keys.map(function (key) {
+        return key === CACHE_VERSION ? null : caches.delete(key);
+      }));
+    }).then(function () { return self.clients.claim(); })
   );
 });
 
-// Permet au frontend d'activer immédiatement la nouvelle version.
 self.addEventListener("message", function (event) {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === "SKIP_WAITING") { self.skipWaiting(); }
 });
 
+function isShellRequest(url) {
+  return url.origin === self.location.origin;
+}
+
 self.addEventListener("fetch", function (event) {
-  const req = event.request;
+  var request = event.request;
+  if (request.method !== "GET") { return; }
 
-  // On ne gère que les GET de même origine. Les appels API (script.google.com)
-  // passent directement au réseau et ne sont pas mis en cache.
-  if (req.method !== "GET") return;
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
+  var url;
+  try { url = new URL(request.url); } catch (e) { return; }
 
-  // Navigation : réseau d'abord, repli sur l'index en cache (hors connexion).
-  if (req.mode === "navigate") {
+  /* Appels API (Google Apps Script) : jamais interceptés, jamais mis en cache. */
+  if (!isShellRequest(url)) { return; }
+
+  if (request.mode === "navigate") {
     event.respondWith(
-      fetch(req).catch(function () {
-        return caches.match("./index.html");
+      fetch(request).catch(function () {
+        return caches.match("index.html").then(function (cached) {
+          return cached || caches.match("./");
+        });
       })
     );
     return;
   }
 
-  // Fichiers statiques : cache d'abord, puis réseau (et mise en cache).
   event.respondWith(
-    caches.match(req).then(function (cached) {
-      if (cached) return cached;
-      return fetch(req)
-        .then(function (res) {
-          if (res && res.ok && res.type === "basic") {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then(function (cache) {
-              cache.put(req, copy);
-            });
-          }
-          return res;
-        })
-        .catch(function () {
-          return cached;
-        });
+    caches.match(request).then(function (cached) {
+      if (cached) { return cached; }
+      return fetch(request).then(function (response) {
+        if (response && response.status === 200 && response.type === "basic") {
+          var copy = response.clone();
+          caches.open(CACHE_VERSION).then(function (cache) { cache.put(request, copy); });
+        }
+        return response;
+      });
     })
   );
 });

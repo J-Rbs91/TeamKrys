@@ -1,103 +1,57 @@
-/**
- * Configuration de TeamKrys.
- *
- * IMPORTANT — SECRET : ne renseignez PAS d'URL réelle ici et ne la committez
- * JAMAIS dans le dépôt (public). L'URL du script Apps Script est un secret
- * d'accès partagé entre les membres de l'équipe : elle est saisie via
- * Paramètres → « Connexion à l'équipe » et conservée uniquement dans le
- * localStorage de l'appareil de chaque utilisateur.
- *
- * API_URL reste donc vide dans le code source. Tant qu'aucune URL n'est
- * enregistrée sur l'appareil, l'application fonctionne en "mode local" :
- * les données restent dans le navigateur, sans synchronisation d'équipe.
+/* BrainstO. — configuration.
+ * Aucune donnée sensible ici : ni code d'accès, ni URL de script.
+ * L'URL du script et le code d'accès sont saisis par chaque utilisateur dans
+ * l'application ; seul un « vérificateur » (hachage) est conservé sur l'appareil.
  */
-const CONFIG = {
-  // Laisser vide dans le dépôt. Renseigné à l'exécution depuis le localStorage.
-  API_URL: "",
+(function (root) {
+  "use strict";
 
-  // Clé de stockage local de l'URL (par appareil, jamais versionnée).
-  STORAGE_KEY: "teamkrys.apiUrl",
+  var CONFIG = {
+    APP_NAME: "BrainstO.",
 
-  // Intervalle de vérification des nouvelles données (onglet visible), en ms.
-  POLL_INTERVAL_VISIBLE_MS: 3000,
+    /* À incrémenter EN MÊME TEMPS que CACHE_VERSION dans service-worker.js. */
+    APP_VERSION: "1.0.0",
 
-  // Intervalle de vérification lorsque l'onglet est masqué, en ms.
-  POLL_INTERVAL_HIDDEN_MS: 30000,
-};
+    /* Sel public partagé avec le backend. Ce n'est PAS un secret : il sert
+     * uniquement à séparer les deux hachages (jeton serveur / vérificateur local). */
+    PW_SALT: "brainsto.v1",
 
-// Lecture synchrone de l'URL enregistrée sur l'appareil (localStorage).
-try {
-  var savedApiUrl = window.localStorage.getItem(CONFIG.STORAGE_KEY);
-  if (savedApiUrl && savedApiUrl.trim()) CONFIG.API_URL = savedApiUrl.trim();
-} catch (e) {
-  /* localStorage indisponible (navigation privée stricte) : mode local. */
-}
+    /* Rythme d'interrogation du serveur. */
+    POLL_VISIBLE_MS: 3000,
+    POLL_HIDDEN_MS: 30000,
 
-// L'URL est-elle réellement configurée ?
-CONFIG.isConfigured = function () {
-  return typeof CONFIG.API_URL === "string" && CONFIG.API_URL.trim().startsWith("http");
-};
+    /* Reverrouillage après ce délai passé en arrière-plan. */
+    LOCK_BACKGROUND_MS: 3 * 60 * 1000,
 
-// Persiste (ou efface) l'URL dans le localStorage de l'appareil.
-CONFIG.persistApiUrl = function (url) {
-  var clean = url ? String(url).trim() : "";
-  CONFIG.API_URL = clean;
-  try {
-    if (clean) window.localStorage.setItem(CONFIG.STORAGE_KEY, clean);
-    else window.localStorage.removeItem(CONFIG.STORAGE_KEY);
-    return true;
-  } catch (e) {
-    return false; // stockage indisponible : l'URL ne survivra pas au rechargement
-  }
-};
+    /* Délai maximal d'une requête réseau. */
+    REQUEST_TIMEOUT_MS: 20000,
 
-/* -------------------------------------------------------------- Mot de passe
- * Verrouillage optionnel de l'application par mot de passe.
- *
- * - Le mot de passe lui-même n'est JAMAIS stocké sur l'appareil.
- * - On conserve seulement un « vérificateur » : un hachage SHA-256 dérivé du
- *   mot de passe, qui permet de valider la saisie à l'écran de déverrouillage
- *   (y compris hors connexion) sans révéler le mot de passe ni le jeton serveur.
- * - Le jeton envoyé au script (auth) est un hachage DIFFÉRENT du même mot de
- *   passe : disposer du vérificateur ne permet pas de reconstituer ce jeton.
- * - Le sel est public (partagé client/serveur) ; il évite les tables
- *   arc-en-ciel triviales sur le hachage stocké.
- */
-CONFIG.PW_SALT = "teamkrys-v1";
-CONFIG.PW_VERIFIER_KEY = "teamkrys.pwVerifier";
+    /* Au-delà de ce nombre de sujets, on affiche le champ de recherche. */
+    SEARCH_THRESHOLD: 6,
 
-// Chaînes hachées (doivent être identiques côté script Apps Script).
-CONFIG.serverTokenInput = function (password) { return "srv|" + CONFIG.PW_SALT + "|" + password; };
-CONFIG.verifierInput = function (password) { return "lock|" + CONFIG.PW_SALT + "|" + password; };
+    /* Clés de stockage local (appareil uniquement). */
+    KEYS: {
+      apiUrl: "brainsto.apiUrl",
+      lockVerifier: "brainsto.lockVerifier",
+      user: "brainsto.user",
+      ownItems: "brainsto.ownItems",
+      localMode: "brainsto.localMode",
+      showArchived: "brainsto.showArchived"
+    }
+  };
 
-CONFIG.hasPassword = function () {
-  try {
-    return !!window.localStorage.getItem(CONFIG.PW_VERIFIER_KEY);
-  } catch (e) {
-    return false;
-  }
-};
+  /* Entrée du hachage envoyé au serveur (jeton d'authentification). */
+  CONFIG.serverTokenInput = function (code) {
+    return "srv|" + CONFIG.PW_SALT + "|" + String(code == null ? "" : code);
+  };
 
-CONFIG.getVerifier = function () {
-  try {
-    return window.localStorage.getItem(CONFIG.PW_VERIFIER_KEY) || "";
-  } catch (e) {
-    return "";
-  }
-};
+  /* Entrée du hachage conservé sur l'appareil (vérification hors ligne).
+   * Volontairement DIFFÉRENT du jeton serveur : connaître le vérificateur ne
+   * permet pas de reconstituer le jeton. */
+  CONFIG.verifierInput = function (code) {
+    return "lock|" + CONFIG.PW_SALT + "|" + String(code == null ? "" : code);
+  };
 
-// Enregistre (ou efface avec une valeur vide) le vérificateur local.
-CONFIG.setVerifier = function (hash) {
-  try {
-    if (hash) window.localStorage.setItem(CONFIG.PW_VERIFIER_KEY, hash);
-    else window.localStorage.removeItem(CONFIG.PW_VERIFIER_KEY);
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
-
-// Délai d'inactivité (onglet masqué) au-delà duquel on reverrouille, en ms.
-CONFIG.LOCK_IDLE_MS = 3 * 60 * 1000;
-
-const APP_VERSION = "1.5.0";
+  root.CONFIG = CONFIG;
+  if (typeof module !== "undefined" && module.exports) { module.exports = CONFIG; }
+})(typeof globalThis !== "undefined" ? globalThis : this);
