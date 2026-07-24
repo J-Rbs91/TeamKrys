@@ -21,11 +21,13 @@ var PROP_PWHASH = "TEAMKRYS_PWHASH";
 var PW_SALT = "teamkrys-v1"; // sel public (identique côté application)
 var MAX_PROCESSED = 500;
 
-// Code d'accès (optionnel). Pour activer SANS toucher aux propriétés du script,
-// collez ici le HACHAGE de votre code (jamais le code en clair) :
-//   PW_HASH = sha256Hex("srv|" + PW_SALT + "|" + VOTRE_CODE)
-// Laissez "" pour ne pas exiger de code (ou utilisez setPassword() à la place).
-var PW_HASH = "";
+// ============================ CODE D'ACCÈS (votre « .env ») =================
+// Mettez ici le code que l'équipe devra saisir dans l'application (ex. "votre-code").
+// Laissez "" pour un accès libre (sans code).
+// Ce fichier vit dans VOTRE projet Apps Script privé. Ne le committez JAMAIS
+// avec un code en clair dans un dépôt public.
+var ACCESS_CODE = "";
+// ===========================================================================
 
 var TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
 var PROPOSAL_STATUSES = ["voting", "selected", "debate", "implemented", "rejected"];
@@ -38,12 +40,10 @@ var REACTIONS = ["👌", "💪", "🤞", "🤏", "👎", "💩"];
    requête doit fournir le bon jeton (auth). Le mot de passe n'est jamais
    stocké en clair : seul son hachage l'est.
 
-   Deux façons d'activer un code d'accès :
-    - Le plus simple : renseignez la constante PW_HASH ci-dessus avec le hachage
-      de votre code (rien d'autre à faire).
-    - Ou : renseignez PASSWORD dans setPassword(), exécutez-la une fois, puis
-      remettez PASSWORD à "" (le hachage est enregistré dans les propriétés).
-   Pour désactiver la seconde méthode : exécutez clearPassword().
+   Le plus simple : renseignez la variable ACCESS_CODE tout en haut du fichier.
+   Alternative (sans code en clair dans le fichier) : renseignez PASSWORD dans
+   setPassword(), exécutez-la une fois, puis remettez PASSWORD à "" (le hachage
+   est enregistré dans les propriétés du script). Pour la retirer : clearPassword().
 */
 
 function setPassword() {
@@ -62,12 +62,14 @@ function clearPassword() {
 }
 
 // Vérifie le jeton d'authentification s'il y a un code d'accès configuré.
-// Priorité à la constante PW_HASH ; sinon, hachage enregistré via setPassword().
+// Priorité au code défini dans ACCESS_CODE ; sinon, hachage via setPassword().
 function requireAuth(e) {
-  var stored = PW_HASH || PropertiesService.getScriptProperties().getProperty(PROP_PWHASH);
-  if (!stored) return { ok: true }; // pas de code : accès libre
+  var expected = ACCESS_CODE
+    ? sha256Hex("srv|" + PW_SALT + "|" + ACCESS_CODE)
+    : PropertiesService.getScriptProperties().getProperty(PROP_PWHASH);
+  if (!expected) return { ok: true }; // pas de code : accès libre
   var token = (e && e.parameter && e.parameter.auth) || "";
-  if (token && token === stored) return { ok: true };
+  if (token && token === expected) return { ok: true };
   return { ok: false, error: "Code d'accès requis ou incorrect.", code: "auth" };
 }
 

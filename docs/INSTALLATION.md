@@ -67,18 +67,21 @@ Ouvrez dans le navigateur `VOTRE_URL/exec?mode=revision`. Vous devez obtenir :
 Pour que l'URL seule ne suffise pas — et bloquer l'accès aux données à qui
 n'a pas le code — définissez un **code d'accès** côté script.
 
-**Méthode recommandée (`setPassword`).** Dans `Code.gs`, ouvrez la fonction
-`setPassword()`, renseignez `PASSWORD` avec votre code, **exécutez-la une fois**,
-puis **remettez `PASSWORD = ""`** et enregistrez. Le code n'est jamais stocké en
-clair : seul son **hachage** est conservé dans les propriétés du script (privé).
-Pour désactiver : exécutez `clearPassword()`.
+**Méthode simple (variable `ACCESS_CODE`).** Tout en haut de `Code.gs`, mettez
+votre code dans la variable `ACCESS_CODE` (comme un fichier `.env`) :
 
-**Méthode alternative (constante `PW_HASH`).** Vous pouvez aussi coller le
-**hachage** de votre code dans la constante `PW_HASH` en haut de `Code.gs`
-(laissée vide dans le dépôt). ⚠️ **Ne committez JAMAIS ce hachage dans un dépôt
-public** : le hachage d'un code court (ex. 6 chiffres) se retrouve en une
-seconde. Renseignez `PW_HASH` uniquement dans **votre** projet Apps Script privé,
-et gardez-le vide partout ailleurs.
+```js
+var ACCESS_CODE = "votre-code";
+```
+
+C'est tout : (re)déployez, c'est actif. ⚠️ Ce fichier est votre projet Apps
+Script **privé** ; ne le committez **jamais** avec un code en clair dans un dépôt
+public (dans ce dépôt, `ACCESS_CODE` reste **vide**).
+
+**Méthode alternative (`setPassword`, sans code en clair dans le fichier).**
+Ouvrez `setPassword()`, renseignez `PASSWORD`, exécutez-la une fois, puis remettez
+`PASSWORD = ""`. Seul le **hachage** est alors conservé dans les propriétés du
+script. Pour désactiver : `clearPassword()`.
 
 > Chaque collaborateur saisit le code une fois à la connexion ; il lui est
 > **redemandé à chaque ouverture** (protège un téléphone égaré).
