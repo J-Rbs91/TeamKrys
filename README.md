@@ -1,202 +1,162 @@
 # BrainstO.
 
-**Outil interne, simple et mobile, de préparation de réunion pour l'équipe d'un magasin.**
+Outil interne de préparation de réunion pour l'équipe d'un magasin : chaque sujet
+devient une conversation de groupe, on en tire des propositions, on vote, et on
+arrive en réunion avec une conclusion partagée. Il remplace le tableur partagé.
 
-Avant une réunion, chaque membre de l'équipe peut créer des sujets, en discuter,
-proposer des solutions, voter, dégager les consensus et rédiger des conclusions.
-L'équipe regroupe les propositions en **conclusions votables**. Pendant la
-réunion, l'écran **« Préparation de la réunion »** offre une synthèse imprimable
-de tous les sujets.
-
-Interface volontairement **épurée** (inspiration Apple / Tesla), thème clair et
-sombre automatiques. Le parcours : on colle d'abord l'**URL du script**, on
-choisit un **nom d'utilisateur**, puis on accède à la **liste des sujets** ;
-chaque sujet ouvre un écran **débat** (messages horodatés et signés, modifiables
-par leur auteur) donnant accès à l'écran **Conclusion**.
-
-BrainstO. fonctionne **en ligne et hors connexion** (PWA). Il n'y a **ni compte,
-ni mot de passe, ni base de données, ni serveur** : les données partagées sont
-stockées dans un simple fichier JSON sur Google Drive, lu et écrit par un petit
-script Google Apps Script.
+Ce dépôt contient **uniquement le frontend** : un site statique (HTML + CSS +
+JavaScript, sans framework ni build) publié par GitHub Pages, installable comme
+application (PWA) sur iPhone et Android.
 
 ---
-
-## Sommaire
-
-- [Fonctionnalités](#fonctionnalités)
-- [Architecture](#architecture)
-- [Lancer l'application localement](#lancer-lapplication-localement)
-- [Installer le backend Apps Script](#installer-le-backend-apps-script)
-- [Renseigner l'URL de l'API](#renseigner-lurl-de-lapi)
-- [Publier avec GitHub Pages](#publier-avec-github-pages)
-- [Mode hors connexion](#mode-hors-connexion)
-- [Synchronisation](#synchronisation)
-- [Limites connues](#limites-connues)
-- [Documentation complémentaire](#documentation-complémentaire)
-
----
-
-## Fonctionnalités
-
-- **Sujets** : création, édition, statuts (`Ouvert`, `Prêt pour la réunion`,
-  `Traité`, `Archivé`), recherche, filtre et tri.
-- **Discussion** : messages chronologiques, **réactions emoji**
-  (👌 💪 🤞 🤏 👎 💩) façon WhatsApp, **citation** d'un message pour y répondre.
-- **Anonymat** : sujets et messages **signés (défaut) ou anonymes** — l'anonyme
-  n'enregistre aucune identité. Édition d'un message possible **tant que personne
-  n'y a réagi** (verrou ensuite) ; la signature reste modifiable après envoi.
-- **Code d'accès (optionnel)** : verrouille l'application par un code, redemandé
-  à chaque ouverture, et bloque l'accès aux données côté script.
-- **Propositions** : plusieurs solutions par sujet, créées directement ou
-  depuis un message, avec statuts en français.
-- **Votes** : Pour / Contre / Abstention, un vote par personne, modifiable et
-  retirable, comptage et indicateur automatique (consensus, majorité, etc.).
-- **Conclusion** : l'équipe ajoute des conclusions (regroupant les propositions
-  du débat), **votables** (choix unique par personne), modifiables et
-  supprimables par leur auteur.
-- **Synthèse de réunion** : vue d'ensemble filtrable et **imprimable**.
-- **Hors connexion** : consultation et modifications possibles, envoyées
-  automatiquement au retour du réseau (aucun texte perdu).
-- **Indicateur de synchronisation** permanent et **console de diagnostic**.
 
 ## Architecture
 
+| Brique | Où elle vit | Dans ce dépôt ? |
+|---|---|---|
+| Frontend (PWA) | GitHub Pages | **oui** — c'est ce que Pages sert |
+| Backend | Google Apps Script | **non, jamais** |
+| Données (un fichier JSON) | Google Drive | **non, jamais** |
+| Secrets (code d'accès, adresse du script) | script Apps Script / appareil | **non, jamais** |
+
+Règles tenues par ce dépôt :
+
+- aucun fichier de backend (`.gs`, `appsscript.json`, dossier `apps-script/`) ;
+- aucun secret : ni code d'accès, ni adresse de script, ni jeton, ni hachage ;
+- aucune dépendance externe : pas de npm, pas de CDN, **pas de police distante**
+  (typographie 100 % système, donc zéro requête réseau pour l'affichage).
+
+L'adresse du script et le code d'accès sont saisis **par chaque utilisateur dans
+l'application**. L'adresse reste dans le `localStorage` de son appareil ; le code
+n'est jamais stocké (voir « Verrou » ci-dessous).
+
+---
+
+## Contenu
+
 ```
-Application BrainstO. (PWA statique, GitHub Pages)
-        │  HTML / CSS / JavaScript
-        ├── Service worker (cache hors connexion)
-        ├── IndexedDB (cache des données + identité locale)
-        └── File d'actions en attente
-                    │  (fetch : GET révision/état, POST action)
-                    ▼
-          Google Apps Script  (doGet / doPost + LockService)
-                    │
-                    ▼
-         teamkrys-data.json   (Google Drive, en clair)
+index.html                 coquille de l'application
+css/app.css                thème unique, clair et sombre automatiques
+js/config.js               constantes (version, rythmes, clés de stockage)
+js/utils.js                DOM sûr (texte brut), dates, SHA-256, stockage
+js/state.js                modèle de données, validation et réduction des actions
+js/database.js             IndexedDB : file d'actions + dernier état connu
+js/api.js                  appels au backend (GET révision / état, POST action)
+js/sync.js                 synchronisation optimiste, file, indicateur d'état
+js/ui.js                   rendu des écrans, feuilles et fenêtres
+js/app.js                  démarrage, navigation, verrou, actions utilisateur
+service-worker.js          hors ligne : précache de la coquille
+manifest.webmanifest       installation sur l'écran d'accueil
+assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
+docs/                      installation, guide utilisateur, checklist de test
+tests/parity.test.js       tests exécutables avec `node tests/parity.test.js`
 ```
 
-Le frontend n'écrit **jamais** tout le JSON : il envoie des **actions précises**
-(ex. `CREATE_MESSAGE`, `SET_VOTE`). Le serveur les applique sur la dernière
-version, ce qui évite qu'un collaborateur écrase le travail d'un autre.
+---
 
-Fichiers principaux :
+## Synchronisation : écriture par actions
 
-| Fichier | Rôle |
-|---|---|
-| `index.html` | Page unique de l'application |
-| `js/config.js` | Configuration (URL de l'API, version) |
-| `js/state.js` | Modèle métier + réducteur d'actions (miroir du backend) |
-| `js/database.js` | IndexedDB (cache, file d'actions) |
-| `js/api.js` | Appels à Apps Script |
-| `js/sync.js` | Moteur de synchronisation (optimiste, file, poll) |
-| `js/ui.js` | Rendu de l'interface (texte brut, sans `innerHTML`) |
-| `js/app.js` | Contrôleur, routage, service worker |
-| `service-worker.js` | Cache hors connexion + mises à jour |
-| `apps-script/Code.gs` | Backend Drive (lecture/écriture du JSON) |
+Le frontend n'écrit **jamais** le JSON complet. Il envoie des actions précises
+(`CREATE_MESSAGE`, `SET_VOTE`, …) que le backend applique sur la dernière
+version. Deux personnes qui écrivent en même temps ne s'écrasent donc pas.
 
-## Lancer l'application localement
+- `GET ?mode=revision` → `{revision, updatedAt}` — léger, appelé en boucle
+  (3 s onglet visible, 30 s onglet masqué) ;
+- `GET ?mode=state` → l'état complet, téléchargé **seulement** si la révision
+  a changé ;
+- `POST` (corps = l'action) → `{ok, revision, state, duplicate}`.
 
-Un simple serveur statique suffit (le service worker exige `http://`, pas
-`file://`) :
+Côté serveur : verrou (`LockService`), déduplication des identifiants d'actions
+déjà traités, `revision` incrémentée à chaque écriture.
+
+Côté application : application optimiste immédiate, file d'actions persistée
+dans **IndexedDB** (ordre garanti par une clé auto-incrémentée), rejeu au retour
+du réseau. Une erreur **réseau** conserve la file ; une erreur **métier**
+(action devenue impossible) retire l'action et l'explique à l'utilisateur.
+
+> Le POST part volontairement en `Content-Type: text/plain;charset=utf-8` :
+> c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
+> sait pas répondre.
+
+---
+
+## Verrou par code d'accès
+
+- Le code vit **uniquement** dans une variable en haut du script Apps Script
+  (vide = accès libre). Il n'est ni dans ce dépôt, ni codé en dur dans l'app.
+- L'application envoie au serveur un jeton `SHA-256("srv|" + sel + "|" + code)`.
+- Elle conserve sur l'appareil un **vérificateur** `SHA-256("lock|" + sel + "|" +
+  code)` — un hachage **différent**, qui permet de valider le déverrouillage
+  hors ligne sans permettre de reconstituer le jeton serveur.
+- Le code lui-même n'est **jamais** enregistré.
+- Le jeton ne vit qu'en mémoire vive : le verrou est redemandé à **chaque
+  ouverture**, et après 3 minutes passées en arrière-plan.
+- Si le serveur refuse le jeton en cours de session, l'application se
+  reverrouille immédiatement.
+
+Le sel est une constante publique partagée par l'application et le script : il
+sert seulement à séparer les deux hachages, ce n'est pas un secret.
+
+---
+
+## Publier le frontend (GitHub Pages)
+
+1. **Settings → Pages** du dépôt ;
+2. *Source* : **Deploy from a branch**, branche `main`, dossier `/ (root)` ;
+3. l'adresse publique s'affiche au bout d'une minute.
+
+Le backend, lui, s'installe dans Google Apps Script — voir
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md).
+
+### Renseigner l'adresse et le code depuis l'application
+
+Au premier lancement, l'application demande :
+
+1. l'**adresse du script** de l'équipe (elle se termine par `/exec`) ;
+2. le **code d'accès**, s'il y en a un (sinon laisser vide) ;
+3. puis le **nom d'utilisateur**.
+
+Un lien « Continuer sans connexion (mode local) » permet d'essayer
+l'application sans backend : les données restent alors sur l'appareil.
+Réglages → « Modifier l'adresse ou le code » permet d'y revenir, et
+« Se déconnecter de l'équipe » oublie l'adresse et le vérificateur.
+
+---
+
+## Publier une nouvelle version
+
+Incrémenter **ensemble** :
+
+- `CONFIG.APP_VERSION` dans `js/config.js` ;
+- `CACHE_VERSION` dans `service-worker.js`.
+
+Sans quoi les appareils garderont l'ancienne coquille en cache. Au chargement
+suivant, un bandeau « nouvelle version disponible » propose la mise à jour ;
+le rechargement n'a lieu que si l'utilisateur l'a demandé.
+
+---
+
+## Tests
 
 ```bash
-# Python 3
-python3 -m http.server 8080
-# puis ouvrir http://localhost:8080
+node tests/parity.test.js
 ```
 
-Sans URL d'API configurée, l'application démarre en **mode local** : tout
-fonctionne dans le navigateur, mais sans partage entre collaborateurs. Idéal
-pour tester l'interface.
+Ces tests couvrent, action par action, la logique que le backend doit reproduire
+à l'identique (validation, réduction, migration des anciens JSON, indicateurs de
+vote), ainsi que les **vecteurs de hachage** partagés avec le serveur. Le script
+Apps Script expose une fonction `runSelfTest()` qui vérifie exactement les mêmes
+valeurs de référence : c'est le garde-fou du piège des octets signés de
+`Utilities.computeDigest`.
 
-## Installer le backend Apps Script
+Le parcours d'interface se vérifie à la main :
+[`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md).
 
-Voir le guide détaillé : [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
+---
 
-Résumé :
+## Documentation
 
-1. Créez un projet sur <https://script.google.com>.
-2. Copiez le contenu de `apps-script/Code.gs` et `apps-script/appsscript.json`.
-3. Exécutez la fonction **`setupProject()`** une fois et acceptez les
-   autorisations Drive. Elle crée le dossier `TeamKrys` et le fichier
-   `teamkrys-data.json` (jamais écrasé s'il existe déjà).
-4. Déployez le projet en **application Web** :
-   - « Exécuter en tant que » : **moi** ;
-   - « Qui a accès » : **Tout le monde**.
-5. Copiez l'**URL de déploiement** (`.../exec`).
-
-## Renseigner l'URL de l'API
-
-**Le plus simple (recommandé, sans toucher au code) :** ouvrez l'application,
-allez dans **Paramètres → Connexion à l'équipe**, collez l'URL du script
-(terminant par `/exec`) dans le champ **« URL du script »**, puis cliquez
-**« Enregistrer et connecter »**. L'URL est conservée **uniquement dans le
-`localStorage` de votre appareil** — elle n'est jamais écrite dans le dépôt et
-reste donc secrète. L'indicateur passe de « Mode local » à « À jour ». Un bouton
-**« Retirer »** permet de revenir au mode local. Chaque collaborateur saisit
-l'URL une fois sur son appareil.
-
-**Alternative (valeur par défaut pour tous) :** définissez l'URL dans
-`js/config.js` avant de publier, afin qu'elle soit préremplie pour tout le
-monde :
-
-```js
-const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/XXXXXXXX/exec",
-  ...
-};
-```
-
-> L'URL saisie dans les Paramètres est prioritaire sur celle de `config.js`.
-
-> Le fichier de **production** `teamkrys-data.json` n'est **pas** versionné
-> (voir `.gitignore`). Il vit uniquement dans votre Google Drive.
-
-## Publier avec GitHub Pages
-
-1. Poussez le dépôt sur GitHub.
-2. **Settings → Pages → Build and deployment → Source : Deploy from a branch**.
-3. Choisissez la branche (ex. `main`) et le dossier **`/ (root)`**.
-4. Patientez ; l'URL publique s'affiche (ex. `https://<user>.github.io/teamkrys/`).
-5. Partagez cette URL à l'équipe. Sur mobile, « Ajouter à l'écran d'accueil »
-   installe l'application.
-
-## Mode hors connexion
-
-Le service worker met en cache la coquille de l'application (HTML, CSS, JS,
-icônes) et la dernière version connue des données. Hors connexion, vous pouvez
-consulter les données, créer un sujet, publier un message, créer une
-proposition, voter, rédiger une conclusion. Les modifications sont enregistrées
-dans une **file locale** (IndexedDB) et envoyées automatiquement au retour du
-réseau, **dans leur ordre de création**. Un texte en cours de rédaction n'est
-jamais perdu.
-
-## Synchronisation
-
-- Onglet visible : vérification toutes les **3 secondes** ; le JSON complet
-  n'est téléchargé que si la **révision** a changé.
-- Onglet masqué : vérification ralentie.
-- Après une action locale : envoi immédiat, interface mise à jour sans attendre.
-- Un identifiant d'action (`actionId`) évite qu'une action envoyée deux fois
-  (après coupure réseau) soit appliquée deux fois.
-- L'indicateur affiche : `À jour`, `Synchronisation…`, `Modifications en
-  attente`, `Hors connexion`, `Erreur de synchronisation`, `Nouvelle version
-  disponible`. Il n'affiche jamais « À jour » s'il reste des actions en attente.
-
-## Limites connues
-
-- Pas de temps réel permanent : les échanges apparaissent en **quelques
-  secondes** (poll de 3 s), pas instantanément.
-- Aucun contrôle d'accès : quiconque possède l'URL de l'application et de l'API
-  peut lire et écrire. **N'y mettez aucune donnée sensible** (client, médicale,
-  bancaire, personnelle). Réservé aux discussions générales du magasin.
-- Résolution de conflits volontairement simple (dernière écriture appliquée par
-  action ; pas de fusion de texte).
-- Quotas Google Apps Script : suffisants pour une petite équipe.
-
-## Documentation complémentaire
-
-- [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — installation pas à pas.
-- [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) — modèle de données et actions.
-- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — guide utilisateur.
-- [`tests/manual-checklist.md`](tests/manual-checklist.md) — tests à effectuer.
+- [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — installer le backend et publier le site
+- [`docs/GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md) — guide de l'équipe
+- [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md) — structure du JSON et liste des actions
+- [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication

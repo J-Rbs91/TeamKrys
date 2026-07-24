@@ -1,18 +1,19 @@
 {
-  "name": "BrainstO. — Préparation de réunion",
+  "name": "BrainstO.",
   "short_name": "BrainstO.",
-  "description": "Outil interne de préparation de réunion pour l'équipe du magasin.",
-  "start_url": "./index.html",
+  "description": "Préparer les réunions de l'équipe, ensemble.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f5f5f7",
+  "background_color": "#000000",
   "theme_color": "#000000",
-  "lang": "fr",
   "icons": [
-    { "src": "assets/icons/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
-    { "src": "assets/icons/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
-    { "src": "assets/icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
-    { "src": "assets/icons/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

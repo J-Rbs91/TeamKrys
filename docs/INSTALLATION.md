@@ -1,165 +1,104 @@
-# Installation de BrainstO.
+# Installer BrainstO.
 
-Ce guide détaille le déploiement complet : backend Google Apps Script, puis
-publication du frontend avec GitHub Pages.
+Trois étapes : le backend dans Google Apps Script, le site sur GitHub Pages,
+puis la configuration de l'application sur chaque téléphone.
 
----
-
-## 1. Backend Google Apps Script
-
-### 1.1 Créer le projet
-
-1. Ouvrez <https://script.google.com> et connectez-vous avec le compte Google
-   qui hébergera le fichier de données.
-2. **Nouveau projet**.
-3. Renommez-le `BrainstO.` (facultatif).
-
-### 1.2 Copier le code
-
-1. Dans l'éditeur, remplacez le contenu de `Code.gs` par celui de
-   [`apps-script/Code.gs`](../apps-script/Code.gs).
-2. Affichez le fichier manifeste : **⚙️ Paramètres du projet → cochez
-   « Afficher le fichier manifeste `appsscript.json` »**.
-3. Ouvrez `appsscript.json` et remplacez son contenu par celui de
-   [`apps-script/appsscript.json`](../apps-script/appsscript.json).
-4. Enregistrez (Ctrl/Cmd + S).
-
-### 1.3 Créer le fichier de données
-
-1. Dans la liste des fonctions (en haut), sélectionnez **`setupProject`**.
-2. Cliquez sur **Exécuter**.
-3. Une fenêtre d'autorisation apparaît :
-   - **Vérifier les autorisations** → choisissez votre compte ;
-   - un avertissement « Google n'a pas validé cette application » peut
-     s'afficher : **Paramètres avancés → Accéder à BrainstO. (non sécurisé)** ;
-   - **Autoriser** l'accès à Google Drive.
-4. Relancez **`setupProject`** si nécessaire. Le journal (**Exécution →
-   Journaux**) doit indiquer « Fichier créé : … ».
-
-> `setupProject()` crée un dossier `TeamKrys` et le fichier
-> `teamkrys-data.json`. Il n'écrase **jamais** un fichier existant.
-
-### 1.4 Déployer en application Web
-
-1. **Déployer → Nouveau déploiement**.
-2. **Type** (roue crantée) → **Application Web**.
-3. Réglages :
-   - **Description** : `BrainstO. API` ;
-   - **Exécuter en tant que** : **Moi** ;
-   - **Qui a accès** : **Tout le monde**.
-4. **Déployer**, autorisez si demandé.
-5. Copiez l'**URL de l'application Web** (se termine par `/exec`).
-
-> À chaque modification du code, créez un **nouveau déploiement** ou **gérez le
-> déploiement existant → Modifier → Nouvelle version**, sinon l'ancienne version
-> reste servie.
-
-### 1.5 Vérifier
-
-Ouvrez dans le navigateur `VOTRE_URL/exec?mode=revision`. Vous devez obtenir :
-
-```json
-{"revision":0,"updatedAt":"..."}
-```
-
-### 1.6 Code d'accès (optionnel mais recommandé)
-
-Pour que l'URL seule ne suffise pas — et bloquer l'accès aux données à qui
-n'a pas le code — définissez un **code d'accès** côté script.
-
-**Méthode recommandée (`setPassword`).** Dans `Code.gs`, ouvrez la fonction
-`setPassword()`, renseignez `PASSWORD` avec votre code, **exécutez-la une fois**,
-puis **remettez `PASSWORD = ""`** et enregistrez. Le code n'est jamais stocké en
-clair : seul son **hachage** est conservé dans les propriétés du script (privé).
-Pour désactiver : exécutez `clearPassword()`.
-
-**Méthode alternative (constante `PW_HASH`).** Vous pouvez aussi coller le
-**hachage** de votre code dans la constante `PW_HASH` en haut de `Code.gs`
-(laissée vide dans le dépôt). ⚠️ **Ne committez JAMAIS ce hachage dans un dépôt
-public** : le hachage d'un code court (ex. 6 chiffres) se retrouve en une
-seconde. Renseignez `PW_HASH` uniquement dans **votre** projet Apps Script privé,
-et gardez-le vide partout ailleurs.
-
-> Chaque collaborateur saisit le code une fois à la connexion ; il lui est
-> **redemandé à chaque ouverture** (protège un téléphone égaré).
-
-> Le code circule vers le script sous forme de **hachage** (jamais en clair) et
-> n'est **jamais stocké** sur l'appareil (seul un vérificateur local l'est).
-> Rappel : une application web ne peut pas être totalement inviolable sur un
-> téléphone **déverrouillé** — comptez aussi sur le verrouillage d'écran du
-> téléphone et n'y mettez pas de données sensibles.
-
-Vérification : `VOTRE_URL/exec?mode=revision` doit désormais répondre
-`{"ok":false,"error":"Code d'accès requis ou incorrect.","code":"auth"}`, et
-`...?mode=revision&auth=LE_HACHAGE` doit répondre normalement.
+L'installation complète est faite **une seule fois**, par une personne de
+l'équipe (celle dont le compte Google hébergera le fichier de données).
 
 ---
 
-## 2. Frontend
+## 1. Le backend (Google Apps Script)
 
-### 2.1 Renseigner l'URL de l'API
+> Le code du backend n'est **pas** dans ce dépôt, et ne doit jamais y être
+> ajouté : il contient le code d'accès de l'équipe. Il vous a été fourni à part,
+> sous forme de deux blocs à copier-coller (le script et son manifeste).
 
-Deux possibilités :
+1. Ouvrir <https://script.google.com> avec le compte Google qui hébergera les
+   données, puis **Nouveau projet**.
+2. Coller le contenu du script dans le fichier de code (remplacer entièrement
+   `function myFunction()`).
+3. Afficher le manifeste : **Paramètres du projet** → cocher « Afficher le
+   fichier manifeste `appsscript.json` », puis coller le manifeste fourni.
+4. **Choisir le code d'accès de l'équipe** : en haut du script, renseigner la
+   variable `ACCESS_CODE`. La laisser vide signifie « accès libre ».
+   Ce code ne doit figurer nulle part ailleurs : ni dans un dépôt, ni dans un
+   message public.
+5. Sélectionner la fonction `setupProject` et l'exécuter une fois. Autoriser
+   l'accès à Google Drive quand la fenêtre le demande. Cette fonction crée le
+   dossier et le fichier JSON de l'équipe, et **n'écrase jamais** un fichier
+   existant : la relancer est sans danger.
+6. *(recommandé)* Exécuter `runSelfTest` : la fonction vérifie que les hachages
+   du serveur correspondent exactement à ceux du navigateur.
+7. **Déployer** → *Nouveau déploiement* → type **Application Web** :
+   - Description : `BrainstO.`
+   - Exécuter en tant que : **moi**
+   - Qui a accès : **tout le monde**
+8. Copier l'**adresse du déploiement**, celle qui se termine par `/exec`.
+   C'est elle que l'équipe saisira dans l'application.
 
-**a) Depuis l'application (recommandé).** Ouvrez BrainstO. → **Réglages →
-Connexion à l'équipe**, collez l'URL du script (terminant par `/exec`) dans le
-champ **« URL du script »** et cliquez **« Enregistrer et connecter »**. L'URL
-est conservée **uniquement dans le `localStorage` de l'appareil** (jamais dans
-le dépôt) ; un test de connexion s'affiche. Chaque collaborateur le fait une
-fois sur son appareil. (Priorité sur `config.js`.)
+> À chaque modification du script, il faut créer une **nouvelle version** du
+> déploiement (Déployer → Gérer les déploiements → Modifier → Version : Nouvelle),
+> sinon l'ancienne version continue de répondre.
 
-**b) Valeur par défaut pour tous** dans [`js/config.js`](../js/config.js) avant
-publication :
+### Diffuser l'adresse et le code
 
-```js
-const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/XXXXXXXX/exec",
-  POLL_INTERVAL_VISIBLE_MS: 3000,
-  POLL_INTERVAL_HIDDEN_MS: 30000,
-};
-```
-
-### 2.2 Tester en local
-
-```bash
-python3 -m http.server 8080
-# ouvrir http://localhost:8080
-```
-
-Au premier lancement, saisissez votre prénom. L'indicateur doit passer à
-« À jour ». Créez un sujet : le fichier Drive doit se remplir.
-
-### 2.3 Publier avec GitHub Pages
-
-1. Poussez le dépôt sur GitHub.
-2. **Settings → Pages**.
-3. **Source : Deploy from a branch**, branche `main`, dossier **`/ (root)`**.
-4. Enregistrez ; l'URL publique apparaît après quelques instants.
-5. Partagez l'URL à l'équipe.
-
-> ⚠️ Si vous publiez **avant** de renseigner `API_URL`, l'application
-> fonctionnera en mode local seulement. Renseignez l'URL puis re-poussez.
+L'adresse et le code se transmettent de la main à la main (message privé,
+oral) — jamais dans un dépôt public, jamais dans une capture d'écran partagée.
 
 ---
 
-## 3. Mise à jour de l'application
+## 2. Le site (GitHub Pages)
 
-Quand vous modifiez le code frontend :
+1. **Settings → Pages** du dépôt.
+2. *Source* : **Deploy from a branch**, branche `main`, dossier `/ (root)`.
+3. Attendre une minute : l'adresse publique s'affiche en haut de la page.
 
-1. Incrémentez `APP_VERSION` dans `js/config.js` **et** `CACHE_VERSION` dans
-   `service-worker.js`.
-2. Poussez sur GitHub.
-3. Les utilisateurs verront « Une nouvelle version de BrainstO. est disponible »
-   avec un bouton **Mettre à jour**. Les données locales et les actions en
-   attente sont **conservées**.
+Rien d'autre à faire : le site est statique, il n'y a ni build ni dépendance.
 
 ---
 
-## 4. Dépannage rapide
+## 3. Sur le téléphone de chaque personne
 
-| Symptôme | Piste |
-|---|---|
-| « Projet non initialisé » | Exécutez `setupProject()`. |
-| Indicateur « Mode local » | `API_URL` non renseignée dans `config.js`. |
-| Erreur de synchronisation | Vérifiez `?mode=revision`, l'accès « Tout le monde », et le déploiement à jour. |
-| Le service worker ne se met pas à jour | Bumpez `CACHE_VERSION`, videz le cache, rechargez. |
+1. Ouvrir l'adresse du site.
+2. **Installer l'application** (facultatif mais recommandé) :
+   - iPhone (Safari) : bouton *Partager* → **Sur l'écran d'accueil** ;
+   - Android (Chrome) : menu ⋮ → **Installer l'application**.
+3. Au premier lancement :
+   - coller l'**adresse du script** (celle qui se termine par `/exec`) ;
+   - saisir le **code d'accès** s'il y en a un ;
+   - choisir son **nom**.
+
+L'application vérifie tout de suite l'adresse et le code : un code erroné est
+signalé immédiatement.
+
+---
+
+## Vérifier que tout fonctionne
+
+- L'indicateur en haut à droite affiche **À jour**.
+- Un sujet créé sur un téléphone apparaît sur un autre en quelques secondes.
+- En mode avion, l'application s'ouvre quand même, les messages écrits partent
+  au retour du réseau et l'indicateur passe par **En attente (n)**.
+
+---
+
+## Problèmes fréquents
+
+| Symptôme | Cause probable | Solution |
+|---|---|---|
+| « Réponse illisible du serveur » | l'adresse ne finit pas par `/exec`, ou le déploiement n'est pas accessible à « tout le monde » | recopier l'adresse du déploiement, vérifier les droits |
+| « Code d'accès refusé » | le code saisi ne correspond pas à `ACCESS_CODE` | vérifier le code auprès de la personne qui a installé le backend |
+| Modifications du script sans effet | déploiement pas mis à jour | créer une **nouvelle version** du déploiement |
+| L'application reste sur l'ancienne version | cache du service worker | publier en incrémentant `APP_VERSION` **et** `CACHE_VERSION`, puis « Mettre à jour » dans le bandeau |
+| Les données n'apparaissent plus | déconnexion ou changement d'adresse | Réglages → Modifier l'adresse ou le code |
+
+---
+
+## Où sont les données ?
+
+Dans **un seul fichier JSON**, sur le Google Drive du compte qui a déployé le
+script. Pour en faire une copie de sauvegarde : ouvrir le dossier créé par
+`setupProject` et dupliquer le fichier. Aucune donnée n'est stockée ailleurs,
+hormis une copie locale de lecture sur chaque appareil (pour le hors-ligne),
+effacée par « Se déconnecter de l'équipe ».

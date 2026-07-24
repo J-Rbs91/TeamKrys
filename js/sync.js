@@ -1,263 +1,288 @@
-/**
- * Moteur de synchronisation.
+/* BrainstO. — synchronisation par actions.
  *
- * Concepts :
- *  - baseState : dernière version connue du serveur (fait autorité).
- *  - pending   : file locale d'actions non encore confirmées par le serveur.
- *  - viewState : baseState + pending appliquées (ce que l'interface affiche).
- *
- * Écriture par actions : on n'envoie jamais tout le JSON, seulement des
- * actions précises. Le serveur les applique sur la dernière version, ce qui
- * évite d'écraser le travail d'un autre collaborateur.
+ * Principe : l'application n'écrit JAMAIS l'état complet. Elle applique
+ * l'action localement (optimiste), la range dans une file persistée
+ * (IndexedDB), puis l'envoie une par une. Le serveur applique l'action sur la
+ * dernière version, incrémente la révision et renvoie l'état à jour.
  */
-const Sync = (function () {
-  let baseState = State.emptyData();
-  let viewState = State.emptyData();
-  let pending = []; // [{seq, actionId, action}]
-  let syncing = false;
-  let lastSyncAt = null;
-  let lastError = null; // { message, at }
-  let onChange = function () {};
-  let onStatus = function () {};
-  let pollTimer = null;
+(function (root) {
+  "use strict";
 
-  // --- Initialisation -------------------------------------------------------
+  var Sync = {};
 
-  function init(callbacks) {
-    onChange = (callbacks && callbacks.onChange) || onChange;
-    onStatus = (callbacks && callbacks.onStatus) || onStatus;
-    return Promise.all([DB.loadState(), DB.listActions(), DB.metaGet("lastSyncAt")]).then(function (
-      res
-    ) {
-      if (res[0]) baseState = res[0];
-      pending = res[1] || [];
-      lastSyncAt = res[2] || null;
-      rebuildView();
-      emit();
+  var listeners = [];
+  var pollTimer = null;
+  var busy = false;          // un envoi est en cours
+  var pulling = false;
+  var lastError = null;      // dernier message d'erreur réseau/serveur
+  var lastSyncAt = null;
+  var hooks = { onAuthError: null, onMessage: null, onChange: null };
+
+  Sync.connection = {
+    url: "",
+    token: "",       // jeton SHA-256 — vit uniquement en mémoire vive
+    localMode: false,
+    unlocked: false
+  };
+
+  /* -------------------------------------------------------------- État --- */
+
+  function notify() {
+    var snapshot = Sync.status();
+    listeners.forEach(function (fn) {
+      try { fn(snapshot); } catch (e) { /* un abonné défaillant ne bloque pas */ }
     });
   }
 
-  function rebuildView() {
-    const clone = JSON.parse(JSON.stringify(baseState));
-    pending.forEach(function (row) {
-      const check = State.validateAction(row.action, clone);
-      if (check.ok) State.applyAction(clone, row.action);
-    });
-    viewState = clone;
-  }
+  Sync.subscribe = function (fn) { listeners.push(fn); return function () {
+    listeners = listeners.filter(function (l) { return l !== fn; });
+  }; };
 
-  function getData() {
-    return viewState;
-  }
+  Sync.setHooks = function (next) { Object.assign(hooks, next || {}); };
 
-  // --- Dispatch d'une action locale ----------------------------------------
+  Sync.pendingCount = function () { return Store.queue.length; };
 
-  /**
-   * Valide, enregistre et applique une action de manière optimiste.
-   * L'application optimiste est synchrone (l'interface reflète le changement
-   * immédiatement) ; la persistance et l'envoi réseau suivent.
-   * Renvoie une promesse { ok } ou { ok:false, error }.
-   */
-  function dispatch(action) {
-    const check = State.validateAction(action, viewState);
-    if (!check.ok) return Promise.resolve({ ok: false, error: check.error });
-
-    // Application optimiste immédiate (seq réel renseigné après persistance).
-    const row = { seq: null, actionId: action.actionId, action: action };
-    pending.push(row);
-    rebuildView();
-    emit();
-
-    return DB.enqueueAction(action).then(function (seq) {
-      row.seq = seq;
-      pushQueue();
-      return { ok: true };
-    });
-  }
-
-  // --- Envoi de la file -----------------------------------------------------
-
-  function pushQueue() {
-    if (syncing) return Promise.resolve();
-    if (!Api.isConfigured()) {
-      emit();
-      return Promise.resolve();
+  /* Indicateur permanent : jamais « À jour » s'il reste des actions en attente. */
+  Sync.status = function () {
+    var pending = Sync.pendingCount();
+    var code, label;
+    if (Sync.connection.localMode || !Sync.connection.url) {
+      code = "local"; label = "Local";
+    } else if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      code = "offline"; label = pending ? "Hors ligne (" + pending + ")" : "Hors ligne";
+    } else if (busy || pulling) {
+      code = "syncing"; label = "Sync…";
+    } else if (pending > 0) {
+      code = "pending"; label = "En attente (" + pending + ")";
+    } else if (lastError) {
+      code = "error"; label = "Erreur";
+    } else {
+      code = "idle"; label = "À jour";
     }
-    if (!navigator.onLine) {
-      emit();
-      return Promise.resolve();
-    }
-    if (pending.length === 0) return Promise.resolve();
+    return {
+      code: code,
+      label: label,
+      pending: pending,
+      error: lastError,
+      lastSyncAt: lastSyncAt,
+      revision: Store.base.revision
+    };
+  };
 
-    syncing = true;
-    emit();
-
-    return sendNext().then(function () {
-      syncing = false;
-      touchSync();
-      emit();
-    });
+  function changed() {
+    notify();
+    if (hooks.onChange) { hooks.onChange(); }
   }
 
-  function sendNext() {
-    if (pending.length === 0) return Promise.resolve();
-    const row = pending[0];
-    // seq pas encore attribué (persistance en cours) : on attendra le prochain
-    // cycle pour ne pas laisser d'action orpheline dans IndexedDB.
-    if (row.seq === null || row.seq === undefined) return Promise.resolve();
-    return Api.postAction(row.action)
-      .then(function (resp) {
-        // Succès (y compris doublon déjà appliqué côté serveur).
-        if (resp && resp.state) {
-          baseState = resp.state;
-          DB.saveState(baseState);
-        }
-        return DB.removeAction(row.seq).then(function () {
-          pending.shift();
-          rebuildView();
-          lastError = null;
-          return sendNext();
+  function message(text, kind) {
+    if (hooks.onMessage) { hooks.onMessage(text, kind || "info"); }
+  }
+
+  /* -------------------------------------------------------- Démarrage --- */
+
+  Sync.boot = function () {
+    return DB.loadState().then(function (saved) {
+      if (saved) { Store.setBase(saved); }
+      return DB.queued();
+    }).then(function (entries) {
+      Store.setQueue(entries || []);
+      changed();
+    }).catch(function () {
+      Store.setQueue([]);
+      changed();
+    });
+  };
+
+  Sync.setConnection = function (options) {
+    Object.assign(Sync.connection, options || {});
+    lastError = null;
+    changed();
+  };
+
+  Sync.isConnected = function () {
+    return !!Sync.connection.url && !Sync.connection.localMode && Sync.connection.unlocked;
+  };
+
+  /* --------------------------------------------------------- Dispatch --- */
+
+  Sync.makeAction = function (type, payload, actor) {
+    return {
+      id: Utils.uid(),
+      type: type,
+      actorId: actor && actor.id ? actor.id : "",
+      actorName: actor && actor.name ? actor.name : "",
+      ts: Utils.nowISO(),
+      payload: payload || {}
+    };
+  };
+
+  /* Applique une action : optimiste en local, puis file d'envoi.
+   * Renvoie {ok:true} ou {ok:false, error} en cas de refus métier immédiat. */
+  Sync.dispatch = function (action) {
+    var check = Core.validateAction(Store.view, action);
+    if (!check.ok) {
+      message(check.error, "error");
+      return Promise.resolve(check);
+    }
+
+    /* Mode local : l'action est fondue directement dans l'état conservé. */
+    if (Sync.connection.localMode || !Sync.connection.url) {
+      Core.reduce(Store.base, action, action.ts);
+      Store.base.revision += 1;
+      Store.base.updatedAt = action.ts;
+      Store.rebuild();
+      changed();
+      return DB.saveState(Store.base).then(function () { return { ok: true, error: null }; });
+    }
+
+    /* Mode connecté : affichage immédiat, envoi dès que la clé est attribuée. */
+    var entry = { seq: null, action: action };
+    Store.addToQueue(entry);
+    changed();
+
+    return DB.enqueue(action).then(function (saved) {
+      /* ⚠️ Tant que « seq » n'est pas attribué, l'action n'est PAS envoyée. */
+      entry.seq = saved.seq;
+      changed();
+      Sync.push();
+      return { ok: true, error: null };
+    }).catch(function () {
+      message("Impossible d'enregistrer l'action sur cet appareil.", "error");
+      return { ok: false, error: "stockage" };
+    });
+  };
+
+  /* ------------------------------------------------------------ Envoi --- */
+
+  Sync.push = function () {
+    if (busy || !Sync.isConnected()) { return Promise.resolve(); }
+    var entry = null;
+    for (var i = 0; i < Store.queue.length; i++) {
+      if (Store.queue[i].seq !== null && Store.queue[i].seq !== undefined) { entry = Store.queue[i]; break; }
+    }
+    if (!entry) { return Promise.resolve(); }
+
+    busy = true;
+    changed();
+
+    return Api.postAction(Sync.connection.url, Sync.connection.token, entry.action)
+      .then(function (response) {
+        lastError = null;
+        lastSyncAt = Utils.nowISO();
+        if (response.state) { Store.setBase(response.state); }
+        return DB.dequeue(entry.seq).then(function () {
+          Store.removeFromQueue(entry.seq);
+          return DB.saveState(Store.base);
         });
       })
-      .catch(function (e) {
-        if (e.kind === "network") {
-          // Réseau indisponible : on garde la file intacte, on réessaiera.
-          return;
+      .catch(function (error) {
+        if (Api.isAuthError(error)) {
+          /* Code d'accès invalidé en cours de session → on reverrouille. */
+          lastError = error.message;
+          if (hooks.onAuthError) { hooks.onAuthError(); }
+          throw error;
         }
-        if (e.kind === "server") {
-          // Action refusée par le serveur : on la retire pour ne pas bloquer
-          // la file, et on conserve un message clair.
-          recordError("Une action n'a pas pu être enregistrée : " + e.message);
-          return DB.removeAction(row.seq).then(function () {
-            pending.shift();
-            rebuildView();
-            return sendNext();
-          });
+        if (Api.isNetworkError(error)) {
+          /* Erreur RÉSEAU : la file reste intacte, on réessaiera. */
+          lastError = error.message;
+          throw error;
         }
-        recordError(e.message || "Erreur de synchronisation.");
-      });
-  }
-
-  // --- Réception (pull) -----------------------------------------------------
-
-  function pull() {
-    if (!Api.isConfigured() || !navigator.onLine) {
-      emit();
-      return Promise.resolve();
-    }
-    return Api.getRevision()
-      .then(function (info) {
-        const remote = info && typeof info.revision === "number" ? info.revision : 0;
-        if (remote > (baseState.revision || 0)) {
-          return Api.getState().then(function (state) {
-            if (state && typeof state.revision === "number") {
-              baseState = state;
-              DB.saveState(baseState);
-              rebuildView();
-              lastError = null;
-            }
-          });
-        }
-        lastError = null;
-      })
-      .catch(function (e) {
-        if (e.kind !== "network") recordError(e.message || "Erreur de synchronisation.");
+        /* Erreur MÉTIER : l'action ne passera jamais, on la retire pour ne pas
+         * bloquer les suivantes, et on prévient clairement l'utilisateur. */
+        message("Action refusée : " + error.message, "error");
+        return DB.dequeue(entry.seq).then(function () { Store.removeFromQueue(entry.seq); });
       })
       .then(function () {
-        touchSync();
-        emit();
+        busy = false;
+        changed();
+        /* On enchaîne tant qu'il reste des actions prêtes. */
+        var more = Store.queue.some(function (e) { return e.seq !== null && e.seq !== undefined; });
+        if (more) { return Sync.push(); }
+      })
+      .catch(function () {
+        busy = false;
+        changed();
       });
+  };
+
+  /* --------------------------------------------------------- Réception --- */
+
+  Sync.pull = function (force) {
+    if (pulling || busy || !Sync.isConnected()) { return Promise.resolve(); }
+    pulling = true;
+    changed();
+
+    return Api.getRevision(Sync.connection.url, Sync.connection.token)
+      .then(function (info) {
+        lastError = null;
+        lastSyncAt = Utils.nowISO();
+        var known = Store.base.revision;
+        if (!force && info.revision === known) { return null; }
+        /* État complet téléchargé UNIQUEMENT si la révision a changé. */
+        return Api.getState(Sync.connection.url, Sync.connection.token).then(function (payload) {
+          Store.setBase(payload.state);
+          return DB.saveState(Store.base);
+        });
+      })
+      .catch(function (error) {
+        if (Api.isAuthError(error)) {
+          lastError = error.message;
+          if (hooks.onAuthError) { hooks.onAuthError(); }
+          return;
+        }
+        lastError = error.message;
+      })
+      .then(function () {
+        pulling = false;
+        changed();
+      });
+  };
+
+  /* ------------------------------------------------------------ Boucle --- */
+
+  function interval() {
+    var hidden = typeof document !== "undefined" && document.hidden;
+    return hidden ? CONFIG.POLL_HIDDEN_MS : CONFIG.POLL_VISIBLE_MS;
   }
 
-  /** Cycle complet : envoyer d'abord la file, puis récupérer les nouveautés. */
-  function syncNow() {
-    return pushQueue().then(pull);
-  }
-
-  // --- Poll adaptatif -------------------------------------------------------
-
-  function startPolling() {
-    stopPolling();
-    schedule();
-  }
-
-  function stopPolling() {
-    if (pollTimer) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
-    }
+  function tick() {
+    pollTimer = null;
+    var run = Sync.isConnected() ? Sync.push().then(function () { return Sync.pull(); }) : Promise.resolve();
+    run.catch(function () { /* déjà traité */ }).then(schedule);
   }
 
   function schedule() {
-    const hidden = document.visibilityState === "hidden";
-    const delay = hidden ? CONFIG.POLL_INTERVAL_HIDDEN_MS : CONFIG.POLL_INTERVAL_VISIBLE_MS;
-    pollTimer = setTimeout(function () {
-      const run = document.visibilityState === "hidden" ? Promise.resolve() : syncNow();
-      run.then(schedule);
-    }, delay);
+    if (pollTimer) { clearTimeout(pollTimer); }
+    pollTimer = setTimeout(tick, interval());
   }
 
-  // --- Statut ---------------------------------------------------------------
-
-  function recordError(message) {
-    lastError = { message: message, at: Utils.nowIso() };
-    DB.metaSet("lastError", lastError);
-  }
-
-  function touchSync() {
-    lastSyncAt = Utils.nowIso();
-    DB.metaSet("lastSyncAt", lastSyncAt);
-  }
-
-  function getStatus() {
-    let key, label;
-    if (!Api.isConfigured()) {
-      key = "local";
-      label = "Mode local (API non configurée)";
-    } else if (!navigator.onLine) {
-      key = "offline";
-      label = "Hors connexion";
-    } else if (syncing) {
-      key = "syncing";
-      label = "Synchronisation…";
-    } else if (pending.length > 0) {
-      key = "pending";
-      label = "Modifications en attente";
-    } else if (lastError) {
-      key = "error";
-      label = "Erreur de synchronisation";
-    } else {
-      key = "up-to-date";
-      label = "À jour";
-    }
-    return {
-      key: key,
-      label: label,
-      pendingCount: pending.length,
-      localRevision: baseState.revision || 0,
-      remoteRevision: baseState.revision || 0,
-      lastSyncAt: lastSyncAt,
-      lastError: lastError,
-      online: navigator.onLine,
-      configured: Api.isConfigured(),
-    };
-  }
-
-  function emit() {
-    onChange(viewState);
-    onStatus(getStatus());
-  }
-
-  return {
-    init: init,
-    getData: getData,
-    dispatch: dispatch,
-    pushQueue: pushQueue,
-    pull: pull,
-    syncNow: syncNow,
-    startPolling: startPolling,
-    stopPolling: stopPolling,
-    getStatus: getStatus,
-    emit: emit,
+  Sync.start = function () {
+    Sync.stop();
+    tick();
   };
-})();
+
+  Sync.stop = function () {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  };
+
+  Sync.now = function () {
+    if (!Sync.isConnected()) { return Promise.resolve(); }
+    return Sync.push().then(function () { return Sync.pull(true); });
+  };
+
+  Sync.resetError = function () { lastError = null; changed(); };
+
+  Sync.diagnostics = function () {
+    return {
+      status: Sync.status(),
+      url: Sync.connection.url,
+      localMode: Sync.connection.localMode,
+      persistent: DB.isPersistent(),
+      revision: Store.base.revision,
+      updatedAt: Store.base.updatedAt,
+      pending: Store.queue.map(function (e) { return { seq: e.seq, type: e.action.type }; })
+    };
+  };
+
+  root.Sync = Sync;
+})(typeof globalThis !== "undefined" ? globalThis : this);

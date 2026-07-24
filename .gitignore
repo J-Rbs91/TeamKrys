@@ -1,5 +1,21 @@
-# Ne jamais versionner les données de production.
-teamkrys-data.json
+# Ce dépôt ne contient QUE le frontend.
+# Le backend Google Apps Script et les secrets ne doivent jamais y entrer.
+*.gs
+appsscript.json
+apps-script/
+secrets*
+.env
+.env.*
+
+# Données de production (elles vivent sur Google Drive)
+*-data.json
+
+# Artefacts de test / dépendances (l'application n'en utilise aucune)
+node_modules/
+package.json
+package-lock.json
+test-results/
+playwright-report/
 
 # Fichiers système / éditeurs
 .DS_Store
@@ -7,6 +23,3 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
-
-# Dépendances éventuelles (l'application n'en utilise aucune)
-node_modules/

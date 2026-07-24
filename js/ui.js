@@ -1,1226 +1,1287 @@
-/**
- * Rendu de l'interface — style épuré (inspiration Apple / Tesla).
+/* BrainstO. — rendu de l'interface.
  *
- * Principes :
- *  - Aucun contenu utilisateur n'est inséré via innerHTML (texte brut only).
- *  - Le rendu complet de la vue est reconstruit quand les données changent,
- *    mais les textes en cours de saisie (attribut data-draft) et l'élément
- *    actif sont préservés : on ne perd jamais un texte rédigé.
- *
- * Parcours :
- *   Accueil (coller l'URL) → nom d'utilisateur → liste des sujets
- *   → écran « débat » d'un sujet → Conclusion.
+ * Trois règles structurantes :
+ *  1. Le contenu utilisateur est inséré en TEXTE BRUT (helper el / textContent).
+ *  2. Le rendu est recalculé seulement si la « signature » de l'écran change,
+ *     sinon la frappe devient saccadée.
+ *  3. Toute saisie en cours (attribut data-draft) est capturée avant le rendu
+ *     et restaurée après, curseur compris : aucun texte ne doit être perdu.
  */
-const UI = (function () {
-  const el = Utils.el;
-  let root, barLeft, barTitle, barRight, viewEl, badgeEl, toastEl;
+(function (root) {
+  "use strict";
 
-  // État éphémère de l'interface (non persisté).
-  const openEditors = new Set(); // clés "kind:id" (édition de proposition)
-  const quoting = {}; // topicId -> messageId cité en cours de rédaction
-  const listState = { search: "", showArchived: false };
-  const meetingState = { filter: "all" };
-  let lastSignature = null;
-  let lastRoute = null;
-  let updateAvailable = false;
-  let lastChatTopic = null;      // dernier sujet ouvert en chat (pour défiler en bas)
-  let pendingScrollBottom = false;
+  var el = Utils.el;
+  var UI = {};
 
-  // --- Montage --------------------------------------------------------------
+  var appRoot = null;
+  var overlayRoot = null;
+  var toastRoot = null;
+  var lastSignature = null;
+  var forceNext = false;
 
-  function mount(container) {
-    root = container;
-    Utils.clear(root);
-    root.classList.add("pre-start");
+  /* État d'interface local (jamais partagé). */
+  UI.local = {
+    version: 0,
+    sheet: null,        // {type:…}
+    modal: null,        // {type:…}
+    quote: null,        // {topicId, messageId}
+    search: "",
+    showArchived: false,
+    flashMessageId: null,
+    composerAnon: false,
+    scrollToBottom: false
+  };
 
-    barLeft = el("div", { class: "bar-left" });
-    barTitle = el("h1", { class: "bar-title" });
-    barRight = el("div", { class: "bar-right" });
+  UI.set = function (patch) {
+    Object.assign(UI.local, patch || {});
+    UI.local.version += 1;
+    UI.render();
+  };
 
-    const header = el("header", { class: "app-bar" }, [barLeft, barTitle, barRight]);
+  UI.force = function () { forceNext = true; UI.render(); };
 
-    badgeEl = el("button", {
-      class: "sync-badge",
-      title: "Synchroniser maintenant",
-      "aria-label": "État de synchronisation",
-      onclick: function () { Sync.syncNow(); },
-    });
+  UI.init = function () {
+    appRoot = document.getElementById("app");
+    overlayRoot = document.getElementById("overlay-root");
+    toastRoot = document.getElementById("toast-root");
+  };
 
-    viewEl = el("main", { id: "view", class: "view" });
-    toastEl = el("div", { class: "toast-root", "aria-live": "polite" });
-
-    root.appendChild(header);
-    root.appendChild(viewEl);
-    root.appendChild(toastEl);
-  }
-
-  // Quitte le mode « pré-démarrage » (onboarding terminé) : la barre du haut
-  // et l'interface principale deviennent visibles.
-  function reveal() {
-    if (root) root.classList.remove("pre-start");
-  }
-
-  // --- Barre supérieure contextuelle ---------------------------------------
-
-  function renderChrome(route) {
-    Utils.clear(barLeft);
-    Utils.clear(barTitle);
-    Utils.clear(barRight);
-
-    const backTo = function (hash, label) {
-      return el("button", { class: "icon-btn back-btn", "aria-label": label || "Retour", onclick: function () { App.navigate(hash); } }, [
-        el("span", { class: "chev", text: "‹" }),
-      ]);
-    };
-
-    let title = "Sujets";
-    let titleTap = null; // action au tap sur le titre (infos du sujet)
-    if (route.name === "topic") {
-      barLeft.appendChild(backTo("#/", "Retour aux sujets"));
-      title = topicTitleFor(route.id);
-      const t = State.findTopic(Sync.getData(), route.id);
-      if (t) titleTap = function () { showTopicInfo(State.ensureTopicShape(t)); };
-    }
-    else if (route.name === "proposals") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Propositions"; }
-    else if (route.name === "conclusion") { barLeft.appendChild(backTo("#/topic/" + route.id, "Retour au débat")); title = "Conclusion"; }
-    else if (route.name === "meeting") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réunion"; }
-    else if (route.name === "settings") { barLeft.appendChild(backTo("#/", "Retour")); title = "Réglages"; }
-    else {
-      // Accueil : marque discrète.
-      barLeft.appendChild(el("span", { class: "brand", text: "BrainstO." }));
-      title = "";
-    }
-
-    if (title && titleTap) {
-      barTitle.appendChild(el("button", { class: "bar-title-btn", onclick: titleTap, title: "Infos du sujet" }, [
-        el("span", { text: title }),
-        el("span", { class: "bar-title-info", text: " ⓘ" }),
-      ]));
-    } else if (title) {
-      barTitle.appendChild(document.createTextNode(title));
-    }
-
-    // À droite : badge de synchro + accès aux réglages (sauf en réglages).
-    barRight.appendChild(badgeEl);
-    if (route.name !== "settings") {
-      barRight.appendChild(el("button", {
-        class: "icon-btn", "aria-label": "Réglages", title: "Réglages",
-        onclick: function () { App.navigate("#/settings"); },
-      }, [el("span", { class: "gear", text: "⚙" })]));
-    }
-  }
-
-  function topicTitleFor(id) {
-    const t = State.findTopic(Sync.getData(), id);
-    return t ? t.title : "Sujet";
-  }
-
-  // --- Préservation des saisies --------------------------------------------
+  /* ------------------------------------------------------------ Brouillons --- */
 
   function captureDrafts() {
-    const map = {};
-    let active = null;
-    root.querySelectorAll("[data-draft]").forEach(function (node) {
-      map[node.getAttribute("data-draft")] = node.value;
-      if (node === document.activeElement) {
-        active = { key: node.getAttribute("data-draft"), start: node.selectionStart, end: node.selectionEnd };
+    var snapshot = { values: {}, active: null };
+    var nodes = document.querySelectorAll("[data-draft]");
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var key = node.getAttribute("data-draft");
+      snapshot.values[key] = node.value;
+      if (document.activeElement === node) {
+        snapshot.active = {
+          key: key,
+          start: node.selectionStart,
+          end: node.selectionEnd
+        };
       }
-    });
-    return { map: map, active: active };
+    }
+    return snapshot;
+  }
+
+  function findDraftNode(key) {
+    var nodes = document.querySelectorAll("[data-draft]");
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].getAttribute("data-draft") === key) { return nodes[i]; }
+    }
+    return null;
   }
 
   function restoreDrafts(snapshot) {
-    root.querySelectorAll("[data-draft]").forEach(function (node) {
-      const key = node.getAttribute("data-draft");
-      if (Object.prototype.hasOwnProperty.call(snapshot.map, key)) {
-        const val = snapshot.map[key];
-        if (node.value === "" && val) node.value = val;
-      }
-    });
+    var nodes = document.querySelectorAll("[data-draft]");
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var key = node.getAttribute("data-draft");
+      var saved = snapshot.values[key];
+      /* On ne restaure que si le champ neuf est vide : une valeur fournie par
+       * le rendu (édition pré-remplie) reste prioritaire. */
+      if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
+      autoGrow(node);
+    }
     if (snapshot.active) {
-      const target = root.querySelector('[data-draft="' + cssEscape(snapshot.active.key) + '"]');
+      var target = findDraftNode(snapshot.active.key);
       if (target) {
-        target.focus();
-        try { target.setSelectionRange(snapshot.active.start, snapshot.active.end); } catch (e) { /* champ non textuel */ }
+        try {
+          target.focus({ preventScroll: true });
+          if (target.setSelectionRange && snapshot.active.start !== null) {
+            target.setSelectionRange(snapshot.active.start, snapshot.active.end);
+          }
+        } catch (e) { /* champ non focalisable */ }
       }
     }
   }
 
-  function cssEscape(s) { return String(s).replace(/["\\]/g, "\\$&"); }
-
-  // --- Rendu principal ------------------------------------------------------
-
-  function renderData(data) {
-    const route = App.route;
-    const signature = route.name + "|" + route.id + "|" + JSON.stringify(listState) +
-      "|" + JSON.stringify(meetingState) + "|" + serialize(openEditors) +
-      "|" + updateAvailable + "|" + (data.updatedAt || "") + "|" + (data.revision || 0) + "|" + dataSignature(data, route);
-
-    if (signature === lastSignature && route.name === lastRoute) return;
-    lastSignature = signature;
-    lastRoute = route.name;
-
-    const snap = captureDrafts();
-    Utils.clear(viewEl);
-    renderChrome(route);
-
-    let content;
-    if (route.name === "topic") content = renderTopic(data, route.id);
-    else if (route.name === "proposals") content = renderProposalsScreen(data, route.id);
-    else if (route.name === "conclusion") content = renderConclusion(data, route.id);
-    else if (route.name === "meeting") content = renderMeeting(data);
-    else if (route.name === "settings") content = renderSettings(data);
-    else content = renderHome(data);
-
-    if (content) viewEl.appendChild(content);
-    restoreDrafts(snap);
-
-    if (route.name !== "topic") lastChatTopic = null;
-    if (pendingScrollBottom) {
-      pendingScrollBottom = false;
-      setTimeout(function () { window.scrollTo({ top: document.body.scrollHeight }); }, 0);
-    }
+  function autoGrow(node) {
+    if (!node || node.tagName !== "TEXTAREA" || !node.classList.contains("grow")) { return; }
+    node.style.height = "auto";
+    node.style.height = Math.min(node.scrollHeight, 140) + "px";
   }
 
-  function serialize(set) { return Array.from(set).sort().join(","); }
+  /* --------------------------------------------------------------- Toasts --- */
 
-  function dataSignature(data, route) {
-    if (route.name === "topic" || route.name === "proposals" || route.name === "conclusion") {
-      const t = State.findTopic(data, route.id);
-      return t ? JSON.stringify(t) : "none";
-    }
-    return data.topics
-      .map(function (t) {
-        return t.id + t.status + t.updatedAt + t.title + t.messages.length +
-          t.proposals.map(function (p) { return p.status + Object.keys(p.votes).length; }).join("");
-      })
-      .join("|");
-  }
-
-  // --- Badge de synchronisation --------------------------------------------
-
-  function renderStatus(status) {
-    if (!badgeEl) return;
-    badgeEl.className = "sync-badge status-" + status.key;
-    Utils.clear(badgeEl);
-    badgeEl.appendChild(el("span", { class: "dot" }));
-    let text = shortStatus(status);
-    if (status.pendingCount > 0) text += " · " + status.pendingCount;
-    badgeEl.appendChild(el("span", { class: "sync-text", text: text }));
-    updateDiagnostics(status);
-  }
-
-  function shortStatus(status) {
-    switch (status.key) {
-      case "up-to-date": return "À jour";
-      case "syncing": return "Sync…";
-      case "pending": return "En attente";
-      case "offline": return "Hors ligne";
-      case "error": return "Erreur";
-      case "local": return "Local";
-      default: return status.label;
-    }
-  }
-
-  function setUpdateAvailable(v) { updateAvailable = v; forceRerender(); }
-
-  function forceRerender() {
-    lastSignature = null;
-    renderData(Sync.getData());
-  }
-
-  // ==========================================================================
-  //  ONBOARDING — 1) URL du script   2) nom d'utilisateur
-  // ==========================================================================
-
-  function showOnboardingUrl(handlers) {
-    const urlInput = el("input", {
-      class: "input input-lg", type: "url", inputmode: "url", autocomplete: "off",
-      placeholder: "https://script.google.com/…/exec",
-      "aria-label": "URL du script Google Apps Script",
-    });
-    const codeInput = el("input", {
-      class: "input input-lg", type: "password", inputmode: "numeric", autocomplete: "off",
-      placeholder: "Code d'accès (optionnel)", "aria-label": "Code d'accès",
-    });
-    const statusLine = el("p", { class: "onb-status" });
-
-    const saveBtn = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Enregistrer et continuer");
-    saveBtn.addEventListener("click", function () {
-      const url = Utils.clean(urlInput.value);
-      if (Utils.isBlank(url) || url.slice(0, 4) !== "http") {
-        return markInvalid(urlInput, "Collez l'URL du script (elle commence par https:// et finit par /exec).");
-      }
-      const code = codeInput.value || "";
-      saveBtn.disabled = true;
-      statusLine.className = "onb-status";
-      statusLine.textContent = "Connexion en cours…";
-      App.connect(url, code).then(function (res) {
-        if (res.ok) {
-          removeOverlay(overlay);
-          if (handlers && handlers.onSaved) handlers.onSaved();
-          return;
-        }
-        saveBtn.disabled = false;
-        statusLine.className = "onb-status err";
-        if (res.code === "auth") {
-          statusLine.textContent = code
-            ? "Code d'accès incorrect."
-            : "Cette équipe demande un code d'accès. Saisissez-le ci-dessus.";
-        } else {
-          statusLine.textContent = "Échec : " + (res.error || "vérifiez l'URL et le déploiement.");
-        }
-      });
-    });
-
-    const overlay = el("div", { class: "onboarding" }, [
-      el("div", { class: "onb-card" }, [
-        el("div", { class: "onb-logo", text: "BrainstO." }),
-        el("h2", { class: "onb-title", text: "Connexion à l'équipe" }),
-        el("p", { class: "onb-sub", text: "Collez l'URL du script Google Apps Script de votre équipe. Ajoutez un code d'accès si votre équipe en utilise un." }),
-        urlInput,
-        codeInput,
-        statusLine,
-        saveBtn,
-        el("button", { class: "btn btn-text btn-block", onclick: function () {
-          removeOverlay(overlay);
-          if (handlers && handlers.onLocal) handlers.onLocal();
-        } }, "Continuer sans connexion (mode local)"),
-      ]),
-    ]);
-    document.body.appendChild(overlay);
-    setTimeout(function () { urlInput.focus(); }, 40);
-    codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") saveBtn.click(); });
-  }
-
-  // Écran de déverrouillage (code d'accès), redemandé à chaque ouverture.
-  let lockShown = false;
-  function showLock(handlers) {
-    if (lockShown) return; // un seul verrou à la fois
-    lockShown = true;
-    const codeInput = el("input", {
-      class: "input input-lg lock-code", type: "password", inputmode: "numeric",
-      autocomplete: "off", placeholder: "Code d'accès", "aria-label": "Code d'accès",
-    });
-    const statusLine = el("p", { class: "onb-status" });
-    const unlockBtn = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Déverrouiller");
-    unlockBtn.addEventListener("click", function () {
-      const code = codeInput.value || "";
-      if (!code) return markInvalid(codeInput, "Saisissez votre code d'accès.");
-      unlockBtn.disabled = true;
-      statusLine.className = "onb-status";
-      statusLine.textContent = "Vérification…";
-      App.unlock(code).then(function (res) {
-        if (res.ok) {
-          lockShown = false;
-          removeOverlay(overlay);
-          if (handlers && handlers.onUnlock) handlers.onUnlock();
-          return;
-        }
-        unlockBtn.disabled = false;
-        statusLine.className = "onb-status err";
-        statusLine.textContent = res.code === "auth" || res.code === undefined
-          ? "Code d'accès incorrect." : ("Échec : " + (res.error || "réessayez."));
-        codeInput.select();
-      });
-    });
-
-    const overlay = el("div", { class: "onboarding lock-screen" }, [
-      el("div", { class: "onb-card" }, [
-        el("div", { class: "lock-icon", text: "🔒" }),
-        el("h2", { class: "onb-title", text: "Application verrouillée" }),
-        el("p", { class: "onb-sub", text: "Saisissez le code d'accès pour continuer." }),
-        codeInput,
-        statusLine,
-        unlockBtn,
-        el("button", { class: "btn btn-text btn-block", onclick: function () {
-          if (!window.confirm("Se déconnecter de l'équipe sur cet appareil ? L'URL et le code seront oubliés.")) return;
-          lockShown = false;
-          removeOverlay(overlay);
-          if (handlers && handlers.onLogout) handlers.onLogout();
-        } }, "Se déconnecter de l'équipe"),
-      ]),
-    ]);
-    document.body.appendChild(overlay);
-    setTimeout(function () { codeInput.focus(); }, 40);
-    codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") unlockBtn.click(); });
-  }
-
-  function showOnboardingName(onDone) {
-    const input = el("input", {
-      class: "input input-lg", type: "text", maxlength: Utils.LIMITS.name,
-      placeholder: "Votre prénom", "aria-label": "Votre prénom",
-    });
-    const confirm = el("button", { class: "btn btn-primary btn-block btn-lg" }, "Commencer");
-    confirm.addEventListener("click", function () {
-      const name = Utils.clean(input.value);
-      if (Utils.isBlank(name)) return markInvalid(input, "Merci d'indiquer un prénom.");
-      removeOverlay(overlay);
-      onDone(name);
-    });
-    const overlay = el("div", { class: "onboarding" }, [
-      el("div", { class: "onb-card" }, [
-        el("div", { class: "onb-logo", text: "BrainstO." }),
-        el("h2", { class: "onb-title", text: "Bienvenue" }),
-        el("p", { class: "onb-sub", text: "Quel nom souhaitez-vous utiliser dans l'application ?" }),
-        input,
-        confirm,
-      ]),
-    ]);
-    document.body.appendChild(overlay);
-    setTimeout(function () { input.focus(); }, 40);
-    input.addEventListener("keydown", function (e) { if (e.key === "Enter") confirm.click(); });
-  }
-
-  function removeOverlay(node) { if (node && node.parentNode) node.parentNode.removeChild(node); }
-
-  // ==========================================================================
-  //  VUE : Accueil / liste des sujets
-  // ==========================================================================
-
-  function renderHome(data) {
-    const wrap = el("section", { class: "page home" });
-
-    if (updateAvailable) wrap.appendChild(updateBanner());
-    if (!CONFIG.isConfigured()) wrap.appendChild(connectBanner());
-
-    const visible = data.topics.filter(function (t) {
-      return listState.showArchived ? true : t.status !== "archived";
-    });
-
-    // Aucun sujet : bouton d'ajout centré au milieu de l'écran.
-    if (data.topics.length === 0) {
-      wrap.appendChild(el("div", { class: "empty-hero" }, [
-        el("h2", { class: "hero-title", text: "Aucun sujet" }),
-        el("p", { class: "hero-sub", text: "Créez le premier sujet à préparer avec l'équipe." }),
-        el("button", { class: "btn btn-primary btn-lg", onclick: showNewTopic }, [plusGlyph(), " Ajouter un sujet"]),
-      ]));
-      return wrap;
-    }
-
-    // Recherche discrète lorsqu'il y a beaucoup de sujets.
-    if (data.topics.length > 6) {
-      wrap.appendChild(el("input", {
-        type: "search", class: "input search-field", placeholder: "Rechercher un sujet…",
-        "aria-label": "Rechercher un sujet", value: listState.search, "data-draft": "home-search",
-        oninput: function (e) { listState.search = e.target.value; forceRerender(); },
-      }));
-    }
-
-    let topics = visible.slice();
-    const q = Utils.clean(listState.search).toLowerCase();
-    if (q) {
-      topics = topics.filter(function (t) {
-        return (t.title || "").toLowerCase().indexOf(q) !== -1 || (t.description || "").toLowerCase().indexOf(q) !== -1;
-      });
-    }
-    topics.sort(function (a, b) { return (b.updatedAt || "").localeCompare(a.updatedAt || ""); });
-
-    if (topics.length === 0) {
-      wrap.appendChild(emptyState("Aucun sujet ne correspond."));
-    } else {
-      const list = el("div", { class: "topic-list" });
-      topics.forEach(function (t) { list.appendChild(topicCard(t)); });
-      wrap.appendChild(list);
-    }
-
-    const archivedCount = data.topics.filter(function (t) { return t.status === "archived"; }).length;
-    if (archivedCount > 0) {
-      wrap.appendChild(el("button", { class: "btn btn-text btn-block", onclick: function () {
-        listState.showArchived = !listState.showArchived; forceRerender();
-      } }, listState.showArchived ? "Masquer les archivés" : (archivedCount + " sujet(s) archivé(s)")));
-    }
-
-    // Bouton rond « + » en bas à droite.
-    wrap.appendChild(el("button", { class: "fab", "aria-label": "Ajouter un sujet", onclick: showNewTopic }, [plusGlyph()]));
-    return wrap;
-  }
-
-  function topicCard(t) {
-    const nbVoting = t.proposals.filter(function (p) { return p.status === "voting"; }).length;
-    return el("button", {
-      class: "card topic-card",
-      onclick: function () { App.navigate("#/topic/" + t.id); },
-    }, [
-      el("div", { class: "card-top" }, [
-        el("h2", { class: "card-title", text: t.title }),
-        topicBadge(t.status),
-      ]),
-      t.description ? el("p", { class: "card-desc", text: shorten(t.description, 140) }) : null,
-      el("div", { class: "card-meta" }, [
-        metaItem(t.messages.length + " message" + plural(t.messages.length)),
-        metaItem(t.proposals.length + " proposition" + plural(t.proposals.length)),
-        nbVoting ? metaItem(nbVoting + " en vote") : null,
-        el("span", { class: "meta-author", text: t.createdBy.name }),
-      ]),
-    ]);
-  }
-
-  // ==========================================================================
-  //  VUE : Débat (détail d'un sujet)
-  // ==========================================================================
-
-  function renderTopic(data, topicId) {
-    const t = State.ensureTopicShape(State.findTopic(data, topicId));
-    if (!t) return notFound();
-
-    const wrap = el("section", { class: "page chat-page" });
-
-    // Barre d'accès compacte (hors du fil de discussion) : Propositions / Conclusion.
-    const propN = t.proposals.length;
-    const conclN = t.conclusions.length;
-    wrap.appendChild(el("div", { class: "chat-toolbar" }, [
-      el("button", { class: "toolbar-chip", onclick: function () { App.navigate("#/topic/" + t.id + "/proposals"); } },
-        [el("span", { class: "tc-emoji", text: "💡" }), "Propositions", propN ? el("span", { class: "tc-count", text: String(propN) }) : null]),
-      el("button", { class: "toolbar-chip", onclick: function () { App.navigate("#/topic/" + t.id + "/conclusion"); } },
-        [el("span", { class: "tc-emoji", text: "✓" }), "Conclusion", conclN ? el("span", { class: "tc-count", text: String(conclN) }) : null]),
-    ]));
-
-    // Fil de discussion (bulles) + barre de saisie (façon messagerie de groupe).
-    wrap.appendChild(renderChat(t));
-    wrap.appendChild(composerBar(t));
-
-    // Défile en bas à l'ouverture du sujet.
-    if (lastChatTopic !== t.id) { lastChatTopic = t.id; pendingScrollBottom = true; }
-    return wrap;
-  }
-
-  // Écran secondaire : propositions & votes (sorties du chat).
-  function renderProposalsScreen(data, topicId) {
-    const t = State.ensureTopicShape(State.findTopic(data, topicId));
-    if (!t) return notFound();
-    const wrap = el("section", { class: "page ai-page" });
-    wrap.appendChild(el("p", { class: "ai-topic-name", text: t.title }));
-    wrap.appendChild(el("p", { class: "ai-lead", text: "Les propositions issues du débat, avec les votes." }));
-    wrap.appendChild(renderProposals(t));
-    return wrap;
-  }
-
-  // Fiche « infos du sujet » (description, statut, édition) — ouverte en tapant
-  // le titre dans la barre du haut, comme les infos d'un groupe.
-  function showTopicInfo(t) {
-    openSheet(function (close) {
-      const statusRow = el("div", { class: "sheet-status" }, Utils.TOPIC_STATUSES.map(function (s) {
-        return el("button", { class: "chip" + (t.status === s ? " active" : ""), onclick: function () {
-          App.actions.changeTopicStatus(t.id, s); close(); forceRerender();
-        } }, State.TOPIC_STATUS_LABELS[s]);
-      }));
-      return [
-        el("h2", { class: "sheet-title", text: t.title }),
-        t.description ? el("p", { class: "pre", text: t.description }) : el("p", { class: "muted", text: "Aucune description." }),
-        el("p", { class: "byline", text: "Créé par " + t.createdBy.name + " · " + Utils.formatDate(t.createdAt) }),
-        el("div", { class: "field-label", text: "Statut" }),
-        statusRow,
-        el("button", { class: "btn btn-outline btn-block", onclick: function () { close(); showEditTopic(t); } }, "Modifier le sujet"),
-      ];
-    });
-  }
-
-  function showEditTopic(t) {
-    const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, value: t.title });
-    const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription });
-    descInput.value = t.description || "";
-    modal("Modifier le sujet", [field("Titre *", titleInput), field("Description", descInput)], function () {
-      const title = Utils.clean(titleInput.value);
-      if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-      App.actions.updateTopic(t.id, title, Utils.clean(descInput.value));
-      forceRerender();
-      return true;
-    });
-    setTimeout(function () { titleInput.focus(); }, 30);
-  }
-
-  // --- Fil de discussion (chat) ---------------------------------------------
-
-  // Identité d'expéditeur pour regrouper les bulles consécutives.
-  function senderKey(m) {
-    if (App.ownsMessage(m)) return "me";
-    return m.anon ? "anon" : (m.authorId || ("n:" + m.authorName));
-  }
-
-  function renderChat(t) {
-    const chat = el("div", { class: "chat" });
-    if (t.messages.length === 0) {
-      chat.appendChild(el("div", { class: "chat-empty", text: "Démarrez la conversation 👋" }));
-      return chat;
-    }
-    const msgs = t.messages.slice().sort(function (a, b) { return (a.createdAt || "").localeCompare(b.createdAt || ""); });
-    msgs.forEach(function (m, i) {
-      const prev = msgs[i - 1];
-      const startGroup = !prev || senderKey(prev) !== senderKey(m);
-      chat.appendChild(messageBubble(t, m, startGroup));
-    });
-    return chat;
-  }
-
-  // Vrai si quelqu'un d'AUTRE que moi a réagi (verrouille l'édition).
-  function othersReacted(m) {
-    const r = m.reactions || {};
-    const me = App.profile ? App.profile.id : null;
-    return Object.keys(r).some(function (pid) { return pid !== me; });
-  }
-
-  function scrollToMessage(id) {
-    const n = document.getElementById("msg-" + id);
-    if (!n) return;
-    n.scrollIntoView({ behavior: "smooth", block: "center" });
-    n.classList.add("flash");
-    setTimeout(function () { n.classList.remove("flash"); }, 1300);
-  }
-
-  // Bloc « message cité » à l'intérieur d'une bulle.
-  function bubbleQuote(t, m) {
-    if (!m.quoteId) return null;
-    const q = State.findMessage(t, m.quoteId);
-    if (!q) return el("div", { class: "bubble-quote missing", text: "Message cité indisponible" });
-    return el("button", { class: "bubble-quote", onclick: function (e) { e.stopPropagation(); scrollToMessage(q.id); } }, [
-      el("span", { class: "bq-author", text: q.anon ? "Anonyme" : q.authorName }),
-      el("span", { class: "bq-text", text: shorten(q.text, 80) }),
-    ]);
-  }
-
-  // Pastilles de réactions sous une bulle (tap = bascule ma réaction).
-  function bubbleReactions(t, m) {
-    const counts = State.reactionSummary(m);
-    const mine = (m.reactions || {})[App.profile.id] || null;
-    const chips = [];
-    Utils.REACTIONS.forEach(function (e) {
-      const c = counts[e] || 0;
-      if (c > 0) {
-        chips.push(el("button", {
-          class: "reaction-chip" + (mine === e ? " mine" : ""),
-          onclick: function () { App.actions.setReaction(t.id, m.id, e); },
-        }, [el("span", { class: "r-emoji", text: e }), c > 1 ? el("span", { class: "r-count", text: String(c) }) : null]));
-      }
-    });
-    if (!chips.length) return null;
-    return el("div", { class: "bubble-reactions" }, chips);
-  }
-
-  // Une bulle de message (façon messagerie de groupe).
-  function messageBubble(t, m, startGroup) {
-    const owns = App.ownsMessage(m);
-    const bubble = el("div", { class: "bubble" + (owns ? " out" : " in") + (m.anon ? " anon" : "") });
-    if (!owns && startGroup) {
-      bubble.appendChild(el("div", { class: "bubble-author" }, [
-        m.anon ? el("span", { class: "anon-badge", text: "🕶️ " }) : null,
-        el("span", { text: m.anon ? "Anonyme" : m.authorName }),
-      ]));
-    }
-    const bq = bubbleQuote(t, m);
-    if (bq) bubble.appendChild(bq);
-    bubble.appendChild(el("div", { class: "bubble-text pre", text: m.text }));
-    bubble.appendChild(el("div", { class: "bubble-meta" }, [
-      m.updatedAt ? el("span", { class: "edited", text: "modifié · " }) : null,
-      el("span", { text: Utils.formatTime(m.createdAt) }),
-    ]));
-    // Tap sur la bulle : menu d'actions (réagir, citer, modifier…).
-    bubble.addEventListener("click", function () { showMessageMenu(t, m); });
-
-    return el("div", { id: "msg-" + m.id, class: "msg-row " + (owns ? "right" : "left") + (startGroup ? " group-start" : "") }, [
-      el("div", { class: "bubble-stack" }, [bubble, bubbleReactions(t, m)]),
-    ]);
-  }
-
-  // Menu d'actions d'un message (feuille du bas, façon appui long WhatsApp).
-  function showMessageMenu(t, m) {
-    const owns = App.ownsMessage(m);
-    const locked = othersReacted(m);
-    const mine = (m.reactions || {})[App.profile.id] || null;
-    openSheet(function (close) {
-      const emojiRow = el("div", { class: "sheet-emojis" }, Utils.REACTIONS.map(function (e) {
-        return el("button", { class: "sheet-emoji" + (mine === e ? " mine" : ""), onclick: function () { App.actions.setReaction(t.id, m.id, e); close(); } }, e);
-      }));
-      const rows = [emojiRow];
-      rows.push(sheetRow("↩︎", "Citer", function () { close(); startQuote(t.id, m.id); }));
-      rows.push(sheetRow("💡", "Créer une proposition", function () { close(); showNewProposal(t.id, m.text); }));
-      if (owns && !locked) rows.push(sheetRow("✏️", "Modifier", function () { close(); showEditMessage(t, m); }));
-      if (owns && locked) rows.push(el("div", { class: "sheet-note", text: "🔒 Modification bloquée : une réaction a été ajoutée." }));
-      if (owns) rows.push(sheetRow(m.anon ? "🙂" : "🕶️", m.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
-        close(); App.actions.setMessageSignature(t.id, m.id, !m.anon);
-        toast(m.anon ? "Message signé de votre nom." : "Message rendu anonyme.", "ok");
-      }));
-      return rows;
-    });
-  }
-
-  function showEditMessage(t, m) {
-    const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.message });
-    ta.value = m.text;
-    modal("Modifier le message", [field("Message", ta)], function () {
-      const text = Utils.clean(ta.value);
-      if (Utils.isBlank(text)) return markInvalid(ta, "Le message est vide.");
-      App.actions.updateMessage(t.id, m.id, text);
-      forceRerender();
-      return true;
-    });
-    setTimeout(function () { ta.focus(); }, 30);
-  }
-
-  function startQuote(topicId, messageId) {
-    quoting[topicId] = messageId;
-    forceRerender();
+  UI.toast = function (text, kind) {
+    if (!toastRoot) { return; }
+    var node = el("div", { class: "toast" + (kind === "error" ? " error" : ""), text: text });
+    toastRoot.appendChild(node);
     setTimeout(function () {
-      const ta = root.querySelector('[data-draft="new-msg-' + cssEscape(topicId) + '"]');
-      if (ta) ta.focus();
-    }, 30);
+      if (node.parentNode) { node.parentNode.removeChild(node); }
+    }, kind === "error" ? 5200 : 2800);
+  };
+
+  /* ------------------------------------------------------ Blocs réutilisables --- */
+
+  function statusPill() {
+    var status = Sync.status();
+    var pill = el("div", { class: "status-pill status-" + status.code, title: status.error || "" }, [
+      el("span", { class: "status-dot" }),
+      el("span", { class: "status-label", text: status.label })
+    ]);
+    return pill;
   }
 
-  // Barre de saisie (collée en bas, façon messagerie).
-  function composerBar(t) {
-    const ta = el("textarea", { class: "composer-input", rows: 1, placeholder: "Message", "aria-label": "Nouveau message", maxlength: Utils.LIMITS.message, "data-draft": "new-msg-" + t.id });
+  UI.refreshStatus = function () {
+    var status = Sync.status();
+    var nodes = document.querySelectorAll(".status-pill");
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].className = "status-pill status-" + status.code;
+      nodes[i].setAttribute("title", status.error || "");
+      var label = nodes[i].querySelector(".status-label");
+      if (label) { label.textContent = status.label; }
+    }
+  };
 
-    const qid = quoting[t.id];
-    const q = qid ? State.findMessage(t, qid) : null;
-    const preview = q ? el("div", { class: "composer-reply" }, [
-      el("span", { class: "reply-to" }, [
-        el("span", { class: "reply-author", text: (q.anon ? "Anonyme" : q.authorName) + " : " }),
-        el("span", { class: "reply-text", text: shorten(q.text, 60) }),
+  function topbar(options) {
+    var left = [];
+    if (options.back) {
+      /* Bouton retour visible sur CHAQUE écran secondaire (iPhone sans retour matériel). */
+      var backLabel = options.backLabel || "Retour";
+      left.push(el("button", {
+        class: "btn-back", type: "button",
+        "aria-label": backLabel === "Retour" ? "Retour" : "Retour vers " + backLabel,
+        onclick: options.back
+      }, [el("span", { class: "chev", "aria-hidden": "true", text: "‹" }), el("span", { text: backLabel })]));
+    }
+    var titles = el("div", { class: "topbar-titles" });
+    if (options.onTitle) {
+      var titleBtn = el("button", {
+        class: "btn-ghost", type: "button",
+        style: { padding: "0", textAlign: "left", width: "100%", minHeight: "auto", background: "transparent", border: "0", cursor: "pointer" },
+        onclick: options.onTitle
+      }, [
+        el("div", { class: "topbar-title", text: options.title }),
+        el("div", { class: "topbar-sub", text: (options.sub || "") + " ⓘ" })
+      ]);
+      titles.appendChild(titleBtn);
+    } else {
+      titles.appendChild(el("div", { class: "topbar-title", text: options.title }));
+      if (options.sub) { titles.appendChild(el("div", { class: "topbar-sub", text: options.sub })); }
+    }
+    return el("header", { class: "topbar" }, [left, titles, el("div", { class: "topbar-actions" }, options.actions || [])]);
+  }
+
+  function field(label, control, hint) {
+    return el("div", { class: "field" }, [
+      label ? el("label", { class: "label", text: label }) : null,
+      control,
+      hint ? el("div", { class: "hint", text: hint }) : null
+    ]);
+  }
+
+  function draftValue(key) {
+    var node = findDraftNode(key);
+    return node ? node.value : "";
+  }
+
+  UI.draftValue = draftValue;
+
+  function closeOverlay() { UI.set({ sheet: null, modal: null }); }
+
+  function sheet(title, children) {
+    return el("div", {
+      class: "overlay bottom",
+      onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
+    }, [
+      el("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, [
+        el("div", { class: "sheet-handle" }),
+        title ? el("div", { class: "sheet-title", text: title }) : null,
+        children,
+        el("button", { class: "btn btn-block btn-outline", type: "button", text: "Fermer", style: { marginTop: "12px" }, onclick: closeOverlay })
+      ])
+    ]);
+  }
+
+  function modal(title, children, actions) {
+    return el("div", {
+      class: "overlay center",
+      onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
+    }, [
+      el("div", { class: "modal", role: "dialog", "aria-modal": "true" }, [
+        el("div", { class: "modal-title", text: title }),
+        children,
+        el("div", { class: "modal-actions" }, actions)
+      ])
+    ]);
+  }
+
+  function sheetAction(icon, label, onclick, options) {
+    options = options || {};
+    return el("button", {
+      class: "sheet-action" + (options.danger ? " danger" : ""),
+      type: "button",
+      disabled: options.disabled,
+      onclick: onclick
+    }, [el("span", { class: "icon", text: icon }), el("span", { text: label })]);
+  }
+
+  function counterFor(key, max) {
+    return el("div", { class: "counter", dataset: { counter: key }, text: "0 / " + max });
+  }
+
+  function bindCounter(input, key, max) {
+    input.addEventListener("input", function () {
+      var nodes = document.querySelectorAll('[data-counter="' + key + '"]');
+      for (var i = 0; i < nodes.length; i++) {
+        nodes[i].textContent = input.value.length + " / " + max;
+      }
+    });
+    return input;
+  }
+
+  /* =========================================================== ÉCRANS ==== */
+
+  /* ---------------------------------------------------- Accueil : connexion --- */
+
+  function screenConnection() {
+    var urlInput = el("input", {
+      class: "input", type: "url", inputmode: "url", autocomplete: "off",
+      autocapitalize: "off", spellcheck: "false",
+      placeholder: "Collez ici l'URL du script (…/exec)",
+      "data-draft": "setup:url",
+      value: Sync.connection.url || ""
+    });
+    var codeInput = el("input", {
+      class: "input", type: "password", autocomplete: "off", inputmode: "text",
+      placeholder: "Code d'accès (si l'équipe en a défini un)",
+      "data-draft": "setup:code"
+    });
+
+    var submit = function () {
+      App.saveConnection(Utils.trim(urlInput.value), codeInput.value);
+    };
+
+    return el("div", { class: "screen" }, [
+      /* Écran secondaire lorsqu'on revient modifier la connexion : bouton retour. */
+      App.connectionConfigured() ? topbar({
+        title: "Connexion",
+        back: function () { App.editingConnection = false; UI.force(); },
+        backLabel: "Retour"
+      }) : null,
+      el("div", { class: "content stack-lg" }, [
+        el("div", { class: "hero" }, [
+          el("div", { class: "logo-mark" }, [el("div", { class: "logo-ring" }), el("div", { class: "logo-dot" })]),
+          el("div", { class: "wordmark", text: "BrainstO." }),
+          el("div", { class: "tagline", text: "Préparer les réunions de l'équipe, ensemble." })
+        ]),
+        el("div", { class: "stack" }, [
+          field("Adresse du script de l'équipe", urlInput,
+            "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
+          field("Code d'accès", codeInput,
+            "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
+          el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer et continuer", onclick: submit }),
+          el("button", {
+            class: "btn btn-ghost btn-block", type: "button",
+            text: "Continuer sans connexion (mode local)",
+            onclick: function () { App.useLocalMode(); }
+          })
+        ])
+      ])
+    ]);
+  }
+
+  /* --------------------------------------------------------- Accueil : nom --- */
+
+  function screenName() {
+    var nameInput = bindCounter(el("input", {
+      class: "input", type: "text", maxlength: Core.LIMITS.name,
+      autocomplete: "name", placeholder: "Votre prénom",
+      "data-draft": "setup:name",
+      value: App.user.name || ""
+    }), "setup:name", Core.LIMITS.name);
+
+    return el("div", { class: "screen" }, [
+      topbar({
+        title: "Votre nom",
+        back: App.connectionConfigured() ? function () { App.editConnection(); } : null,
+        backLabel: "Connexion"
+      }),
+      el("div", { class: "content stack-lg" }, [
+        el("div", { class: "stack" }, [
+          el("h2", { text: "Comment vous appelez-vous ?" }),
+          el("p", { class: "hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
+          nameInput,
+          counterFor("setup:name", Core.LIMITS.name),
+          el("button", {
+            class: "btn btn-primary btn-block", type: "button", text: "Commencer",
+            onclick: function () { App.saveName(nameInput.value); }
+          })
+        ])
+      ])
+    ]);
+  }
+
+  /* ------------------------------------------------------------- Verrou --- */
+
+  function screenLock() {
+    var codeInput = el("input", {
+      class: "input", type: "password", inputmode: "text", autocomplete: "off",
+      placeholder: "Code d'accès", "data-draft": "lock:code",
+      onkeydown: function (e) { if (e.key === "Enter") { App.unlock(codeInput.value); } }
+    });
+
+    return el("div", { class: "screen" }, [
+      el("div", { class: "content stack-lg" }, [
+        el("div", { class: "hero" }, [
+          el("div", { class: "logo-mark" }, [el("div", { class: "logo-ring" }), el("div", { class: "logo-dot" })]),
+          el("div", { class: "wordmark", text: "BrainstO." }),
+          el("div", { class: "tagline", text: "Espace de l'équipe verrouillé" })
+        ]),
+        el("div", { class: "stack" }, [
+          field("Code d'accès", codeInput, "Le code vous est communiqué par l'équipe. Il n'est jamais enregistré sur cet appareil."),
+          el("button", {
+            class: "btn btn-primary btn-block", type: "button", text: "Déverrouiller",
+            onclick: function () { App.unlock(codeInput.value); }
+          }),
+          el("button", {
+            class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe",
+            onclick: function () { UI.set({ modal: { type: "logout" } }); }
+          })
+        ])
+      ])
+    ]);
+  }
+
+  /* -------------------------------------------------------- Liste des sujets --- */
+
+  function topicCard(topic) {
+    var messages = topic.messages.length;
+    var proposals = topic.proposals.length;
+    var meta = [];
+    meta.push(Utils.plural(messages, "message", "messages"));
+    if (proposals) { meta.push(Utils.plural(proposals, "proposition", "propositions")); }
+    if (topic.conclusions.length) { meta.push(Utils.plural(topic.conclusions.length, "conclusion", "conclusions")); }
+
+    return el("button", {
+      class: "card", type: "button",
+      onclick: function () { App.go("#/topic/" + topic.id); }
+    }, [
+      el("div", { class: "row", style: { gap: "8px", alignItems: "flex-start" } }, [
+        el("div", { class: "card-title", style: { flex: "1" }, text: topic.title }),
+        el("span", { class: "badge" + (topic.status === "ready" ? " badge-ink" : ""), text: Core.TOPIC_STATUS_LABELS[topic.status] })
       ]),
-      el("button", { class: "reply-cancel", "aria-label": "Annuler la citation", onclick: function () { delete quoting[t.id]; forceRerender(); } }, "✕"),
-    ]) : null;
+      topic.description ? el("div", { class: "card-desc", text: topic.description }) : null,
+      el("div", { class: "card-meta", text: meta.join(" · ") + " · " + topic.createdBy.name })
+    ]);
+  }
+
+  function screenTopics() {
+    var state = Store.view;
+    var all = state.topics.slice().sort(function (a, b) {
+      return String(b.updatedAt).localeCompare(String(a.updatedAt));
+    });
+    var visible = all.filter(function (t) { return UI.local.showArchived || t.status !== "archived"; });
+    var archivedCount = all.length - all.filter(function (t) { return t.status !== "archived"; }).length;
+
+    var query = Utils.trim(UI.local.search).toLowerCase();
+    if (query) {
+      visible = visible.filter(function (t) {
+        return (t.title + " " + t.description).toLowerCase().indexOf(query) >= 0;
+      });
+    }
+
+    var body;
+    if (!all.length) {
+      body = el("div", { class: "empty" }, [
+        el("div", { class: "empty-title", text: "Aucun sujet pour l'instant" }),
+        el("div", { class: "empty-text", text: "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet." }),
+        el("button", {
+          class: "btn btn-primary", type: "button", text: "Ajouter un sujet",
+          onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
+        })
+      ]);
+    } else {
+      var list = el("div", { class: "stack" });
+      if (all.length > CONFIG.SEARCH_THRESHOLD) {
+        var search = el("input", {
+          class: "input", type: "search", placeholder: "Rechercher un sujet",
+          "data-draft": "topics:search", value: UI.local.search,
+          oninput: Utils.debounce(function (e) { UI.set({ search: e.target.value }); }, 180)
+        });
+        list.appendChild(el("div", { class: "search-wrap" }, [el("span", { class: "search-icon", text: "⌕" }), search]));
+      }
+      if (!visible.length) {
+        list.appendChild(el("p", { class: "hint", text: "Aucun sujet ne correspond." }));
+      }
+      visible.forEach(function (topic) { list.appendChild(topicCard(topic)); });
+      if (archivedCount > 0) {
+        list.appendChild(el("button", {
+          class: "btn btn-ghost btn-block", type: "button",
+          text: UI.local.showArchived
+            ? "Masquer les sujets archivés"
+            : "Afficher les sujets archivés (" + archivedCount + ")",
+          onclick: function () {
+            Utils.storage.set(CONFIG.KEYS.showArchived, !UI.local.showArchived);
+            UI.set({ showArchived: !UI.local.showArchived });
+          }
+        }));
+      }
+      body = list;
+    }
+
+    var screen = el("div", { class: "screen" }, [
+      topbar({
+        title: "BrainstO.",
+        sub: App.user.name ? "Bonjour " + App.user.name : null,
+        actions: [
+          statusPill(),
+          el("button", { class: "btn-icon", type: "button", "aria-label": "Réglages", text: "⚙", onclick: function () { App.go("#/settings"); } })
+        ]
+      }),
+      el("div", { class: "content" }, [body])
+    ]);
+
+    if (all.length) {
+      screen.appendChild(el("button", {
+        class: "fab", type: "button", "aria-label": "Ajouter un sujet", text: "+",
+        onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
+      }));
+    }
+    return screen;
+  }
+
+  /* ------------------------------------------------------- Écran débat --- */
+
+  function messageGroupKey(message, mine) {
+    if (message.anon) { return "anon:" + (mine ? "me:" : "") + message.id; }
+    return "id:" + (message.authorId || message.authorName);
+  }
+
+  function quoteBlock(topic, message) {
+    var quoted = Core.findMessage(topic, message.quoteId);
+    if (!quoted) { return null; }
+    return el("button", {
+      class: "quote", type: "button",
+      onclick: function (e) { e.stopPropagation(); UI.scrollToMessage(quoted.id); }
+    }, [
+      el("div", { class: "quote-author", text: quoted.authorName }),
+      el("div", { class: "quote-text", text: quoted.text })
+    ]);
+  }
+
+  function reactionsRow(topic, message) {
+    var keys = Object.keys(message.reactions);
+    if (!keys.length) { return null; }
+    var byEmoji = {};
+    keys.forEach(function (pid) {
+      var emoji = message.reactions[pid];
+      if (!byEmoji[emoji]) { byEmoji[emoji] = { count: 0, mine: false }; }
+      byEmoji[emoji].count += 1;
+      if (pid === App.user.id) { byEmoji[emoji].mine = true; }
+    });
+    var row = el("div", { class: "reactions" });
+    Core.REACTIONS.forEach(function (emoji) {
+      var info = byEmoji[emoji];
+      if (!info) { return; }
+      row.appendChild(el("button", {
+        class: "reaction" + (info.mine ? " mine" : ""), type: "button",
+        "aria-label": "Réaction " + emoji,
+        onclick: function (e) { e.stopPropagation(); App.actions.setReaction(topic.id, message.id, emoji); }
+      }, [
+        el("span", { text: emoji }),
+        info.count > 1 ? el("span", { class: "reaction-count", text: String(info.count) }) : null
+      ]));
+    });
+    return row;
+  }
+
+  function messageRow(topic, message, previous) {
+    var mine = App.ownsMessage(message);
+    var grouped = false;
+    if (previous) {
+      var samePerson = messageGroupKey(previous, App.ownsMessage(previous)) === messageGroupKey(message, mine);
+      var sameDay = Utils.sameDay(previous.createdAt, message.createdAt);
+      grouped = samePerson && sameDay;
+    }
+
+    var classes = "msg-row" + (mine ? " mine" : "") + (grouped ? " grouped" : " first");
+    var col = el("div", { class: "msg-col" });
+
+    if (!grouped && !mine) {
+      col.appendChild(el("div", { class: "msg-author", text: message.authorName }));
+    }
+
+    var metaBits = [];
+    if (mine && message.anon) { metaBits.push("Anonyme"); }
+    metaBits.push(Utils.formatTime(message.createdAt));
+    if (message.updatedAt && message.updatedAt !== message.createdAt) { metaBits.push("modifié"); }
+    if (mine && Core.isMessageLocked(message, App.user.id)) { metaBits.push("🔒"); }
+
+    var bubble = el("button", {
+      class: "bubble", type: "button", dataset: { messageId: message.id },
+      onclick: function () { UI.set({ sheet: { type: "message", topicId: topic.id, messageId: message.id } }); }
+    }, [
+      message.quoteId ? quoteBlock(topic, message) : null,
+      el("div", { class: "bubble-text", text: message.text }),
+      el("div", { class: "bubble-meta", text: metaBits.join(" · ") })
+    ]);
+
+    col.appendChild(bubble);
+    var reactions = reactionsRow(topic, message);
+    if (reactions) { col.appendChild(reactions); }
+
+    return el("div", { class: classes }, [col]);
+  }
+
+  UI.scrollToMessage = function (messageId) {
+    var nodes = document.querySelectorAll("[data-message-id]");
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].getAttribute("data-message-id") === messageId) {
+        nodes[i].scrollIntoView({ block: "center", behavior: "smooth" });
+        nodes[i].classList.add("flash");
+        (function (node) {
+          setTimeout(function () { node.classList.remove("flash"); }, 1200);
+        })(nodes[i]);
+        return;
+      }
+    }
+  };
+
+  function composer(topic) {
+    var draftKey = "composer:" + topic.id;
+    var textarea = el("textarea", {
+      class: "textarea grow", rows: "1", placeholder: "Votre message…",
+      maxlength: Core.LIMITS.message, "data-draft": draftKey,
+      oninput: function (e) { autoGrow(e.target); },
+      onkeydown: function (e) {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
+      }
+    });
 
     function send() {
-      const text = Utils.clean(ta.value);
-      if (Utils.isBlank(text)) { ta.focus(); return; }
-      const useQuote = quoting[t.id] || null;
-      ta.value = "";
-      delete quoting[t.id];
-      App.actions.createMessage(t.id, text, useQuote);
-      pendingScrollBottom = true;
-      forceRerender();
+      var text = Utils.trim(textarea.value);
+      if (!text) { return; }
+      var quoteId = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote.messageId : null;
+      /* ⚠️ On vide le champ AVANT de déclencher l'action : le dispatch provoque
+       * un rendu synchrone et la restauration des brouillons réinjecterait le
+       * message déjà publié. */
+      textarea.value = "";
+      autoGrow(textarea);
+      UI.local.quote = null;
+      UI.local.scrollToBottom = true;
+      App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon);
     }
 
-    return el("div", { class: "composer" }, [
-      preview,
-      el("div", { class: "composer-row" }, [
-        ta,
-        el("button", { class: "composer-send", "aria-label": "Envoyer", onclick: send }, "➤"),
-      ]),
-    ]);
+    var sendBtn = el("button", {
+      class: "send-btn", type: "button", "aria-label": "Envoyer", text: "↑", onclick: send
+    });
+
+    var parts = [];
+    if (UI.local.quote && UI.local.quote.topicId === topic.id) {
+      var quoted = Core.findMessage(topic, UI.local.quote.messageId);
+      if (quoted) {
+        parts.push(el("div", { class: "quote-preview" }, [
+          el("div", { class: "quote-body" }, [
+            el("div", { class: "quote-author", text: "En réponse à " + quoted.authorName }),
+            el("div", { class: "quote-text", text: quoted.text })
+          ]),
+          el("button", { class: "btn-icon", type: "button", "aria-label": "Annuler la citation", text: "✕", onclick: function () { UI.set({ quote: null }); } })
+        ]));
+      }
+    }
+
+    parts.push(el("div", { class: "signature-toggle" }, [
+      el("span", { text: UI.local.composerAnon ? "Publier en anonyme" : "Publier signé : " + (App.user.name || "moi") }),
+      el("button", {
+        class: "btn btn-sm btn-outline", type: "button",
+        text: UI.local.composerAnon ? "Signer" : "Anonyme",
+        onclick: function () { UI.set({ composerAnon: !UI.local.composerAnon }); }
+      })
+    ]));
+
+    parts.push(el("div", { class: "composer-inner" }, [textarea, sendBtn]));
+
+    return el("div", { class: "composer" }, parts);
   }
 
-  // --- Propositions & votes -------------------------------------------------
+  function screenTopic(topicId) {
+    var topic = Core.findTopic(Store.view, topicId);
+    if (!topic) { return screenMissing(); }
 
-  function renderProposals(t) {
-    const box = el("div", { class: "proposals" });
-    box.appendChild(el("button", { class: "btn btn-outline", onclick: function () { showNewProposal(t.id, ""); } }, [plusGlyph(), " Nouvelle proposition"]));
-    if (t.proposals.length === 0) box.appendChild(el("p", { class: "muted", text: "Aucune proposition." }));
-    t.proposals.forEach(function (p) { box.appendChild(proposalCard(t, p)); });
-    return box;
-  }
+    var threadInner = el("div", { class: "thread-inner" });
+    var previous = null;
+    var lastDay = null;
+    topic.messages.forEach(function (message) {
+      if (!lastDay || !Utils.sameDay(lastDay, message.createdAt)) {
+        threadInner.appendChild(el("div", { class: "day-sep", text: Utils.relativeDay(message.createdAt) }));
+        lastDay = message.createdAt;
+        previous = null;
+      }
+      threadInner.appendChild(messageRow(topic, message, previous));
+      previous = message;
+    });
 
-  function proposalCard(t, p) {
-    const key = "prop:" + p.id;
-    const card = el("div", { class: "card proposal" });
-    if (openEditors.has(key)) {
-      const titleInput = el("input", { class: "input", type: "text", value: p.title, maxlength: Utils.LIMITS.proposalTitle, "data-draft": "edit-prop-title-" + p.id });
-      const descInput = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.proposalDescription, "data-draft": "edit-prop-desc-" + p.id });
-      descInput.value = p.description || "";
-      field("Titre", titleInput).forEach(function (n) { card.appendChild(n); });
-      field("Description", descInput).forEach(function (n) { card.appendChild(n); });
-      card.appendChild(el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-sm btn-primary", onclick: function () {
-          const title = Utils.clean(titleInput.value);
-          if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-          App.actions.updateProposal(t.id, p.id, title, Utils.clean(descInput.value));
-          openEditors.delete(key); forceRerender();
-        } }, "Enregistrer"),
-        el("button", { class: "btn btn-sm btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
+    if (!topic.messages.length) {
+      threadInner.appendChild(el("div", { class: "empty" }, [
+        el("div", { class: "empty-title", text: "La discussion démarre ici" }),
+        el("div", { class: "empty-text", text: "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer." })
       ]));
-      return card;
     }
 
-    card.appendChild(el("div", { class: "card-top" }, [
-      el("h3", { class: "proposal-title", text: p.title }),
-      proposalBadge(p.status),
-    ]));
-    if (p.description) card.appendChild(el("p", { class: "proposal-desc pre", text: p.description }));
-    card.appendChild(el("p", { class: "byline", text: "Proposé par " + p.authorName + " · " + Utils.formatDate(p.createdAt) }));
-    card.appendChild(voteBlock(t, p));
-    card.appendChild(el("div", { class: "proposal-footer" }, [
-      el("label", { class: "field-label inline", text: "Statut :" }),
-      proposalStatusSelect(t, p),
-      el("button", { class: "btn btn-ghost btn-sm", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier"),
-    ]));
-    return card;
-  }
+    var thread = el("div", { class: "thread", dataset: { thread: topic.id } }, [threadInner]);
 
-  function voteBlock(t, p) {
-    const s = State.tally(p);
-    const myVote = p.votes[App.profile.id] || null;
-    const bar = el("div", { class: "vote-bar" }, [
-      s.total ? el("span", { class: "seg seg-for", style: "flex:" + s.for }) : null,
-      s.total ? el("span", { class: "seg seg-against", style: "flex:" + s.against }) : null,
-      s.total ? el("span", { class: "seg seg-abstain", style: "flex:" + s.abstain }) : null,
-    ]);
-    const buttons = el("div", { class: "vote-buttons" }, [
-      voteBtn("Pour", "for", myVote, t, p),
-      voteBtn("Contre", "against", myVote, t, p),
-      voteBtn("Abstention", "abstain", myVote, t, p),
-      myVote ? el("button", { class: "btn btn-sm btn-ghost", onclick: function () { App.actions.removeVote(t.id, p.id); } }, "Retirer") : null,
-    ]);
-    return el("div", { class: "vote-block" }, [
-      bar,
-      el("div", { class: "vote-stats" }, [
-        el("span", { class: "v-for", text: "Pour " + s.for }),
-        el("span", { class: "v-against", text: "Contre " + s.against }),
-        el("span", { class: "v-abstain", text: "Abst. " + s.abstain }),
-        el("span", { class: "v-pct", text: s.expressed ? s.favorablePct + "% favorables" : "" }),
+    return el("div", { class: "screen chat" }, [
+      topbar({
+        title: topic.title,
+        sub: Core.TOPIC_STATUS_LABELS[topic.status],
+        back: function () { App.go("#/"); },
+        backLabel: "Sujets",
+        onTitle: function () { UI.set({ sheet: { type: "topicInfo", topicId: topic.id } }); },
+        actions: [statusPill()]
+      }),
+      el("nav", { class: "quickbar" }, [
+        el("button", {
+          class: "btn", type: "button",
+          text: "💡 Propositions" + (topic.proposals.length ? " (" + topic.proposals.length + ")" : ""),
+          onclick: function () { App.go("#/topic/" + topic.id + "/proposals"); }
+        }),
+        el("button", {
+          class: "btn", type: "button",
+          text: "✓ Conclusion" + (topic.conclusions.length ? " (" + topic.conclusions.length + ")" : ""),
+          onclick: function () { App.go("#/topic/" + topic.id + "/conclusion"); }
+        })
       ]),
-      el("div", { class: "vote-indicator ind-" + s.indicator.key, text: s.indicator.label }),
-      buttons,
+      thread,
+      composer(topic)
     ]);
   }
 
-  function voteBtn(label, value, myVote, t, p) {
-    return el("button", {
-      class: "btn btn-sm vote-btn" + (myVote === value ? " active vote-" + value : ""),
-      onclick: function () {
-        if (myVote === value) App.actions.removeVote(t.id, p.id);
-        else App.actions.setVote(t.id, p.id, value);
-      },
-    }, label);
+  function screenMissing() {
+    return el("div", { class: "screen" }, [
+      topbar({ title: "Introuvable", back: function () { App.go("#/"); }, backLabel: "Sujets" }),
+      el("div", { class: "content" }, [
+        el("div", { class: "empty" }, [
+          el("div", { class: "empty-title", text: "Ce contenu n'existe plus" }),
+          el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets", onclick: function () { App.go("#/"); } })
+        ])
+      ])
+    ]);
   }
 
-  function proposalStatusSelect(t, p) {
-    const sel = el("select", { class: "select select-sm", "aria-label": "Statut de la proposition", onchange: function (e) { App.actions.changeProposalStatus(t.id, p.id, e.target.value); } });
-    Utils.PROPOSAL_STATUSES.forEach(function (st) { sel.appendChild(option(st, State.PROPOSAL_STATUS_LABELS[st], p.status)); });
-    return sel;
+  /* ------------------------------------------------------- Propositions --- */
+
+  function proposalCard(topic, proposal) {
+    var summary = Core.voteSummary(proposal);
+    var myVote = proposal.votes[App.user.id] || null;
+    var total = summary.total || 1;
+
+    var statusSelect = el("select", { class: "select", "aria-label": "Statut de la proposition",
+      onchange: function (e) { App.actions.changeProposalStatus(topic.id, proposal.id, e.target.value); }
+    });
+    Core.PROPOSAL_STATUSES.forEach(function (status) {
+      statusSelect.appendChild(el("option", { value: status, selected: proposal.status === status, text: Core.PROPOSAL_STATUS_LABELS[status] }));
+    });
+
+    var voteButtons = el("div", { class: "vote-actions" });
+    Core.VOTE_VALUES.forEach(function (value) {
+      voteButtons.appendChild(el("button", {
+        class: "btn btn-sm btn-outline" + (myVote === value ? " active" : ""), type: "button",
+        text: Core.VOTE_LABELS[value],
+        onclick: function () { App.actions.setVote(topic.id, proposal.id, value); }
+      }));
+    });
+
+    return el("article", { class: "card card-static stack" }, [
+      el("div", { class: "row", style: { alignItems: "flex-start" } }, [
+        el("div", { class: "card-title", style: { flex: "1" }, text: proposal.title }),
+        el("span", { class: "badge", text: Core.PROPOSAL_STATUS_LABELS[proposal.status] })
+      ]),
+      proposal.description ? el("div", { class: "pre-wrap", style: { fontSize: "14px" }, text: proposal.description }) : null,
+      el("div", { class: "card-meta", text: "Proposé par " + proposal.authorName + " · " + Utils.formatDateTime(proposal.createdAt) }),
+      el("div", { class: "vote-bar" }, [
+        el("span", { class: "vote-for", style: { width: (summary.counts.for / total * 100) + "%" } }),
+        el("span", { class: "vote-against", style: { width: (summary.counts.against / total * 100) + "%" } }),
+        el("span", { class: "vote-abstain", style: { width: (summary.counts.abstain / total * 100) + "%" } })
+      ]),
+      el("div", { class: "card-meta", text: summary.label + " · " + summary.counts.for + " pour · " +
+        summary.counts.against + " contre · " + summary.counts.abstain + " abstention" + (summary.counts.abstain > 1 ? "s" : "") +
+        (summary.expressed ? " · " + summary.favorablePercent + " % favorables (hors abstentions)" : "") }),
+      voteButtons,
+      el("div", { class: "row-wrap" }, [
+        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Retirer mon vote",
+          onclick: function () { App.actions.removeVote(topic.id, proposal.id); } }) : null,
+        App.ownsItem(proposal.id, proposal.authorId)
+          ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Modifier",
+            onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } })
+          : null,
+        el("div", { class: "spacer" }),
+        statusSelect
+      ])
+    ]);
   }
 
-  // ==========================================================================
-  //  VUE : Conclusion — conclusions ajoutées par l'équipe + vote
-  // ==========================================================================
+  function screenProposals(topicId) {
+    var topic = Core.findTopic(Store.view, topicId);
+    if (!topic) { return screenMissing(); }
 
-  function renderConclusion(data, topicId) {
-    const t = State.ensureTopicShape(State.findTopic(data, topicId));
-    if (!t) return notFound();
-    const wrap = el("section", { class: "page ai-page" });
-
-    wrap.appendChild(el("p", { class: "ai-topic-name", text: t.title }));
-    wrap.appendChild(el("p", { class: "ai-lead", text: "Regroupez les propositions du débat en conclusions, puis votez pour celle que vous préférez." }));
-
-    wrap.appendChild(el("button", { class: "btn btn-primary btn-block", onclick: function () { showAddConclusion(t.id); } }, [plusGlyph(), " Ajouter une conclusion"]));
-
-    const list = t.conclusions || [];
-    const leading = State.leadingConclusion(t);
-    const myVote = t.conclusionVotes[App.profile.id] || null;
-
-    if (list.length === 0) {
-      wrap.appendChild(emptyState("Aucune conclusion pour l'instant. Ajoutez-en une à partir des propositions du débat."));
+    var list = el("div", { class: "stack" });
+    if (!topic.proposals.length) {
+      list.appendChild(el("div", { class: "empty" }, [
+        el("div", { class: "empty-title", text: "Aucune proposition" }),
+        el("div", { class: "empty-text", text: "Transformez les idées de la discussion en propositions concrètes à soumettre au vote." }),
+        el("button", { class: "btn btn-primary", type: "button", text: "Ajouter une proposition",
+          onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } })
+      ]));
     } else {
-      const box = el("div", { class: "conclusion-list" });
-      list.forEach(function (c) { box.appendChild(conclusionCard(t, c, myVote, leading)); });
-      wrap.appendChild(box);
+      topic.proposals.forEach(function (proposal) { list.appendChild(proposalCard(topic, proposal)); });
     }
-    return wrap;
+
+    var screen = el("div", { class: "screen" }, [
+      topbar({
+        title: "Propositions",
+        sub: topic.title,
+        back: function () { App.go("#/topic/" + topic.id); },
+        backLabel: "Discussion",
+        actions: [statusPill()]
+      }),
+      el("div", { class: "content" }, [list])
+    ]);
+
+    if (topic.proposals.length) {
+      screen.appendChild(el("button", {
+        class: "fab", type: "button", "aria-label": "Ajouter une proposition", text: "+",
+        onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); }
+      }));
+    }
+    return screen;
   }
 
-  function conclusionCard(t, c, myVote, leading) {
-    const key = "concl:" + c.id;
-    const tally = State.conclusionTally(t, c.id);
-    const mine = myVote === c.id;
-    const canEdit = c.authorId === App.profile.id;
+  /* --------------------------------------------------------- Conclusion --- */
 
-    if (openEditors.has(key) && canEdit) {
-      const ta = el("textarea", { class: "textarea", rows: 3, maxlength: Utils.LIMITS.conclusion, "data-draft": "edit-concl-" + c.id });
-      ta.value = c.text;
-      return el("div", { class: "card conclusion-card" }, [
-        ta,
-        el("div", { class: "row-actions" }, [
-          el("button", { class: "btn btn-sm btn-primary", onclick: function () {
-            const text = Utils.clean(ta.value);
-            if (Utils.isBlank(text)) return markInvalid(ta, "La conclusion est vide.");
-            App.actions.updateConclusionItem(t.id, c.id, text);
-            openEditors.delete(key); forceRerender();
-          } }, "Enregistrer"),
-          el("button", { class: "btn btn-sm btn-ghost", onclick: function () { openEditors.delete(key); forceRerender(); } }, "Annuler"),
+  function screenConclusion(topicId) {
+    var topic = Core.findTopic(Store.view, topicId);
+    if (!topic) { return screenMissing(); }
+
+    var scores = Core.conclusionScores(topic);
+    var myVote = topic.conclusionVotes[App.user.id] || null;
+
+    var list = el("div", { class: "stack" });
+
+    topic.conclusions.forEach(function (conclusion) {
+      var count = scores.scores[conclusion.id] || 0;
+      var isLead = scores.best > 0 && count === scores.best;
+      var mine = App.ownsItem(conclusion.id, conclusion.authorId);
+      list.appendChild(el("article", { class: "card card-static stack" }, [
+        el("div", { class: "row", style: { alignItems: "flex-start" } }, [
+          el("div", { class: "pre-wrap", style: { flex: "1" }, text: conclusion.text }),
+          isLead ? el("span", { class: "badge badge-ink lead", text: "★ En tête" }) : null
         ]),
-      ]);
-    }
-
-    return el("div", { class: "card conclusion-card" + (mine ? " chosen" : "") }, [
-      el("div", { class: "conclusion-top" }, [
-        el("span", { class: "src-badge src-manual", text: c.authorName || "Proposé" }),
-        leading && leading.id === c.id && tally.count > 0 ? el("span", { class: "lead-badge", text: "En tête" }) : null,
-      ]),
-      el("p", { class: "conclusion-text pre", text: c.text }),
-      el("div", { class: "conclusion-foot" }, [
-        el("button", { class: "btn btn-sm vote-choice" + (mine ? " active" : ""), onclick: function () {
-          if (mine) App.actions.removeConclusionVote(t.id);
-          else App.actions.setConclusionVote(t.id, c.id);
-        } }, mine ? "✓ Votre choix" : "Voter"),
-        el("span", { class: "vote-count", text: tally.count + " voix" + (tally.total ? " · " + tally.pct + "%" : "") }),
-        canEdit ? el("button", { class: "link-btn", onclick: function () { openEditors.add(key); forceRerender(); } }, "Modifier") : null,
-        canEdit ? el("button", { class: "link-btn danger", onclick: function () { App.actions.deleteConclusion(t.id, c.id); forceRerender(); } }, "Supprimer") : null,
-      ]),
-    ]);
-  }
-
-  // ==========================================================================
-  //  VUE : Synthèse de réunion (conservée, accessible depuis les Réglages)
-  // ==========================================================================
-
-  function renderMeeting(data) {
-    const wrap = el("section", { class: "page meeting" });
-    wrap.appendChild(el("div", { class: "page-head" }, [
-      el("h2", { text: "Préparation de la réunion" }),
-      el("button", { class: "btn btn-primary no-print", onclick: function () { window.print(); } }, "Imprimer"),
-    ]));
-
-    const filters = [["all", "Tout"], ["open", "Ouverts"], ["ready", "Prêts"], ["closed", "Clôturés"]];
-    const fbar = el("div", { class: "controls no-print" });
-    filters.forEach(function (f) {
-      fbar.appendChild(el("button", { class: "chip" + (meetingState.filter === f[0] ? " active" : ""), onclick: function () { meetingState.filter = f[0]; forceRerender(); } }, f[1]));
-    });
-    wrap.appendChild(fbar);
-
-    let topics = data.topics.filter(function (t) { return t.status !== "archived"; });
-    const f = meetingState.filter;
-    if (f === "open" || f === "ready" || f === "closed") topics = topics.filter(function (t) { return t.status === f; });
-    topics.sort(function (a, b) { return (b.updatedAt || "").localeCompare(a.updatedAt || ""); });
-
-    if (topics.length === 0) { wrap.appendChild(emptyState("Aucun sujet à synthétiser.")); return wrap; }
-    topics.forEach(function (t) { wrap.appendChild(meetingBlock(State.ensureTopicShape(t))); });
-    return wrap;
-  }
-
-  function meetingBlock(t) {
-    const selected = t.proposals.filter(function (p) { return p.status === "selected"; });
-    const debate = t.proposals.filter(function (p) { return p.status === "debate"; });
-    const block = el("article", { class: "card meeting-block" });
-    block.appendChild(el("div", { class: "card-top" }, [el("h3", { class: "card-title", text: t.title }), topicBadge(t.status)]));
-    if (t.description) block.appendChild(el("p", { class: "card-desc", text: shorten(t.description, 220) }));
-
-    const leading = State.leadingConclusion(t);
-    block.appendChild(el("h4", { class: "mini-title", text: "Conclusion" }));
-    if (leading) {
-      const tally = State.conclusionTally(t, leading.id);
-      block.appendChild(el("p", { class: "pre", text: leading.text }));
-      block.appendChild(el("p", { class: "byline", text: (leading.authorName || "Proposé") + " · " + tally.count + " voix" }));
-    } else if (t.conclusion) {
-      block.appendChild(el("p", { class: "pre", text: t.conclusion }));
-    } else {
-      block.appendChild(el("p", { class: "muted", text: "— (à rédiger)" }));
-    }
-
-    block.appendChild(proposalSummary("Solutions retenues", selected));
-    block.appendChild(proposalSummary("À débattre en réunion", debate));
-    return block;
-  }
-
-  function proposalSummary(title, list) {
-    if (!list.length) return el("span");
-    const box = el("div", { class: "prop-summary" }, [el("h4", { class: "mini-title", text: title })]);
-    list.forEach(function (p) {
-      const s = State.tally(p);
-      box.appendChild(el("div", { class: "prop-line" }, [
-        el("span", { class: "prop-line-title", text: p.title }),
-        el("span", { class: "prop-line-votes", text: "Pour " + s.for + " · Contre " + s.against + (s.expressed ? " · " + s.favorablePct + "%" : "") }),
+        el("div", { class: "card-meta", text: conclusion.authorName + " · " + Utils.formatDateTime(conclusion.createdAt) +
+          " · " + Utils.plural(count, "vote", "votes") }),
+        el("div", { class: "row-wrap" }, [
+          el("button", {
+            class: "btn btn-sm " + (myVote === conclusion.id ? "btn-primary" : "btn-outline"), type: "button",
+            text: myVote === conclusion.id ? "✓ Mon choix" : "Choisir",
+            onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
+          }),
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Modifier",
+            onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } }) : null,
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Supprimer",
+            onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } }) : null
+        ])
       ]));
     });
-    return box;
-  }
 
-  // ==========================================================================
-  //  VUE : Réglages & diagnostic
-  // ==========================================================================
-
-  function renderSettings(data) {
-    const wrap = el("section", { class: "page settings" });
-    if (updateAvailable) wrap.appendChild(updateBanner());
-
-    wrap.appendChild(renderApiSettings());
-
-    const nameInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, value: App.profile.name, "data-draft": "settings-name" });
-    wrap.appendChild(el("div", { class: "card" }, [
-      el("h2", { text: "Votre identité" }),
-      field("Nom d'utilisateur", nameInput),
-      el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-primary", onclick: function () {
-          const name = Utils.clean(nameInput.value);
-          if (Utils.isBlank(name)) return markInvalid(nameInput, "Le nom est obligatoire.");
-          App.updateProfileName(name); toast("Nom mis à jour.", "ok");
-        } }, "Enregistrer"),
-      ]),
-    ]));
-
-    wrap.appendChild(el("div", { class: "card" }, [
-      el("h2", { text: "Réunion" }),
-      el("p", { class: "muted small", text: "Synthèse imprimable de tous les sujets." }),
-      el("button", { class: "btn btn-outline", onclick: function () { App.navigate("#/meeting"); } }, "Ouvrir la préparation de réunion"),
-    ]));
-
-    const status = Sync.getStatus();
-    wrap.appendChild(el("div", { class: "card" }, [
-      el("h2", { text: "Synchronisation" }),
-      el("div", { class: "row-actions" }, [el("button", { class: "btn btn-primary", onclick: function () { Sync.syncNow(); } }, "Synchroniser maintenant")]),
-      diagnosticsBlock(status),
-    ]));
-
-    wrap.appendChild(el("div", { class: "card" }, [
-      el("h2", { text: "À propos" }),
-      el("p", { text: "BrainstO. — préparation de réunion : sujets, discussion, propositions, résumés et conclusions votables." }),
-      el("p", { class: "muted small", text: "Version " + APP_VERSION }),
-    ]));
-    return wrap;
-  }
-
-  function renderApiSettings() {
-    const urlInput = el("input", {
-      class: "input", type: "url", inputmode: "url", autocomplete: "off",
-      placeholder: "https://script.google.com/…/exec", "aria-label": "URL du script Google Apps Script",
-      value: CONFIG.API_URL || "", "data-draft": "api-url",
-    });
-    const codeInput = el("input", {
-      class: "input", type: "password", inputmode: "numeric", autocomplete: "off",
-      placeholder: CONFIG.hasPassword() ? "Code d'accès (déjà défini)" : "Code d'accès (optionnel)",
-      "aria-label": "Code d'accès",
-    });
-    const st = Sync.getStatus();
-    let cls = "conn-status", txt;
-    if (!CONFIG.isConfigured()) txt = "Non connecté (mode local).";
-    else if (st.key === "up-to-date") { cls += " conn-ok"; txt = "Connecté ✓ — synchronisé."; }
-    else if (st.key === "syncing" || st.key === "pending") { cls += " conn-ok"; txt = "Connecté — synchronisation…"; }
-    else if (st.key === "error") { cls += " conn-err"; txt = "Erreur de connexion — vérifiez l'URL et le déploiement."; }
-    else if (st.key === "offline") txt = "URL enregistrée — hors connexion.";
-    else txt = "URL enregistrée.";
-    const statusLine = el("p", { class: cls, text: txt });
-
-    function save() {
-      const url = Utils.clean(urlInput.value);
-      if (Utils.isBlank(url) || url.slice(0, 4) !== "http") return markInvalid(urlInput, "Collez l'URL du script (https:// … /exec).");
-      statusLine.className = "conn-status";
-      statusLine.textContent = "Connexion en cours…";
-      App.connect(url, codeInput.value || "").then(function (res) {
-        if (res.ok) toast("Connecté ✓ (révision " + (res.revision != null ? res.revision : "?") + ").", "ok");
-        else if (res.code === "auth") toast(codeInput.value ? "Code d'accès incorrect." : "Cette équipe demande un code d'accès.", "error");
-        else toast("Échec : " + (res.error || "vérifiez l'URL."), "error");
-        forceRerender();
-      });
+    if (!topic.conclusions.length) {
+      list.appendChild(el("div", { class: "empty" }, [
+        el("div", { class: "empty-title", text: "Pas encore de conclusion" }),
+        el("div", { class: "empty-text", text: "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée." })
+      ]));
     }
 
-    return el("div", { class: "card api-card" }, [
-      el("h2", { text: "Connexion à l'équipe" }),
-      el("p", { class: "muted small", text: "URL du script Google Apps Script (déployé en application Web, terminant par « /exec »). Conservée uniquement sur cet appareil." }),
-      field("URL du script", urlInput),
-      field("Code d'accès", codeInput),
-      el("p", { class: "muted small", text: CONFIG.hasPassword()
-        ? "🔒 Cet appareil est verrouillé par un code, redemandé à chaque ouverture."
-        : "Ajoutez un code pour verrouiller l'application sur cet appareil (redemandé à chaque ouverture). Pour bloquer aussi l'accès aux données, définissez le même code sur le script (voir docs/INSTALLATION.md)." }),
-      statusLine,
-      el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-primary", onclick: save }, "Enregistrer et connecter"),
-        CONFIG.isConfigured() ? el("button", { class: "btn btn-ghost", onclick: function () {
-          App.clearApiUrl().then(function () { toast("Connexion retirée (mode local).", "ok"); forceRerender(); });
-        } }, "Retirer") : null,
-      ]),
+    var textarea = bindCounter(el("textarea", {
+      class: "textarea", placeholder: "Nouvelle conclusion…", maxlength: Core.LIMITS.conclusion,
+      "data-draft": "conclusion:" + topic.id
+    }), "conclusion:" + topic.id, Core.LIMITS.conclusion);
+
+    var addBlock = el("div", { class: "stack" }, [
+      el("div", { class: "section-title", text: "Ajouter une conclusion" }),
+      textarea,
+      counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
+      el("button", {
+        class: "btn btn-primary btn-block", type: "button", text: "Ajouter",
+        onclick: function () {
+          var text = Utils.trim(textarea.value);
+          if (!text) { UI.toast("La conclusion est vide.", "error"); return; }
+          textarea.value = "";
+          App.actions.addConclusion(topic.id, text);
+        }
+      })
+    ]);
+
+    var myVoteHint = el("p", { class: "hint", text: myVote
+      ? "Vous avez choisi une conclusion. Choisir une autre déplace votre vote."
+      : "Choix unique : une seule conclusion par personne." });
+
+    return el("div", { class: "screen" }, [
+      topbar({
+        title: "Conclusion",
+        sub: topic.title,
+        back: function () { App.go("#/topic/" + topic.id); },
+        backLabel: "Discussion",
+        actions: [statusPill()]
+      }),
+      el("div", { class: "content stack-lg" }, [myVoteHint, list, el("hr", { class: "divider" }), addBlock])
     ]);
   }
 
-  function diagnosticsBlock(status) {
-    return el("div", { class: "diagnostics", id: "diagnostics" }, [
-      diagRow("Version", APP_VERSION),
-      diagRow("Statut réseau", status.online ? "En ligne" : "Hors connexion", "diag-online"),
-      diagRow("État", status.label, "diag-state"),
-      diagRow("Dernière synchronisation", status.lastSyncAt ? Utils.formatDate(status.lastSyncAt) : "—", "diag-sync"),
-      diagRow("Révision", String(status.localRevision), "diag-localrev"),
-      diagRow("Actions en attente", String(status.pendingCount), "diag-pending"),
-      diagRow("Dernière erreur", status.lastError ? status.lastError.message : "Aucune", "diag-error"),
+  /* ------------------------------------------------------------ Réunion --- */
+
+  function screenMeeting() {
+    var state = Store.view;
+    var topics = state.topics.filter(function (t) { return t.status !== "archived"; });
+
+    var doc = el("div", { class: "print-doc" }, [
+      el("h1", { class: "print-h1", text: "BrainstO. — Préparation de réunion" }),
+      el("p", { class: "hint", text: "Édité le " + Utils.formatDateTime(Utils.nowISO()) + " · " + Utils.plural(topics.length, "sujet", "sujets") })
+    ]);
+
+    if (!topics.length) {
+      doc.appendChild(el("p", { class: "hint", text: "Aucun sujet à présenter." }));
+    }
+
+    topics.forEach(function (topic) {
+      var block = el("section", { class: "print-topic" }, [
+        el("h2", { class: "print-h2", text: topic.title }),
+        el("div", { class: "card-meta", text: Core.TOPIC_STATUS_LABELS[topic.status] + " · proposé par " + topic.createdBy.name +
+          " · " + Utils.plural(topic.messages.length, "message", "messages") })
+      ]);
+      if (topic.description) {
+        block.appendChild(el("p", { class: "pre-wrap", text: topic.description }));
+      }
+
+      if (topic.proposals.length) {
+        block.appendChild(el("h3", { class: "print-h3", text: "Propositions" }));
+        var pl = el("ul", { class: "print-list" });
+        topic.proposals.forEach(function (proposal) {
+          var summary = Core.voteSummary(proposal);
+          pl.appendChild(el("li", {}, [
+            el("strong", { text: proposal.title }),
+            el("span", { text: " — " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + summary.label +
+              " (" + summary.counts.for + " pour / " + summary.counts.against + " contre / " + summary.counts.abstain + " abst.)" }),
+            proposal.description ? el("div", { class: "hint pre-wrap", text: proposal.description }) : null
+          ]));
+        });
+        block.appendChild(pl);
+      }
+
+      if (topic.conclusions.length) {
+        var scores = Core.conclusionScores(topic);
+        block.appendChild(el("h3", { class: "print-h3", text: "Conclusions" }));
+        var cl = el("ul", { class: "print-list" });
+        topic.conclusions.slice().sort(function (a, b) {
+          return (scores.scores[b.id] || 0) - (scores.scores[a.id] || 0);
+        }).forEach(function (conclusion) {
+          var count = scores.scores[conclusion.id] || 0;
+          cl.appendChild(el("li", {}, [
+            el("span", { class: "pre-wrap", text: conclusion.text }),
+            el("span", { class: "hint", text: " — " + Utils.plural(count, "vote", "votes") +
+              (scores.best > 0 && count === scores.best ? " · en tête" : "") })
+          ]));
+        });
+        block.appendChild(cl);
+      }
+
+      doc.appendChild(block);
+    });
+
+    return el("div", { class: "screen" }, [
+      topbar({
+        title: "Réunion",
+        sub: "Synthèse imprimable",
+        back: function () { App.go("#/settings"); },
+        backLabel: "Réglages",
+        actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button", text: "Imprimer", onclick: function () { window.print(); } })]
+      }),
+      el("div", { class: "content" }, [doc])
     ]);
   }
 
-  function diagRow(label, value, id) {
-    return el("div", { class: "diag-row" }, [
-      el("span", { class: "diag-label", text: label }),
-      el("span", { class: "diag-value", id: id || null, text: value }),
+  /* ------------------------------------------------------------ Réglages --- */
+
+  function screenSettings() {
+    var diagnostics = Sync.diagnostics();
+
+    var nameInput = el("input", {
+      class: "input", type: "text", maxlength: Core.LIMITS.name,
+      value: App.user.name || "", "data-draft": "settings:name"
+    });
+
+    var connectionRows = el("div", { class: "stack" }, [
+      el("div", { class: "card card-static stack" }, [
+        el("div", { class: "section-title", text: "Connexion" }),
+        el("div", { class: "hint", text: Sync.connection.localMode || !Sync.connection.url
+          ? "Mode local : les données restent sur cet appareil."
+          : "Connecté à l'espace de l'équipe." }),
+        el("button", { class: "btn btn-outline btn-block", type: "button", text: "Modifier l'adresse ou le code",
+          onclick: function () { App.editConnection(); } }),
+        el("button", { class: "btn btn-danger btn-block", type: "button", text: "Se déconnecter de l'équipe",
+          onclick: function () { UI.set({ modal: { type: "logout" } }); } })
+      ])
+    ]);
+
+    var diagRows = el("div", { class: "card card-static stack" }, [
+      el("div", { class: "section-title", text: "Diagnostic de synchronisation" }),
+      el("div", { class: "row" }, [statusPill(), el("div", { class: "spacer" }),
+        el("button", { class: "btn btn-sm btn-outline", type: "button", text: "Synchroniser", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } })]),
+      el("div", { class: "card-meta", text: "Révision : " + diagnostics.revision }),
+      el("div", { class: "card-meta", text: "Dernière mise à jour : " + (diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "—") }),
+      el("div", { class: "card-meta", text: "Actions en attente : " + diagnostics.pending.length +
+        (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "") }),
+      el("div", { class: "card-meta", text: "Stockage local : " + (diagnostics.persistent ? "IndexedDB" : "mémoire (non persistant)") }),
+      diagnostics.status.error ? el("div", { class: "card-meta", style: { color: "var(--danger)" }, text: "Dernière erreur : " + diagnostics.status.error }) : null,
+      el("div", { class: "card-meta", text: "Version de l'application : " + CONFIG.APP_VERSION })
+    ]);
+
+    return el("div", { class: "screen" }, [
+      topbar({ title: "Réglages", back: function () { App.go("#/"); }, backLabel: "Sujets", actions: [statusPill()] }),
+      el("div", { class: "content stack-lg" }, [
+        el("div", { class: "card card-static stack" }, [
+          el("div", { class: "section-title", text: "Votre nom" }),
+          nameInput,
+          el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
+            onclick: function () { App.saveName(nameInput.value, true); } })
+        ]),
+        connectionRows,
+        el("div", { class: "card card-static stack" }, [
+          el("div", { class: "section-title", text: "Réunion" }),
+          el("div", { class: "hint", text: "Synthèse de tous les sujets, prête à imprimer ou à projeter." }),
+          el("button", { class: "btn btn-outline btn-block", type: "button", text: "Ouvrir la synthèse",
+            onclick: function () { App.go("#/meeting"); } })
+        ]),
+        diagRows
+      ])
     ]);
   }
 
-  function updateDiagnostics(status) {
-    if (!root) return;
-    const set = function (id, val) { const n = root.querySelector("#" + id); if (n) n.textContent = val; };
-    set("diag-online", status.online ? "En ligne" : "Hors connexion");
-    set("diag-state", status.label);
-    set("diag-sync", status.lastSyncAt ? Utils.formatDate(status.lastSyncAt) : "—");
-    set("diag-localrev", String(status.localRevision));
-    set("diag-pending", String(status.pendingCount));
-    set("diag-error", status.lastError ? status.lastError.message : "Aucune");
-  }
+  /* ========================================================= OVERLAYS ==== */
 
-  function updateBanner() {
-    return el("div", { class: "banner no-print" }, [
-      el("span", { text: "Une nouvelle version est disponible." }),
-      el("button", { class: "btn btn-sm btn-primary", onclick: function () { App.applyUpdate(); } }, "Mettre à jour"),
+  function messageSheet(spec) {
+    var topic = Core.findTopic(Store.view, spec.topicId);
+    var message = topic ? Core.findMessage(topic, spec.messageId) : null;
+    if (!message) { return null; }
+
+    var mine = App.ownsMessage(message);
+    var locked = Core.isMessageLocked(message, App.user.id);
+
+    var emojiRow = el("div", { class: "emoji-row" });
+    Core.REACTIONS.forEach(function (emoji) {
+      var isMine = message.reactions[App.user.id] === emoji;
+      emojiRow.appendChild(el("button", {
+        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button", "aria-label": "Réagir " + emoji, text: emoji,
+        onclick: function () {
+          App.actions.setReaction(topic.id, message.id, emoji);
+          UI.set({ sheet: null });
+        }
+      }));
+    });
+
+    var actions = el("div", { class: "sheet-actions" }, [
+      sheetAction("❝", "Citer", function () {
+        UI.set({ sheet: null, quote: { topicId: topic.id, messageId: message.id } });
+        var node = findDraftNode("composer:" + topic.id);
+        if (node) { node.focus(); }
+      }),
+      sheetAction("💡", "Créer une proposition", function () {
+        UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
+      }),
+      mine ? sheetAction("✎", locked ? "Modifier (verrouillé 🔒)" : "Modifier", function () {
+        if (locked) { UI.toast("Message verrouillé : quelqu'un y a déjà réagi.", "error"); return; }
+        UI.set({ sheet: null, modal: { type: "editMessage", topicId: topic.id, messageId: message.id } });
+      }, { disabled: false }) : null,
+      mine ? sheetAction(message.anon ? "🙂" : "🎭", message.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
+        App.actions.setMessageSignature(topic.id, message.id, !message.anon);
+        UI.set({ sheet: null });
+      }) : null
     ]);
+
+    var info = [];
+    info.push(message.authorName);
+    info.push(Utils.formatDateTime(message.createdAt));
+    if (locked) { info.push("verrouillé"); }
+
+    return sheet(info.join(" · "), el("div", {}, [emojiRow, actions]));
   }
 
-  function connectBanner() {
-    return el("div", { class: "banner banner-warn no-print" }, [
-      el("span", { text: "Mode local (non connecté à l'équipe)." }),
-      el("button", { class: "btn btn-sm btn-primary", onclick: function () { App.navigate("#/settings"); } }, "Connecter"),
-    ]);
+  function topicInfoSheet(spec) {
+    var topic = Core.findTopic(Store.view, spec.topicId);
+    if (!topic) { return null; }
+
+    var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet",
+      onchange: function (e) { App.actions.changeTopicStatus(topic.id, e.target.value); }
+    });
+    Core.TOPIC_STATUSES.forEach(function (status) {
+      statusSelect.appendChild(el("option", { value: status, selected: topic.status === status, text: Core.TOPIC_STATUS_LABELS[status] }));
+    });
+
+    return sheet(topic.title, el("div", { class: "stack" }, [
+      el("div", { class: "card-meta", text: "Proposé par " + topic.createdBy.name + " · " + Utils.formatDateTime(topic.createdAt) }),
+      topic.description
+        ? el("div", { class: "pre-wrap", text: topic.description })
+        : el("div", { class: "hint", text: "Aucune description." }),
+      field("Statut", statusSelect),
+      el("button", { class: "btn btn-outline btn-block", type: "button", text: "Modifier le sujet",
+        onclick: function () { UI.set({ sheet: null, modal: { type: "editTopic", topicId: topic.id } }); } })
+    ]));
   }
 
-  // ==========================================================================
-  //  Modales
-  // ==========================================================================
+  function createTopicModal() {
+    var titleInput = bindCounter(el("input", {
+      class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
+      placeholder: "Titre du sujet", "data-draft": "newTopic:title"
+    }), "newTopic:title", Core.LIMITS.topicTitle);
 
-  function showNewTopic() {
-    const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.topicTitle, placeholder: "Titre du sujet" });
-    const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.topicDescription, placeholder: "Description (facultative)" });
-    const nameInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.name, placeholder: "Anonyme" });
-    nameInput.value = App.profile ? App.profile.name : "";
-    modal("Nouveau sujet", [
-      field("Titre *", titleInput),
+    var descInput = el("textarea", {
+      class: "textarea", maxlength: Core.LIMITS.topicDescription,
+      placeholder: "Description (facultative)", "data-draft": "newTopic:desc"
+    });
+
+    var nameInput = el("input", {
+      class: "input", type: "text", maxlength: Core.LIMITS.name,
+      value: App.user.name || "", "data-draft": "newTopic:name"
+    });
+
+    return modal("Nouveau sujet", el("div", { class: "stack" }, [
+      field("Titre (obligatoire)", titleInput),
+      counterFor("newTopic:title", Core.LIMITS.topicTitle),
       field("Description", descInput),
-      field("Nom (laisser vide = Anonyme)", nameInput),
-      el("p", { class: "muted small", text: "Un sujet anonyme n'enregistre aucune identité : idéal pour aborder un sujet délicat sans être « celui qui a mis les pieds dans le plat »." }),
-    ], function () {
-      const title = Utils.clean(titleInput.value);
-      if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-      const name = Utils.clean(nameInput.value);
-      const anon = Utils.isBlank(name);
-      const id = App.actions.createTopic(title, Utils.clean(descInput.value), anon ? "Anonyme" : name, anon);
-      App.navigate("#/topic/" + id);
-      return true;
-    });
-    setTimeout(function () { titleInput.focus(); }, 30);
-  }
-
-  function showNewProposal(topicId, prefillDesc) {
-    const titleInput = el("input", { class: "input", type: "text", maxlength: Utils.LIMITS.proposalTitle, placeholder: "Titre de la proposition" });
-    const descInput = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.proposalDescription, placeholder: "Décrivez la solution…" });
-    if (prefillDesc) descInput.value = prefillDesc;
-    modal("Nouvelle proposition", [field("Titre *", titleInput), field("Description", descInput)], function () {
-      const title = Utils.clean(titleInput.value);
-      if (Utils.isBlank(title)) return markInvalid(titleInput, "Le titre est obligatoire.");
-      App.actions.createProposal(topicId, title, Utils.clean(descInput.value));
-      forceRerender();
-      return true;
-    });
-    setTimeout(function () { titleInput.focus(); }, 30);
-  }
-
-  function showAddConclusion(topicId) {
-    const ta = el("textarea", { class: "textarea", rows: 4, maxlength: Utils.LIMITS.conclusion, placeholder: "Votre conclusion…" });
-    modal("Ajouter une conclusion", [field("Conclusion", ta)], function () {
-      const text = Utils.clean(ta.value);
-      if (Utils.isBlank(text)) return markInvalid(ta, "La conclusion est vide.");
-      App.actions.addConclusion(topicId, text);
-      forceRerender();
-      return true;
-    });
-    setTimeout(function () { ta.focus(); }, 30);
-  }
-
-  function modal(title, body, onConfirm) {
-    const overlay = el("div", { class: "modal-overlay" });
-    const close = function () { if (overlay.parentNode) document.body.removeChild(overlay); };
-    const box = el("div", { class: "modal" }, [
-      el("h2", { text: title }),
-      el("div", { class: "modal-body" }, body),
-      el("div", { class: "row-actions" }, [
-        el("button", { class: "btn btn-primary", onclick: function () { if (onConfirm() !== false) close(); } }, "Valider"),
-        el("button", { class: "btn btn-ghost", onclick: close }, "Annuler"),
-      ]),
-    ]);
-    overlay.appendChild(box);
-    overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
-    document.body.appendChild(overlay);
-  }
-
-  // Feuille du bas (action sheet) : `builder(close)` renvoie les nœuds à afficher.
-  function openSheet(builder) {
-    const overlay = el("div", { class: "modal-overlay sheet-overlay" });
-    const close = function () { if (overlay.parentNode) document.body.removeChild(overlay); };
-    const box = el("div", { class: "sheet" }, builder(close));
-    overlay.appendChild(box);
-    overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
-    document.body.appendChild(overlay);
-    return close;
-  }
-
-  function sheetRow(icon, label, onclick) {
-    return el("button", { class: "sheet-row", onclick: onclick }, [
-      el("span", { class: "sheet-row-icon", text: icon }),
-      el("span", { text: label }),
+      field("Votre nom", nameInput, "Laissez vide pour publier ce sujet en anonyme : aucune identité ne sera enregistrée.")
+    ]), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", {
+        class: "btn btn-primary", type: "button", text: "Créer",
+        onclick: function () {
+          var title = Utils.trim(titleInput.value);
+          if (!title) { UI.toast("Le titre du sujet est obligatoire.", "error"); return; }
+          App.actions.createTopic(title, descInput.value, Utils.trim(nameInput.value));
+        }
+      })
     ]);
   }
 
-  // --- Toasts ---------------------------------------------------------------
-
-  function toast(message, kind) {
-    const t = el("div", { class: "toast toast-" + (kind || "info"), text: message });
-    toastEl.appendChild(t);
-    setTimeout(function () { t.classList.add("show"); }, 10);
-    setTimeout(function () {
-      t.classList.remove("show");
-      setTimeout(function () { if (t.parentNode) toastEl.removeChild(t); }, 300);
-    }, 3600);
+  function editTopicModal(spec) {
+    var topic = Core.findTopic(Store.view, spec.topicId);
+    if (!topic) { return null; }
+    var titleInput = el("input", {
+      class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
+      value: topic.title, "data-draft": "editTopic:title:" + topic.id
+    });
+    var descInput = el("textarea", {
+      class: "textarea", maxlength: Core.LIMITS.topicDescription,
+      value: topic.description, "data-draft": "editTopic:desc:" + topic.id
+    });
+    return modal("Modifier le sujet", el("div", { class: "stack" }, [
+      field("Titre", titleInput),
+      field("Description", descInput)
+    ]), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", {
+        class: "btn btn-primary", type: "button", text: "Enregistrer",
+        onclick: function () {
+          var title = Utils.trim(titleInput.value);
+          if (!title) { UI.toast("Le titre du sujet est obligatoire.", "error"); return; }
+          App.actions.updateTopic(topic.id, title, descInput.value);
+        }
+      })
+    ]);
   }
 
-  // --- Petits composants ----------------------------------------------------
-
-  let fieldSeq = 0;
-  function field(labelText, inputNode) {
-    if (!inputNode.id) inputNode.id = "fld-" + (++fieldSeq);
-    return [el("label", { class: "field-label", for: inputNode.id, text: labelText }), inputNode];
+  function editMessageModal(spec) {
+    var topic = Core.findTopic(Store.view, spec.topicId);
+    var message = topic ? Core.findMessage(topic, spec.messageId) : null;
+    if (!message) { return null; }
+    var textarea = el("textarea", {
+      class: "textarea", maxlength: Core.LIMITS.message,
+      value: message.text, "data-draft": "editMessage:" + message.id
+    });
+    return modal("Modifier le message", el("div", { class: "stack" }, [textarea]), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", {
+        class: "btn btn-primary", type: "button", text: "Enregistrer",
+        onclick: function () {
+          var text = Utils.trim(textarea.value);
+          if (!text) { UI.toast("Le message est vide.", "error"); return; }
+          App.actions.updateMessage(topic.id, message.id, text);
+        }
+      })
+    ]);
   }
 
-  function markInvalid(input, message) {
-    if (!input.id) input.id = "fld-" + (++fieldSeq);
-    input.classList.add("invalid");
-    input.setAttribute("aria-invalid", "true");
-    input.setAttribute("aria-describedby", input.id + "-err");
-    let err = input.nextSibling && input.nextSibling.className === "field-error" ? input.nextSibling : null;
-    if (!err) {
-      err = el("span", { class: "field-error", id: input.id + "-err", role: "alert" });
-      if (input.parentNode) input.parentNode.insertBefore(err, input.nextSibling);
+  function proposalModal(spec) {
+    var topic = Core.findTopic(Store.view, spec.topicId);
+    if (!topic) { return null; }
+    var existing = spec.proposalId ? Core.findProposal(topic, spec.proposalId) : null;
+    var keyBase = existing ? "editProposal:" + existing.id : "newProposal:" + topic.id;
+
+    var initialTitle = existing ? existing.title : Utils.limit(spec.fromText || "", Core.LIMITS.proposalTitle);
+    var initialDesc = existing ? existing.description : "";
+
+    var titleInput = el("input", {
+      class: "input", type: "text", maxlength: Core.LIMITS.proposalTitle,
+      placeholder: "Titre de la proposition", value: initialTitle, "data-draft": keyBase + ":title"
+    });
+    var descInput = el("textarea", {
+      class: "textarea", maxlength: Core.LIMITS.proposalDescription,
+      placeholder: "Description (facultative)", value: initialDesc, "data-draft": keyBase + ":desc"
+    });
+
+    return modal(existing ? "Modifier la proposition" : "Nouvelle proposition", el("div", { class: "stack" }, [
+      field("Titre", titleInput),
+      field("Description", descInput)
+    ]), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", {
+        class: "btn btn-primary", type: "button", text: existing ? "Enregistrer" : "Créer",
+        onclick: function () {
+          var title = Utils.trim(titleInput.value);
+          if (!title) { UI.toast("Le titre de la proposition est obligatoire.", "error"); return; }
+          if (existing) { App.actions.updateProposal(topic.id, existing.id, title, descInput.value); }
+          else { App.actions.createProposal(topic.id, title, descInput.value); }
+        }
+      })
+    ]);
+  }
+
+  function editConclusionModal(spec) {
+    var topic = Core.findTopic(Store.view, spec.topicId);
+    var conclusion = topic ? Core.findConclusion(topic, spec.conclusionId) : null;
+    if (!conclusion) { return null; }
+    var textarea = el("textarea", {
+      class: "textarea", maxlength: Core.LIMITS.conclusion,
+      value: conclusion.text, "data-draft": "editConclusion:" + conclusion.id
+    });
+    return modal("Modifier la conclusion", el("div", { class: "stack" }, [textarea]), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", {
+        class: "btn btn-primary", type: "button", text: "Enregistrer",
+        onclick: function () {
+          var text = Utils.trim(textarea.value);
+          if (!text) { UI.toast("La conclusion est vide.", "error"); return; }
+          App.actions.updateConclusion(topic.id, conclusion.id, text);
+        }
+      })
+    ]);
+  }
+
+  function confirmModal(title, text, confirmLabel, onConfirm) {
+    return modal(title, el("p", { class: "hint", text: text }), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", { class: "btn btn-danger", type: "button", text: confirmLabel, onclick: onConfirm })
+    ]);
+  }
+
+  function renderOverlay() {
+    Utils.clear(overlayRoot);
+    var spec = UI.local.sheet;
+    var node = null;
+
+    if (spec) {
+      if (spec.type === "message") { node = messageSheet(spec); }
+      else if (spec.type === "topicInfo") { node = topicInfoSheet(spec); }
+    } else if (UI.local.modal) {
+      var m = UI.local.modal;
+      if (m.type === "createTopic") { node = createTopicModal(); }
+      else if (m.type === "editTopic") { node = editTopicModal(m); }
+      else if (m.type === "editMessage") { node = editMessageModal(m); }
+      else if (m.type === "createProposal" || m.type === "editProposal") { node = proposalModal(m); }
+      else if (m.type === "editConclusion") { node = editConclusionModal(m); }
+      else if (m.type === "deleteConclusion") {
+        node = confirmModal("Supprimer la conclusion",
+          "La conclusion et les votes qui la visaient seront supprimés.",
+          "Supprimer", function () { App.actions.deleteConclusion(m.topicId, m.conclusionId); });
+      } else if (m.type === "logout") {
+        node = confirmModal("Se déconnecter de l'équipe",
+          "L'adresse du script et le déverrouillage seront oubliés sur cet appareil. Les données de l'équipe restent sur Google Drive.",
+          "Se déconnecter", function () { App.logout(); });
+      }
     }
-    err.textContent = message;
-    input.focus();
-    input.addEventListener("input", function clearInvalid() {
-      input.classList.remove("invalid");
-      input.removeAttribute("aria-invalid");
-      if (err) err.textContent = "";
-      input.removeEventListener("input", clearInvalid);
-    });
-    return false;
+
+    if (node) { overlayRoot.appendChild(node); }
   }
 
-  function option(value, label, current) {
-    const o = el("option", { value: value, text: label });
-    if (value === current) o.selected = true;
-    return o;
+  /* ============================================================ RENDU ==== */
+
+  function currentScreen() {
+    var gate = App.gate();
+    if (gate === "connection") { return screenConnection(); }
+    if (gate === "name") { return screenName(); }
+    if (gate === "lock") { return screenLock(); }
+
+    var route = App.route;
+    if (route.name === "topic") { return screenTopic(route.topicId); }
+    if (route.name === "proposals") { return screenProposals(route.topicId); }
+    if (route.name === "conclusion") { return screenConclusion(route.topicId); }
+    if (route.name === "settings") { return screenSettings(); }
+    if (route.name === "meeting") { return screenMeeting(); }
+    return screenTopics();
   }
 
-  function plusGlyph() { return el("span", { class: "plus-glyph", text: "+" }); }
-  function notFound() {
-    return el("section", { class: "page" }, [
-      el("p", { class: "empty", text: "Sujet introuvable." }),
-      el("button", { class: "btn", onclick: function () { App.navigate("#/"); } }, "← Retour"),
-    ]);
+  function signature() {
+    /* Le statut de synchronisation est volontairement EXCLU : il est rafraîchi
+     * en place (UI.refreshStatus) pour ne pas re-rendre pendant la frappe. */
+    return [
+      App.gate() || "",
+      App.route.raw,
+      Store.version,
+      UI.local.version,
+      App.user.id,
+      App.user.name
+    ].join("|");
   }
-  function topicBadge(status) { return el("span", { class: "badge badge-topic badge-" + status, text: State.TOPIC_STATUS_LABELS[status] || status }); }
-  function proposalBadge(status) { return el("span", { class: "badge badge-prop badge-" + status, text: State.PROPOSAL_STATUS_LABELS[status] || status }); }
-  function sectionTitle(text) { return el("h2", { class: "section-title", text: text }); }
-  function metaItem(text) { return el("span", { class: "meta-item", text: text }); }
-  function emptyState(text) { return el("div", { class: "empty", text: text }); }
-  function shorten(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
-  function plural(n) { return n > 1 ? "s" : ""; }
 
-  return {
-    mount: mount,
-    reveal: reveal,
-    renderData: renderData,
-    renderStatus: renderStatus,
-    setUpdateAvailable: setUpdateAvailable,
-    forceRerender: forceRerender,
-    showOnboardingUrl: showOnboardingUrl,
-    showOnboardingName: showOnboardingName,
-    showLock: showLock,
-    toast: toast,
+  UI.render = function () {
+    if (!appRoot) { return; }
+    var sig = signature();
+    if (!forceNext && sig === lastSignature) { return; }
+    forceNext = false;
+    lastSignature = sig;
+
+    var drafts = captureDrafts();
+
+    /* Position de défilement du fil de discussion. */
+    var thread = document.querySelector(".thread");
+    var scrollTop = thread ? thread.scrollTop : 0;
+    var threadKey = thread ? thread.getAttribute("data-thread") : null;
+    var atBottom = thread ? (thread.scrollHeight - thread.scrollTop - thread.clientHeight) < 80 : true;
+
+    Utils.clear(appRoot);
+    appRoot.appendChild(currentScreen());
+    renderOverlay();
+    restoreDrafts(drafts);
+
+    var newThread = document.querySelector(".thread");
+    if (newThread) {
+      var sameThread = newThread.getAttribute("data-thread") === threadKey;
+      if (!sameThread || UI.local.scrollToBottom || atBottom) {
+        newThread.scrollTop = newThread.scrollHeight;
+      } else {
+        newThread.scrollTop = scrollTop;
+      }
+      UI.local.scrollToBottom = false;
+    }
+
+    UI.refreshStatus();
   };
-})();
+
+  /* -------------------------------------------------- Bandeau nouvelle version --- */
+
+  UI.showUpdateBanner = function (onUpdate) {
+    if (document.querySelector(".update-banner")) { return; }
+    var banner = el("div", { class: "update-banner" }, [
+      el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
+      el("button", {
+        class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",
+        onclick: function () { banner.remove(); onUpdate(); }
+      }),
+      el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard", text: "✕", onclick: function () { banner.remove(); } })
+    ]);
+    document.body.appendChild(banner);
+  };
+
+  root.UI = UI;
+})(typeof globalThis !== "undefined" ? globalThis : this);
