@@ -1254,14 +1254,19 @@ p { margin: 0; }
 .sheet-action .icon { color: var(--muted); }
 .sheet-action.danger .icon { color: var(--danger); }
 
+/* Trois par rangée, largeur fixe. En grille, un nombre de réactions non
+   multiple de 3 laisse un trou en bas à droite ; en flex centré, la dernière
+   rangée se recentre et la composition reste tenue quel que soit le nombre. */
 .emoji-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   padding: 2px 0 16px;
 }
 
 .emoji-btn {
+  flex: 0 0 calc((100% - 16px) / 3);
   display: flex;
   flex-direction: column;
   align-items: center;

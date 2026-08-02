@@ -50,7 +50,7 @@ C'est le cœur de l'outil : une conversation de groupe.
 
 | Action | Effet |
 |---|---|
-| Les six émojis | Réagir (👌 💪 🤞 🤏 👎 💩) |
+| Les cinq réactions | Réagir : **D'accord**, **Je m'engage**, **Mitigé**, **Pas d'accord**, **À écarter** |
 | **Citer** | Répondre en citant le message |
 | **Créer une proposition** | Transformer l'idée en proposition à voter |
 | **Modifier** | Corriger votre message |

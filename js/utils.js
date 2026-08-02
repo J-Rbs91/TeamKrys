@@ -139,19 +139,19 @@
   /* Choix de conception : on ne redessine PAS les mains. À 22 px, une main en
    * trait est illisible et une main pleine devient une tache. On traduit donc
    * chaque réaction par le symbole de son INTENTION — même trait, mêmes bouts
-   * arrondis que les icônes d'interface, six formes franchement distinctes
-   * (✓ ⚡ ✦ ›‹ ✕ ⊘) reconnaissables du coin de l'œil dans un fil qui défile.
-   * Le libellé accompagne la marque partout où on la choisit. */
+   * arrondis que les icônes d'interface, des formes franchement distinctes
+   * (✓ ⚡ ≈ ✕ ⊘) reconnaissables du coin de l'œil dans un fil qui défile.
+   * Le libellé accompagne la marque partout où on la choisit.
+   *
+   * Les clés doivent rester alignées sur Core.REACTIONS (js/state.js). Une
+   * valeur absente d'ici retombe sur l'emoji brut : c'est le filet de sécurité
+   * si un appareil sur une version antérieure a écrit une réaction retirée
+   * depuis. */
   var REACTION_MARKS = {
     /* 👌 → coche : l'accord simple. */
     "👌": { label: "D'accord", paths: ["M4.6 12.6 9.9 17.9 19.6 6.6"] },
     /* 💪 → éclair : l'énergie, l'engagement à faire. */
     "💪": { label: "Je m'engage", paths: ["M13.6 3 6.2 13.6h5.2L10.4 21l7.4-10.6h-5.2z"] },
-    /* 🤞 → étincelle : l'adhésion prudente, l'espoir. */
-    "🤞": { label: "Pourquoi pas", paths: [
-      "M11.4 4.2l1.8 4.6 4.6 1.8-4.6 1.8-1.8 4.6-1.8-4.6L5 10.6l4.6-1.8z",
-      "M18.2 15.4l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"
-    ] },
     /* 🤏 → onde : le « bof », l'avis mitigé. Deux chevrons rentrants avaient été
        essayés : à 22 px leurs pointes se rejoignent et redonnent une croix,
        impossible à distinguer du désaccord juste à côté. */

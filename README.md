@@ -93,16 +93,14 @@ Aucune police d'icônes : `Utils.icon(nom, taille)` construit un SVG en trait
 (1,7 px, bouts arrondis, `currentColor`). Rendu identique partout, contrairement
 aux emoji dont le dessin change d'un système à l'autre.
 
-Les six réactions restent **stockées sous forme d'emoji** — la liste
-`Core.REACTIONS` et sa validation côté backend sont inchangées — mais elles sont
-**affichées** comme des marques dessinées (`Utils.reactionMark`), accompagnées de
-leur libellé :
+Les réactions restent **stockées sous forme d'emoji** (`Core.REACTIONS`, validée
+à l'identique par le backend) mais elles sont **affichées** comme des marques
+dessinées (`Utils.reactionMark`), accompagnées de leur libellé :
 
 | Valeur stockée | Marque | Libellé |
 |---|---|---|
 | `👌` | coche | D'accord |
 | `💪` | éclair | Je m'engage |
-| `🤞` | étincelle | Pourquoi pas |
 | `🤏` | onde | Mitigé |
 | `👎` | croix | Pas d'accord |
 | `💩` | sens interdit | À écarter |
@@ -110,6 +108,11 @@ leur libellé :
 À 22 px, une main dessinée est illisible : on traduit donc l'intention, pas le
 geste. Une valeur inconnue (donnée écrite par une version différente) retombe
 sur l'emoji brut.
+
+> `🤞` a été retiré du jeu. **La même liste doit être appliquée dans le script
+> Apps Script** — sinon un appareil resté sur l'ancienne version peut encore
+> écrire cette réaction. Elle est alors ignorée à la lecture : elle disparaît de
+> l'affichage, sans jamais être convertie vers une autre réaction.
 
 ## Synchronisation : écriture par actions
 
