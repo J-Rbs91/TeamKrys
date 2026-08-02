@@ -1,0 +1,431 @@
+{
+  "_": "Matrice des navigateurs mobiles ciblés par la recette de BrainstO. Source de vérité partagée par les agents QA (.claude/agents/qa-*.md), par tests/qa/compat-scan.js et par docs/QA_NAVIGATEURS.md. Aucune donnée n'est téléchargée : ce fichier est la baseline hors ligne, à relire à chaque publication.",
+  "version": "1.0.0",
+  "updated": "2026-08-02",
+  "tiers": {
+    "A": "Doit fonctionner parfaitement. Un défaut ici bloque la publication.",
+    "B": "Doit fonctionner. Une dégradation cosmétique documentée est tolérée, jamais une perte de fonction.",
+    "C": "Doit rester utilisable ou échouer honnêtement (message clair). Pas d'écran blanc, pas de perte de données.",
+    "D": "Hors support. Documenté pour que personne ne rouvre le débat ; aucun correctif n'est dû."
+  },
+  "engines": {
+    "webkit": {
+      "label": "WebKit",
+      "version_scheme": "ios",
+      "note": "Sur iOS et iPadOS, tous les navigateurs partagent le WebKit du système (ouverture aux autres moteurs dans l'UE depuis iOS 17.4, sans déploiement réel à ce jour). La version pertinente est donc celle d'iOS, pas celle de l'application. Corollaire : un bug WebKit touche Safari, Chrome iOS, Firefox iOS et toutes les WKWebView en même temps."
+    },
+    "blink": {
+      "label": "Blink / Chromium",
+      "version_scheme": "chromium",
+      "note": "Les navigateurs Android dérivés de Chromium sont comparés via leur version Chromium embarquée (champ chromium_equivalent). Les équivalences constructeur sont approximatives : à confirmer sur appareil via chrome://version ou l'user agent."
+    },
+    "gecko": {
+      "label": "Gecko",
+      "version_scheme": "firefox",
+      "note": "Firefox Android suit la numérotation Firefox. Gecko est le seul moteur de la matrice où :has() est arrivé tardivement (121), ce qui en fait le révélateur le plus utile des sélecteurs modernes."
+    },
+    "server": {
+      "label": "Rendu distant / proxy",
+      "version_scheme": "none",
+      "note": "Le rendu se fait sur les serveurs de l'éditeur, la page arrive pré-composée. Ni Service Worker, ni IndexedDB, ni WebCrypto fiables. Ces navigateurs ne peuvent pas faire tourner l'application : l'objectif est un échec propre, pas un fonctionnement."
+    },
+    "legacy": {
+      "label": "Moteur ancien ou figé",
+      "version_scheme": "none",
+      "note": "Moteurs sans mise à jour. Documentés pour mémoire."
+    }
+  },
+  "browsers": [
+    {
+      "id": "safari-ios",
+      "name": "Safari (iOS / iPadOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "A",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios",
+      "notes": "Seul navigateur iOS capable d'installer la PWA sur l'écran d'accueil. Plancher 15.4 : c'est la version qui apporte :has(), dvh, crypto.randomUUID et :focus-visible, tous utilisés par l'application."
+    },
+    {
+      "id": "safari-ios-15.0",
+      "name": "Safari (iOS 15.0 → 15.3)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "B",
+      "target_floor": "15.0",
+      "agent": "qa-webkit-ios",
+      "notes": "Parc résiduel (iPhone 6s / SE 1re génération restés en 15.x). Sert de sonde : tout ce qui casse ici casse aussi sur les WebView anciennes."
+    },
+    {
+      "id": "chrome-ios",
+      "name": "Chrome (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "A",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios",
+      "notes": "WebKit du système. Ne peut pas installer la PWA : l'utilisateur doit repasser par Safari. À vérifier : le message d'installation ne doit pas promettre l'impossible."
+    },
+    {
+      "id": "firefox-ios",
+      "name": "Firefox (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "B",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios",
+      "notes": "WebKit malgré le nom. Ne teste rien de Gecko : ne jamais l'utiliser pour valider Firefox."
+    },
+    {
+      "id": "edge-ios",
+      "name": "Edge (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "B",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios"
+    },
+    {
+      "id": "opera-ios",
+      "name": "Opera / Opera GX (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "C",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios"
+    },
+    {
+      "id": "brave-ios",
+      "name": "Brave (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "B",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios",
+      "notes": "Blocage agressif et cloisonnement de stockage : vérifier que l'adresse du script survit à un redémarrage."
+    },
+    {
+      "id": "duckduckgo-ios",
+      "name": "DuckDuckGo (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "B",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios",
+      "notes": "Le bouton « feu » efface le stockage du site : la file d'actions en attente disparaît. Comportement attendu, à documenter pour l'équipe."
+    },
+    {
+      "id": "arc-search-ios",
+      "name": "Arc Search / Orion / Aloha / Ecosia / Vivaldi / Yandex (iOS)",
+      "engine": "webkit",
+      "platform": "ios",
+      "tier": "C",
+      "target_floor": "15.4",
+      "agent": "qa-webkit-ios",
+      "notes": "Coques WebKit. Couvertes par le passage sur Safari iOS ; à ne tester à la main qu'en cas de signalement."
+    },
+    {
+      "id": "chrome-android",
+      "name": "Chrome (Android)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "A",
+      "target_floor": "108",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android",
+      "notes": "Référence Android. Plancher 108 : version qui apporte dvh. Navigateur d'installation de la PWA sur Android."
+    },
+    {
+      "id": "chrome-android-old",
+      "name": "Chrome (Android, appareils non mis à jour)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "100",
+      "chromium_equivalent": "100",
+      "agent": "qa-blink-android",
+      "notes": "Téléphones d'entrée de gamme et appareils d'occasion du magasin. Sonde utile : dvh et color-mix() y manquent."
+    },
+    {
+      "id": "samsung-internet",
+      "name": "Samsung Internet",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "A",
+      "target_floor": "21",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android",
+      "notes": "Navigateur par défaut de tout téléphone Galaxy : traité au même rang que Chrome. Équivalences approximatives : SI 16 ≈ Chromium 92, 17 ≈ 96, 18 ≈ 99, 19 ≈ 102, 20 ≈ 106, 21 ≈ 108, 22 ≈ 111, 23 ≈ 115, 25 ≈ 121. Mode sombre forcé et zoom de police du système : deux sources de régressions visuelles absentes de Chrome."
+    },
+    {
+      "id": "samsung-internet-old",
+      "name": "Samsung Internet (parc ancien)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "16",
+      "chromium_equivalent": "92",
+      "agent": "qa-blink-android"
+    },
+    {
+      "id": "edge-android",
+      "name": "Edge (Android)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "108",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android"
+    },
+    {
+      "id": "opera-android",
+      "name": "Opera (Android)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "94",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android",
+      "notes": "Le mode « économie de données » d'Opera reste local (Blink). À ne pas confondre avec Opera Mini, qui est un moteur distant."
+    },
+    {
+      "id": "brave-android",
+      "name": "Brave (Android)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "108",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android",
+      "notes": "Shields peut bloquer des requêtes tierces : l'adresse du script Apps Script est un domaine tiers, à vérifier explicitement."
+    },
+    {
+      "id": "vivaldi-android",
+      "name": "Vivaldi (Android)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "108",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android"
+    },
+    {
+      "id": "duckduckgo-android",
+      "name": "DuckDuckGo (Android)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "108",
+      "chromium_equivalent": "108",
+      "agent": "qa-blink-android"
+    },
+    {
+      "id": "mi-browser",
+      "name": "Mi Browser / Xiaomi",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "94",
+      "chromium_equivalent": "94",
+      "agent": "qa-blink-android",
+      "notes": "Navigateur constructeur pré-installé, Chromium souvent en retard de plusieurs versions. Équivalence à confirmer sur appareil : elle n'est pas publiée."
+    },
+    {
+      "id": "huawei-browser",
+      "name": "Huawei Browser",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "94",
+      "chromium_equivalent": "94",
+      "agent": "qa-blink-android",
+      "notes": "Appareils sans services Google : l'installation de la PWA passe par le menu du navigateur, pas par la bannière habituelle."
+    },
+    {
+      "id": "heytap-browser",
+      "name": "HeyTap / Oppo / Realme / vivo Browser",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "94",
+      "chromium_equivalent": "94",
+      "agent": "qa-blink-android"
+    },
+    {
+      "id": "uc-browser",
+      "name": "UC Browser (mode local U4)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "78",
+      "chromium_equivalent": "78",
+      "agent": "qa-legacy-proxy-browsers",
+      "notes": "Deux modes : local (Blink ancien) et cloud (rendu distant). Le mode cloud relève de qa-legacy-proxy-browsers."
+    },
+    {
+      "id": "qq-browser",
+      "name": "QQ Browser / WeChat X5",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "86",
+      "chromium_equivalent": "86",
+      "agent": "qa-webview-inapp",
+      "notes": "Moteur X5 embarqué dans WeChat : version Chromium figée, indépendante du système."
+    },
+    {
+      "id": "amazon-silk",
+      "name": "Amazon Silk (tablettes Fire)",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "100",
+      "chromium_equivalent": "100",
+      "agent": "qa-blink-android"
+    },
+    {
+      "id": "android-webview",
+      "name": "Android System WebView",
+      "engine": "blink",
+      "platform": "android",
+      "tier": "A",
+      "target_floor": "108",
+      "chromium_equivalent": "108",
+      "agent": "qa-webview-inapp",
+      "notes": "Mis à jour via le Play Store indépendamment du système, mais figé sur les appareils sans Play Store ou sans mise à jour. Support de toutes les fenêtres in-app Android."
+    },
+    {
+      "id": "firefox-android",
+      "name": "Firefox (Android)",
+      "engine": "gecko",
+      "platform": "android",
+      "tier": "A",
+      "target_floor": "121",
+      "agent": "qa-gecko-firefox",
+      "notes": "Plancher 121 : version qui apporte :has(). En dessous, toute règle CSS contenant :has() est rejetée en bloc par le moteur."
+    },
+    {
+      "id": "firefox-android-old",
+      "name": "Firefox (Android, parc ancien)",
+      "engine": "gecko",
+      "platform": "android",
+      "tier": "B",
+      "target_floor": "115",
+      "agent": "qa-gecko-firefox",
+      "notes": "Sonde des sélecteurs et fonctions récentes : ni :has(), et color-mix() n'y est arrivé qu'en 113."
+    },
+    {
+      "id": "firefox-focus-android",
+      "name": "Firefox Focus (Android)",
+      "engine": "gecko",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "121",
+      "agent": "qa-gecko-firefox",
+      "notes": "Efface le stockage à la fermeture : la file d'actions et le vérificateur de verrou ne survivent pas. Comportement attendu, à ne pas traiter comme un bug."
+    },
+    {
+      "id": "tor-browser-android",
+      "name": "Tor Browser (Android)",
+      "engine": "gecko",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": "115",
+      "agent": "qa-gecko-firefox",
+      "notes": "Latence élevée : bon banc d'essai de la synchronisation et des délais d'attente."
+    },
+    {
+      "id": "opera-mini-extreme",
+      "name": "Opera Mini (économie extrême)",
+      "engine": "server",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": null,
+      "agent": "qa-legacy-proxy-browsers",
+      "notes": "Rendu distant. Ni Service Worker, ni IndexedDB, ni WebCrypto fiables : l'application ne peut pas fonctionner. Objectif : message honnête, jamais un écran blanc."
+    },
+    {
+      "id": "uc-cloud",
+      "name": "UC Browser (mode cloud) / Puffin",
+      "engine": "server",
+      "platform": "android",
+      "tier": "C",
+      "target_floor": null,
+      "agent": "qa-legacy-proxy-browsers",
+      "notes": "Même conclusion qu'Opera Mini en mode extrême."
+    },
+    {
+      "id": "kaios-browser",
+      "name": "KaiOS Browser",
+      "engine": "legacy",
+      "platform": "kaios",
+      "tier": "D",
+      "target_floor": null,
+      "agent": "qa-legacy-proxy-browsers",
+      "notes": "Gecko ancien, écran 240x320, navigation aux touches et sans écran tactile. Hors support : l'application est pensée pour le tactile."
+    },
+    {
+      "id": "ie-mobile",
+      "name": "Internet Explorer Mobile / Edge Legacy / BlackBerry / Symbian",
+      "engine": "legacy",
+      "platform": "legacy",
+      "tier": "D",
+      "target_floor": null,
+      "agent": "qa-legacy-proxy-browsers",
+      "notes": "Plateformes mortes. Aucun correctif n'est dû. Ligne conservée pour clore le débat."
+    }
+  ],
+  "webviews": [
+    {
+      "id": "inapp-instagram",
+      "name": "Instagram / Facebook / Messenger (in-app)",
+      "engine_host": "android-webview | wkwebview",
+      "tier": "A",
+      "agent": "qa-webview-inapp",
+      "notes": "Chemin d'arrivée le plus probable si un lien est partagé dans un groupe d'équipe. Pas d'installation possible, barre d'outils qui recouvre le bas de page, stockage cloisonné par application."
+    },
+    {
+      "id": "inapp-whatsapp",
+      "name": "WhatsApp / Telegram / Signal (in-app)",
+      "engine_host": "android-webview | wkwebview | custom-tabs",
+      "tier": "A",
+      "agent": "qa-webview-inapp",
+      "notes": "Canal de partage interne le plus courant en magasin."
+    },
+    {
+      "id": "inapp-tiktok",
+      "name": "TikTok / Snapchat / Pinterest / X / LinkedIn / Reddit (in-app)",
+      "engine_host": "android-webview | wkwebview",
+      "tier": "B",
+      "agent": "qa-webview-inapp"
+    },
+    {
+      "id": "inapp-mail",
+      "name": "Gmail / Outlook / Teams / Slack / Discord (in-app)",
+      "engine_host": "custom-tabs | wkwebview",
+      "tier": "A",
+      "agent": "qa-webview-inapp",
+      "notes": "Gmail Android ouvre en Chrome Custom Tabs (moteur et stockage de Chrome) ; Outlook et Teams ouvrent dans leur propre WebView (stockage isolé). Deux comportements opposés pour le même geste."
+    },
+    {
+      "id": "inapp-wechat",
+      "name": "WeChat / Line / KakaoTalk (in-app)",
+      "engine_host": "x5 | wkwebview",
+      "tier": "C",
+      "agent": "qa-webview-inapp"
+    },
+    {
+      "id": "sfsafariviewcontroller",
+      "name": "SFSafariViewController (iOS)",
+      "engine_host": "webkit",
+      "tier": "A",
+      "agent": "qa-webview-inapp",
+      "notes": "Partage le moteur de Safari mais pas son stockage. Une session ouverte ici ne retrouve ni l'adresse du script, ni le vérificateur de verrou."
+    }
+  ],
+  "install_paths": {
+    "ios": "Safari uniquement → Partager → Sur l'écran d'accueil. Aucun autre navigateur iOS ne peut installer la PWA, et l'événement beforeinstallprompt n'existe pas sur iOS.",
+    "android": "Chrome / Samsung Internet / Edge → bannière beforeinstallprompt ou menu → Ajouter à l'écran d'accueil.",
+    "webview": "Impossible depuis une fenêtre in-app : l'utilisateur doit d'abord ouvrir le lien dans un vrai navigateur."
+  }
+}

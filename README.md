@@ -200,6 +200,7 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 
 ```bash
 node tests/parity.test.js
+node tests/qa/compat-scan.js
 ```
 
 Ces tests couvrent, action par action, la logique que le backend doit reproduire
@@ -209,8 +210,19 @@ Apps Script expose une fonction `runSelfTest()` qui vérifie exactement les mêm
 valeurs de référence : c'est le garde-fou du piège des octets signés de
 `Utilities.computeDigest`.
 
+`compat-scan.js` répond à une autre question : **quelle ligne de ce dépôt casse
+sur quel navigateur mobile ?** Il croise les fonctions web réellement utilisées
+avec une baseline de support hors ligne et la matrice des navigateurs visés — et
+repère au passage deux défauts invisibles à la lecture : un repli CSS écrit
+*après* la valeur moderne qu'il est censé secourir, et un champ de saisie sous
+16 px, qui fait zoomer toute la page sur iOS. Comme le reste du dépôt, il
+n'ouvre aucun navigateur et n'installe rien.
+
 Le parcours d'interface se vérifie à la main :
-[`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md).
+[`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md). La recette navigateur par
+navigateur : [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md), assistée par
+dix agents QA spécialisés par moteur de rendu
+([`.claude/agents/`](.claude/agents/)).
 
 ---
 
@@ -220,3 +232,4 @@ Le parcours d'interface se vérifie à la main :
 - [`docs/GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md) — guide de l'équipe
 - [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md) — structure du JSON et liste des actions
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
+- [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
