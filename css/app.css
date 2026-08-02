@@ -553,6 +553,15 @@ p { margin: 0; }
 
 .select { padding-right: 42px; cursor: pointer; }
 
+/* La liste déroulante est peinte par le système, hors de la page : elle ignore
+   le fond sur lequel le champ repose et compose son voile translucide sur sa
+   propre base, blanche. Il lui faut donc une couleur OPAQUE, sinon l'encre
+   claire du thème sombre se retrouve sur du blanc. */
+.select option {
+  background-color: var(--surface-opaque);
+  color: var(--text);
+}
+
 .select-wrap { position: relative; display: inline-flex; align-items: center; min-width: 160px; }
 .select-block { display: flex; width: 100%; }
 .select-wrap .icon {
