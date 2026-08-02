@@ -22,7 +22,12 @@
     conclusion: 5000
   };
 
-  Core.REACTIONS = ["👌", "💪", "🤞", "🤏", "👎", "💩"];
+  /* ⚠️ Liste partagée avec le backend : toute modification doit être reportée
+   * dans le script Apps Script, sans quoi les deux côtés ne valideront pas les
+   * mêmes réactions. Une réaction retirée d'ici disparaît à la lecture (voir
+   * la normalisation plus bas) : les anciennes valeurs sont ignorées, pas
+   * converties. */
+  Core.REACTIONS = ["👌", "💪", "🤏", "👎", "💩"];
 
   Core.TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
   Core.PROPOSAL_STATUSES = ["voting", "selected", "debate", "implemented", "rejected"];

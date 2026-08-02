@@ -261,7 +261,24 @@ tests.push(() => check("SET_REACTION refuse un emoji hors liste", () => {
     assert(Core.validateAction(state, action("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: emoji })).ok,
       "emoji autorisé refusé : " + emoji);
   });
-  equal(Core.REACTIONS, ["👌", "💪", "🤞", "🤏", "👎", "💩"]);
+  equal(Core.REACTIONS, ["👌", "💪", "🤏", "👎", "💩"]);
+  /* « 🤞 » a été retiré du jeu : il doit désormais être refusé comme n'importe
+   * quelle valeur inconnue. Le backend doit appliquer la même liste. */
+  assert(!Core.validateAction(state, action("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤞" })).ok);
+}));
+
+tests.push(() => check("Une réaction retirée du jeu est ignorée à la lecture", () => {
+  /* Cas réel de transition : un appareil resté sur une version antérieure a
+   * écrit « 🤞 » dans le JSON. On l'ignore silencieusement — surtout pas de
+   * conversion vers une autre réaction, qui trahirait l'avis de la personne. */
+  const migrated = Core.ensureShape({
+    topics: [{
+      id: "t1", title: "Sujet",
+      messages: [{ id: "m1", text: "Bonjour", reactions: { p1: "🤞", p2: "👌" } }]
+    }]
+  });
+  const reactions = migrated.topics[0].messages[0].reactions;
+  equal(reactions, { p2: "👌" });
 }));
 
 /* ---------------------------------------------------------- Propositions --- */
@@ -370,7 +387,7 @@ tests.push(() => check("Toutes les actions du modèle sont validées et appliqu�
   run("CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Bonjour" });
   run("UPDATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Bonjour à tous" });
   run("SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: true });
-  run("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤞" });
+  run("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤏" });
   run("CREATE_PROPOSAL", { topicId: "t1", proposalId: "pr1", title: "Idée" });
   run("UPDATE_PROPOSAL", { topicId: "t1", proposalId: "pr1", title: "Idée 2", description: "x" });
   run("CHANGE_PROPOSAL_STATUS", { topicId: "t1", proposalId: "pr1", status: "selected" });

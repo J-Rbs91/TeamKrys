@@ -89,8 +89,14 @@ L'auteur d'une action est toujours pris dans l'enveloppe (`actorId`,
 
 ## Règles métier
 
-- Réactions autorisées : **👌 💪 🤞 🤏 👎 💩** — toute autre valeur est refusée,
-  côté serveur comme côté application.
+- Réactions autorisées : **👌 💪 🤏 👎 💩** — toute autre valeur est refusée,
+  côté serveur comme côté application. La liste vit dans `Core.REACTIONS`
+  (`js/state.js`) et doit être **strictement identique** dans le script Apps
+  Script. Une réaction retirée de la liste est ignorée à la lecture du JSON :
+  les anciennes valeurs disparaissent de l'affichage, elles ne sont jamais
+  converties vers une autre réaction — cela trahirait l'avis exprimé.
+  L'application les **affiche** sous forme de marques dessinées, mais ce sont
+  bien ces emoji qui sont stockés (voir « Icônes et réactions » du README).
 - Une réaction par personne et par message ; la même réaction rejouée la retire.
 - Un vote par personne et par proposition ; le même vote rejoué le retire.
 - Conclusion : **choix unique** par personne — voter ailleurs déplace le vote.
