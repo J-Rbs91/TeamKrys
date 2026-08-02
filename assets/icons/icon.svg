@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="BrainstO.">
-  <rect width="100" height="100" fill="#000000"/>
-  <circle cx="43.5" cy="50" r="19.44" fill="none" stroke="#ffffff" stroke-width="9.12"/>
-  <circle cx="81.78" cy="67.2" r="6.8" fill="#ffffff"/>
+  <rect width="100" height="100" fill="#171717"/>
+  <circle cx="43.5" cy="50" r="19.44" fill="none" stroke="#faede3" stroke-width="9.12"/>
+  <circle cx="81.78" cy="67.2" r="6.8" fill="#faede3"/>
 </svg>

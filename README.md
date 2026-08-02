@@ -24,7 +24,9 @@ Règles tenues par ce dépôt :
 - aucun fichier de backend (`.gs`, `appsscript.json`, dossier `apps-script/`) ;
 - aucun secret : ni code d'accès, ni adresse de script, ni jeton, ni hachage ;
 - aucune dépendance externe : pas de npm, pas de CDN, **pas de police distante**
-  (typographie 100 % système, donc zéro requête réseau pour l'affichage).
+  (typographie 100 % système, donc zéro requête réseau pour l'affichage) ;
+- aucune image distante non plus : les icônes sont des SVG construits en
+  JavaScript et le grain est un data-URI (voir « Direction artistique »).
 
 L'adresse du script et le code d'accès sont saisis **par chaque utilisateur dans
 l'application**. L'adresse reste dans le `localStorage` de son appareil ; le code
@@ -53,6 +55,61 @@ tests/parity.test.js       tests exécutables avec `node tests/parity.test.js`
 ```
 
 ---
+
+## Direction artistique
+
+Le langage visuel est une transposition de celui de **HorizonX**
+([horizonx.so](https://horizonx.so/)) au contexte de l'application : un outil
+d'équipe consulté debout, en magasin, plusieurs fois par jour. Les jetons sont
+en tête de [`css/app.css`](css/app.css).
+
+| Élément | Valeur | Pourquoi ici |
+|---|---|---|
+| Fond | crème `#faede3` | moins fatigant qu'un blanc clinique sur une journée entière |
+| Encre | `#171717`, jamais de noir pur | contraste éditorial, plus doux à l'écran |
+| Surfaces | blancs superposés + flou | réservées à ce qui flotte : barres collantes, feuilles, FAB |
+| Rayons | 30 px cartes, 19 px champs, 100 px pastilles | |
+| Ombres | `0 20px 70px` à 7 % | la carte lévite au lieu de « tomber » |
+| Typographie | système, échelle fluide (`clamp`), surtitres 11 px `+0.08em` | zéro requête réseau, hiérarchie éditoriale |
+| Mouvement | `cubic-bezier(.16,1,.3,1)`, révélation `translateY(36px) scale(.96)` décalée de 45 ms | |
+
+Trois écarts assumés par rapport à la source, dictés par l'usage :
+
+- **le halo de CTA est directionnel** (`0 6px 18px`) et non omnidirectionnel :
+  dans un formulaire dense, un halo bave sur le champ du dessus. Le halo
+  d'origine reste sur le FAB, qui flotte seul ;
+- **l'état par défaut n'est pas coloré.** « En discussion » et « En vote »
+  concernent presque tous les éléments : les teinter saturerait la liste. La
+  couleur signale ce qui appelle une action ou une issue ;
+- **les révélations ne se jouent qu'à l'arrivée sur un écran**, pas à chaque
+  mise à jour de données — sinon un message reçu relance toute la cascade.
+
+Le thème sombre n'est pas l'inverse du clair : il garde la chaleur (charbon
+`#16120f`, surfaces teintées crème). Sans cela, l'identité disparaît la nuit.
+
+### Icônes et réactions
+
+Aucune police d'icônes : `Utils.icon(nom, taille)` construit un SVG en trait
+(1,7 px, bouts arrondis, `currentColor`). Rendu identique partout, contrairement
+aux emoji dont le dessin change d'un système à l'autre.
+
+Les six réactions restent **stockées sous forme d'emoji** — la liste
+`Core.REACTIONS` et sa validation côté backend sont inchangées — mais elles sont
+**affichées** comme des marques dessinées (`Utils.reactionMark`), accompagnées de
+leur libellé :
+
+| Valeur stockée | Marque | Libellé |
+|---|---|---|
+| `👌` | coche | D'accord |
+| `💪` | éclair | Je m'engage |
+| `🤞` | étincelle | Pourquoi pas |
+| `🤏` | onde | Mitigé |
+| `👎` | croix | Pas d'accord |
+| `💩` | sens interdit | À écarter |
+
+À 22 px, une main dessinée est illisible : on traduit donc l'intention, pas le
+geste. Une valeur inconnue (donnée écrite par une version différente) retombe
+sur l'emoji brut.
 
 ## Synchronisation : écriture par actions
 

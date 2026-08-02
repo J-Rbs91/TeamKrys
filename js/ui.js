@@ -11,12 +11,90 @@
   "use strict";
 
   var el = Utils.el;
+  var icon = Utils.icon;
   var UI = {};
+
+  /* Teinte associée à chaque statut : le fond pâle + la couleur saturée
+   * donnent l'état avant même la lecture du mot (cf. app.css, .tone-*).
+   *
+   * Règle : l'état PAR DÉFAUT reste neutre. « En discussion » et « En vote »
+   * concernent la quasi-totalité des éléments ; les teinter saturerait toute
+   * la liste et plus rien ne ressortirait. La couleur est réservée à ce qui
+   * demande une action ou signale une issue. */
+  var TOPIC_TONES = {
+    open: "tone-neutral",
+    ready: "tone-success",
+    closed: "tone-info",
+    archived: "tone-neutral"
+  };
+
+  var PROPOSAL_TONES = {
+    voting: "tone-neutral",
+    selected: "tone-success",
+    debate: "tone-warning",
+    implemented: "tone-success",
+    rejected: "tone-danger"
+  };
+
+  function toneBadge(label, tone, extra) {
+    return el("span", { class: "badge " + (tone || "tone-neutral") + (extra ? " " + extra : "") }, [
+      el("span", { class: "dot", "aria-hidden": "true" }),
+      el("span", { text: label })
+    ]);
+  }
+
+  /* Surtitre de section : 11 px, capitales, très interlettré, précédé d'une
+   * icône. C'est le repère de lecture verticale des écrans de réglages. */
+  function sectionTitle(name, label) {
+    return el("div", { class: "section-title" }, [icon(name, 14), el("span", { text: label })]);
+  }
+
+  /* Marque la position d'une carte dans sa liste : l'animation d'entrée se
+   * décale de 45 ms par cran (variable --reveal-index lue par app.css). */
+  function reveal(node, index) {
+    node.classList.add("reveal");
+    node.style.setProperty("--reveal-index", String(index));
+    return node;
+  }
+
+  function emptyState(iconName, title, text, action) {
+    return el("div", { class: "empty" }, [
+      el("div", { class: "empty-art" }, [icon(iconName, 32)]),
+      el("div", { class: "empty-title", text: title }),
+      text ? el("div", { class: "empty-text", text: text }) : null,
+      action || null
+    ]);
+  }
+
+  /* Logotype animé caractère par caractère (écrans vides uniquement). */
+  function wordmark(text) {
+    var node = el("div", { class: "wordmark", "aria-label": text });
+    node.appendChild(Utils.splitChars(text, "wm-char"));
+    return node;
+  }
+
+  function heroBlock(tagline) {
+    return el("div", { class: "hero" }, [
+      el("div", { class: "logo-mark", "aria-hidden": "true" }, [
+        el("div", { class: "logo-ring" }),
+        el("div", { class: "logo-dot" })
+      ]),
+      wordmark(CONFIG.APP_NAME),
+      el("div", { class: "tagline", text: tagline })
+    ]);
+  }
+
+  /* Menu déroulant natif + chevron dessiné : le natif reste le plus fiable au
+   * doigt, on lui rend seulement une flèche cohérente avec le reste. */
+  function selectWrap(select, block) {
+    return el("div", { class: "select-wrap" + (block ? " select-block" : "") }, [select, icon("down", 18)]);
+  }
 
   var appRoot = null;
   var overlayRoot = null;
   var toastRoot = null;
   var lastSignature = null;
+  var lastPlace = null;
   var forceNext = false;
 
   /* État d'interface local (jamais partagé). */
@@ -146,7 +224,7 @@
         class: "btn-back", type: "button",
         "aria-label": backLabel === "Retour" ? "Retour" : "Retour vers " + backLabel,
         onclick: options.back
-      }, [el("span", { class: "chev", "aria-hidden": "true", text: "‹" }), el("span", { text: backLabel })]));
+      }, [icon("back", 20), el("span", { text: backLabel })]));
     }
     var titles = el("div", { class: "topbar-titles" });
     if (options.onTitle) {
@@ -156,12 +234,14 @@
         onclick: options.onTitle
       }, [
         el("div", { class: "topbar-title", text: options.title }),
-        el("div", { class: "topbar-sub", text: (options.sub || "") + " ⓘ" })
+        el("div", { class: "topbar-sub" }, [el("span", { text: options.sub || "" }), icon("info", 13)])
       ]);
       titles.appendChild(titleBtn);
     } else {
       titles.appendChild(el("div", { class: "topbar-title", text: options.title }));
-      if (options.sub) { titles.appendChild(el("div", { class: "topbar-sub", text: options.sub })); }
+      if (options.sub) {
+        titles.appendChild(el("div", { class: "topbar-sub" }, [el("span", { text: options.sub })]));
+      }
     }
     return el("header", { class: "topbar" }, [left, titles, el("div", { class: "topbar-actions" }, options.actions || [])]);
   }
@@ -190,9 +270,9 @@
     }, [
       el("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, [
         el("div", { class: "sheet-handle" }),
-        title ? el("div", { class: "sheet-title", text: title }) : null,
+        title ? (title instanceof Node ? title : el("div", { class: "sheet-title", text: title })) : null,
         children,
-        el("button", { class: "btn btn-block btn-outline", type: "button", text: "Fermer", style: { marginTop: "12px" }, onclick: closeOverlay })
+        el("button", { class: "btn btn-block btn-outline", type: "button", text: "Fermer", style: { marginTop: "14px" }, onclick: closeOverlay })
       ])
     ]);
   }
@@ -210,14 +290,14 @@
     ]);
   }
 
-  function sheetAction(icon, label, onclick, options) {
+  function sheetAction(iconName, label, onclick, options) {
     options = options || {};
     return el("button", {
       class: "sheet-action" + (options.danger ? " danger" : ""),
       type: "button",
       disabled: options.disabled,
       onclick: onclick
-    }, [el("span", { class: "icon", text: icon }), el("span", { text: label })]);
+    }, [icon(iconName, 20), el("span", { text: label })]);
   }
 
   function counterFor(key, max) {
@@ -264,23 +344,21 @@
         backLabel: "Retour"
       }) : null,
       el("div", { class: "content stack-lg" }, [
-        el("div", { class: "hero" }, [
-          el("div", { class: "logo-mark" }, [el("div", { class: "logo-ring" }), el("div", { class: "logo-dot" })]),
-          el("div", { class: "wordmark", text: "BrainstO." }),
-          el("div", { class: "tagline", text: "Préparer les réunions de l'équipe, ensemble." })
-        ]),
-        el("div", { class: "stack" }, [
+        heroBlock("Préparer les réunions de l'équipe, ensemble."),
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("link", "Rejoindre l'espace de l'équipe"),
           field("Adresse du script de l'équipe", urlInput,
             "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
           field("Code d'accès", codeInput,
             "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
-          el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer et continuer", onclick: submit }),
-          el("button", {
-            class: "btn btn-ghost btn-block", type: "button",
-            text: "Continuer sans connexion (mode local)",
-            onclick: function () { App.useLocalMode(); }
-          })
-        ])
+          el("button", { class: "btn btn-primary btn-block", type: "button", onclick: submit },
+            [el("span", { text: "Enregistrer et continuer" }), icon("forward", 18)])
+        ]), 1),
+        reveal(el("button", {
+          class: "btn btn-ghost btn-block", type: "button",
+          text: "Continuer sans connexion (mode local)",
+          onclick: function () { App.useLocalMode(); }
+        }), 2)
       ])
     ]);
   }
@@ -302,16 +380,17 @@
         backLabel: "Connexion"
       }),
       el("div", { class: "content stack-lg" }, [
-        el("div", { class: "stack" }, [
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("user", "Votre identité"),
           el("h2", { text: "Comment vous appelez-vous ?" }),
           el("p", { class: "hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
           nameInput,
           counterFor("setup:name", Core.LIMITS.name),
           el("button", {
-            class: "btn btn-primary btn-block", type: "button", text: "Commencer",
+            class: "btn btn-primary btn-block", type: "button",
             onclick: function () { App.saveName(nameInput.value); }
-          })
-        ])
+          }, [el("span", { text: "Commencer" }), icon("forward", 18)])
+        ]), 0)
       ])
     ]);
   }
@@ -327,46 +406,61 @@
 
     return el("div", { class: "screen" }, [
       el("div", { class: "content stack-lg" }, [
-        el("div", { class: "hero" }, [
-          el("div", { class: "logo-mark" }, [el("div", { class: "logo-ring" }), el("div", { class: "logo-dot" })]),
-          el("div", { class: "wordmark", text: "BrainstO." }),
-          el("div", { class: "tagline", text: "Espace de l'équipe verrouillé" })
-        ]),
-        el("div", { class: "stack" }, [
+        heroBlock("Espace de l'équipe verrouillé"),
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("lock", "Verrou de l'équipe"),
           field("Code d'accès", codeInput, "Le code vous est communiqué par l'équipe. Il n'est jamais enregistré sur cet appareil."),
           el("button", {
-            class: "btn btn-primary btn-block", type: "button", text: "Déverrouiller",
+            class: "btn btn-primary btn-block", type: "button",
             onclick: function () { App.unlock(codeInput.value); }
-          }),
-          el("button", {
-            class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe",
-            onclick: function () { UI.set({ modal: { type: "logout" } }); }
-          })
-        ])
+          }, [icon("unlock", 18), el("span", { text: "Déverrouiller" })])
+        ]), 1),
+        reveal(el("button", {
+          class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe",
+          onclick: function () { UI.set({ modal: { type: "logout" } }); }
+        }), 2)
       ])
     ]);
   }
 
   /* -------------------------------------------------------- Liste des sujets --- */
 
+  /* Compteur illustré : une icône + un nombre se lisent plus vite qu'une
+   * énumération en toutes lettres, et la carte reste calme. */
+  function countChip(iconName, count, label) {
+    return el("span", { class: "legend-chip", title: Utils.plural(count, label, label + "s") }, [
+      icon(iconName, 13),
+      el("span", { text: String(count) })
+    ]);
+  }
+
   function topicCard(topic) {
-    var messages = topic.messages.length;
-    var proposals = topic.proposals.length;
-    var meta = [];
-    meta.push(Utils.plural(messages, "message", "messages"));
-    if (proposals) { meta.push(Utils.plural(proposals, "proposition", "propositions")); }
-    if (topic.conclusions.length) { meta.push(Utils.plural(topic.conclusions.length, "conclusion", "conclusions")); }
+    /* Un compteur à zéro n'apprend rien : on ne montre que ce qui existe, et
+     * un sujet encore vide le dit avec des mots. */
+    var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
+      topic.messages.length ? countChip("users", topic.messages.length, "message") : null,
+      topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
+      topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "conclusion") : null
+    ]);
+    if (!counts.childNodes.length) {
+      counts.appendChild(el("span", { class: "legend-chip", text: "Rien encore" }));
+    }
 
     return el("button", {
       class: "card", type: "button",
       onclick: function () { App.go("#/topic/" + topic.id); }
     }, [
-      el("div", { class: "row", style: { gap: "8px", alignItems: "flex-start" } }, [
+      el("div", { class: "row", style: { gap: "10px", alignItems: "flex-start" } }, [
         el("div", { class: "card-title", style: { flex: "1" }, text: topic.title }),
-        el("span", { class: "badge" + (topic.status === "ready" ? " badge-ink" : ""), text: Core.TOPIC_STATUS_LABELS[topic.status] })
+        toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status])
       ]),
       topic.description ? el("div", { class: "card-desc", text: topic.description }) : null,
-      el("div", { class: "card-meta", text: meta.join(" · ") + " · " + topic.createdBy.name })
+      el("div", { class: "card-foot" }, [
+        counts,
+        el("div", { class: "spacer" }),
+        el("span", { class: "card-meta", style: { marginTop: "0" }, text: topic.createdBy.name }),
+        icon("forward", 16)
+      ])
     ]);
   }
 
@@ -387,50 +481,56 @@
 
     var body;
     if (!all.length) {
-      body = el("div", { class: "empty" }, [
-        el("div", { class: "empty-title", text: "Aucun sujet pour l'instant" }),
-        el("div", { class: "empty-text", text: "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet." }),
+      body = emptyState("sparkle", "Aucun sujet pour l'instant",
+        "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet.",
         el("button", {
-          class: "btn btn-primary", type: "button", text: "Ajouter un sujet",
+          class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
-        })
-      ]);
+        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]));
     } else {
-      var list = el("div", { class: "stack" });
+      var list = el("div", { class: "stack topics-grid" });
+      var index = 0;
       if (all.length > CONFIG.SEARCH_THRESHOLD) {
         var search = el("input", {
           class: "input", type: "search", placeholder: "Rechercher un sujet",
           "data-draft": "topics:search", value: UI.local.search,
           oninput: Utils.debounce(function (e) { UI.set({ search: e.target.value }); }, 180)
         });
-        list.appendChild(el("div", { class: "search-wrap" }, [el("span", { class: "search-icon", text: "⌕" }), search]));
+        list.appendChild(el("div", { class: "search-wrap" }, [
+          el("span", { class: "search-icon" }, [icon("search", 19)]), search
+        ]));
       }
       if (!visible.length) {
         list.appendChild(el("p", { class: "hint", text: "Aucun sujet ne correspond." }));
       }
-      visible.forEach(function (topic) { list.appendChild(topicCard(topic)); });
+      visible.forEach(function (topic) { list.appendChild(reveal(topicCard(topic), index++)); });
       if (archivedCount > 0) {
         list.appendChild(el("button", {
           class: "btn btn-ghost btn-block", type: "button",
-          text: UI.local.showArchived
-            ? "Masquer les sujets archivés"
-            : "Afficher les sujets archivés (" + archivedCount + ")",
           onclick: function () {
             Utils.storage.set(CONFIG.KEYS.showArchived, !UI.local.showArchived);
             UI.set({ showArchived: !UI.local.showArchived });
           }
-        }));
+        }, [
+          icon(UI.local.showArchived ? "eye" : "archive", 16),
+          el("span", {
+            text: UI.local.showArchived
+              ? "Masquer les sujets archivés"
+              : "Afficher les sujets archivés (" + archivedCount + ")"
+          })
+        ]));
       }
       body = list;
     }
 
     var screen = el("div", { class: "screen" }, [
       topbar({
-        title: "BrainstO.",
+        title: CONFIG.APP_NAME,
         sub: App.user.name ? "Bonjour " + App.user.name : null,
         actions: [
           statusPill(),
-          el("button", { class: "btn-icon", type: "button", "aria-label": "Réglages", text: "⚙", onclick: function () { App.go("#/settings"); } })
+          el("button", { class: "btn-icon", type: "button", "aria-label": "Réglages",
+            onclick: function () { App.go("#/settings"); } }, [icon("settings", 21)])
         ]
       }),
       el("div", { class: "content" }, [body])
@@ -438,9 +538,9 @@
 
     if (all.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter un sujet", text: "+",
+        class: "fab", type: "button", "aria-label": "Ajouter un sujet",
         onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
-      }));
+      }, [icon("plus", 20), el("span", { text: "Nouveau sujet" })]));
     }
     return screen;
   }
@@ -478,12 +578,15 @@
     Core.REACTIONS.forEach(function (emoji) {
       var info = byEmoji[emoji];
       if (!info) { return; }
+      var label = Utils.reactionLabel(emoji);
       row.appendChild(el("button", {
         class: "reaction" + (info.mine ? " mine" : ""), type: "button",
-        "aria-label": "Réaction " + emoji,
+        title: label + " · " + Utils.plural(info.count, "personne", "personnes"),
+        "aria-label": label + " (" + Utils.plural(info.count, "personne", "personnes") + ")",
+        "aria-pressed": info.mine ? "true" : "false",
         onclick: function (e) { e.stopPropagation(); App.actions.setReaction(topic.id, message.id, emoji); }
       }, [
-        el("span", { text: emoji }),
+        Utils.reactionMark(emoji, 17),
         info.count > 1 ? el("span", { class: "reaction-count", text: String(info.count) }) : null
       ]));
     });
@@ -506,11 +609,11 @@
       col.appendChild(el("div", { class: "msg-author", text: message.authorName }));
     }
 
+    var locked = mine && Core.isMessageLocked(message, App.user.id);
     var metaBits = [];
     if (mine && message.anon) { metaBits.push("Anonyme"); }
     metaBits.push(Utils.formatTime(message.createdAt));
     if (message.updatedAt && message.updatedAt !== message.createdAt) { metaBits.push("modifié"); }
-    if (mine && Core.isMessageLocked(message, App.user.id)) { metaBits.push("🔒"); }
 
     var bubble = el("button", {
       class: "bubble", type: "button", dataset: { messageId: message.id },
@@ -518,14 +621,31 @@
     }, [
       message.quoteId ? quoteBlock(topic, message) : null,
       el("div", { class: "bubble-text", text: message.text }),
-      el("div", { class: "bubble-meta", text: metaBits.join(" · ") })
+      el("div", { class: "bubble-meta" }, [
+        el("span", { text: metaBits.join(" · ") }),
+        locked ? icon("lock", 12) : null
+      ])
     ]);
 
     col.appendChild(bubble);
     var reactions = reactionsRow(topic, message);
     if (reactions) { col.appendChild(reactions); }
 
-    return el("div", { class: classes }, [col]);
+    /* Pastille d'initiales à gauche des messages des autres : elle n'apparaît
+     * qu'en tête de groupe, et laisse une place vide (avatar-ghost) sur les
+     * messages suivants pour que les bulles restent alignées. */
+    var children = [col];
+    if (!mine) {
+      var avatarClass = "avatar" +
+        (message.anon ? " avatar-anon" : "") +
+        (grouped ? " avatar-ghost" : "");
+      children = [
+        el("div", { class: avatarClass, "aria-hidden": "true", text: message.anon ? "?" : Utils.initials(message.authorName) }),
+        col
+      ];
+    }
+
+    return el("div", { class: classes }, children);
   }
 
   UI.scrollToMessage = function (messageId) {
@@ -568,8 +688,8 @@
     }
 
     var sendBtn = el("button", {
-      class: "send-btn", type: "button", "aria-label": "Envoyer", text: "↑", onclick: send
-    });
+      class: "send-btn", type: "button", "aria-label": "Envoyer", onclick: send
+    }, [icon("send", 20)]);
 
     var parts = [];
     if (UI.local.quote && UI.local.quote.topicId === topic.id) {
@@ -580,18 +700,24 @@
             el("div", { class: "quote-author", text: "En réponse à " + quoted.authorName }),
             el("div", { class: "quote-text", text: quoted.text })
           ]),
-          el("button", { class: "btn-icon", type: "button", "aria-label": "Annuler la citation", text: "✕", onclick: function () { UI.set({ quote: null }); } })
+          el("button", { class: "btn-icon", type: "button", "aria-label": "Annuler la citation",
+            onclick: function () { UI.set({ quote: null }); } }, [icon("close", 18)])
         ]));
       }
     }
 
     parts.push(el("div", { class: "signature-toggle" }, [
-      el("span", { text: UI.local.composerAnon ? "Publier en anonyme" : "Publier signé : " + (App.user.name || "moi") }),
+      el("span", { class: "who" }, [
+        icon(UI.local.composerAnon ? "mask" : "user", 15),
+        el("span", { text: UI.local.composerAnon ? "Publié en anonyme" : "Signé : " + (App.user.name || "moi") })
+      ]),
       el("button", {
         class: "btn btn-sm btn-outline", type: "button",
-        text: UI.local.composerAnon ? "Signer" : "Anonyme",
         onclick: function () { UI.set({ composerAnon: !UI.local.composerAnon }); }
-      })
+      }, [
+        icon(UI.local.composerAnon ? "user" : "mask", 15),
+        el("span", { text: UI.local.composerAnon ? "Signer" : "Anonyme" })
+      ])
     ]));
 
     parts.push(el("div", { class: "composer-inner" }, [textarea, sendBtn]));
@@ -617,10 +743,8 @@
     });
 
     if (!topic.messages.length) {
-      threadInner.appendChild(el("div", { class: "empty" }, [
-        el("div", { class: "empty-title", text: "La discussion démarre ici" }),
-        el("div", { class: "empty-text", text: "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer." })
-      ]));
+      threadInner.appendChild(emptyState("users", "La discussion démarre ici",
+        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer."));
     }
 
     var thread = el("div", { class: "thread", dataset: { thread: topic.id } }, [threadInner]);
@@ -637,14 +761,20 @@
       el("nav", { class: "quickbar" }, [
         el("button", {
           class: "btn", type: "button",
-          text: "💡 Propositions" + (topic.proposals.length ? " (" + topic.proposals.length + ")" : ""),
           onclick: function () { App.go("#/topic/" + topic.id + "/proposals"); }
-        }),
+        }, [
+          icon("idea", 17),
+          el("span", { text: "Propositions" }),
+          topic.proposals.length ? el("span", { class: "badge tone-neutral", text: String(topic.proposals.length) }) : null
+        ]),
         el("button", {
           class: "btn", type: "button",
-          text: "✓ Conclusion" + (topic.conclusions.length ? " (" + topic.conclusions.length + ")" : ""),
           onclick: function () { App.go("#/topic/" + topic.id + "/conclusion"); }
-        })
+        }, [
+          icon("checkCircle", 17),
+          el("span", { text: "Conclusion" }),
+          topic.conclusions.length ? el("span", { class: "badge tone-neutral", text: String(topic.conclusions.length) }) : null
+        ])
       ]),
       thread,
       composer(topic)
@@ -655,10 +785,10 @@
     return el("div", { class: "screen" }, [
       topbar({ title: "Introuvable", back: function () { App.go("#/"); }, backLabel: "Sujets" }),
       el("div", { class: "content" }, [
-        el("div", { class: "empty" }, [
-          el("div", { class: "empty-title", text: "Ce contenu n'existe plus" }),
-          el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets", onclick: function () { App.go("#/"); } })
-        ])
+        emptyState("warning", "Ce contenu n'existe plus",
+          "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.",
+          el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets",
+            onclick: function () { App.go("#/"); } }))
       ])
     ]);
   }
@@ -677,40 +807,60 @@
       statusSelect.appendChild(el("option", { value: status, selected: proposal.status === status, text: Core.PROPOSAL_STATUS_LABELS[status] }));
     });
 
+    var VOTE_ICONS = { for: "check", against: "close", abstain: "flag" };
     var voteButtons = el("div", { class: "vote-actions" });
     Core.VOTE_VALUES.forEach(function (value) {
       voteButtons.appendChild(el("button", {
         class: "btn btn-sm btn-outline" + (myVote === value ? " active" : ""), type: "button",
-        text: Core.VOTE_LABELS[value],
+        "aria-pressed": myVote === value ? "true" : "false",
         onclick: function () { App.actions.setVote(topic.id, proposal.id, value); }
-      }));
+      }, [icon(VOTE_ICONS[value], 15), el("span", { text: Core.VOTE_LABELS[value] })]));
     });
 
+    /* Légende sous la barre : chaque couleur est nommée et chiffrée. Une barre
+     * seule oblige à deviner ce que veut dire le rouge. */
+    var legend = el("div", { class: "vote-legend" }, [
+      el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.for + " pour" })]),
+      el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.against + " contre" })]),
+      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }),
+        el("span", { text: summary.counts.abstain + " abstention" + (summary.counts.abstain > 1 ? "s" : "") })]),
+      summary.expressed
+        ? el("span", { class: "legend-chip", text: summary.favorablePercent + " % favorables" })
+        : null
+    ]);
+
     return el("article", { class: "card card-static stack" }, [
-      el("div", { class: "row", style: { alignItems: "flex-start" } }, [
+      el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
         el("div", { class: "card-title", style: { flex: "1" }, text: proposal.title }),
-        el("span", { class: "badge", text: Core.PROPOSAL_STATUS_LABELS[proposal.status] })
+        toneBadge(Core.PROPOSAL_STATUS_LABELS[proposal.status], PROPOSAL_TONES[proposal.status])
       ]),
-      proposal.description ? el("div", { class: "pre-wrap", style: { fontSize: "14px" }, text: proposal.description }) : null,
-      el("div", { class: "card-meta", text: "Proposé par " + proposal.authorName + " · " + Utils.formatDateTime(proposal.createdAt) }),
-      el("div", { class: "vote-bar" }, [
-        el("span", { class: "vote-for", style: { width: (summary.counts.for / total * 100) + "%" } }),
-        el("span", { class: "vote-against", style: { width: (summary.counts.against / total * 100) + "%" } }),
-        el("span", { class: "vote-abstain", style: { width: (summary.counts.abstain / total * 100) + "%" } })
+      proposal.description ? el("div", { class: "pre-wrap", style: { fontSize: "14px", color: "var(--muted)" }, text: proposal.description }) : null,
+      el("div", { class: "card-meta" }, [
+        icon("user", 13),
+        el("span", { text: proposal.authorName }),
+        el("span", { class: "meta-dot" }),
+        el("span", { text: Utils.formatDateTime(proposal.createdAt) })
       ]),
-      el("div", { class: "card-meta", text: summary.label + " · " + summary.counts.for + " pour · " +
-        summary.counts.against + " contre · " + summary.counts.abstain + " abstention" + (summary.counts.abstain > 1 ? "s" : "") +
-        (summary.expressed ? " · " + summary.favorablePercent + " % favorables (hors abstentions)" : "") }),
+      el("div", {}, [
+        el("div", { class: "vote-bar", role: "img", "aria-label": summary.label }, [
+          el("span", { class: "vote-for", style: { width: (summary.counts.for / total * 100) + "%" } }),
+          el("span", { class: "vote-against", style: { width: (summary.counts.against / total * 100) + "%" } }),
+          el("span", { class: "vote-abstain", style: { width: (summary.counts.abstain / total * 100) + "%" } })
+        ]),
+        legend
+      ]),
       voteButtons,
-      el("div", { class: "row-wrap" }, [
-        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Retirer mon vote",
-          onclick: function () { App.actions.removeVote(topic.id, proposal.id); } }) : null,
+      el("div", { class: "card-foot row-wrap" }, [
+        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button",
+          onclick: function () { App.actions.removeVote(topic.id, proposal.id); } },
+        [icon("close", 15), el("span", { text: "Retirer mon vote" })]) : null,
         App.ownsItem(proposal.id, proposal.authorId)
-          ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Modifier",
-            onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } })
+          ? el("button", { class: "btn btn-sm btn-ghost", type: "button",
+            onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } },
+          [icon("edit", 15), el("span", { text: "Modifier" })])
           : null,
         el("div", { class: "spacer" }),
-        statusSelect
+        selectWrap(statusSelect)
       ])
     ]);
   }
@@ -721,14 +871,13 @@
 
     var list = el("div", { class: "stack" });
     if (!topic.proposals.length) {
-      list.appendChild(el("div", { class: "empty" }, [
-        el("div", { class: "empty-title", text: "Aucune proposition" }),
-        el("div", { class: "empty-text", text: "Transformez les idées de la discussion en propositions concrètes à soumettre au vote." }),
-        el("button", { class: "btn btn-primary", type: "button", text: "Ajouter une proposition",
-          onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } })
-      ]));
+      list.appendChild(emptyState("idea", "Aucune proposition",
+        "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
+        el("button", { class: "btn btn-primary", type: "button",
+          onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
+        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })])));
     } else {
-      topic.proposals.forEach(function (proposal) { list.appendChild(proposalCard(topic, proposal)); });
+      topic.proposals.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
     }
 
     var screen = el("div", { class: "screen" }, [
@@ -744,9 +893,9 @@
 
     if (topic.proposals.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter une proposition", text: "+",
+        class: "fab", type: "button", "aria-label": "Ajouter une proposition",
         onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); }
-      }));
+      }, [icon("plus", 20), el("span", { text: "Proposition" })]));
     }
     return screen;
   }
@@ -762,36 +911,44 @@
 
     var list = el("div", { class: "stack" });
 
-    topic.conclusions.forEach(function (conclusion) {
+    topic.conclusions.forEach(function (conclusion, i) {
       var count = scores.scores[conclusion.id] || 0;
       var isLead = scores.best > 0 && count === scores.best;
       var mine = App.ownsItem(conclusion.id, conclusion.authorId);
-      list.appendChild(el("article", { class: "card card-static stack" }, [
-        el("div", { class: "row", style: { alignItems: "flex-start" } }, [
+      var chosen = myVote === conclusion.id;
+      list.appendChild(reveal(el("article", { class: "card card-static stack" + (isLead ? " is-lead" : "") }, [
+        el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
           el("div", { class: "pre-wrap", style: { flex: "1" }, text: conclusion.text }),
-          isLead ? el("span", { class: "badge badge-ink lead", text: "★ En tête" }) : null
+          isLead ? el("span", { class: "badge badge-ink lead" }, [icon("star", 13), el("span", { text: "En tête" })]) : null
         ]),
-        el("div", { class: "card-meta", text: conclusion.authorName + " · " + Utils.formatDateTime(conclusion.createdAt) +
-          " · " + Utils.plural(count, "vote", "votes") }),
-        el("div", { class: "row-wrap" }, [
+        el("div", { class: "card-meta" }, [
+          icon("user", 13),
+          el("span", { text: conclusion.authorName }),
+          el("span", { class: "meta-dot" }),
+          el("span", { text: Utils.formatDateTime(conclusion.createdAt) }),
+          el("span", { class: "meta-dot" }),
+          el("span", { text: Utils.plural(count, "vote", "votes") })
+        ]),
+        el("div", { class: "card-foot row-wrap" }, [
           el("button", {
-            class: "btn btn-sm " + (myVote === conclusion.id ? "btn-primary" : "btn-outline"), type: "button",
-            text: myVote === conclusion.id ? "✓ Mon choix" : "Choisir",
+            class: "btn btn-sm " + (chosen ? "btn-primary" : "btn-outline"), type: "button",
+            "aria-pressed": chosen ? "true" : "false",
             onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
-          }),
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Modifier",
-            onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } }) : null,
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Supprimer",
-            onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } }) : null
+          }, [icon("check", 15), el("span", { text: chosen ? "Mon choix" : "Choisir" })]),
+          el("div", { class: "spacer" }),
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la conclusion",
+            onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
+          [icon("edit", 15), el("span", { text: "Modifier" })]) : null,
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la conclusion",
+            onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
+          [icon("trash", 15)]) : null
         ])
-      ]));
+      ]), i));
     });
 
     if (!topic.conclusions.length) {
-      list.appendChild(el("div", { class: "empty" }, [
-        el("div", { class: "empty-title", text: "Pas encore de conclusion" }),
-        el("div", { class: "empty-text", text: "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée." })
-      ]));
+      list.appendChild(emptyState("checkCircle", "Pas encore de conclusion",
+        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée."));
     }
 
     var textarea = bindCounter(el("textarea", {
@@ -799,8 +956,8 @@
       "data-draft": "conclusion:" + topic.id
     }), "conclusion:" + topic.id, Core.LIMITS.conclusion);
 
-    var addBlock = el("div", { class: "stack" }, [
-      el("div", { class: "section-title", text: "Ajouter une conclusion" }),
+    var addBlock = el("div", { class: "card card-static stack" }, [
+      sectionTitle("edit", "Ajouter une conclusion"),
       textarea,
       counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
       el("button", {
@@ -814,9 +971,12 @@
       })
     ]);
 
-    var myVoteHint = el("p", { class: "hint", text: myVote
-      ? "Vous avez choisi une conclusion. Choisir une autre déplace votre vote."
-      : "Choix unique : une seule conclusion par personne." });
+    var myVoteHint = el("div", { class: "note" }, [
+      icon("info", 14),
+      el("span", { text: myVote
+        ? "Vous avez choisi une conclusion. Choisir une autre déplace votre vote."
+        : "Choix unique : une seule conclusion par personne." })
+    ]);
 
     return el("div", { class: "screen" }, [
       topbar({
@@ -836,21 +996,28 @@
     var state = Store.view;
     var topics = state.topics.filter(function (t) { return t.status !== "archived"; });
 
-    var doc = el("div", { class: "print-doc" }, [
-      el("h1", { class: "print-h1", text: "BrainstO. — Préparation de réunion" }),
-      el("p", { class: "hint", text: "Édité le " + Utils.formatDateTime(Utils.nowISO()) + " · " + Utils.plural(topics.length, "sujet", "sujets") })
+    var doc = el("div", { class: "print-doc stack" }, [
+      el("div", { class: "stack", style: { gap: "6px", marginBottom: "10px" } }, [
+        sectionTitle("doc", "Synthèse d'équipe"),
+        el("h1", { class: "print-h1", text: CONFIG.APP_NAME + " — Préparation de réunion" }),
+        el("p", { class: "hint", text: "Édité le " + Utils.formatDateTime(Utils.nowISO()) + " · " + Utils.plural(topics.length, "sujet", "sujets") })
+      ])
     ]);
 
     if (!topics.length) {
       doc.appendChild(el("p", { class: "hint", text: "Aucun sujet à présenter." }));
     }
 
-    topics.forEach(function (topic) {
-      var block = el("section", { class: "print-topic" }, [
+    topics.forEach(function (topic, i) {
+      var block = reveal(el("section", { class: "print-topic" }, [
         el("h2", { class: "print-h2", text: topic.title }),
-        el("div", { class: "card-meta", text: Core.TOPIC_STATUS_LABELS[topic.status] + " · proposé par " + topic.createdBy.name +
-          " · " + Utils.plural(topic.messages.length, "message", "messages") })
-      ]);
+        el("div", { class: "card-meta" }, [
+          toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status]),
+          el("span", { text: "proposé par " + topic.createdBy.name }),
+          el("span", { class: "meta-dot" }),
+          el("span", { text: Utils.plural(topic.messages.length, "message", "messages") })
+        ])
+      ]), i);
       if (topic.description) {
         block.appendChild(el("p", { class: "pre-wrap", text: topic.description }));
       }
@@ -896,7 +1063,8 @@
         sub: "Synthèse imprimable",
         back: function () { App.go("#/settings"); },
         backLabel: "Réglages",
-        actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button", text: "Imprimer", onclick: function () { window.print(); } })]
+        actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button",
+          onclick: function () { window.print(); } }, [icon("print", 16), el("span", { text: "Imprimer" })])]
       }),
       el("div", { class: "content" }, [doc])
     ]);
@@ -912,49 +1080,70 @@
       value: App.user.name || "", "data-draft": "settings:name"
     });
 
-    var connectionRows = el("div", { class: "stack" }, [
-      el("div", { class: "card card-static stack" }, [
-        el("div", { class: "section-title", text: "Connexion" }),
-        el("div", { class: "hint", text: Sync.connection.localMode || !Sync.connection.url
-          ? "Mode local : les données restent sur cet appareil."
-          : "Connecté à l'espace de l'équipe." }),
-        el("button", { class: "btn btn-outline btn-block", type: "button", text: "Modifier l'adresse ou le code",
-          onclick: function () { App.editConnection(); } }),
-        el("button", { class: "btn btn-danger btn-block", type: "button", text: "Se déconnecter de l'équipe",
-          onclick: function () { UI.set({ modal: { type: "logout" } }); } })
-      ])
+    var connected = !(Sync.connection.localMode || !Sync.connection.url);
+
+    var connectionRows = el("div", { class: "card card-static stack" }, [
+      el("div", { class: "row" }, [
+        sectionTitle("link", "Connexion"),
+        el("div", { class: "spacer" }),
+        toneBadge(connected ? "Équipe" : "Local", connected ? "tone-success" : "tone-info")
+      ]),
+      el("div", { class: "hint", text: connected
+        ? "Connecté à l'espace de l'équipe."
+        : "Mode local : les données restent sur cet appareil." }),
+      el("button", { class: "btn btn-outline btn-block", type: "button",
+        onclick: function () { App.editConnection(); } },
+      [icon("edit", 16), el("span", { text: "Modifier l'adresse ou le code" })]),
+      el("button", { class: "btn btn-danger btn-block", type: "button",
+        onclick: function () { UI.set({ modal: { type: "logout" } }); } },
+      [icon("logout", 16), el("span", { text: "Se déconnecter de l'équipe" })])
     ]);
 
+    function diagRow(label, value, danger) {
+      return el("div", { class: "diag-row" }, [
+        el("span", { class: "diag-label", text: label }),
+        el("span", { class: "diag-value" + (danger ? " is-danger" : ""), text: value })
+      ]);
+    }
+
     var diagRows = el("div", { class: "card card-static stack" }, [
-      el("div", { class: "section-title", text: "Diagnostic de synchronisation" }),
-      el("div", { class: "row" }, [statusPill(), el("div", { class: "spacer" }),
-        el("button", { class: "btn btn-sm btn-outline", type: "button", text: "Synchroniser", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } })]),
-      el("div", { class: "card-meta", text: "Révision : " + diagnostics.revision }),
-      el("div", { class: "card-meta", text: "Dernière mise à jour : " + (diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "—") }),
-      el("div", { class: "card-meta", text: "Actions en attente : " + diagnostics.pending.length +
-        (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "") }),
-      el("div", { class: "card-meta", text: "Stockage local : " + (diagnostics.persistent ? "IndexedDB" : "mémoire (non persistant)") }),
-      diagnostics.status.error ? el("div", { class: "card-meta", style: { color: "var(--danger)" }, text: "Dernière erreur : " + diagnostics.status.error }) : null,
-      el("div", { class: "card-meta", text: "Version de l'application : " + CONFIG.APP_VERSION })
+      el("div", { class: "row" }, [
+        sectionTitle("sync", "Synchronisation"),
+        el("div", { class: "spacer" }),
+        statusPill()
+      ]),
+      el("button", { class: "btn btn-outline btn-block", type: "button",
+        onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
+      [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
+      el("div", { class: "diag" }, [
+        diagRow("Révision", String(diagnostics.revision)),
+        diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "—"),
+        diagRow("Actions en attente", String(diagnostics.pending.length) +
+          (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
+        diagRow("Stockage local", diagnostics.persistent ? "IndexedDB" : "mémoire (non persistant)"),
+        diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
+        diagRow("Version", CONFIG.APP_VERSION)
+      ])
     ]);
 
     return el("div", { class: "screen" }, [
       topbar({ title: "Réglages", back: function () { App.go("#/"); }, backLabel: "Sujets", actions: [statusPill()] }),
       el("div", { class: "content stack-lg" }, [
-        el("div", { class: "card card-static stack" }, [
-          el("div", { class: "section-title", text: "Votre nom" }),
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("user", "Votre nom"),
           nameInput,
           el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
             onclick: function () { App.saveName(nameInput.value, true); } })
-        ]),
-        connectionRows,
-        el("div", { class: "card card-static stack" }, [
-          el("div", { class: "section-title", text: "Réunion" }),
+        ]), 0),
+        reveal(connectionRows, 1),
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("doc", "Réunion"),
           el("div", { class: "hint", text: "Synthèse de tous les sujets, prête à imprimer ou à projeter." }),
-          el("button", { class: "btn btn-outline btn-block", type: "button", text: "Ouvrir la synthèse",
-            onclick: function () { App.go("#/meeting"); } })
-        ]),
-        diagRows
+          el("button", { class: "btn btn-outline btn-block", type: "button",
+            onclick: function () { App.go("#/meeting"); } },
+          [icon("print", 16), el("span", { text: "Ouvrir la synthèse" })])
+        ]), 2),
+        reveal(diagRows, 3)
       ])
     ]);
   }
@@ -969,32 +1158,40 @@
     var mine = App.ownsMessage(message);
     var locked = Core.isMessageLocked(message, App.user.id);
 
+    /* Le sélecteur de réaction nomme chaque marque : dessinée, elle n'est pas
+     * toujours devinable au premier passage, et l'apprentissage se fait une
+     * seule fois. */
     var emojiRow = el("div", { class: "emoji-row" });
     Core.REACTIONS.forEach(function (emoji) {
       var isMine = message.reactions[App.user.id] === emoji;
+      var label = Utils.reactionLabel(emoji);
       emojiRow.appendChild(el("button", {
-        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button", "aria-label": "Réagir " + emoji, text: emoji,
+        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button",
+        "aria-label": label, "aria-pressed": isMine ? "true" : "false",
         onclick: function () {
           App.actions.setReaction(topic.id, message.id, emoji);
           UI.set({ sheet: null });
         }
-      }));
+      }, [
+        Utils.reactionMark(emoji, 24),
+        el("span", { class: "emoji-label", text: label })
+      ]));
     });
 
     var actions = el("div", { class: "sheet-actions" }, [
-      sheetAction("❝", "Citer", function () {
+      sheetAction("quote", "Citer", function () {
         UI.set({ sheet: null, quote: { topicId: topic.id, messageId: message.id } });
         var node = findDraftNode("composer:" + topic.id);
         if (node) { node.focus(); }
       }),
-      sheetAction("💡", "Créer une proposition", function () {
+      sheetAction("idea", "Créer une proposition", function () {
         UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
       }),
-      mine ? sheetAction("✎", locked ? "Modifier (verrouillé 🔒)" : "Modifier", function () {
+      mine ? sheetAction(locked ? "lock" : "edit", locked ? "Modifier (verrouillé)" : "Modifier", function () {
         if (locked) { UI.toast("Message verrouillé : quelqu'un y a déjà réagi.", "error"); return; }
         UI.set({ sheet: null, modal: { type: "editMessage", topicId: topic.id, messageId: message.id } });
       }, { disabled: false }) : null,
-      mine ? sheetAction(message.anon ? "🙂" : "🎭", message.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
+      mine ? sheetAction(message.anon ? "user" : "mask", message.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
         App.actions.setMessageSignature(topic.id, message.id, !message.anon);
         UI.set({ sheet: null });
       }) : null
@@ -1005,7 +1202,14 @@
     info.push(Utils.formatDateTime(message.createdAt));
     if (locked) { info.push("verrouillé"); }
 
-    return sheet(info.join(" · "), el("div", {}, [emojiRow, actions]));
+    /* Surtitre plutôt que titre : la feuille porte sur un message précis, mais
+     * ce sont les actions qui doivent capter l'œil, pas l'horodatage. */
+    var header = el("div", { class: "sheet-eyebrow" }, [
+      locked ? icon("lock", 13) : icon("user", 13),
+      el("span", { text: info.join(" · ") })
+    ]);
+
+    return sheet(header, el("div", {}, [emojiRow, actions]));
   }
 
   function topicInfoSheet(spec) {
@@ -1020,13 +1224,20 @@
     });
 
     return sheet(topic.title, el("div", { class: "stack" }, [
-      el("div", { class: "card-meta", text: "Proposé par " + topic.createdBy.name + " · " + Utils.formatDateTime(topic.createdAt) }),
+      el("div", { class: "card-meta" }, [
+        toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status]),
+        icon("user", 13),
+        el("span", { text: topic.createdBy.name }),
+        el("span", { class: "meta-dot" }),
+        el("span", { text: Utils.formatDateTime(topic.createdAt) })
+      ]),
       topic.description
-        ? el("div", { class: "pre-wrap", text: topic.description })
+        ? el("div", { class: "pre-wrap", style: { fontSize: "var(--fs-sm)" }, text: topic.description })
         : el("div", { class: "hint", text: "Aucune description." }),
-      field("Statut", statusSelect),
-      el("button", { class: "btn btn-outline btn-block", type: "button", text: "Modifier le sujet",
-        onclick: function () { UI.set({ sheet: null, modal: { type: "editTopic", topicId: topic.id } }); } })
+      field("Statut", selectWrap(statusSelect, true)),
+      el("button", { class: "btn btn-outline btn-block", type: "button",
+        onclick: function () { UI.set({ sheet: null, modal: { type: "editTopic", topicId: topic.id } }); } },
+      [icon("edit", 16), el("span", { text: "Modifier le sujet" })])
     ]));
   }
 
@@ -1241,6 +1452,13 @@
     forceNext = false;
     lastSignature = sig;
 
+    /* Les animations d'entrée ne se jouent qu'en ARRIVANT sur un écran. Une
+     * mise à jour de données (message reçu, vote) ne doit pas relancer la
+     * cascade : une animation d'entrée qui se répète devient du clignotement. */
+    var place = (App.gate() || "") + "|" + App.route.raw;
+    var entering = place !== lastPlace;
+    lastPlace = place;
+
     var drafts = captureDrafts();
 
     /* Position de défilement du fil de discussion. */
@@ -1250,7 +1468,9 @@
     var atBottom = thread ? (thread.scrollHeight - thread.scrollTop - thread.clientHeight) < 80 : true;
 
     Utils.clear(appRoot);
-    appRoot.appendChild(currentScreen());
+    var screen = currentScreen();
+    if (entering) { screen.classList.add("screen--enter"); }
+    appRoot.appendChild(screen);
     renderOverlay();
     restoreDrafts(drafts);
 
@@ -1273,12 +1493,14 @@
   UI.showUpdateBanner = function (onUpdate) {
     if (document.querySelector(".update-banner")) { return; }
     var banner = el("div", { class: "update-banner" }, [
+      icon("sparkle", 17),
       el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",
         onclick: function () { banner.remove(); onUpdate(); }
       }),
-      el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard", text: "✕", onclick: function () { banner.remove(); } })
+      el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard",
+        onclick: function () { banner.remove(); } }, [icon("close", 18)])
     ]);
     document.body.appendChild(banner);
   };
