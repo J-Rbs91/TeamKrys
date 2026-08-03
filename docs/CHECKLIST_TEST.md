@@ -49,6 +49,17 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] Séparateurs de jour (« Aujourd'hui », « Hier », date).
 - [ ] Défilement automatique en bas à l'ouverture et après envoi.
 - [ ] **Le champ de saisie est vidé après l'envoi** (aucun texte réinjecté).
+- [ ] iPhone : toucher le champ de message → **la page ne zoome pas**, la barre
+      du haut reste en place. Idem avec un brouillon en cours et avec l'aperçu
+      « en réponse à … » ouvert.
+- [ ] Saisir cinq lignes : le champ s'arrête à quatre lignes puis défile, la
+      dernière ligne n'est pas rognée en bas.
+- [ ] Ouvrir une discussion depuis une liste **déjà défilée** : le composeur est
+      en place dès l'affichage, il ne remonte pas sous le pouce.
+- [ ] Bloc cité : fond visible et distinct du message, dans les **quatre** cas —
+      mon message / message d'un autre × thème clair / thème sombre. À vérifier
+      sur un iPhone en iOS 15.4 ou 16.1, sinon on ne teste que le cas qui
+      fonctionnait déjà.
 - [ ] Taper un texte, ouvrir puis fermer une feuille → **le brouillon est intact**,
       curseur compris.
 - [ ] Appui sur une bulle → feuille : 6 émojis, Citer, Créer une proposition,
@@ -69,6 +80,13 @@ du navigateur ouverte : **zéro erreur console** attendue.
 
 - [ ] Création (titre obligatoire, description facultative).
 - [ ] Les 5 statuts sélectionnables et conservés.
+- [ ] iPhone : ouvrir le menu de statut → **la page ne zoome pas** ; à la
+      fermeture, l'affichage est identique à avant l'appui.
+- [ ] Écran de 320 px : le menu de statut occupe sa propre ligne, pleine
+      largeur, et « Mise en place » s'affiche **en entier**. « Retirer mon vote »
+      et « Modifier » restent atteignables sans défilement horizontal.
+- [ ] Le menu de statut ne devient pas l'élément le plus voyant de la carte :
+      le titre de la proposition reste dominant.
 - [ ] Vote Pour / Contre / Abstention ; re-tap = retrait ; « Retirer mon vote ».
 - [ ] Barre de répartition cohérente avec les compteurs.
 - [ ] Indicateur : Aucun vote / Avis partagés / Consensus favorable /
@@ -115,6 +133,11 @@ du navigateur ouverte : **zéro erreur console** attendue.
 
 - [ ] Thèmes clair et sombre corrects (sombre en vrai noir).
 - [ ] Cibles tactiles ≥ 44 px, rien sous l'encoche ni sous la barre d'accueil.
+- [ ] Barre d'URL **affichée**, écran qui tient en une page : aucun défilement
+      résiduel. Écran de discussion : composeur et bouton d'envoi entièrement
+      visibles sans faire défiler la page. Idem sur Chrome **et** Samsung
+      Internet, et sur un téléphone sans `dvh` si l'équipe en possède un
+      (Chrome < 108, Samsung Internet < 21, iOS 15.0–15.3).
 - [ ] Aucune police externe chargée (onglet Réseau : aucune requête de police).
 - [ ] Un message contenant `<script>alert(1)</script>` s'affiche **en texte**.
 

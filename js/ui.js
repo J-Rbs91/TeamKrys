@@ -179,7 +179,11 @@
   function autoGrow(node) {
     if (!node || node.tagName !== "TEXTAREA" || !node.classList.contains("grow")) { return; }
     node.style.height = "auto";
-    node.style.height = Math.min(node.scrollHeight, 140) + "px";
+    /* +2 : box-sizing est border-box, mais scrollHeight ne compte pas les deux
+       pixels de bordure. Sans eux, la dernière ligne saisie est rognée par le
+       bas. Le plafond de 140 px doit rester égal au max-height de
+       .composer .textarea (css/app.css). */
+    node.style.height = Math.min(node.scrollHeight + 2, 140) + "px";
   }
 
   /* --------------------------------------------------------------- Toasts --- */

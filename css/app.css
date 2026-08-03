@@ -287,18 +287,26 @@ p { margin: 0; }
 
 .app { min-height: 100%; }
 
+/* Le repli passe AVANT la valeur moderne : sur un moteur qui comprend les deux,
+   les deux déclarations sont valides et c'est la dernière qui gagne. Écrit dans
+   l'autre sens, vh écrase dvh et l'unité moderne ne sert nulle part. */
 .screen {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
-/* Écran de discussion : hauteur fixe, seul le fil défile (composeur collé). */
+/* Écran de discussion : hauteur fixe, seul le fil défile (composeur collé).
+   svh et non dvh : la page ne défile pas, donc le navigateur redéploie sa barre
+   d'URL à l'arrivée. Dimensionné sur la petite hauteur, l'écran est déjà à sa
+   taille finale — le composeur ne remonte pas sous le pouce au moment où l'on
+   vise le champ. En application installée, svh, dvh et lvh sont égales. */
 .screen.chat {
-  height: 100dvh;
   height: 100vh;
-  max-height: 100dvh;
+  height: 100svh;
+  max-height: 100vh;
+  max-height: 100svh;
   overflow: hidden;
 }
 
@@ -681,18 +689,22 @@ p { margin: 0; }
 .card.stack { gap: 15px; }
 
 /* Menu de statut logé dans un pied de carte : hauteur de bouton secondaire,
-   pas de champ de saisie — c'est une action, pas une question posée. */
+   pas de champ de saisie — c'est une action, pas une question posée. Ce qui le
+   dit n'est plus la taille du texte (16 px imposés : en dessous, iOS zoome
+   toute la page au focus et ne dézoome jamais) mais la forme — pastille, fond
+   transparent, 44 px et non les 55 px d'un champ. La hauteur rejoint au passage
+   le plancher de cible tactile annoncé en tête de ce fichier. */
 .card-foot .select-wrap .select {
-  min-height: 40px;
-  padding: 8px 40px 8px 14px;
-  font-size: var(--fs-xs);
+  min-height: var(--tap);
+  padding: 9px 38px 9px 16px;
+  font-size: var(--fs-body);
   font-weight: 600;
   border-radius: var(--radius-chip);
   background: transparent;
   border-color: var(--line-field);
 }
 
-.card-foot .select-wrap { min-width: 148px; }
+.card-foot .select-wrap { min-width: 168px; }
 
 .card-title {
   font-size: var(--fs-lead);
@@ -926,6 +938,12 @@ p { margin: 0; }
     padding: 0;
     justify-content: center;
   }
+
+  /* À 16 px, la pastille de statut ne peut plus rétrécir : à la largeur d'un
+     téléphone elle prend sa propre ligne plutôt que de pousser les boutons du
+     pied de carte vers le bord. Elle cesse d'être en concurrence avec eux et
+     redevient ce qu'elle est — l'état de cette proposition. */
+  .card-foot .select-wrap { width: 100%; min-width: 0; }
 }
 
 /* ==================================================== Fil de discussion ==== */
@@ -1074,6 +1092,7 @@ p { margin: 0; }
 }
 
 .quote {
+  position: relative;
   display: block;
   width: 100%;
   text-align: left;
@@ -1082,11 +1101,34 @@ p { margin: 0; }
   border: 0;
   border-left: 3px solid currentColor;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, currentColor 11%, transparent);
+  background: transparent;
   color: inherit;
   font-size: var(--fs-xs);
   cursor: pointer;
   opacity: 0.9;
+}
+
+/* Le voile du bloc cité est une couche de currentColor à 11 %, et non un
+   color-mix() : la couleur du texte change selon la bulle (clair sur encre,
+   encre sur clair) ET selon le thème — quatre cas, dont une valeur figée n'en
+   servirait qu'un. La couche donne le même rendu que color-mix() là où il
+   existe, et le donne aussi sous iOS 16.2 et sur les navigateurs constructeurs,
+   où il n'existe pas.
+   z-index négatif : .quote porte opacity .9, donc un contexte d'empilement — la
+   couche reste sous le texte et enfermée dans la citation.
+   Les quatre côtés plutôt que le raccourci inset, absent d'UC et de X5. */
+.quote::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0.11;
+  pointer-events: none;
 }
 
 .quote-author { font-weight: 700; letter-spacing: -0.01em; }
@@ -1161,7 +1203,11 @@ p { margin: 0; }
   background: var(--surface-strong);
   border-color: var(--glass-line);
   resize: none;
-  font-size: 15.5px;
+  /* 16 px minimum : en dessous, iOS zoome toute la page au focus et le zoom ne
+     se défait pas au retour — la barre du haut sort de l'écran et il faut
+     pincer à deux doigts pour revenir, sur le geste le plus fréquent de
+     l'application. */
+  font-size: var(--fs-body);
 }
 
 .composer .textarea:focus { border-color: var(--line-field); box-shadow: none; }
@@ -1571,8 +1617,15 @@ p { margin: 0; }
   .content { padding-top: 28px; }
 
   /* La liste de sujets est la seule vue qui gagne à s'élargir : ailleurs, la
-     colonne de lecture de 760 px reste la bonne mesure. */
-  .content:has(.topics-grid) { max-width: 1120px; }
+     colonne de lecture de 760 px reste la bonne mesure.
+     Le bloc @supports rend l'intention explicite : sur un moteur sans :has()
+     — Gecko avant 121, Chromium avant 105 — la règle serait rejetée en entier,
+     et l'élargissement se perd sans que rien ne le signale. Isolée ici, la
+     perte est délibérée : la grille reste à 760 px, personne ne perd de
+     fonction. */
+  @supports selector(:has(*)) {
+    .content:has(.topics-grid) { max-width: 1120px; }
+  }
 
   .topics-grid {
     display: grid;
