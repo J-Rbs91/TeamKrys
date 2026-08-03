@@ -122,9 +122,17 @@
     appRoot = document.getElementById("app");
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
+    bindViewport();
   };
 
   /* ------------------------------------------------------------ Brouillons --- */
+
+  /* Les brouillons ne vivent que dans le DOM, et l'instantané ne franchit pas un
+   * rendu : au reverrouillage (3 minutes en arrière-plan), l'écran de verrou ne
+   * contient aucun champ « composer:… », la valeur est donc jetée et le message
+   * en cours d'écriture est perdu — ce que la recette annonce pourtant intact.
+   * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
+  var composerDrafts = {};
 
   function captureDrafts() {
     var snapshot = { values: {}, active: null };
@@ -133,6 +141,10 @@
       var node = nodes[i];
       var key = node.getAttribute("data-draft");
       snapshot.values[key] = node.value;
+      if (key.indexOf("composer:") === 0) {
+        if (node.value) { composerDrafts[key] = node.value; }
+        else { delete composerDrafts[key]; }
+      }
       if (document.activeElement === node) {
         snapshot.active = {
           key: key,
@@ -158,6 +170,9 @@
       var node = nodes[i];
       var key = node.getAttribute("data-draft");
       var saved = snapshot.values[key];
+      /* Repli sur le relais quand l'instantané ne connaît pas la clé : c'est le
+       * cas au retour de l'écran de verrou, qui n'a rendu aucun composeur. */
+      if (saved === undefined) { saved = composerDrafts[key]; }
       /* On ne restaure que si le champ neuf est vide : une valeur fournie par
        * le rendu (édition pré-remplie) reste prioritaire. */
       if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
@@ -178,18 +193,108 @@
 
   function autoGrow(node) {
     if (!node || node.tagName !== "TEXTAREA" || !node.classList.contains("grow")) { return; }
+    var before = node.style.height;
     node.style.height = "auto";
     /* +2 : box-sizing est border-box, mais scrollHeight ne compte pas les deux
        pixels de bordure. Sans eux, la dernière ligne saisie est rognée par le
        bas. Le plafond de 140 px doit rester égal au max-height de
        .composer .textarea (css/app.css). */
     node.style.height = Math.min(node.scrollHeight + 2, 140) + "px";
+    /* Chaque ligne gagnée par le champ est une ligne perdue en bas du fil : le
+     * dernier message glisse sous le composeur sans que rien ne le signale. On
+     * ne mesure que si la hauteur a réellement changé — sinon c'est un calcul
+     * de mise en page forcé à chaque frappe, sur des téléphones qui ne l'ont
+     * pas. */
+    if (node.style.height !== before) { keepThreadAtBottom(); }
+  }
+
+  /* --------------------------------------------------------- Clavier virtuel --- */
+
+  /* Deux régimes opposés, dont aucun ne se règle en CSS :
+   *  - là où le clavier REDIMENSIONNE la fenêtre (Chromium avant 108, encore
+   *    embarqué chez plusieurs constructeurs), le fil rétrécit mais garde son
+   *    scrollTop : le bas du fil sort de l'écran en silence ;
+   *  - là où il RECOUVRE (iOS, et Chrome Android 108+ par défaut), rien ne
+   *    rétrécit : le moteur décale le viewport visuel pour révéler le champ.
+   *    Rien à recaler pendant la saisie, mais le décalage doit être rendu à la
+   *    fermeture — sur l'écran de discussion la page ne défile pas, et en
+   *    application installée la barre du haut porte l'unique sortie.
+   *
+   * visualViewport.scroll n'est délibérément pas écouté : suivre le viewport
+   * image par image imposerait de transformer un écran qui empile une dizaine
+   * de surfaces floutées, ce qui coûte plus cher que le défaut corrigé. */
+
+  var lastThreadHeight = 0;
+  var keyboardCovered = false;
+
+  /* C'est le rétrécissement du FIL qui déclenche le rattrapage, jamais celui de
+   * la fenêtre : un seul test couvre le composeur qui grandit, l'aperçu « en
+   * réponse à … » qui s'ouvre, la rotation et le clavier qui redimensionne — et
+   * il reste sans effet là où rien ne rétrécit. */
+  function keepThreadAtBottom() {
+    var thread = document.querySelector(".thread");
+    if (!thread) { lastThreadHeight = 0; return; }
+    var height = thread.clientHeight;
+    var shrink = lastThreadHeight - height;
+    lastThreadHeight = height;
+    if (shrink <= 0) { return; }
+    /* La distance au bas vient d'augmenter d'exactement « shrink » : qui lisait
+     * le bas s'y trouve encore, à « shrink » près. Même tolérance de 80 px que
+     * le rendu — on ne ramène jamais en bas quelqu'un qui relisait plus haut. */
+    if (thread.scrollHeight - thread.scrollTop - height <= shrink + 80) {
+      thread.scrollTop = thread.scrollHeight;
+    }
+  }
+
+  /* Sortie de secours, pas un réglage : l'écran de discussion ne défile pas,
+   * donc un décalage laissé par le moteur après la fermeture du clavier n'y est
+   * rattrapable par aucun geste, et la barre du haut — seule sortie en
+   * application installée — resterait hors de l'écran. Partout ailleurs la page
+   * défile normalement et on n'y touche pas. */
+  function resetChatPageScroll() {
+    if (!document.querySelector(".screen.chat")) { return; }
+    var offset = window.pageYOffset || document.documentElement.scrollTop || 0;
+    if (offset > 0) { window.scrollTo(0, 0); }
+  }
+
+  function onViewportResize() {
+    keepThreadAtBottom();
+    var view = window.visualViewport;
+    if (!view) { return; }
+    /* Hauteur cachée par le clavier. Nulle là où la fenêtre a été redimensionnée
+     * — il n'y a alors rien à rendre. 120 px : au-dessus d'une barre d'URL qui
+     * se replie, très en dessous du plus petit clavier. Tant que le clavier
+     * couvre, on ne touche à rien : corriger le défilement pendant la saisie
+     * masquerait le champ que le moteur vient de révéler. */
+    if (window.innerHeight - view.height > 120) { keyboardCovered = true; return; }
+    if (keyboardCovered) { keyboardCovered = false; resetChatPageScroll(); }
+  }
+
+  function bindViewport() {
+    if (window.visualViewport && window.visualViewport.addEventListener) {
+      window.visualViewport.addEventListener("resize", onViewportResize);
+    } else {
+      /* Sans visualViewport, seul un redimensionnement de fenêtre est
+       * observable — c'est justement le cas qui a besoin du rattrapage. */
+      window.addEventListener("resize", onViewportResize);
+    }
   }
 
   /* --------------------------------------------------------------- Toasts --- */
 
   UI.toast = function (text, kind) {
     if (!toastRoot) { return; }
+    /* Un élément fixe reste accroché au viewport de MISE EN PAGE : clavier
+     * ouvert, le moteur décale le viewport visuel et le toast s'afficherait
+     * au-dessus du bord de l'écran — invisible, alors que c'est justement
+     * pendant la saisie que tombent « Action refusée » et le reverrouillage.
+     * Mesuré ici, à l'affichage : exact, et sans écoute continue du
+     * défilement, qui coûterait cher sur un écran empilant autant de surfaces
+     * floutées. */
+    var view = window.visualViewport;
+    if (view) {
+      document.documentElement.style.setProperty("--vv-top", Math.round(view.offsetTop) + "px");
+    }
     var node = el("div", { class: "toast" + (kind === "error" ? " error" : ""), text: text });
     toastRoot.appendChild(node);
     setTimeout(function () {
@@ -556,13 +661,21 @@
     return "id:" + (message.authorId || message.authorName);
   }
 
+  /* La citation n'est plus un contrôle. Un bouton dans un bouton est un arbre
+   * invalide, et le stopPropagation ne masquait le symptôme qu'à la souris :
+   * pour un lecteur d'écran un bouton est une feuille, la citation devenait
+   * soit inatteignable, soit absorbée dans le nom du bouton parent — où le nom
+   * de la personne CITÉE passait en tête, attribuant le message à la mauvaise
+   * personne. Au doigt, c'était une cible non signalée logée dans une cible
+   * plus grande, avec une action radicalement différente.
+   * Le dessin ne bouge pas. L'action « aller au message cité » n'est pas
+   * perdue : elle passe dans la feuille du message, où elle gagne un libellé
+   * et une cible pleine au lieu d'une bande muette. */
   function quoteBlock(topic, message) {
     var quoted = Core.findMessage(topic, message.quoteId);
     if (!quoted) { return null; }
-    return el("button", {
-      class: "quote", type: "button",
-      onclick: function (e) { e.stopPropagation(); UI.scrollToMessage(quoted.id); }
-    }, [
+    return el("div", { class: "quote" }, [
+      el("span", { class: "visually-hidden", text: "En réponse à " }),
       el("div", { class: "quote-author", text: quoted.authorName }),
       el("div", { class: "quote-text", text: quoted.text })
     ]);
@@ -610,7 +723,9 @@
     var col = el("div", { class: "msg-col" });
 
     if (!grouped && !mine) {
-      col.appendChild(el("div", { class: "msg-author", text: message.authorName }));
+      /* Repris dans le nom accessible de la bulle : le laisser lisible ici le
+       * ferait annoncer deux fois. */
+      col.appendChild(el("div", { class: "msg-author", "aria-hidden": "true", text: message.authorName }));
     }
 
     var locked = mine && Core.isMessageLocked(message, App.user.id);
@@ -619,16 +734,25 @@
     metaBits.push(Utils.formatTime(message.createdAt));
     if (message.updatedAt && message.updatedAt !== message.createdAt) { metaBits.push("modifié"); }
 
+    /* L'auteur figure TOUJOURS dans le nom accessible : le regroupement est une
+     * économie visuelle, pas une raison de priver le lecteur d'écran de
+     * l'attribution. Sans lui, un message groupé s'annonce « d'accord aussi,
+     * 14:33, bouton » sans dire de qui, et mes propres messages n'ont jamais
+     * d'auteur du tout. Le cadenas, lui, est un SVG masqué : sans la mention
+     * explicite, l'état verrouillé n'existe que pour l'œil. */
     var bubble = el("button", {
       class: "bubble", type: "button", dataset: { messageId: message.id },
       onclick: function () { UI.set({ sheet: { type: "message", topicId: topic.id, messageId: message.id } }); }
     }, [
+      el("span", { class: "visually-hidden", text: (mine ? "Vous" : message.authorName) + ". " }),
       message.quoteId ? quoteBlock(topic, message) : null,
       el("div", { class: "bubble-text", text: message.text }),
       el("div", { class: "bubble-meta" }, [
         el("span", { text: metaBits.join(" · ") }),
         locked ? icon("lock", 12) : null
-      ])
+      ]),
+      locked ? el("span", { class: "visually-hidden", text: ", verrouillé" }) : null,
+      el("span", { class: "visually-hidden", text: ". Actions du message." })
     ]);
 
     col.appendChild(bubble);
@@ -657,6 +781,10 @@
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i].getAttribute("data-message-id") === messageId) {
         nodes[i].scrollIntoView({ block: "center", behavior: "smooth" });
+        /* Le clignotement ne dit rien à qui ne voit pas l'écran : sans
+         * déplacement du focus, le lecteur d'écran reste là où la feuille s'est
+         * fermée et rien n'indique qu'on a été emmené ailleurs dans le fil. */
+        try { nodes[i].focus({ preventScroll: true }); } catch (e) { /* non focalisable */ }
         nodes[i].classList.add("flash");
         (function (node) {
           setTimeout(function () { node.classList.remove("flash"); }, 1200);
@@ -685,6 +813,10 @@
        * un rendu synchrone et la restauration des brouillons réinjecterait le
        * message déjà publié. */
       textarea.value = "";
+      /* Le relais de brouillons doit être purgé ici aussi : sinon il réinjecte
+       * au rendu suivant le message que l'on vient de publier — exactement le
+       * piège que l'ordre ci-dessus évite pour l'instantané. */
+      delete composerDrafts[draftKey];
       autoGrow(textarea);
       UI.local.quote = null;
       UI.local.scrollToBottom = true;
@@ -804,8 +936,18 @@
     var myVote = proposal.votes[App.user.id] || null;
     var total = summary.total || 1;
 
-    var statusSelect = el("select", { class: "select", "aria-label": "Statut de la proposition",
-      onchange: function (e) { App.actions.changeProposalStatus(topic.id, proposal.id, e.target.value); }
+    /* Le titre entre dans le nom : dans une liste de propositions, cinq
+     * contrôles nommés « Statut de la proposition » sont indiscernables au
+     * balayage, et on change le statut de la mauvaise. Le changement part vers
+     * toute l'équipe sans confirmation : il doit au moins être annoncé — le
+     * libellé est lu AVANT l'envoi, qui provoque un rendu détruisant ce nœud. */
+    var statusSelect = el("select", {
+      class: "select", "aria-label": "Statut de la proposition : " + proposal.title,
+      onchange: function (e) {
+        var label = Core.PROPOSAL_STATUS_LABELS[e.target.value];
+        App.actions.changeProposalStatus(topic.id, proposal.id, e.target.value);
+        UI.toast(proposal.title + " : " + label + ".");
+      }
     });
     Core.PROPOSAL_STATUSES.forEach(function (status) {
       statusSelect.appendChild(el("option", { value: status, selected: proposal.status === status, text: Core.PROPOSAL_STATUS_LABELS[status] }));
@@ -1183,6 +1325,14 @@
     });
 
     var actions = el("div", { class: "sheet-actions" }, [
+      /* Reprise de l'action que portait la citation elle-même. En tête : elle
+       * concerne le contexte du message, pas ce qu'on va en faire. */
+      message.quoteId && Core.findMessage(topic, message.quoteId)
+        ? sheetAction("up", "Aller au message cité", function () {
+          UI.set({ sheet: null });
+          UI.scrollToMessage(message.quoteId);
+        })
+        : null,
       sheetAction("quote", "Citer", function () {
         UI.set({ sheet: null, quote: { topicId: topic.id, messageId: message.id } });
         var node = findDraftNode("composer:" + topic.id);
@@ -1221,7 +1371,11 @@
     if (!topic) { return null; }
 
     var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet",
-      onchange: function (e) { App.actions.changeTopicStatus(topic.id, e.target.value); }
+      onchange: function (e) {
+        var label = Core.TOPIC_STATUS_LABELS[e.target.value];
+        App.actions.changeTopicStatus(topic.id, e.target.value);
+        UI.toast(topic.title + " : " + label + ".");
+      }
     });
     Core.TOPIC_STATUSES.forEach(function (status) {
       statusSelect.appendChild(el("option", { value: status, selected: topic.status === status, text: Core.TOPIC_STATUS_LABELS[status] }));
@@ -1487,6 +1641,11 @@
         newThread.scrollTop = scrollTop;
       }
       UI.local.scrollToBottom = false;
+      /* Hauteur de référence du rattrapage : le nœud est recréé à chaque rendu,
+       * la mesure doit l'être aussi. */
+      lastThreadHeight = newThread.clientHeight;
+    } else {
+      lastThreadHeight = 0;
     }
 
     UI.refreshStatus();

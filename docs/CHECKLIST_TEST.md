@@ -64,6 +64,19 @@ du navigateur ouverte : **zéro erreur console** attendue.
       curseur compris.
 - [ ] Appui sur une bulle → feuille : 6 émojis, Citer, Créer une proposition,
       et pour ses propres messages Modifier + Rendre anonyme / Signer.
+- [ ] Message cité : la feuille propose **« Aller au message cité »** en tête ;
+      elle défile jusqu'à l'original et le fait clignoter. La citation
+      elle-même n'est plus tactile.
+- [ ] Lecteur d'écran (VoiceOver / TalkBack) : sur trois messages consécutifs
+      d'une même personne, **l'auteur est annoncé sur les trois** ; sur un
+      message cité, l'expéditeur est annoncé **avant** la personne citée ; un
+      message verrouillé annonce « verrouillé ».
+- [ ] Message en cours d'écriture, application en arrière-plan > 3 minutes,
+      retour et déverrouillage : **le brouillon est toujours là**.
+- [ ] Erreur pendant la saisie, clavier ouvert (couper le réseau et envoyer) :
+      le message d'erreur est **visible à l'écran**.
+- [ ] Composeur qui grandit jusqu'à 4 lignes, ou aperçu « en réponse à … »
+      ouvert : le dernier message du fil reste visible au-dessus du champ.
 - [ ] Réaction posée → pastille sous la bulle, la mienne surlignée ; compteur
       au-delà de 1 ; re-tap = retrait.
 - [ ] Citer → aperçu « en réponse à … » annulable ; message publié avec bloc
@@ -82,6 +95,10 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] Les 5 statuts sélectionnables et conservés.
 - [ ] iPhone : ouvrir le menu de statut → **la page ne zoome pas** ; à la
       fermeture, l'affichage est identique à avant l'appui.
+- [ ] Changer un statut affiche une confirmation à l'écran (« *titre* :
+      *statut*. »), et le lecteur d'écran l'annonce.
+- [ ] Lecteur d'écran, écran de propositions : les menus de statut portent des
+      noms **distincts**, incluant le titre de chaque proposition.
 - [ ] Écran de 320 px : le menu de statut occupe sa propre ligne, pleine
       largeur, et « Mise en place » s'affiche **en entier**. « Retirer mon vote »
       et « Modifier » restent atteignables sans défilement horizontal.

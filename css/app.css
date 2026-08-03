@@ -1104,7 +1104,6 @@ p { margin: 0; }
   background: transparent;
   color: inherit;
   font-size: var(--fs-xs);
-  cursor: pointer;
   opacity: 0.9;
 }
 
@@ -1434,8 +1433,13 @@ p { margin: 0; }
 .toast-root {
   position: fixed;
   left: 50%;
-  /* En haut : ne recouvre jamais le composeur ni les boutons d'action. */
-  top: calc(var(--safe-top) + 62px);
+  /* En haut : ne recouvre jamais le composeur ni les boutons d'action.
+     --vv-top suit le décalage du viewport visuel (js/ui.js) : un élément fixe
+     reste accroché au viewport de MISE EN PAGE, donc clavier ouvert, un toast
+     s'afficherait au-dessus du bord de l'écran — « Action refusée » ou « Code
+     d'accès refusé » disparaîtraient pendant la saisie, qui est le moment où
+     ils tombent. Le repli à 0 couvre les moteurs sans visualViewport. */
+  top: calc(var(--safe-top) + 62px + var(--vv-top, 0px));
   transform: translateX(-50%);
   z-index: var(--z-toast);
   display: flex;
