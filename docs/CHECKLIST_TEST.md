@@ -7,6 +7,8 @@ du navigateur ouverte : **zéro erreur console** attendue.
 ## 0. Automatique
 
 - [ ] `node tests/parity.test.js` → tous les tests passent.
+- [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
+      (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
 - [ ] `git status` propre : aucun `.gs`, aucun `appsscript.json`, aucun secret,
       aucun `node_modules/` ni `package*.json`.
@@ -115,3 +117,9 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] Cibles tactiles ≥ 44 px, rien sous l'encoche ni sous la barre d'accueil.
 - [ ] Aucune police externe chargée (onglet Réseau : aucune requête de police).
 - [ ] Un message contenant `<script>alert(1)</script>` s'affiche **en texte**.
+
+## 11. Navigateurs
+
+Trois passes obligatoires — iPhone (WebKit), Android (Blink), Firefox Android
+(Gecko) — plus les passes conditionnelles : [`QA_NAVIGATEURS.md`](QA_NAVIGATEURS.md).
+Un navigateur non observé n'est pas un navigateur validé.
