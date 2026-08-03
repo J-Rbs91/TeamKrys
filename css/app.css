@@ -1,18 +1,25 @@
 /* BrainstO. — feuille de style unique.
  *
- * Direction artistique : « atelier chaud », transposition du langage visuel
- * HorizonX (horizonx.so) au contexte d'un outil d'équipe utilisé debout, en
- * magasin, plusieurs fois par jour.
+ * Direction artistique : la palette de l'équipe, transposition du langage
+ * visuel HorizonX (horizonx.so) au contexte d'un outil utilisé debout, en
+ * magasin, plusieurs fois par jour — et le soir, en faible luminosité.
  *
- *   canvas crème #faede3   — au lieu du blanc clinique : moins fatigant sur une
- *                            journée, et l'application ne ressemble à aucun
- *                            autre outil interne ;
- *   encre #171717          — jamais de noir pur, le contraste reste éditorial ;
- *   surfaces en verre      — blancs superposés + flou, réservés aux éléments
- *                            qui flottent (barres collantes, feuilles, FAB) ;
+ *   cinq couleurs          — 01161E Ink Black · 124559 Dark Teal · 598392 Air
+ *                            Force Blue · AEC3B0 Ash Grey · EFF6E0 Beige.
+ *                            Leur LUMINANCE décide de leur emploi, pas le goût ;
+ *   canvas Beige #EFF6E0   — le jour ; la nuit #031C25, l'Ink Black relevé de
+ *                            12 % de Dark Teal pour que la vignette garde de
+ *                            quoi descendre ;
+ *   encre Ink Black        — le jour, Beige la nuit ; jamais de noir pur à
+ *                            l'écran, le contraste reste éditorial ;
+ *   surfaces en verre      — le jour des blancs superposés + flou ; la nuit
+ *                            l'élévation se mesure en Air Force Blue ajouté,
+ *                            car cette couleur ne peut être ni fond ni encre
+ *                            (elle échoue au contraste des deux côtés) ;
  *   rayons larges          — 30 px cartes, 19 px champs, 100 px pastilles ;
- *   ombres diffuses        — 0 20px 70px à 7 % : la carte lévite, elle ne
- *                            « tombe » pas ;
+ *   ombres diffuses        — 0 20px 70px à 10 % le jour, 55 % la nuit. Sur fond
+ *                            sombre la lévitation ne vient plus de l'ombre mais
+ *                            du liseré clair et de l'écart de luminance ;
  *   typographie éditoriale — surtitres 11 px / 700 / +0.08em, titres en
  *                            interlettrage serré, échelle fluide (clamp) ;
  *   révélation décalée     — translateY(36px) + scale(.96), courbe
@@ -28,46 +35,72 @@
 
 :root {
   /* — Fond et matière ------------------------------------------------ */
-  --canvas: #faede3;
-  --canvas-deep: #f3e0d2;
+  /* Palette d'équipe, du plus sombre au plus clair :
+       01161E Ink Black · 124559 Dark Teal · 598392 Air Force Blue ·
+       AEC3B0 Ash Grey · EFF6E0 Beige
+     Le jour, le Beige est le fond et l'Ink Black l'encre ; la nuit, les deux
+     s'échangent. Aucune teinte étrangère à ces cinq couleurs, à la seule
+     exception des trois signaux (voir « Sémantique »). */
+  --canvas: #eff6e0;
+  --canvas-deep: #e5eed9;
   --aura-1: rgba(255, 255, 255, 0.9);
-  --aura-2: rgba(23, 23, 23, 0.05);
+  --aura-2: rgba(18, 69, 89, 0.05);
   --grain-opacity: 0.05;
   --grain-blend: multiply;
 
   --surface: rgba(255, 255, 255, 0.72);
   --surface-soft: rgba(255, 255, 255, 0.45);
   --surface-strong: rgba(255, 255, 255, 0.86);
-  --surface-opaque: #ffffff;
-  --surface-sunken: rgba(23, 23, 23, 0.05);
+  /* Composite exact de --surface-strong sur --canvas : un navigateur privé de
+     backdrop-filter (repli @supports en fin de fichier) rend la même
+     luminance qu'un navigateur qui sait flouter. */
+  --surface-opaque: #fdfefb;
+  --surface-sunken: rgba(1, 22, 30, 0.05);
   /* Feuilles et fenêtres : presque opaques. Un panneau modal translucide
      posé sur un fond flouté vire au gris sale — il doit trancher. */
-  --surface-sheet: rgba(255, 252, 250, 0.95);
+  --surface-sheet: rgba(253, 254, 251, 0.96);
 
   /* — Encre et texte -------------------------------------------------- */
-  --ink: #171717;
-  --ink-soft: #2a2a2a;
-  --on-ink: #ffffff;
-  --text: #171717;
-  --muted: rgba(23, 23, 23, 0.56);
-  --faint: rgba(23, 23, 23, 0.35);
+  --ink: #01161e;
+  --on-ink: #eff6e0;
+  --text: #01161e;
+  /* Encres secondaires : des teintes de la palette, pas l'encre principale
+     rendue transparente. Un texte à 56 % d'opacité sur un fond teinté prend
+     la couleur du fond ; ici il reste dans la famille. */
+  --muted: #124559;
+  --faint: #366476;
 
   /* — Traits ---------------------------------------------------------- */
-  --line: rgba(23, 23, 23, 0.09);
-  --line-strong: rgba(23, 23, 23, 0.16);
+  /* --line habille, --line-field délimite : seul le second dessine le bord
+     d'un champ de saisie, donc seul lui doit tenir le seuil de 3:1. */
+  --line: rgba(1, 22, 30, 0.1);
+  --line-strong: rgba(1, 22, 30, 0.18);
+  --line-field: rgba(1, 22, 30, 0.5);
+  --focus-ring: rgba(1, 22, 30, 0.48);
   --glass-line: rgba(255, 255, 255, 0.62);
+  --abstain: rgba(1, 22, 30, 0.55);
 
   /* — Sémantique (couleur forte + fond teinté, comme les notifications
-       HorizonX : le statut se lit d'un coup d'œil, sans lire le mot). */
-  --success: #1a8f5c;
-  --success-bg: #e7f7f0;
-  --danger: #d03821;
-  --danger-bg: #fdecec;
-  --warning: #b26a05;
-  --warning-bg: #fef4e4;
-  --info: #2563eb;
-  --info-bg: #e9effe;
-  --neutral-bg: rgba(23, 23, 23, 0.06);
+       HorizonX : le statut se lit d'un coup d'œil, sans lire le mot).
+       La palette ne contient aucune teinte chaude : le danger et
+       l'avertissement — et le vert de succès, qu'aucune des cinq ne peut
+       porter sans se confondre avec le texte secondaire — sont les trois
+       seuls emprunts du fichier. --info, lui, reste dans la palette. Ils
+       restent
+       cantonnés au signal — jamais une surface, jamais un texte courant. */
+  /* L'alpha des fonds teintés est plafonné par le contraste : au-delà, le
+     texte de la pastille passe sous 4,5:1 quand elle est posée sur le canvas
+     nu plutôt que dans une carte. */
+  --success: #14724a;
+  --success-bg: rgba(20, 114, 74, 0.1);
+  --danger: #c0301b;
+  --danger-bg: rgba(192, 48, 27, 0.08);
+  --on-danger: #eff6e0;
+  --warning: #8f5405;
+  --warning-bg: rgba(143, 84, 5, 0.1);
+  --info: #124559;
+  --info-bg: rgba(18, 69, 89, 0.12);
+  --neutral-bg: rgba(1, 22, 30, 0.06);
 
   /* — Rayons ---------------------------------------------------------- */
   --radius-card: 30px;
@@ -77,14 +110,18 @@
   --radius-chip: 100px;
 
   /* — Ombres ---------------------------------------------------------- */
-  --shadow-card: 0 20px 70px rgba(23, 23, 23, 0.07);
-  --shadow-card-hover: 0 8px 32px rgba(23, 23, 23, 0.09);
+  --shadow-card: 0 20px 70px rgba(1, 22, 30, 0.1);
+  --shadow-card-hover: 0 8px 32px rgba(1, 22, 30, 0.13);
   /* Portée vers le bas plutôt qu'en halo : dans un formulaire dense, un halo
      omnidirectionnel bave sur le champ du dessus et donne l'impression que les
      deux éléments se chevauchent. Le halo reste réservé au FAB, isolé. */
-  --shadow-cta: 0 6px 18px rgba(23, 23, 23, 0.2);
-  --shadow-glow: 0 0 22px rgba(23, 23, 23, 0.26);
-  --shadow-float: 0 18px 44px rgba(23, 23, 23, 0.18);
+  --shadow-cta: 0 6px 18px rgba(1, 22, 30, 0.22);
+  --shadow-glow: 0 0 22px rgba(1, 22, 30, 0.26);
+  --shadow-float: 0 18px 44px rgba(1, 22, 30, 0.2);
+  --shadow-bubble: 0 6px 18px rgba(1, 22, 30, 0.06);
+  --shadow-bubble-mine: 0 8px 22px rgba(1, 22, 30, 0.18);
+  --scrim: rgba(1, 22, 30, 0.32);
+  --scrim-solid: rgba(1, 22, 30, 0.55);
 
   /* — Flou de verre --------------------------------------------------- */
   --blur-sm: saturate(150%) blur(16px);
@@ -130,52 +167,78 @@
   color-scheme: light dark;
 }
 
-/* Le sombre n'est pas l'inverse du clair : il garde la chaleur (encre brune
-   plutôt que grise), sinon l'identité disparaît la nuit. */
+/* Le sombre n'est pas l'inverse du clair : c'est la même palette lue par
+   l'autre bout. Le Beige devient l'encre, l'Ink Black devient le fond, et
+   l'Air Force Blue — inutilisable en texte comme en aplat, il échoue au
+   contraste des deux côtés — devient la LUMIÈRE : l'élévation d'une surface
+   se mesure à la quantité de bleu qu'on ajoute au fond. */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Charbon chaud, pas noir : la teinte brune du clair doit survivre la
-       nuit, sinon l'application change d'identité en changeant de thème. */
-    --canvas: #16120f;
-    --canvas-deep: #0d0a09;
-    --aura-1: rgba(255, 228, 200, 0.08);
-    --aura-2: rgba(255, 240, 225, 0.04);
-    --grain-opacity: 0.06;
+    /* Le fond n'est pas l'Ink Black pur : il est relevé de 12 % de Dark Teal,
+       pour que la vignette (--canvas-deep) garde de quoi descendre encore. */
+    --canvas: #031c25;
+    --canvas-deep: #01161e;
+    --aura-1: rgba(89, 131, 146, 0.14);
+    --aura-2: rgba(174, 195, 176, 0.05);
+    --grain-opacity: 0.05;
+    /* overlay et non soft-light : le bruit de feTurbulence est centré sur 0,5,
+       or soft-light rend exactement le fond pour cette valeur — le grain
+       disparaîtrait au lieu de se poser. */
     --grain-blend: overlay;
 
-    --surface: rgba(255, 238, 224, 0.065);
-    --surface-soft: rgba(255, 238, 224, 0.04);
-    --surface-strong: rgba(255, 238, 224, 0.1);
-    --surface-opaque: #201a17;
-    --surface-sunken: rgba(255, 238, 224, 0.07);
-    --surface-sheet: rgba(37, 30, 27, 0.96);
+    --surface: rgba(89, 131, 146, 0.1);
+    --surface-soft: rgba(89, 131, 146, 0.06);
+    --surface-strong: rgba(89, 131, 146, 0.16);
+    --surface-opaque: #112c37;
+    --surface-sunken: rgba(174, 195, 176, 0.06);
+    --surface-sheet: rgba(25, 55, 65, 0.96);
 
-    --ink: #f7f0ea;
-    --ink-soft: #e5ddd6;
-    --on-ink: #171717;
-    --text: #f7f0ea;
-    --muted: rgba(247, 240, 234, 0.58);
-    --faint: rgba(247, 240, 234, 0.36);
+    /* Le fond est déjà saturé : le filtre du verre doit redescendre, sinon
+       chaque surface tire au bleu franc au lieu de laisser passer le fond. */
+    --blur-sm: saturate(115%) blur(18px);
+    --blur-md: saturate(120%) blur(28px);
+    --blur-lg: saturate(125%) blur(50px);
 
-    --line: rgba(255, 255, 255, 0.1);
-    --line-strong: rgba(255, 255, 255, 0.2);
-    --glass-line: rgba(255, 255, 255, 0.12);
+    --ink: #eff6e0;
+    --on-ink: #01161e;
+    --text: #eff6e0;
+    --muted: #99af9f;
+    --faint: #84a3a1;
 
-    --success: #4fd39a;
-    --success-bg: rgba(79, 211, 154, 0.14);
-    --danger: #ff7a63;
-    --danger-bg: rgba(255, 122, 99, 0.14);
-    --warning: #f0b45c;
-    --warning-bg: rgba(240, 180, 92, 0.14);
-    --info: #7ba4ff;
-    --info-bg: rgba(123, 164, 255, 0.14);
-    --neutral-bg: rgba(255, 255, 255, 0.07);
+    --line: rgba(174, 195, 176, 0.1);
+    --line-strong: rgba(174, 195, 176, 0.26);
+    --line-field: rgba(174, 195, 176, 0.5);
+    --focus-ring: rgba(174, 195, 176, 0.55);
+    --glass-line: rgba(239, 246, 224, 0.12);
+    --abstain: rgba(174, 195, 176, 0.62);
 
-    --shadow-card: 0 20px 70px rgba(0, 0, 0, 0.45);
-    --shadow-card-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
-    --shadow-cta: 0 6px 20px rgba(0, 0, 0, 0.5);
-    --shadow-glow: 0 0 26px rgba(247, 240, 234, 0.2);
-    --shadow-float: 0 18px 44px rgba(0, 0, 0, 0.6);
+    --success: #6fc08e;
+    --success-bg: rgba(111, 192, 142, 0.14);
+    --danger: #ff8a73;
+    --danger-bg: rgba(255, 138, 115, 0.14);
+    --on-danger: #01161e;
+    --warning: #e0a458;
+    --warning-bg: rgba(224, 164, 88, 0.14);
+    /* 30 % d'Air Force Blue sur du Beige. Une teinte plus bleue collerait à
+       --faint (1,19:1) et les voyants « hors ligne » et « local » seraient le
+       même pixel ; ici ils se séparent à 1,75:1. */
+    --info: #c2d4c9;
+    --info-bg: rgba(194, 212, 201, 0.16);
+    --neutral-bg: rgba(174, 195, 176, 0.12);
+
+    /* L'ombre est de l'Ink Black, le halo est de l'Ash Grey. Sur fond sombre
+       une ombre diffuse ne fait plus léviter quoi que ce soit : la lévitation
+       vient désormais du liseré clair (--glass-line) et de l'écart de
+       luminance entre la surface et le fond, pas d'un alpha plus fort. */
+    --shadow-card: 0 20px 70px rgba(1, 22, 30, 0.55);
+    --shadow-card-hover: 0 8px 32px rgba(1, 22, 30, 0.6);
+    --shadow-cta: 0 6px 20px rgba(1, 22, 30, 0.55);
+    --shadow-glow: 0 0 26px rgba(174, 195, 176, 0.18);
+    --shadow-float: 0 18px 44px rgba(1, 22, 30, 0.7);
+    --shadow-bubble: 0 6px 18px rgba(1, 22, 30, 0.4);
+    --shadow-bubble-mine: 0 8px 22px rgba(1, 22, 30, 0.5);
+    --scrim: rgba(1, 22, 30, 0.62);
+    --scrim-solid: rgba(1, 22, 30, 0.8);
   }
 }
 
@@ -202,7 +265,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Aura : deux halos très larges, fixes. Ils donnent de la profondeur au crème
+/* Aura : deux halos très larges, fixes. Ils donnent de la profondeur au fond
    sans jamais passer devant le contenu (position fixe, derrière tout). */
 body::before {
   content: "";
@@ -348,7 +411,7 @@ p { margin: 0; }
   .screen--enter .wm-char {
     transform-origin: 50% 100%;
     animation: char-rise 0.85s var(--ease-out) backwards;
-    animation-delay: calc(60ms + var(--ci) * 22ms);
+    animation-delay: calc(60ms + var(--ci, 0) * 22ms);
   }
 }
 
@@ -394,12 +457,16 @@ p { margin: 0; }
 
 .btn-outline {
   background: transparent;
-  border-color: var(--line-strong);
+  border-color: var(--line-field);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
-.btn-outline:not(:disabled):hover { background: var(--surface-soft); }
+/* --surface-sunken et non --surface-soft : ce dernier est un blanc, et un
+   blanc posé sur un fond déjà quasi blanc ne se voit pas le jour (1,01:1).
+   --surface-sunken est le seul jeton de survol qui change de sens avec le
+   thème — il creuse le jour, il éclaire la nuit. */
+.btn-outline:not(:disabled):hover { background: var(--surface-sunken); }
 
 .btn-ghost {
   background: transparent;
@@ -410,7 +477,7 @@ p { margin: 0; }
   backdrop-filter: none;
 }
 
-.btn-ghost:not(:disabled):hover { color: var(--text); background: var(--surface-soft); }
+.btn-ghost:not(:disabled):hover { color: var(--text); background: var(--surface-sunken); }
 
 .btn-danger {
   background: var(--danger-bg);
@@ -540,7 +607,7 @@ p { margin: 0; }
   width: 100%;
   min-height: var(--field-h);
   padding: 15px 18px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-field);
   border-radius: var(--radius-lg);
   background: var(--surface-strong);
   color: var(--text);
@@ -576,7 +643,7 @@ p { margin: 0; }
 .input:focus, .textarea:focus, .select:focus {
   border-color: var(--ink);
   background: var(--surface-opaque);
-  box-shadow: 0 0 0 4px var(--neutral-bg);
+  box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
 .input::placeholder, .textarea::placeholder { color: var(--faint); }
@@ -645,7 +712,7 @@ p { margin: 0; }
   font-weight: 600;
   border-radius: var(--radius-chip);
   background: transparent;
-  border-color: var(--line-strong);
+  border-color: var(--line-field);
 }
 
 .card-foot .select-wrap { min-width: 148px; }
@@ -859,7 +926,11 @@ p { margin: 0; }
 
 .status-idle .status-dot { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
 .status-syncing .status-dot { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
-.status-pending .status-dot { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
+/* « En attente » se distingue de « Sync en cours » par la FORME, pas par une
+   quatrième teinte : un anneau creux au lieu d'un point plein. Sans cela les
+   deux états sont le même pixel dès que les animations sont réduites et que
+   le libellé est masqué (sous 430 px). */
+.status-pending .status-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--warning), 0 0 0 3px var(--warning-bg); }
 .status-offline .status-dot { background: var(--faint); }
 .status-error .status-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-bg); }
 .status-local .status-dot { background: var(--info); box-shadow: 0 0 0 3px var(--info-bg); }
@@ -999,7 +1070,7 @@ p { margin: 0; }
   cursor: pointer;
   word-break: break-word;
   overflow-wrap: anywhere;
-  box-shadow: 0 6px 18px rgba(23, 23, 23, 0.05);
+  box-shadow: var(--shadow-bubble);
   transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
 
@@ -1008,7 +1079,7 @@ p { margin: 0; }
   border-color: transparent;
   color: var(--on-ink);
   border-bottom-right-radius: 7px;
-  box-shadow: 0 8px 22px rgba(23, 23, 23, 0.16);
+  box-shadow: var(--shadow-bubble-mine);
 }
 
 .msg-row:not(.mine) .bubble { border-bottom-left-radius: 7px; }
@@ -1026,7 +1097,7 @@ p { margin: 0; }
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 .quote {
@@ -1120,7 +1191,7 @@ p { margin: 0; }
   font-size: 15.5px;
 }
 
-.composer .textarea:focus { border-color: var(--line-strong); box-shadow: none; }
+.composer .textarea:focus { border-color: var(--line-field); box-shadow: none; }
 
 .send-btn {
   flex: 0 0 auto;
@@ -1184,7 +1255,7 @@ p { margin: 0; }
   inset: 0;
   z-index: var(--z-overlay);
   display: flex;
-  background: rgba(23, 23, 23, 0.28);
+  background: var(--scrim);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   animation: fade-in var(--dur-base) var(--ease-out);
@@ -1257,7 +1328,7 @@ p { margin: 0; }
   transition: background var(--dur-fast) linear;
 }
 
-.sheet-action:hover { background: var(--surface-soft); }
+.sheet-action:hover { background: var(--surface-sunken); }
 .sheet-action:last-child { border-bottom: 0; }
 .sheet-action.danger { color: var(--danger); }
 .sheet-action .icon { color: var(--muted); }
@@ -1367,7 +1438,7 @@ p { margin: 0; }
   animation: slide-up var(--dur-base) var(--ease-out);
 }
 
-.toast.error { background: var(--danger); color: #fff; }
+.toast.error { background: var(--danger); color: var(--on-danger); }
 
 /* ======================================================== Bandeau de MAJ ==== */
 
@@ -1409,7 +1480,7 @@ p { margin: 0; }
 .vote-bar span { display: block; height: 100%; border-radius: var(--radius-chip); transition: width var(--dur-slow) var(--ease-out); }
 .vote-for { background: var(--success); }
 .vote-against { background: var(--danger); }
-.vote-abstain { background: var(--line-strong); }
+.vote-abstain { background: var(--abstain); }
 
 .vote-legend { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -1428,7 +1499,7 @@ p { margin: 0; }
 .legend-chip .swatch { width: 7px; height: 7px; border-radius: 50%; }
 .legend-for .swatch { background: var(--success); }
 .legend-against .swatch { background: var(--danger); }
-.legend-abstain .swatch { background: var(--line-strong); }
+.legend-abstain .swatch { background: var(--abstain); }
 
 .vote-actions { display: flex; gap: 7px; }
 .vote-actions .btn { flex: 1; }
@@ -1474,8 +1545,53 @@ p { margin: 0; }
 .print-list li { margin-bottom: 8px; line-height: 1.55; }
 
 @media print {
+  /* Remettre la couche de JETONS à plat, pas seulement le fond de la page.
+     Sans cela, un appareil réglé en thème sombre imprime ses encres claires :
+     les surtitres, les méta de carte et les pastilles posent une couleur
+     explicite, qui l'emporte sur le `color: #000` hérité du body. */
+  :root {
+    --text: #000;
+    --ink: #000;
+    --on-ink: #fff;
+    --muted: #333;
+    --faint: #444;
+    --line: #ddd;
+    --line-strong: #bbb;
+    --line-field: #999;
+    --glass-line: #ddd;
+    --abstain: #999;
+    --neutral-bg: #f0f0f0;
+    --surface: #fff;
+    --surface-soft: #fff;
+    --surface-strong: #fff;
+    --surface-opaque: #fff;
+    --surface-sunken: #f5f5f5;
+    --surface-sheet: #fff;
+    --success: #14724a;
+    --success-bg: #fff;
+    --danger: #c0301b;
+    --danger-bg: #fff;
+    --on-danger: #000;
+    --warning: #8f5405;
+    --warning-bg: #fff;
+    --info: #124559;
+    --info-bg: #fff;
+  }
+
   .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .no-print { display: none !important; }
   html, body { background: #fff; color: #000; }
+
+  /* Les aplats ne sont PAS envoyés à l'imprimante (print-color-adjust: economy
+     est le défaut) : un élément encré perd son fond mais garde sa
+     contre-couleur, et son texte disparaît sur le papier. On lui rend donc un
+     fond blanc, une encre noire et un contour pour qu'il reste identifiable. */
+  .msg-row.mine .bubble, .badge-ink, .btn-primary, .reaction.mine,
+  .emoji-btn.mine, .vote-actions .btn.active {
+    background: #fff !important;
+    color: #000 !important;
+    border: 1px solid #ddd;
+    box-shadow: none;
+  }
   body::before, body::after { display: none; }
   .content { padding: 0; max-width: none; }
   .print-topic {
@@ -1518,7 +1634,9 @@ p { margin: 0; }
   .topbar, .quickbar, .composer, .card, .bubble, .sheet, .modal, .update-banner, .day-sep, .status-pill {
     background: var(--surface-opaque);
   }
-  .msg-row.mine .bubble { background: var(--ink); }
+  /* .overlay repose sur le flou pour séparer la page de la feuille : sans lui,
+     le voile seul doit faire tout le travail, donc il s'épaissit. */
+  .overlay { background: var(--scrim-solid); }
 }
 
 /* Au-delà du mobile, la mise en page respire : deux colonnes pour les listes
