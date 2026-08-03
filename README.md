@@ -63,13 +63,29 @@ Le langage visuel est une transposition de celui de **HorizonX**
 d'équipe consulté debout, en magasin, plusieurs fois par jour. Les jetons sont
 en tête de [`css/app.css`](css/app.css).
 
+La palette est imposée et tient en cinq couleurs :
+
+| | `#01161E` | `#124559` | `#598392` | `#AEC3B0` | `#EFF6E0` |
+|---|---|---|---|---|---|
+| | Ink Black | Dark Teal | Air Force Blue | Ash Grey | Beige |
+
+Elles ne se répartissent pas au goût : leur **luminance** décide de leur emploi.
+Les deux premières sont trop sombres pour porter du texte, les deux dernières
+trop claires pour servir de fond, et celle du milieu échoue au contraste des
+deux côtés (`#598392` ne fait que 3,72:1 sous du Beige et 4,48:1 sous de l'Ink
+Black : aucun texte ne tient dessus). L'Air Force Blue n'est donc **ni un fond
+ni une encre : c'est la lumière**. L'élévation d'une surface se mesure à la
+quantité de bleu ajoutée au fond — ce qui fournit les six niveaux
+intermédiaires que cinq couleurs ne donnent pas, sans jamais introduire de
+teinte étrangère.
+
 | Élément | Valeur | Pourquoi ici |
 |---|---|---|
-| Fond | crème `#faede3` | moins fatigant qu'un blanc clinique sur une journée entière |
-| Encre | `#171717`, jamais de noir pur | contraste éditorial, plus doux à l'écran |
-| Surfaces | blancs superposés + flou | réservées à ce qui flotte : barres collantes, feuilles, FAB |
+| Fond | Beige `#EFF6E0` le jour, `#031C25` la nuit | l'Ink Black relevé de 12 % de Dark Teal, pour que la vignette garde de quoi descendre |
+| Encre | Ink Black / Beige, jamais de noir ni de blanc purs | contraste éditorial, plus doux à l'écran |
+| Surfaces | superpositions translucides + flou | réservées à ce qui flotte : barres collantes, feuilles, FAB |
 | Rayons | 30 px cartes, 19 px champs, 100 px pastilles | |
-| Ombres | `0 20px 70px` à 7 % | la carte lévite au lieu de « tomber » |
+| Ombres | `0 20px 70px` à 10 % le jour, 55 % la nuit | la carte lévite au lieu de « tomber » |
 | Typographie | système, échelle fluide (`clamp`), surtitres 11 px `+0.08em` | zéro requête réseau, hiérarchie éditoriale |
 | Mouvement | `cubic-bezier(.16,1,.3,1)`, révélation `translateY(36px) scale(.96)` décalée de 45 ms | |
 
@@ -84,8 +100,28 @@ Trois écarts assumés par rapport à la source, dictés par l'usage :
 - **les révélations ne se jouent qu'à l'arrivée sur un écran**, pas à chaque
   mise à jour de données — sinon un message reçu relance toute la cascade.
 
-Le thème sombre n'est pas l'inverse du clair : il garde la chaleur (charbon
-`#16120f`, surfaces teintées crème). Sans cela, l'identité disparaît la nuit.
+Le thème sombre n'est pas l'inverse du clair : c'est la même palette lue par
+l'autre bout. Le Beige devient l'encre, l'Ink Black devient le fond, et les
+surfaces s'éclairent à l'Air Force Blue au lieu de s'éclaircir au blanc — sans
+quoi l'identité disparaîtrait la nuit.
+
+Un point de vocabulaire change avec le fond sombre : **la lévitation ne vient
+plus de l'ombre.** Sur du `#031C25`, une ombre diffuse ne se voit pas, quel que
+soit son alpha. Ce sont le liseré clair du haut de carte (`--glass-line`) et
+l'écart de luminance entre la surface et le fond qui font flotter — l'ombre ne
+fait plus qu'ancrer.
+
+Deux jetons portent la conformité et ne doivent pas être confondus :
+`--line` habille (filets, séparateurs, aucune information n'en dépend) tandis
+que `--line-field` délimite — il dessine le bord des champs de saisie et tient
+seul le seuil de 3:1 exigé par le critère WCAG 1.4.11. Le second n'existait pas
+avant la refonte de palette : les bordures de champs étaient à 1,85:1.
+
+Enfin, la palette ne contient **aucune teinte chaude**. Le rouge de danger
+(`#C0301B` le jour, `#FF8A73` la nuit) et l'ambre d'avertissement sont les
+seuls emprunts du fichier : un danger teinté teal serait un contresens
+sémantique, pas un choix esthétique. Ils restent cantonnés au signal — jamais
+une surface, jamais un texte courant.
 
 ### Icônes et réactions
 
