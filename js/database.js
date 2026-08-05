@@ -18,8 +18,9 @@
   var DB = {};
   var dbPromise = null;
 
-  /* Repli mémoire si IndexedDB est indisponible (navigation privée, etc.). */
-  var memory = { available: true, seq: 0, queue: [], meta: {} };
+  /* Repli mémoire si IndexedDB est indisponible (navigation privée, fenêtre
+   * in-app d'une messagerie, protection renforcée contre le pistage…). */
+  var memory = { available: true, reason: null, seq: 0, queue: [], meta: {} };
 
   function openDatabase() {
     if (dbPromise) { return dbPromise; }
@@ -40,6 +41,7 @@
       request.onblocked = function () { reject(new Error("IndexedDB bloquée par un autre onglet")); };
     }).catch(function (error) {
       memory.available = false;
+      memory.reason = (error && error.message) || "IndexedDB indisponible";
       return null;
     });
     return dbPromise;
@@ -49,9 +51,25 @@
 
   DB.isPersistent = function () { return memory.available; };
 
+  DB.unavailableReason = function () { return memory.reason; };
+
+  /* Les deux branches (IndexedDB et repli mémoire) doivent rendre EXACTEMENT la
+   * même forme. Chaque `work` renvoie une boîte { value: … } — parce qu'en
+   * IndexedDB la valeur n'est connue qu'à la fin de la transaction — et c'est
+   * ce déballage commun qui la sort de sa boîte. */
+  function unwrap(result) {
+    return result && result.value !== undefined ? result.value : result;
+  }
+
   function withStore(storeName, mode, work) {
     return openDatabase().then(function (db) {
-      if (!db) { return work(null); }
+      /* ⚠️ Le déballage vaut AUSSI pour le repli mémoire. Sans lui, DB.enqueue
+       * rendait { value: { seq, action } } au lieu de { seq, action } : « saved.seq »
+       * valait undefined, l'entrée restait marquée « pas encore prête » et
+       * l'action n'était JAMAIS envoyée au serveur — le message s'affichait chez
+       * son auteur et n'arrivait chez personne. Même piège pour DB.queued (file
+       * perdue au démarrage) et DB.loadState (état local lu comme vide). */
+      if (!db) { return unwrap(work(null)); }
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(storeName, mode);
         var store = tx.objectStore(storeName);
@@ -59,7 +77,7 @@
         try { result = work(store); } catch (e) { reject(e); return; }
         /* On attend la FIN de la transaction : une clé auto-incrémentée n'est
          * réellement acquise qu'à ce moment (sinon action orpheline). */
-        tx.oncomplete = function () { resolve(result && result.value !== undefined ? result.value : result); };
+        tx.oncomplete = function () { resolve(unwrap(result)); };
         tx.onerror = function () { reject(tx.error || new Error("Transaction IndexedDB échouée")); };
         tx.onabort = function () { reject(tx.error || new Error("Transaction IndexedDB annulée")); };
       });

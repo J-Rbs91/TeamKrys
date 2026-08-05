@@ -81,14 +81,28 @@
     });
   }
 
+  /* ⚠️ DEUXIÈME PIÈGE APPS SCRIPT : /exec répond par une redirection 302 vers
+   * script.googleusercontent.com. Une redirection sans en-tête de cache est
+   * mise en cache HEURISTIQUEMENT par les navigateurs — et le client relit
+   * alors éternellement la même réponse : la révision ne bouge plus, les
+   * messages des autres n'arrivent jamais. « no-store » plus un paramètre
+   * jetable rendent chaque appel unique. Le backend ignore les paramètres
+   * qu'il ne connaît pas : rien à changer côté script. */
+  function nocache(params) {
+    params._ = Date.now().toString(36);
+    return params;
+  }
+
   /* Léger : appelé en boucle. */
   Api.getRevision = function (baseUrl, token) {
-    return send(buildUrl(baseUrl, { mode: "revision", auth: token || "" }), { method: "GET" });
+    return send(buildUrl(baseUrl, nocache({ mode: "revision", auth: token || "" })),
+      { method: "GET", cache: "no-store" });
   };
 
   /* Lourd : appelé uniquement quand la révision a changé. */
   Api.getState = function (baseUrl, token) {
-    return send(buildUrl(baseUrl, { mode: "state", auth: token || "" }), { method: "GET" });
+    return send(buildUrl(baseUrl, nocache({ mode: "state", auth: token || "" })),
+      { method: "GET", cache: "no-store" });
   };
 
   Api.postAction = function (baseUrl, token, action) {

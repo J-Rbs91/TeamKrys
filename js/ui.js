@@ -1262,11 +1262,23 @@
         onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
       [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
       el("div", { class: "diag" }, [
+        /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux
+         * codes différents = deux scripts différents, et c'est la première
+         * explication à « je ne vois pas les messages des autres ». */
+        connected ? diagRow("Code d'espace", Utils.fingerprint(Sync.connection.url)) : null,
         diagRow("Révision", String(diagnostics.revision)),
         diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "—"),
+        connected ? diagRow("Dernier échange",
+          diagnostics.lastSyncAt ? Utils.formatDateTime(diagnostics.lastSyncAt) : "aucun",
+          !diagnostics.lastSyncAt) : null,
+        connected ? diagRow("Rythme actuel",
+          (diagnostics.intervalMs / 1000).toFixed(1).replace(".", ",") + " s" +
+          (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,
         diagRow("Actions en attente", String(diagnostics.pending.length) +
           (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
-        diagRow("Stockage local", diagnostics.persistent ? "IndexedDB" : "mémoire (non persistant)"),
+        diagRow("Stockage local", diagnostics.persistent
+          ? "IndexedDB"
+          : "mémoire — non persistant", !diagnostics.persistent),
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
         diagRow("Version", CONFIG.APP_VERSION)
       ])

@@ -51,7 +51,8 @@ service-worker.js          hors ligne : précache de la coquille
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/                      installation, guide utilisateur, checklist de test
-tests/parity.test.js       tests exécutables avec `node tests/parity.test.js`
+tests/parity.test.js       parité client / backend, action par action
+tests/sync.test.js         deux clients face à un faux backend (réception, file)
 ```
 
 ---
@@ -156,11 +157,39 @@ Le frontend n'écrit **jamais** le JSON complet. Il envoie des actions précises
 (`CREATE_MESSAGE`, `SET_VOTE`, …) que le backend applique sur la dernière
 version. Deux personnes qui écrivent en même temps ne s'écrasent donc pas.
 
-- `GET ?mode=revision` → `{revision, updatedAt}` — léger, appelé en boucle
-  (3 s onglet visible, 30 s onglet masqué) ;
+- `GET ?mode=revision` → `{revision, updatedAt}` — léger, appelé en boucle ;
 - `GET ?mode=state` → l'état complet, téléchargé **seulement** si la révision
   a changé ;
 - `POST` (corps = l'action) → `{ok, revision, state, duplicate}`.
+
+### Rythme adaptatif
+
+Le rythme d'interrogation n'est pas fixe : il suit l'activité réelle
+(`CONFIG.POLL_*`).
+
+| Régime | Cadence | Quand |
+|---|---|---|
+| Nerveux | 1,8 s | pendant les 90 s qui suivent une écriture — la sienne ou celle d'un autre |
+| Repos | jusqu'à 6 s | personne n'écrit ; relâchement progressif, pas un saut |
+| Arrière-plan | 60 s | onglet masqué |
+| Recul | ×2 par échec, plafond 60 s | le réseau ou le serveur ne répond pas |
+
+Une cadence fixe de 3 s était le pire des deux mondes : 1 200 requêtes par
+heure et par personne sur un backend Apps Script qui sérialise tout derrière un
+`LockService` — donc contention, latence et erreurs dès que plusieurs
+téléphones interrogent ensemble — et malgré ce coût une réception toujours en
+retard d'un tour de boucle.
+
+Le repos reste volontairement **court** (6 s) : c'est lui qui plafonne l'attente
+du *premier* message après un silence, le seul cas où la nouvelle cadence peut
+être plus lente que l'ancienne. Tout le reste d'une conversation arrive à 1,8 s,
+soit près de deux fois plus vite qu'avant — et sur un serveur bien moins
+encombré, donc avec des allers-retours eux-mêmes plus courts.
+
+> Les deux `GET` partent en `cache: "no-store"` avec un paramètre jetable :
+> `/exec` répond par une redirection 302 que les navigateurs mettent en cache
+> **heuristiquement** faute d'en-tête, et une redirection figée gèle la révision
+> — les messages des autres n'arrivent alors plus jamais.
 
 Côté serveur : verrou (`LockService`), déduplication des identifiants d'actions
 déjà traités, `revision` incrémentée à chaque écriture.
@@ -168,7 +197,18 @@ déjà traités, `revision` incrémentée à chaque écriture.
 Côté application : application optimiste immédiate, file d'actions persistée
 dans **IndexedDB** (ordre garanti par une clé auto-incrémentée), rejeu au retour
 du réseau. Une erreur **réseau** conserve la file ; une erreur **métier**
-(action devenue impossible) retire l'action et l'explique à l'utilisateur.
+(action devenue impossible) retire l'action et l'explique à l'utilisateur. Un
+échec du **stockage local** est une troisième catégorie, à ne confondre avec
+aucune des deux : l'action quitte quand même la file en mémoire — sinon elle
+serait repostée sans fin — et l'éventuel doublon au redémarrage est absorbé par
+la déduplication serveur.
+
+Là où IndexedDB est refusée (fenêtre in-app d'une messagerie, navigation privée,
+protection renforcée contre le pistage), `js/database.js` bascule sur un repli
+**mémoire**. Ce repli doit rendre exactement la même forme que la branche
+IndexedDB — c'est le rôle du déballage commun de `withStore`. L'application le
+signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
+écrite hors ligne n'y survit pas à la fermeture de la page.
 
 > Le POST part volontairement en `Content-Type: text/plain;charset=utf-8` :
 > c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
@@ -236,8 +276,17 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 
 ```bash
 node tests/parity.test.js
+node tests/sync.test.js
 node tests/qa/compat-scan.js
 ```
+
+`sync.test.js` monte **deux clients complets** (`state.js` + `database.js` +
+`sync.js`, chacun dans son contexte isolé) face à un faux backend qui reproduit
+le contrat du script Apps Script, et vérifie la seule question qui compte :
+*l'utilisateur A voit-il le message de l'utilisateur B ?* Il couvre aussi le
+repli mémoire, le refus métier, la panne réseau et l'arrêt de la boucle. Node
+n'ayant pas d'IndexedDB, c'est toujours le repli mémoire qui est exercé — la
+branche IndexedDB reste du ressort de la recette sur appareil.
 
 Ces tests couvrent, action par action, la logique que le backend doit reproduire
 à l'identique (validation, réduction, migration des anciens JSON, indicateurs de
