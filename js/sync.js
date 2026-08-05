@@ -32,6 +32,21 @@
   var activeUntil = 0;       // régime nerveux jusqu'à cet instant
   var storageWarned = false;
 
+  /* Capacités annoncées par le serveur. Le frontend et le backend se déploient
+   * séparément — GitHub Pages d'un côté, Apps Script de l'autre, et des
+   * téléphones qui gardent longtemps une version en cache. Plutôt que d'exiger
+   * une mise à jour simultanée, chaque réponse du serveur dit ce qu'il sait
+   * faire, et le client n'emprunte un raccourci qu'une fois celui-ci annoncé.
+   * Un serveur d'avant n'annonce rien : on retombe sur le protocole d'origine,
+   * sans rien casser ni de son côté ni du nôtre. */
+  var features = [];
+
+  Sync.supports = function (name) { return features.indexOf(name) >= 0; };
+
+  function learn(response) {
+    if (response && Array.isArray(response.features)) { features = response.features; }
+  }
+
   Sync.connection = {
     url: "",
     token: "",       // jeton SHA-256 — vit uniquement en mémoire vive
@@ -176,7 +191,7 @@
       entry.seq = saved && saved.seq !== undefined && saved.seq !== null ? saved.seq : null;
       if (entry.seq === null) { throw new Error("clé de file non attribuée"); }
       changed();
-      Sync.push();
+      schedulePush();
       return { ok: true, error: null };
     }).catch(function () {
       /* L'action est retirée de la file : la garder « pas prête » la rendrait
@@ -190,16 +205,133 @@
 
   /* ------------------------------------------------------------ Envoi --- */
 
+  var pushTimer = null;
+
+  /* Laisse une rafale se regrouper avant de partir. Contre un serveur qui ne
+   * sait pas grouper, on envoie tout de suite : attendre ne servirait à rien. */
+  function schedulePush() {
+    if (!Sync.supports("batch")) { Sync.push(); return; }
+    if (pushTimer) { return; }
+    pushTimer = setTimeout(function () {
+      pushTimer = null;
+      Sync.push();
+    }, CONFIG.BATCH_COALESCE_MS);
+  }
+
+  /* Classification commune des refus du serveur. Elle ne porte QUE sur la
+   * réponse : un échec du stockage local n'est pas un refus du serveur. */
+  function classify(error) {
+    if (Api.isAuthError(error)) {
+      lastError = error.message;
+      if (hooks.onAuthError) { hooks.onAuthError(); }
+      return { done: false, halt: true };
+    }
+    if (Api.isNetworkError(error)) {
+      failures += 1;
+      lastError = error.message;
+      return { done: false, halt: true };
+    }
+    return null;   // erreur MÉTIER : au traitement appelant de décider
+  }
+
+  /* Retire une liste d'entrées de la file, en mémoire quoi qu'il arrive. */
+  function dropEntries(entries) {
+    return entries.reduce(function (chain, item) {
+      return chain
+        .then(function () { return DB.dequeue(item.seq).catch(function () { return null; }); })
+        .then(function () { Store.removeFromQueue(item.seq); });
+    }, Promise.resolve()).then(function () {
+      return DB.saveState(Store.base).catch(function () { return null; });
+    });
+  }
+
+  /* Envoi GROUPÉ. Le serveur applique les actions dans l'ordre, sur une même
+   * lecture du fichier, et rend un verdict PAR action : une action refusée
+   * n'emporte pas les valides du même envoi. */
+  function pushBatch(entries) {
+    var actions = entries.map(function (e) { return e.action; });
+
+    return Api.postActions(Sync.connection.url, Sync.connection.token, actions)
+      .then(function (response) {
+        learn(response);
+        failures = 0;
+        lastError = null;
+        lastSyncAt = Utils.nowISO();
+        if (response.state) { Store.setBase(response.state); }
+        wake();
+        return { done: true, results: Array.isArray(response.results) ? response.results : null };
+      }, function (error) {
+        var verdict = classify(error);
+        if (verdict) { return verdict; }
+        /* Refus MÉTIER portant sur l'envoi ENTIER (corps illisible, lot trop
+         * gros) : on n'a aucun verdict par action. Repartir une par une isole
+         * la fautive au lieu de sacrifier tout le lot. */
+        message("Envoi refusé : " + error.message, "error");
+        return { done: true, results: null, single: true };
+      })
+      .then(function (outcome) {
+        if (!outcome.done) { return outcome; }
+
+        if (outcome.single) {
+          /* On ne retire rien : le prochain tour repassera en envoi unitaire,
+           * ce qui fera ressortir l'action réellement en cause. */
+          features = features.filter(function (f) { return f !== "batch"; });
+          return outcome;
+        }
+
+        var verdicts = {};
+        if (outcome.results) {
+          outcome.results.forEach(function (r) { if (r && r.id) { verdicts[r.id] = r; } });
+        }
+
+        var settled = entries.filter(function (item) {
+          if (!outcome.results) { return true; }   // serveur muet : tout a été appliqué
+          return Object.prototype.hasOwnProperty.call(verdicts, item.action.id);
+        });
+
+        settled.forEach(function (item) {
+          var verdict = verdicts[item.action.id];
+          if (verdict && verdict.ok === false) {
+            message("Action refusée : " + verdict.error, "error");
+          }
+        });
+
+        return dropEntries(settled).then(function () { return outcome; });
+      })
+      .then(function (outcome) {
+        busy = false;
+        changed();
+        if (outcome.halt) { return; }
+        var more = Store.queue.some(function (e) { return e.seq !== null && e.seq !== undefined; });
+        if (more) { return Sync.push(); }
+      })
+      .catch(function () {
+        busy = false;
+        changed();
+      });
+  }
+
   Sync.push = function () {
     if (busy || !Sync.isConnected()) { return Promise.resolve(); }
-    var entry = null;
+
+    /* Seules les actions dont la clé de file est attribuée sont envoyables, et
+     * l'ORDRE de la file fait foi : on ne saute jamais par-dessus une action
+     * pas encore prête, sinon un message partirait avant le sujet qui le porte. */
+    var ready = [];
     for (var i = 0; i < Store.queue.length; i++) {
-      if (Store.queue[i].seq !== null && Store.queue[i].seq !== undefined) { entry = Store.queue[i]; break; }
+      var candidate = Store.queue[i];
+      if (candidate.seq === null || candidate.seq === undefined) { break; }
+      ready.push(candidate);
+      if (!Sync.supports("batch") || ready.length >= CONFIG.MAX_BATCH) { break; }
     }
-    if (!entry) { return Promise.resolve(); }
+    if (!ready.length) { return Promise.resolve(); }
+
+    var entry = ready[0];
 
     busy = true;
     changed();
+
+    if (ready.length > 1) { return pushBatch(ready); }
 
     /* ⚠️ La CLASSIFICATION de l'erreur se fait ici, sur la seule réponse du
      * serveur. Auparavant le catch englobait aussi les écritures IndexedDB qui
@@ -208,6 +340,7 @@
      * la file échouait lui aussi, la même action repartait en boucle. */
     return Api.postAction(Sync.connection.url, Sync.connection.token, entry.action)
       .then(function (response) {
+        learn(response);
         failures = 0;
         lastError = null;
         lastSyncAt = Utils.nowISO();
@@ -215,19 +348,10 @@
         wake();
         return { done: true };
       }, function (error) {
-        if (Api.isAuthError(error)) {
-          /* Code d'accès invalidé en cours de session → on reverrouille. */
-          lastError = error.message;
-          if (hooks.onAuthError) { hooks.onAuthError(); }
-          return { done: false, halt: true };
-        }
-        if (Api.isNetworkError(error)) {
-          /* Erreur RÉSEAU : la file reste intacte, on réessaiera — mais plus
-           * doucement à chaque échec (voir interval()). */
-          failures += 1;
-          lastError = error.message;
-          return { done: false, halt: true };
-        }
+        /* Code d'accès invalidé → reverrouillage. Erreur RÉSEAU → la file reste
+         * intacte, on réessaiera plus doucement (voir interval()). */
+        var verdict = classify(error);
+        if (verdict) { return verdict; }
         /* Erreur MÉTIER : l'action ne passera jamais, on la retire pour ne pas
          * bloquer les suivantes, et on prévient clairement l'utilisateur. */
         message("Action refusée : " + error.message, "error");
@@ -239,13 +363,7 @@
          * MÉMOIRE a lieu même si IndexedDB refuse, sinon la file ne se vide
          * jamais et la même action est repostée sans fin. Le doublon éventuel
          * au prochain démarrage est neutralisé par la déduplication serveur. */
-        return DB.dequeue(entry.seq)
-          .catch(function () { return null; })
-          .then(function () {
-            Store.removeFromQueue(entry.seq);
-            return DB.saveState(Store.base).catch(function () { return null; });
-          })
-          .then(function () { return outcome; });
+        return dropEntries([entry]).then(function () { return outcome; });
       })
       .then(function (outcome) {
         busy = false;
@@ -269,13 +387,45 @@
     changed();
 
     var recovering = !!lastError;
+    var known = Store.base.revision;
 
+    /* Serveur récent : UN seul aller-retour. Il ne renvoie l'état que si la
+     * révision annoncée a bougé — sinon la réponse est minuscule et le fichier
+     * Drive n'est même pas lu. « since: -1 » force le téléchargement. */
+    if (Sync.supports("since")) {
+      var suspectNow = force && (known === 0 || recovering);
+      return Api.getStateSince(Sync.connection.url, Sync.connection.token, suspectNow ? -1 : known)
+        .then(function (payload) {
+          learn(payload);
+          failures = 0;
+          lastError = null;
+          lastSyncAt = Utils.nowISO();
+          if (payload.unchanged || !payload.state) { idleRounds += 1; return null; }
+          if (Store.setBase(payload.state)) { wake(); } else { idleRounds += 1; }
+          return DB.saveState(Store.base).catch(function () { return null; });
+        })
+        .catch(function (error) {
+          if (Api.isAuthError(error)) {
+            lastError = error.message;
+            if (hooks.onAuthError) { hooks.onAuthError(); }
+            return;
+          }
+          failures += 1;
+          lastError = error.message;
+        })
+        .then(function () {
+          pulling = false;
+          changed();
+        });
+    }
+
+    /* Serveur d'avant : le protocole d'origine, en deux temps. */
     return Api.getRevision(Sync.connection.url, Sync.connection.token)
       .then(function (info) {
+        learn(info);
         failures = 0;
         lastError = null;
         lastSyncAt = Utils.nowISO();
-        var known = Store.base.revision;
         /* « force » signifie « n'attends pas le prochain tour », PAS « retélécharge
          * tout ». La révision est incrémentée par le serveur à chaque écriture :
          * même révision = même état, et rapatrier l'état entier à chaque retour
@@ -377,6 +527,7 @@
     cycleToken += 1;      // invalide aussi le cycle déjà en vol
     looping = false;
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
   };
 
   Sync.now = function () {
@@ -404,6 +555,9 @@
        * synchronisation « traîne ». */
       intervalMs: interval(),
       failures: failures,
+      /* Capacités du serveur en face : dit tout de suite si le backend déployé
+       * est celui qu'on croit. */
+      features: features.slice(),
       pending: Store.queue.map(function (e) { return { seq: e.seq, type: e.action.type }; })
     };
   };

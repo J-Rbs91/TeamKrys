@@ -105,11 +105,33 @@
       { method: "GET", cache: "no-store" });
   };
 
+  /* Lecture CONDITIONNELLE : le client annonce la révision qu'il détient et le
+   * serveur ne renvoie l'état que si elle a bougé. Un seul aller-retour au lieu
+   * de deux — c'est la moitié du délai de réception d'un message. Réservé aux
+   * serveurs qui annoncent la capacité « since » (voir Sync.supports). */
+  Api.getStateSince = function (baseUrl, token, since) {
+    return send(buildUrl(baseUrl, nocache({
+      mode: "state", auth: token || "", since: String(since)
+    })), { method: "GET", cache: "no-store" });
+  };
+
   Api.postAction = function (baseUrl, token, action) {
     return send(buildUrl(baseUrl, { auth: token || "" }), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(action)
+    });
+  };
+
+  /* Envoi GROUPÉ : le serveur applique les actions dans l'ordre reçu, sur la
+   * même lecture du fichier. Cinq réactions enchaînées coûtaient cinq
+   * allers-retours d'environ une seconde chacun ; elles n'en coûtent plus qu'un.
+   * Réservé aux serveurs qui annoncent la capacité « batch ». */
+  Api.postActions = function (baseUrl, token, actions) {
+    return send(buildUrl(baseUrl, { auth: token || "" }), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(actions)
     });
   };
 

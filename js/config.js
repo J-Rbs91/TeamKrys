@@ -10,7 +10,7 @@
     APP_NAME: "BrainstO.",
 
     /* À incrémenter EN MÊME TEMPS que CACHE_VERSION dans service-worker.js. */
-    APP_VERSION: "1.3.0",
+    APP_VERSION: "1.4.0",
 
     /* Sel public partagé avec le backend. Ce n'est PAS un secret : il sert
      * uniquement à séparer les deux hachages (jeton serveur / vérificateur local). */
@@ -37,6 +37,18 @@
     POLL_HIDDEN_MS: 60000,         // onglet masqué
     POLL_ACTIVE_WINDOW_MS: 90000,  // durée du régime nerveux après une activité
     POLL_BACKOFF_MAX_MS: 60000,    // plafond du recul après échecs réseau
+
+    /* Actions envoyées en un seul POST, quand le serveur annonce « batch ».
+     * Doit rester ≤ MAX_BATCH du script Apps Script, sinon le lot est refusé
+     * en bloc et le client repart en envoi unitaire pour rien. */
+    MAX_BATCH: 20,
+
+    /* Petite attente avant d'envoyer, pour laisser une rafale se regrouper.
+     * Sans elle, la première action part seule pendant que les suivantes
+     * attendent encore leur clé de file, et cinq réactions coûtent deux envois
+     * au lieu d'un. 150 ms est invisible à côté d'un aller-retour Apps Script,
+     * qui se compte en secondes. Ignoré si le serveur ne sait pas grouper. */
+    BATCH_COALESCE_MS: 150,
 
     /* Reverrouillage après ce délai passé en arrière-plan. */
     LOCK_BACKGROUND_MS: 3 * 60 * 1000,

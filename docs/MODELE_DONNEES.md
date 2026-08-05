@@ -4,8 +4,14 @@ Un seul fichier JSON, sur Google Drive. Le frontend n'écrit jamais ce fichier :
 il envoie des **actions**, que le backend applique sur la dernière version.
 
 La référence exécutable de ce document est [`js/state.js`](../js/state.js) ;
-le backend Apps Script en est la copie conforme, vérifiée par
-[`tests/parity.test.js`](../tests/parity.test.js).
+[`apps-script/Code.gs`](../apps-script/Code.gs) en est la copie conforme — et
+cette conformité n'est plus déclarative : [`tests/parity.test.js`](../tests/parity.test.js)
+charge les deux et leur fait passer les mêmes vecteurs, action par action.
+
+`processedActionIds` reste **côté serveur uniquement**. Il sert à la
+déduplication et le client ne le lit jamais : le backend le retire de l'état
+qu'il envoie (capacité `lean`), ce qui allège d'un tiers chaque téléchargement.
+`ensureShape()` le recrée à vide côté client, sans conséquence.
 
 ---
 

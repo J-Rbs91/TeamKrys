@@ -11,8 +11,14 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
-- [ ] `git status` propre : aucun `.gs`, aucun `appsscript.json`, aucun secret,
-      aucun `node_modules/` ni `package*.json`.
+- [ ] `apps-script/Code.gs` : `ACCESS_CODE` et `DATA_FILE_ID` **vides** dans le
+      dépôt (vérifié par `parity.test.js`, à relire tout de même avant de
+      committer).
+- [ ] `BACKEND_VERSION` incrémentée si `Code.gs` a changé — c'est elle qui
+      déclenche la sauvegarde automatique avant la première écriture.
+- [ ] `git status` propre : aucun secret, aucun `node_modules/` ni
+      `package*.json`. Les seuls fichiers backend versionnés sont
+      `apps-script/Code.gs` et `apps-script/appsscript.json`.
 - [ ] `CONFIG.APP_VERSION` et `CACHE_VERSION` incrémentés **ensemble**.
 
 ## 1. Premier lancement

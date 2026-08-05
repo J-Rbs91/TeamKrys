@@ -43,32 +43,87 @@ async function check(name, fn) {
 
 /* ------------------------------------------------------- Faux backend --- */
 
-function makeServer() {
-  const srv = { data: Core.emptyState(), calls: { revision: 0, state: 0, post: 0 }, down: false };
+/* options.features : capacités annoncées. Un tableau vide reproduit le backend
+ * d'AVANT (protocole en deux temps, une action par POST) — c'est ce qui prouve
+ * qu'un client à jour continue de fonctionner contre un script pas encore
+ * redéployé. */
+function makeServer(options) {
+  options = options || {};
+  const features = options.features || [];
+  const srv = {
+    data: Core.emptyState(), features,
+    calls: { revision: 0, state: 0, post: 0, actionsPosted: 0 },
+    down: false
+  };
 
-  srv.post = function (action) {
-    srv.calls.post += 1;
-    if (srv.down) { const e = new Error("Connexion impossible."); e.kind = "network"; throw e; }
+  function envelope(payload) {
+    return Object.assign({ ok: true, features }, payload);
+  }
+
+  function applyOne(action) {
+    /* Refus décidé par le SERVEUR seul : c'est le cas réel où la validation
+     * optimiste du client passe (sa vue est encore à jour) mais où l'état
+     * serveur a changé entre-temps. */
+    if (srv.rejectWhen && srv.rejectWhen(action)) {
+      return { id: action.id, ok: false, error: "Refus simulé côté serveur." };
+    }
     if (srv.data.processedActionIds.indexOf(action.id) >= 0) {
-      return { ok: true, duplicate: true, revision: srv.data.revision, state: clone(srv.data) };
+      return { id: action.id, ok: true, duplicate: true };
     }
     const verdict = Core.validateAction(srv.data, action);
-    if (!verdict.ok) { const e = new Error(verdict.error); e.kind = "server"; throw e; }
+    if (!verdict.ok) { return { id: action.id, ok: false, error: verdict.error }; }
     Core.applyAction(srv.data, action, new Date().toISOString());
     srv.data.revision += 1;
     srv.data.processedActionIds.push(action.id);
-    return { ok: true, revision: srv.data.revision, state: clone(srv.data) };
+    return { id: action.id, ok: true };
+  }
+
+  srv.post = function (body) {
+    srv.calls.post += 1;
+    if (srv.down) { const e = new Error("Connexion impossible."); e.kind = "network"; throw e; }
+    const actions = Array.isArray(body) ? body : [body];
+    srv.calls.actionsPosted += actions.length;
+
+    if (!Array.isArray(body)) {
+      /* Chemin d'origine : un refus métier est une erreur de la requête. */
+      const result = applyOne(body);
+      if (result.ok === false) { const e = new Error(result.error); e.kind = "server"; throw e; }
+      return envelope({ revision: srv.data.revision, state: lean(srv.data), duplicate: !!result.duplicate });
+    }
+
+    const results = actions.map(applyOne);
+    return envelope({ revision: srv.data.revision, state: lean(srv.data), results });
   };
 
   srv.revision = function () {
     srv.calls.revision += 1;
     if (srv.down) { const e = new Error("Connexion impossible."); e.kind = "network"; throw e; }
-    return { ok: true, revision: srv.data.revision, updatedAt: srv.data.updatedAt };
+    return envelope({ revision: srv.data.revision, updatedAt: srv.data.updatedAt });
   };
 
-  srv.state = function () { srv.calls.state += 1; return { ok: true, state: clone(srv.data) }; };
+  srv.state = function (since) {
+    srv.calls.state += 1;
+    if (srv.down) { const e = new Error("Connexion impossible."); e.kind = "network"; throw e; }
+    if (features.indexOf("since") >= 0 && since !== undefined && since !== null && since !== "") {
+      const known = parseInt(since, 10);
+      if (!isNaN(known) && known === srv.data.revision) {
+        return envelope({ unchanged: true, revision: known });
+      }
+    }
+    return envelope({ revision: srv.data.revision, state: lean(srv.data) });
+  };
   return srv;
 }
+
+/* L'état envoyé au client n'emporte pas processedActionIds (capacité « lean »). */
+function lean(state) {
+  return {
+    revision: state.revision, updatedAt: state.updatedAt,
+    participants: clone(state.participants), topics: clone(state.topics)
+  };
+}
+
+const MODERN = ["since", "batch", "lean"];
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
@@ -93,9 +148,15 @@ function makeClient(name, server, options) {
     isNetworkError: (e) => !!e && e.kind === "network",
     isAuthError: (e) => !!e && e.kind === "auth",
     getRevision: () => { try { return Promise.resolve(server.revision()); } catch (e) { return Promise.reject(e); } },
-    getState: () => Promise.resolve(server.state()),
+    getState: () => { try { return Promise.resolve(server.state()); } catch (e) { return Promise.reject(e); } },
+    getStateSince: (url, token, since) => {
+      try { return Promise.resolve(server.state(since)); } catch (e) { return Promise.reject(e); }
+    },
     postAction: (url, token, action) => {
       try { return Promise.resolve(server.post(action)); } catch (e) { return Promise.reject(e); }
+    },
+    postActions: (url, token, actions) => {
+      try { return Promise.resolve(server.post(actions)); } catch (e) { return Promise.reject(e); }
     }
   };
 
@@ -275,6 +336,137 @@ async function run() {
     assert(a !== b, "deux adresses différentes donnent la même empreinte");
     assert(a === Utils.fingerprint("https://script.google.com/macros/s/AAA/exec"), "empreinte instable");
     assert(a.length === 9 && a.indexOf("script") < 0, "l'empreinte laisse filtrer l'adresse");
+  });
+
+  /* ------------------------------------- Négociation de capacités --- */
+
+  /* Le frontend (GitHub Pages) et le backend (Apps Script) se déploient
+   * séparément, et les téléphones gardent longtemps une version en cache. Les
+   * deux sens de désaccord doivent donc marcher. */
+
+  await check("client à jour + backend PAS ENCORE redéployé : rien ne casse", async () => {
+    const srv = makeServer({ features: [] });
+    const B = makeClient("B", srv, { indexedDB: false });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await B.Sync.boot(); await A.Sync.boot(); await settle();
+
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(B, { topicId: "t1", messageId: "m1", text: "Salut A" });
+    await A.Sync.now(); await settle();
+
+    assert(A.Sync.supports("since") === false, "capacité déduite d'un serveur qui n'annonce rien");
+    assert(A.Sync.supports("batch") === false, "capacité déduite d'un serveur qui n'annonce rien");
+    const topic = Core.findTopic(A.Store.view, "t1");
+    assert(topic && Core.findMessage(topic, "m1"), "A ne voit pas le message de B");
+  });
+
+  await check("backend à jour : la lecture ne coûte plus qu'un aller-retour", async () => {
+    const srv = makeServer({ features: MODERN });
+    const B = makeClient("B", srv, { indexedDB: false });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await B.Sync.boot(); await A.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await A.Sync.now(); await settle();
+    assert(A.Sync.supports("since"), "la capacité « since » n'a pas été apprise");
+
+    /* B écrit ; A doit tout recevoir en UNE requête. */
+    await say(B, { topicId: "t1", messageId: "m1", text: "Salut A" });
+    const before = { revision: srv.calls.revision, state: srv.calls.state };
+    await A.Sync.now(); await settle();
+
+    assert(srv.calls.revision === before.revision,
+      "mode=revision est encore appelé alors que « since » est disponible");
+    assert(srv.calls.state === before.state + 1,
+      "la réception a coûté " + (srv.calls.state - before.state) + " requêtes au lieu d'une");
+    const topic = Core.findTopic(A.Store.view, "t1");
+    assert(Core.findMessage(topic, "m1"), "A ne voit pas le message de B");
+
+    /* Et un tour sans rien de neuf reste une seule requête, minuscule. */
+    const idle = srv.calls.state;
+    await A.Sync.now(); await settle();
+    assert(srv.calls.state === idle + 1, "un tour au repos devrait coûter une requête");
+  });
+
+  await check("backend à jour : cinq réactions partent en un seul envoi", async () => {
+    const srv = makeServer({ features: MODERN });
+    const B = makeClient("B", srv, { indexedDB: false });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await B.Sync.boot(); await A.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(B, { topicId: "t1", messageId: "m1", text: "x" });
+    await A.Sync.now(); await settle();
+
+    const before = srv.calls.post;
+    /* Cinq réactions enchaînées, sans laisser la file se vider entre-temps. */
+    for (const emoji of ["👌", "💪", "🤏", "👎", "💩"]) {
+      A.Sync.dispatch(A.Sync.makeAction("SET_REACTION",
+        { topicId: "t1", messageId: "m1", emoji }, A.user));
+    }
+    await settle();
+    await A.Sync.now(); await settle();
+
+    const posts = srv.calls.post - before;
+    assert(posts === 1, "les cinq réactions ont coûté " + posts + " allers-retours au lieu d'un");
+    assert(A.Sync.pendingCount() === 0, "la file n'est pas vidée après l'envoi groupé");
+    assert(srv.calls.actionsPosted >= 5, "des actions ont été perdues en route");
+  });
+
+  await check("envoi groupé : une action refusée n'emporte pas les valides", async () => {
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    /* Trois actions d'un coup, dont une que le SERVEUR refuse — cas réel d'un
+     * état modifié ailleurs entre la validation optimiste et l'envoi. Le refus
+     * arrive au milieu du lot : c'est la position qui compte. */
+    srv.rejectWhen = (action) => action.payload && action.payload.text === "perdu";
+    A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "ok1", text: "avant" }, A.user));
+    A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "ko", text: "perdu" }, A.user));
+    A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "ok2", text: "après" }, A.user));
+    await settle();
+    await A.Sync.now(); await settle();
+
+    const topic = Core.findTopic(A.Store.view, "t1");
+    assert(Core.findMessage(topic, "ok1"), "le message d'avant le refus a été perdu");
+    assert(Core.findMessage(topic, "ok2"), "le message d'APRÈS le refus a été perdu");
+    assert(A.Sync.pendingCount() === 0, "la file reste bloquée par l'action refusée");
+    assert(A.messages.some((m) => m.indexOf("refusée") >= 0), "le refus n'est pas expliqué");
+  });
+
+  await check("l'ordre de la file est respecté malgré le groupage", async () => {
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    /* Le sujet et ses messages partent dans le même lot : si l'ordre n'était
+     * pas tenu, le serveur refuserait les messages d'un sujet pas encore créé. */
+    A.Sync.dispatch(A.Sync.makeAction("CREATE_TOPIC", { topicId: "t9", title: "Ordre" }, A.user));
+    for (let i = 0; i < 4; i++) {
+      A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+        { topicId: "t9", messageId: "m" + i, text: "message " + i }, A.user));
+    }
+    await settle();
+    await A.Sync.now(); await settle();
+
+    const topic = Core.findTopic(A.Store.view, "t9");
+    assert(topic, "le sujet du lot n'a pas été créé");
+    assert(topic.messages.length === 4, "seulement " + topic.messages.length + " messages sur 4");
+    assert(topic.messages.map((m) => m.text).join("|") === "message 0|message 1|message 2|message 3",
+      "l'ordre des messages n'est pas tenu");
+    assert(A.messages.every((m) => m.indexOf("refusée") < 0), "une action a été refusée à tort");
+  });
+
+  await check("backend à jour : l'état reçu ne porte plus processedActionIds", async () => {
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    assert(A.Store.base.processedActionIds.length === 0,
+      "le client reçoit encore les identifiants de déduplication");
+    assert(Core.findTopic(A.Store.view, "t1"), "l'allègement a fait perdre le sujet");
   });
 
   console.log(failures.length
