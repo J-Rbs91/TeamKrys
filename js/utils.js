@@ -325,6 +325,25 @@
 
   /* --------------------------------------------------------------- Divers --- */
 
+  /* Empreinte courte et STABLE d'un texte, pour comparer à l'œil deux appareils
+   * (« sommes-nous bien sur le même espace d'équipe ? ») sans jamais afficher
+   * l'adresse du script. Ce n'est pas un contrôle de sécurité : juste un code de
+   * comparaison, calculé sur l'appareil et jamais transmis. */
+  Utils.fingerprint = function (text) {
+    var value = String(text == null ? "" : text);
+    var h1 = 0x811c9dc5;
+    var h2 = 0x1000193;
+    for (var i = 0; i < value.length; i++) {
+      var c = value.charCodeAt(i);
+      h1 = (h1 ^ c) >>> 0;
+      h1 = Math.imul(h1, 0x01000193) >>> 0;
+      h2 = (h2 + Math.imul(c + i, 0x85ebca6b)) >>> 0;
+    }
+    var hex = ((h1 ^ h2) >>> 0).toString(16).toUpperCase();
+    while (hex.length < 8) { hex = "0" + hex; }
+    return hex.slice(0, 4) + "-" + hex.slice(4);
+  };
+
   Utils.clone = function (value) {
     return value === undefined ? value : JSON.parse(JSON.stringify(value));
   };

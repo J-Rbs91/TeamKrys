@@ -81,14 +81,38 @@
     });
   }
 
+  /* ⚠️ DEUXIÈME PIÈGE APPS SCRIPT : /exec répond par une redirection 302 vers
+   * script.googleusercontent.com. Une redirection sans en-tête de cache est
+   * mise en cache HEURISTIQUEMENT par les navigateurs — et le client relit
+   * alors éternellement la même réponse : la révision ne bouge plus, les
+   * messages des autres n'arrivent jamais. « no-store » plus un paramètre
+   * jetable rendent chaque appel unique. Le backend ignore les paramètres
+   * qu'il ne connaît pas : rien à changer côté script. */
+  function nocache(params) {
+    params._ = Date.now().toString(36);
+    return params;
+  }
+
   /* Léger : appelé en boucle. */
   Api.getRevision = function (baseUrl, token) {
-    return send(buildUrl(baseUrl, { mode: "revision", auth: token || "" }), { method: "GET" });
+    return send(buildUrl(baseUrl, nocache({ mode: "revision", auth: token || "" })),
+      { method: "GET", cache: "no-store" });
   };
 
   /* Lourd : appelé uniquement quand la révision a changé. */
   Api.getState = function (baseUrl, token) {
-    return send(buildUrl(baseUrl, { mode: "state", auth: token || "" }), { method: "GET" });
+    return send(buildUrl(baseUrl, nocache({ mode: "state", auth: token || "" })),
+      { method: "GET", cache: "no-store" });
+  };
+
+  /* Lecture CONDITIONNELLE : le client annonce la révision qu'il détient et le
+   * serveur ne renvoie l'état que si elle a bougé. Un seul aller-retour au lieu
+   * de deux — c'est la moitié du délai de réception d'un message. Réservé aux
+   * serveurs qui annoncent la capacité « since » (voir Sync.supports). */
+  Api.getStateSince = function (baseUrl, token, since) {
+    return send(buildUrl(baseUrl, nocache({
+      mode: "state", auth: token || "", since: String(since)
+    })), { method: "GET", cache: "no-store" });
   };
 
   Api.postAction = function (baseUrl, token, action) {
@@ -96,6 +120,18 @@
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(action)
+    });
+  };
+
+  /* Envoi GROUPÉ : le serveur applique les actions dans l'ordre reçu, sur la
+   * même lecture du fichier. Cinq réactions enchaînées coûtaient cinq
+   * allers-retours d'environ une seconde chacun ; elles n'en coûtent plus qu'un.
+   * Réservé aux serveurs qui annoncent la capacité « batch ». */
+  Api.postActions = function (baseUrl, token, actions) {
+    return send(buildUrl(baseUrl, { auth: token || "" }), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(actions)
     });
   };
 

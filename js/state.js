@@ -677,10 +677,33 @@
 
   Store.bump = function () { Store.version += 1; };
 
+  /* Signature bon marché d'un état. La révision est incrémentée par le serveur
+   * à CHAQUE écriture : deux états de même révision sont le même état. Les deux
+   * longueurs ne servent qu'à couvrir le cas d'un état local remis à zéro
+   * (déconnexion) qui garderait par hasard la même révision. */
+  function baseKey(state) {
+    return state.revision + "|" + state.updatedAt + "|" +
+      state.topics.length + "|" + state.participants.length;
+  }
+
+  var lastBaseKey = null;
+
+  /* Renvoie true si l'état a RÉELLEMENT changé.
+   * Republier un état identique coûtait un rebuild complet suivi d'un rendu
+   * intégral du DOM : c'est ce qui faisait clignoter l'écran et perdre le
+   * défilement à chaque « Synchroniser maintenant » ou retour d'onglet. */
   Store.setBase = function (state) {
-    Store.base = Core.ensureShape(state);
+    var next = Core.ensureShape(state);
+    var key = baseKey(next);
+    if (lastBaseKey !== null && key === lastBaseKey) { return false; }
+    lastBaseKey = key;
+    Store.base = next;
     Store.rebuild();
+    return true;
   };
+
+  /* Le mode local mute Store.base en place : la signature doit suivre. */
+  Store.touchBase = function () { lastBaseKey = baseKey(Store.base); };
 
   Store.setQueue = function (entries) {
     Store.queue = Array.isArray(entries) ? entries.slice() : [];
@@ -697,9 +720,20 @@
     Store.rebuild();
   };
 
+  /* Retrait par identité : une entrée dont la clé n'a jamais été attribuée vaut
+   * « seq: null », et filtrer sur null emporterait toutes ses voisines. */
+  Store.removeEntry = function (entry) {
+    Store.queue = Store.queue.filter(function (e) { return e !== entry; });
+    Store.rebuild();
+  };
+
   /* Recalcule la vue : état serveur + rejeu des actions en attente. */
   Store.rebuild = function () {
-    var view = Core.ensureShape(JSON.parse(JSON.stringify(Store.base)));
+    /* ensureShape reconstruit déjà chaque objet et chaque tableau à neuf (rien
+     * de l'entrée n'est partagé avec la sortie) : le JSON.parse(JSON.stringify())
+     * qui le précédait sérialisait puis reparsait tout l'état pour rien, à
+     * chaque changement — sur un sujet de 200 messages, deux fois le travail. */
+    var view = Core.ensureShape(Store.base);
     Store.queue.forEach(function (entry) {
       try { Core.reduce(view, entry.action, entry.action.ts); } catch (e) { /* action obsolète : ignorée */ }
     });

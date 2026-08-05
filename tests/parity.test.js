@@ -428,6 +428,192 @@ tests.push(() => check("Limites de saisie conformes à la spécification", () =>
   });
 }));
 
+/* ==========================================================================
+ *        PARITÉ RÉELLE : le backend Apps Script passe les mêmes vecteurs
+ * ==========================================================================
+ *
+ * Jusqu'ici la parité client/serveur reposait sur une relecture à l'œil et sur
+ * un runSelfTest() qu'il fallait penser à lancer dans l'éditeur Apps Script.
+ * apps-script/Code.gs étant désormais versionné, on peut faire mieux : le
+ * charger ici dans un contexte isolé, avec des doublures des services Google,
+ * et lui faire passer EXACTEMENT les mêmes vecteurs qu'au frontend.
+ *
+ * Une divergence entre js/state.js et Code.gs fait donc échouer
+ * « node tests/parity.test.js », au lieu de se découvrir en réunion.
+ */
+
+const fs = require("fs");
+const vm = require("vm");
+const crypto = require("crypto");
+
+const BACKEND_PATH = require("path").join(__dirname, "..", "apps-script", "Code.gs");
+const BACKEND_SOURCE = fs.readFileSync(BACKEND_PATH, "utf8");
+
+function loadBackend() {
+  const logs = [];
+  const sandbox = {
+    console: { log: (m) => logs.push(m), warn: (m) => logs.push(m), error: (m) => logs.push(m) },
+    JSON, Math, Date, Object, Array, String, Number, isFinite, isNaN, parseInt, Error,
+
+    /* ⚠️ La doublure reproduit le piège : Utilities.computeDigest renvoie des
+     * octets SIGNÉS (-128..127). Un backend qui oublie la conversion produit
+     * ici le même hexadécimal erroné qu'en production. */
+    Utilities: {
+      DigestAlgorithm: { SHA_256: "SHA_256" },
+      Charset: { UTF_8: "UTF_8" },
+      computeDigest: (algo, text) => Array.from(
+        crypto.createHash("sha256").update(String(text), "utf8").digest()
+      ).map((b) => (b > 127 ? b - 256 : b)),
+      formatDate: () => "2026-01-01-0000"
+    },
+
+    PropertiesService: { getScriptProperties: () => ({
+      getProperty: () => null, setProperty: () => null, deleteProperty: () => null }) },
+    CacheService: { getScriptCache: () => ({ get: () => null, put: () => null }) },
+    DriveApp: {},
+    LockService: {},
+    ContentService: { MimeType: { JSON: "JSON" }, createTextOutput: (t) => ({ setMimeType: () => t }) }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(BACKEND_SOURCE, sandbox, { filename: "Code.gs" });
+  return sandbox;
+}
+
+const GS = loadBackend();
+
+/* Le script est maintenant versionné : le dépôt ne doit JAMAIS porter le code
+ * d'accès de l'équipe. Ce test remplace la vigilance humaine. */
+tests.push(() => check("SÉCURITÉ : aucun code d'accès commité dans Code.gs", () => {
+  assert(GS.ACCESS_CODE === "",
+    "ACCESS_CODE doit rester vide dans le dépôt — il se renseigne dans l'éditeur Apps Script");
+  assert(GS.DATA_FILE_ID === "",
+    "DATA_FILE_ID pointe vers un Drive précis : à renseigner dans l'éditeur, pas ici");
+  assert(GS.PW_SALT === CONFIG.PW_SALT, "le sel doit être identique des deux côtés");
+}));
+
+tests.push(() => check("PARITÉ : le backend calcule les mêmes hachages", () => {
+  equal(GS.sha256Hex("abc"),
+    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    "octets signés mal convertis côté Apps Script");
+  equal(GS.sha256Hex("réunion"),
+    "8c85d3fa84b7926e2e0664129cefa7ea17401086243561611c56ee5016908ea1",
+    "encodage UTF-8 incorrect côté Apps Script");
+  equal(GS.serverTokenInput("x"), CONFIG.serverTokenInput("x"), "entrée du jeton serveur");
+  equal(GS.verifierInput("x"), CONFIG.verifierInput("x"), "entrée du vérificateur");
+}));
+
+tests.push(() => check("PARITÉ : mêmes constantes métier", () => {
+  equal(GS.REACTIONS, Core.REACTIONS, "liste des réactions");
+  equal(GS.TOPIC_STATUSES, Core.TOPIC_STATUSES, "statuts de sujet");
+  equal(GS.PROPOSAL_STATUSES, Core.PROPOSAL_STATUSES, "statuts de proposition");
+  equal(GS.VOTE_VALUES, Core.VOTE_VALUES, "valeurs de vote");
+  equal(GS.ACTION_TYPES, Core.ACTION_TYPES, "liste des actions");
+  equal(GS.LIMITS, Core.LIMITS, "limites de saisie");
+  equal(GS.ANON_NAME, Core.ANON_NAME, "nom anonyme");
+}));
+
+tests.push(() => check("PARITÉ : ensureShape rend le même état", () => {
+  const corpus = [
+    null, {}, { topics: "pas un tableau" },
+    seed(),
+    /* JSON malmené : champs manquants, types faux, citation orpheline,
+     * réaction retirée du jeu, vote vers une conclusion supprimée. */
+    { revision: "7", updatedAt: null, participants: [{ id: " u1 ", name: "  Marie  " }, { name: "sans id" }],
+      topics: [{ id: "t1", title: "", status: "inconnu", messages: [
+        { id: "m1", text: "a", reactions: { u1: "🤞", u2: "👌" }, quoteId: "disparu" },
+        { id: "m2", text: "b", anon: true, authorId: "u1", authorName: "Marie" },
+        { notAnId: true }
+      ], proposals: [{ id: "p1", votes: { u1: "peut-être", u2: "for" } }],
+        conclusions: [{ id: "c1", text: "ok" }],
+        conclusionVotes: { u1: "c1", u2: "supprimée" } }],
+      processedActionIds: ["a1", "", "a2"] }
+  ];
+  corpus.forEach((input, index) => {
+    const front = Core.ensureShape(JSON.parse(JSON.stringify(input)));
+    const back = GS.ensureShape(JSON.parse(JSON.stringify(input)));
+    equal(back, front, "ensureShape diverge sur le cas #" + index);
+  });
+}));
+
+tests.push(() => check("PARITÉ : validateAction et applyAction, action par action", () => {
+  const NOW_GS = "2026-02-02T09:00:00.000Z";
+
+  /* Un scénario qui traverse les 19 types d'actions, valides et refusées. */
+  const script = [
+    ["REGISTER_PARTICIPANT", { participantId: "u1", name: "Marie" }],
+    ["REGISTER_PARTICIPANT", { participantId: "u2", name: "Alex" }],
+    ["REGISTER_PARTICIPANT", { participantId: "u3", name: "" }],              // refus
+    ["CREATE_TOPIC", { topicId: "t1", title: "Rayon solaire" }],
+    ["CREATE_TOPIC", { topicId: "t1", title: "Doublon" }],                     // refus
+    ["CREATE_TOPIC", { topicId: "t2", title: "Anonyme", anon: true }],
+    ["UPDATE_TOPIC", { topicId: "t1", title: "Rayon solaire 2", description: "d" }],
+    ["UPDATE_TOPIC", { topicId: "absent", title: "x" }],                       // refus
+    ["CHANGE_TOPIC_STATUS", { topicId: "t1", status: "ready" }],
+    ["CHANGE_TOPIC_STATUS", { topicId: "t1", status: "n_importe_quoi" }],      // refus
+    ["CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Premier" }],
+    ["CREATE_MESSAGE", { topicId: "t1", messageId: "m2", text: "Cité", quoteId: "m1" }],
+    ["CREATE_MESSAGE", { topicId: "t1", messageId: "m3", text: "", }],         // refus
+    ["CREATE_MESSAGE", { topicId: "t1", messageId: "m4", text: "Anonyme", anon: true }],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌" }],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤞" }],         // refus
+    ["UPDATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Corrigé" }],
+    ["SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m4", anon: false }],
+    ["SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m4", anon: true }],
+    ["CREATE_PROPOSAL", { topicId: "t1", proposalId: "p1", title: "Proposition" }],
+    ["UPDATE_PROPOSAL", { topicId: "t1", proposalId: "p1", title: "Proposition 2", description: "d" }],
+    ["CHANGE_PROPOSAL_STATUS", { topicId: "t1", proposalId: "p1", status: "selected" }],
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for" }],
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for" }],           // retire le vote
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "abstain" }],
+    ["REMOVE_VOTE", { topicId: "t1", proposalId: "p1" }],
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "c1", text: "Conclusion A" }],
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "c2", text: "Conclusion B" }],
+    ["UPDATE_CONCLUSION_ITEM", { topicId: "t1", conclusionId: "c1", text: "Conclusion A+" }],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c1" }],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c2" }],            // déplace le vote
+    ["REMOVE_CONCLUSION_VOTE", { topicId: "t1" }],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c2" }],
+    ["DELETE_CONCLUSION", { topicId: "t1", conclusionId: "c2" }],              // retire aussi le vote
+    ["UPDATE_PARTICIPANT", { participantId: "u1", name: "Marie L." }],         // propage le renommage
+    ["ACTION_INVENTÉE", { topicId: "t1" }]                                     // refus
+  ];
+
+  const front = Core.emptyState();
+  const back = GS.emptyState();
+
+  script.forEach(([type, payload], index) => {
+    const action = { id: "a" + index, type, actorId: "u1", actorName: "Marie", ts: NOW_GS, payload };
+
+    const frontVerdict = Core.validateAction(front, action);
+    const backVerdict = GS.validateAction(back, action);
+    equal(backVerdict, frontVerdict,
+      "verdict divergent sur #" + index + " " + type);
+
+    if (frontVerdict.ok) {
+      Core.applyAction(front, action, NOW_GS);
+      GS.applyAction(back, action, NOW_GS);
+      equal(back, front, "état divergent après #" + index + " " + type);
+    }
+  });
+
+  /* Le scénario doit vraiment avoir exercé les deux issues. */
+  assert(front.topics.length === 2 && front.topics[0].messages.length === 3,
+    "le scénario de parité n'a pas produit l'état attendu");
+}));
+
+tests.push(() => check("PARITÉ : l'état allégé ne perd que processedActionIds", () => {
+  const state = GS.ensureShape(seed());
+  state.processedActionIds = ["a1", "a2"];
+  const lean = GS.leanState(state);
+  assert(lean.processedActionIds === undefined, "processedActionIds ne doit pas être envoyé");
+  /* Ce que reçoit le client doit redonner le même état après ensureShape,
+   * aux identifiants traités près — sinon l'allègement perdrait des données. */
+  const rebuilt = Core.ensureShape(JSON.parse(JSON.stringify(lean)));
+  const expected = Core.ensureShape(JSON.parse(JSON.stringify(state)));
+  expected.processedActionIds = [];
+  equal(rebuilt, expected, "l'allègement de l'état perd des données");
+}));
+
 /* ------------------------------------------------------------ Exécution --- */
 
 (async function run() {

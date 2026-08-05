@@ -10,16 +10,18 @@ l'équipe (celle dont le compte Google hébergera le fichier de données).
 
 ## 1. Le backend (Google Apps Script)
 
-> Le code du backend n'est **pas** dans ce dépôt, et ne doit jamais y être
-> ajouté : il contient le code d'accès de l'équipe. Il vous a été fourni à part,
-> sous forme de deux blocs à copier-coller (le script et son manifeste).
+> Le code du backend est dans ce dépôt : [`apps-script/Code.gs`](../apps-script/Code.gs)
+> et [`apps-script/appsscript.json`](../apps-script/appsscript.json). Il n'y
+> contient **aucun secret** — `ACCESS_CODE` y est vide et se renseigne dans
+> l'éditeur, à l'étape 4.
 
 1. Ouvrir <https://script.google.com> avec le compte Google qui hébergera les
    données, puis **Nouveau projet**.
-2. Coller le contenu du script dans le fichier de code (remplacer entièrement
-   `function myFunction()`).
+2. Coller le contenu de `apps-script/Code.gs` dans le fichier de code
+   (remplacer entièrement `function myFunction()`).
 3. Afficher le manifeste : **Paramètres du projet** → cocher « Afficher le
-   fichier manifeste `appsscript.json` », puis coller le manifeste fourni.
+   fichier manifeste `appsscript.json` », puis coller
+   `apps-script/appsscript.json`.
 4. **Choisir le code d'accès de l'équipe** : en haut du script, renseigner la
    variable `ACCESS_CODE`. La laisser vide signifie « accès libre ».
    Ce code ne doit figurer nulle part ailleurs : ni dans un dépôt, ni dans un
@@ -40,6 +42,47 @@ l'équipe (celle dont le compte Google hébergera le fichier de données).
 > À chaque modification du script, il faut créer une **nouvelle version** du
 > déploiement (Déployer → Gérer les déploiements → Modifier → Version : Nouvelle),
 > sinon l'ancienne version continue de répondre.
+
+---
+
+## 1 bis. Mettre à jour un backend **déjà en service**
+
+Cette section ne concerne que les espaces qui tournent déjà, avec des données
+réelles. Le risque n'est pas le code : c'est de faire pointer le nouveau script
+vers le **mauvais fichier**, ou vers aucun. L'ordre ci-dessous existe pour que
+rien d'irréversible n'arrive avant la vérification.
+
+1. **Sauvegarder d'abord, à la main.** Dans l'éditeur, exécuter `backupNow()` si
+   l'ancienne version l'expose — sinon ouvrir le dossier `BrainstO.` sur Drive
+   et dupliquer le fichier JSON. Ne pas sauter cette étape parce que le script
+   en fait une automatiquement : la sauvegarde automatique n'a lieu qu'à la
+   première écriture du nouveau code, donc *après* le point de non-retour.
+2. **Noter la révision actuelle**, lisible dans l'application : Réglages →
+   *Révision*. C'est le nombre à retrouver à l'étape 5.
+3. Coller le nouveau `Code.gs` (et le manifeste), **sans encore déployer**.
+   Renseigner `ACCESS_CODE` avec le code existant de l'équipe — le même
+   qu'avant, sinon tous les téléphones seront refusés.
+4. Exécuter **`diagnoseStorage()`**. Elle n'écrit rien. Elle affiche le fichier
+   que le nouveau script utilisera, sa date de dernière modification, la
+   révision, le nombre de sujets, de participants et de messages.
+5. **Comparer.** Si la révision et les nombres correspondent à votre espace,
+   continuer. Sinon **ne pas déployer** : renseigner `DATA_FILE_ID` en haut du
+   script avec l'identifiant du bon fichier (la fonction liste les candidats
+   trouvés sur le Drive) puis relancer `diagnoseStorage()`.
+6. Exécuter `runSelfTest()` : hachages et noyau partagé conformes.
+7. Déployer une **nouvelle version** du déploiement existant, en conservant la
+   **même adresse `/exec`** — sinon chaque personne devra ressaisir l'adresse.
+
+À la première écriture, le script dépose sur Drive une copie
+`brainsto-data.json.avant-<version>.<date>`. Pour revenir en arrière : remettre
+l'ancien code, et si le fichier de données a été abîmé, renommer la copie en
+`brainsto-data.json` après avoir écarté l'exemplaire fautif.
+
+> **Pas besoin de synchroniser les deux déploiements.** Le frontend et le
+> backend négocient leurs capacités : un téléphone resté sur l'ancienne version
+> de l'application continue de fonctionner contre le nouveau script, et
+> inversement. Vous pouvez donc déployer l'un puis l'autre, dans l'ordre que
+> vous voulez, sans fenêtre de panne.
 
 ### Diffuser l'adresse et le code
 
@@ -92,6 +135,10 @@ signalé immédiatement.
 | Modifications du script sans effet | déploiement pas mis à jour | créer une **nouvelle version** du déploiement |
 | L'application reste sur l'ancienne version | cache du service worker | publier en incrémentant `APP_VERSION` **et** `CACHE_VERSION`, puis « Mettre à jour » dans le bandeau |
 | Les données n'apparaissent plus | déconnexion ou changement d'adresse | Réglages → Modifier l'adresse ou le code |
+| Espace vide après une mise à jour du script | le script pointe vers un autre fichier que le vôtre | **ne rien écrire de plus** : exécuter `diagnoseStorage()`, puis renseigner `DATA_FILE_ID` avec le bon identifiant |
+| « Fichier de données introuvable » | aucun fichier repérable sur ce Drive | `setupProject()` pour un espace neuf, ou `DATA_FILE_ID` pour un espace existant |
+| Une personne ne voit pas les messages des autres | les deux appareils ne visent pas le même script | comparer le **Code d'espace** dans Réglages : il doit être identique |
+| « Serveur occupé, réessayez » | plusieurs écritures simultanées ont dépassé le verrou | sans gravité, l'action repart toute seule au tour suivant |
 
 ---
 

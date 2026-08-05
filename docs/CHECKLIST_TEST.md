@@ -7,11 +7,18 @@ du navigateur ouverte : **zéro erreur console** attendue.
 ## 0. Automatique
 
 - [ ] `node tests/parity.test.js` → tous les tests passent.
+- [ ] `node tests/sync.test.js` → tous les tests passent.
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
-- [ ] `git status` propre : aucun `.gs`, aucun `appsscript.json`, aucun secret,
-      aucun `node_modules/` ni `package*.json`.
+- [ ] `apps-script/Code.gs` : `ACCESS_CODE` et `DATA_FILE_ID` **vides** dans le
+      dépôt (vérifié par `parity.test.js`, à relire tout de même avant de
+      committer).
+- [ ] `BACKEND_VERSION` incrémentée si `Code.gs` a changé — c'est elle qui
+      déclenche la sauvegarde automatique avant la première écriture.
+- [ ] `git status` propre : aucun secret, aucun `node_modules/` ni
+      `package*.json`. Les seuls fichiers backend versionnés sont
+      `apps-script/Code.gs` et `apps-script/appsscript.json`.
 - [ ] `CONFIG.APP_VERSION` et `CACHE_VERSION` incrémentés **ensemble**.
 
 ## 1. Premier lancement
@@ -136,6 +143,20 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] Action devenue impossible (sujet supprimé ailleurs) → message clair et
       file débloquée.
 - [ ] Code invalidé côté serveur → reverrouillage immédiat.
+- [ ] Réglages → **Code d'espace identique** sur les deux appareils. Deux codes
+      différents = deux scripts différents, et c'est la première explication à
+      « je ne vois pas les messages des autres ».
+- [ ] Réglages → **Dernier échange** avance tout seul ; **Rythme actuel**
+      descend vers 1,8 s pendant une conversation et remonte vers 6 s au repos.
+- [ ] Ouvrir l'application depuis un lien partagé dans **WhatsApp / Instagram /
+      Messenger** (fenêtre in-app) : si Réglages affiche « Stockage local :
+      mémoire — non persistant », un bandeau l'a annoncé — et **les messages
+      partent quand même** vers les autres appareils.
+- [ ] Laisser l'application ouverte dix minutes sans rien faire, puis écrire
+      depuis l'autre appareil : le message arrive **sans** avoir à toucher
+      l'écran (la boucle au repos reste vivante).
+- [ ] Réglages → « Synchroniser maintenant » sur un fil déjà à jour : **le
+      défilement ne saute pas** et l'écran ne clignote pas.
 
 ## 9. PWA
 

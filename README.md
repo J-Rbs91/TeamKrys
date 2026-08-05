@@ -15,14 +15,23 @@ application (PWA) sur iPhone et Android.
 | Brique | Où elle vit | Dans ce dépôt ? |
 |---|---|---|
 | Frontend (PWA) | GitHub Pages | **oui** — c'est ce que Pages sert |
-| Backend | Google Apps Script | **non, jamais** |
+| Backend | Google Apps Script | **oui** — `apps-script/`, à copier dans l'éditeur |
 | Données (un fichier JSON) | Google Drive | **non, jamais** |
-| Secrets (code d'accès, adresse du script) | script Apps Script / appareil | **non, jamais** |
+| Secrets (code d'accès, adresse du script) | éditeur Apps Script / appareil | **non, jamais** |
+
+> Le backend a longtemps été tenu hors du dépôt, au motif qu'il porte le code
+> d'accès de l'équipe. Il y est entré parce que le code d'accès n'a pas besoin
+> d'y être : `ACCESS_CODE` reste **vide** dans le fichier versionné et se
+> renseigne dans l'éditeur Apps Script après le collage. Le versionner permet
+> ce que la séparation empêchait : `tests/parity.test.js` charge maintenant
+> `apps-script/Code.gs` et lui fait passer les mêmes vecteurs qu'au frontend.
+> La parité client/serveur n'est plus une relecture à l'œil, c'est un test.
 
 Règles tenues par ce dépôt :
 
-- aucun fichier de backend (`.gs`, `appsscript.json`, dossier `apps-script/`) ;
-- aucun secret : ni code d'accès, ni adresse de script, ni jeton, ni hachage ;
+- **aucun secret** : ni code d'accès, ni adresse de script, ni jeton, ni
+  hachage. Un `ACCESS_CODE` ou un `DATA_FILE_ID` renseigné dans
+  `apps-script/Code.gs` fait **échouer les tests** ;
 - aucune dépendance externe : pas de npm, pas de CDN, **pas de police distante**
   (typographie 100 % système, donc zéro requête réseau pour l'affichage) ;
 - aucune image distante non plus : les icônes sont des SVG construits en
@@ -51,7 +60,10 @@ service-worker.js          hors ligne : précache de la coquille
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/                      installation, guide utilisateur, checklist de test
-tests/parity.test.js       tests exécutables avec `node tests/parity.test.js`
+apps-script/Code.gs        backend : stockage Drive, verrou, dédup, protocole
+apps-script/appsscript.json manifeste du projet Apps Script
+tests/parity.test.js       parité client / backend, action par action
+tests/sync.test.js         deux clients face à un faux backend (réception, file)
 ```
 
 ---
@@ -156,11 +168,67 @@ Le frontend n'écrit **jamais** le JSON complet. Il envoie des actions précises
 (`CREATE_MESSAGE`, `SET_VOTE`, …) que le backend applique sur la dernière
 version. Deux personnes qui écrivent en même temps ne s'écrasent donc pas.
 
-- `GET ?mode=revision` → `{revision, updatedAt}` — léger, appelé en boucle
-  (3 s onglet visible, 30 s onglet masqué) ;
-- `GET ?mode=state` → l'état complet, téléchargé **seulement** si la révision
-  a changé ;
-- `POST` (corps = l'action) → `{ok, revision, state, duplicate}`.
+- `GET ?mode=revision` → `{revision, updatedAt}` — léger, appelé en boucle ;
+- `GET ?mode=state&since=N` → `{unchanged:true}` si la révision vaut encore `N`,
+  sinon l'état complet **dans la même réponse** ;
+- `POST` (corps = une action, **ou un tableau d'actions**) →
+  `{ok, revision, state, results}`.
+
+### Capacités négociées
+
+Le frontend et le backend se déploient séparément — GitHub Pages d'un côté,
+Apps Script de l'autre, et des téléphones qui gardent longtemps une version en
+cache. Exiger une mise à jour simultanée était donc intenable.
+
+Chaque réponse du serveur porte un champ `features`, et le client n'emprunte un
+raccourci qu'une fois celui-ci annoncé :
+
+| Capacité | Ce qu'elle change |
+|---|---|
+| `since` | lecture conditionnelle : **une** requête au lieu de deux pour recevoir un message |
+| `batch` | un `POST` peut porter jusqu'à 20 actions, avec un verdict par action |
+| `lean` | l'état envoyé n'emporte plus `processedActionIds` — **un tiers du poids** |
+
+Un serveur d'avant n'annonce rien : le client retombe sur le protocole
+d'origine. Un client d'avant ignore le champ : le serveur récent lui répond
+comme avant. Les deux sens de désaccord sont couverts par `tests/sync.test.js`.
+
+Mesuré sur un fil de 60 messages :
+
+| | backend d'origine | backend redéployé |
+|---|---|---|
+| Recevoir un message | 2 requêtes | **1** |
+| Cinq réactions enchaînées | 5 `POST` | **1** |
+| Poids d'un état téléchargé | 57,6 ko | **38,6 ko** |
+
+### Rythme adaptatif
+
+Le rythme d'interrogation n'est pas fixe : il suit l'activité réelle
+(`CONFIG.POLL_*`).
+
+| Régime | Cadence | Quand |
+|---|---|---|
+| Nerveux | 1,8 s | pendant les 90 s qui suivent une écriture — la sienne ou celle d'un autre |
+| Repos | jusqu'à 6 s | personne n'écrit ; relâchement progressif, pas un saut |
+| Arrière-plan | 60 s | onglet masqué |
+| Recul | ×2 par échec, plafond 60 s | le réseau ou le serveur ne répond pas |
+
+Une cadence fixe de 3 s était le pire des deux mondes : 1 200 requêtes par
+heure et par personne sur un backend Apps Script qui sérialise tout derrière un
+`LockService` — donc contention, latence et erreurs dès que plusieurs
+téléphones interrogent ensemble — et malgré ce coût une réception toujours en
+retard d'un tour de boucle.
+
+Le repos reste volontairement **court** (6 s) : c'est lui qui plafonne l'attente
+du *premier* message après un silence, le seul cas où la nouvelle cadence peut
+être plus lente que l'ancienne. Tout le reste d'une conversation arrive à 1,8 s,
+soit près de deux fois plus vite qu'avant — et sur un serveur bien moins
+encombré, donc avec des allers-retours eux-mêmes plus courts.
+
+> Les deux `GET` partent en `cache: "no-store"` avec un paramètre jetable :
+> `/exec` répond par une redirection 302 que les navigateurs mettent en cache
+> **heuristiquement** faute d'en-tête, et une redirection figée gèle la révision
+> — les messages des autres n'arrivent alors plus jamais.
 
 Côté serveur : verrou (`LockService`), déduplication des identifiants d'actions
 déjà traités, `revision` incrémentée à chaque écriture.
@@ -168,7 +236,18 @@ déjà traités, `revision` incrémentée à chaque écriture.
 Côté application : application optimiste immédiate, file d'actions persistée
 dans **IndexedDB** (ordre garanti par une clé auto-incrémentée), rejeu au retour
 du réseau. Une erreur **réseau** conserve la file ; une erreur **métier**
-(action devenue impossible) retire l'action et l'explique à l'utilisateur.
+(action devenue impossible) retire l'action et l'explique à l'utilisateur. Un
+échec du **stockage local** est une troisième catégorie, à ne confondre avec
+aucune des deux : l'action quitte quand même la file en mémoire — sinon elle
+serait repostée sans fin — et l'éventuel doublon au redémarrage est absorbé par
+la déduplication serveur.
+
+Là où IndexedDB est refusée (fenêtre in-app d'une messagerie, navigation privée,
+protection renforcée contre le pistage), `js/database.js` bascule sur un repli
+**mémoire**. Ce repli doit rendre exactement la même forme que la branche
+IndexedDB — c'est le rôle du déballage commun de `withStore`. L'application le
+signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
+écrite hors ligne n'y survit pas à la fermeture de la page.
 
 > Le POST part volontairement en `Content-Type: text/plain;charset=utf-8` :
 > c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
@@ -236,15 +315,33 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 
 ```bash
 node tests/parity.test.js
+node tests/sync.test.js
 node tests/qa/compat-scan.js
 ```
 
-Ces tests couvrent, action par action, la logique que le backend doit reproduire
-à l'identique (validation, réduction, migration des anciens JSON, indicateurs de
-vote), ainsi que les **vecteurs de hachage** partagés avec le serveur. Le script
-Apps Script expose une fonction `runSelfTest()` qui vérifie exactement les mêmes
-valeurs de référence : c'est le garde-fou du piège des octets signés de
-`Utilities.computeDigest`.
+`sync.test.js` monte **deux clients complets** (`state.js` + `database.js` +
+`sync.js`, chacun dans son contexte isolé) face à un faux backend qui reproduit
+le contrat du script Apps Script, et vérifie la seule question qui compte :
+*l'utilisateur A voit-il le message de l'utilisateur B ?* Il couvre aussi le
+repli mémoire, le refus métier, la panne réseau et l'arrêt de la boucle. Node
+n'ayant pas d'IndexedDB, c'est toujours le repli mémoire qui est exercé — la
+branche IndexedDB reste du ressort de la recette sur appareil.
+
+`parity.test.js` couvre, action par action, la logique que le backend doit
+reproduire à l'identique (validation, réduction, migration des anciens JSON,
+indicateurs de vote), ainsi que les **vecteurs de hachage** partagés.
+
+Depuis que `apps-script/Code.gs` est versionné, il ne se contente plus de
+décrire cette parité : il **la vérifie**. Le fichier est chargé dans un contexte
+isolé, avec des doublures des services Google — dont un `Utilities.computeDigest`
+qui rend des octets **signés**, comme le vrai — puis soumis aux mêmes vecteurs
+que le frontend, sur un scénario traversant les 19 types d'actions. Une
+divergence entre `js/state.js` et `Code.gs` fait échouer la commande.
+
+Le test refuse aussi de passer si un `ACCESS_CODE` ou un `DATA_FILE_ID` a été
+commité par mégarde. Le script conserve par ailleurs sa fonction `runSelfTest()`,
+à exécuter dans l'éditeur : elle vérifie les mêmes valeurs sur le vrai moteur
+Apps Script, là où la doublure ne peut pas se substituer à Google.
 
 `compat-scan.js` répond à une autre question : **quelle ligne de ce dépôt casse
 sur quel navigateur mobile ?** Il croise les fonctions web réellement utilisées
