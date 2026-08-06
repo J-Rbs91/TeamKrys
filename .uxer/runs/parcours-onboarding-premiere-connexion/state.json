@@ -3,18 +3,26 @@
   "run_id": "parcours-onboarding-premiere-connexion",
   "status": "in_progress",
   "execution_profile": "standard",
-  "current_phase": "research",
-  "current_unit": "",
-  "completed_phases": [],
+  "current_phase": "visual-direction",
+  "current_unit": "U1",
+  "completed_phases": [
+    "clarification",
+    "audit",
+    "reference-research"
+  ],
   "completed_units": [],
-  "last_safe_checkpoint": "2026-08-06T23:41:49+00:00",
+  "last_safe_checkpoint": "2026-08-06T23:57:22+00:00",
   "session_name": "uxer-parcours-onboarding-premiere-connexion",
   "branch": "claude/onboarding-sequence-first-login-4roq0m",
-  "commit_sha": "0b0d076",
-  "files_changed": [],
-  "validations_passed": [],
+  "commit_sha": "2ca5495",
+  "files_changed": [
+    "docs/ONBOARDING.md"
+  ],
+  "validations_passed": [
+    "compat-scan baseline consultée : plancher dialog/showModal 15.4, échec throws, tier B en perte de fonction sans garde"
+  ],
   "validations_failed": [],
-  "next_action": "Recherche externe réelle sur les séquences d'onboarding de première connexion",
+  "next_action": "Phase visual-direction (effort high autorise par le profil) puis unite U1 : cle, revision et regle pure testee",
   "blocking_issue": null,
   "pause_reason": null,
   "resume_required": false

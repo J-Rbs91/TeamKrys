@@ -8,6 +8,59 @@
 `js/state.js`, `js/sync.js`, `js/database.js`, `css/app.css`,
 `service-worker.js`, `index.html`, `tests/`, et les cinq documents de `docs/`.
 
+Méthode : UXER, sept étapes. Mission `parcours-onboarding-premiere-connexion`,
+profil `standard`. Le dossier d'exécution — brief, décisions durables, plan d'unités,
+synthèse de recherche, validations — vit dans `.uxer/runs/`.
+
+---
+
+## Mode de recherche
+
+```
+Outils détectés :      recherche web · fetch HTTP
+                       navigateur : ABSENT · capture : ABSENTE · session : AUCUNE
+Mode utilisé :         recherche et fetch
+Ressources consultées : 13, toutes de NIVEAU 1, le 2026-08-06 — normes W3C et MDN,
+                       recherche NN/g, design systems ouverts (GOV.UK, Shopify),
+                       un artefact d'ingénierie (GitLab)
+Non consultées mais pertinentes : Adobe Spectrum (rendu côté client), Material 3
+                       (404), Atlassian (route obsolète), IBM Carbon (tronqué),
+                       Mobbin · Page Flows · Ripplix (compte requis, non tenté)
+```
+
+**Niveau 1 signifie : le texte a été lu, le rendu n'a pas été observé.** Aucune
+affirmation de ce document ne porte donc sur une composition, une densité, un rythme
+typographique, un enchaînement réel ou une durée constatée dans un produit tiers.
+Les partis pris visuels et de mouvement viennent de la direction artistique du dépôt
+et du corpus local UXER, pas d'une observation externe.
+
+Détail, limites et vérifications différées : `.uxer/runs/parcours-onboarding-premiere-connexion/research-summary.md`.
+
+---
+
+## Principes retenus (étape 4 — extraction)
+
+Huit principes, formulés sans nommer leur source, chacun avec son **point de
+rupture** — c'est lui qui dit quand le principe cesse de s'appliquer ici.
+
+| # | Principe | Point de rupture, appliqué à ce produit |
+|---|---|---|
+| P1 | Une étape ne survit que si aucun autre emplacement ne porte son information | **Cède pour le premier arrivant** : sur un espace vide où rien ne se passe sans qu'un collègue agisse, il n'existe aucun « moment de l'usage » où déporter l'explication |
+| P2 | Plafonner à cinq écrans pédagogiques, et afficher la longueur dès le premier | Les gates obligatoires — connexion, verrou, prénom — n'entrent pas dans le décompte et ne se suppriment pas pour tenir le plafond |
+| P3 | La sortie est à chaque étape, à un emplacement stable, et son libellé dit la suite | Une sortie très visible fait baisser la complétion : c'est le prix, pas un défaut à corriger en la cachant |
+| P4 | Ce qui est fermé se rouvre depuis un emplacement permanent | **Aucune source consultée ne prescrit de détection du premier lancement** : le § *Détection* est une extrapolation, et ici aucun marqueur serveur n'est atteignable |
+| P5 | Une liste de contrôle persistante traite la reprise sans mécanique de reprise | **Écarte la checklist ici** : sur un produit ouvert 1–2 ×/semaine, une liste jamais terminée devient un reproche permanent |
+| P6 | L'invitation des collègues se loge dans une étape existante, jamais en étape de plus | Qui rejoint un espace peuplé n'a pas à traverser les étapes du premier arrivant |
+| P7 | Un calque bloquant porte un nom accessible issu de son titre visible, rend le fond réellement et **visiblement** inerte, boucle le focus, ferme sur Échap | Le corpus normatif décrit **un** dialogue, pas une **séquence** : l'annonce du changement d'étape et le replacement du focus entre étapes ne sont couverts par aucune source consultée |
+| P8 | Transition entre étapes sous 150 ms ou inexistante ; ouverture du calque 200–250 ms | Dès qu'un **déplacement** intervient, le critère normatif de mouvement s'applique ; un fondu d'opacité seul **sort du champ du critère** |
+
+**Convergence la plus gênante pour cette demande, et il faut la dire :** trois familles
+de sources sur quatre déconseillent la séquence en amont et poussent l'explication vers
+le moment de l'usage. La convergence traverse des contextes différents, ce qui empêche
+de l'écarter comme effet de mode. Ce qui sauve la séquence ici est le point de rupture
+de P1 — et il ne la sauve que pour le premier arrivant. D'où la décision **M** :
+deux traitements selon que l'espace est vide ou déjà peuplé.
+
 ---
 
 ## PHASE 1 — Reformulation de la demande
@@ -58,7 +111,8 @@ FAB lui-même est conditionné à `if (all.length)` (`js/ui.js:654`). Une visite
 guidée qui surligne les vrais éléments est donc **techniquement impossible** au
 moment même où elle serait utile.
 
-**Inclus (v1)** : six panneaux séquentiels, un marqueur de première connexion,
+**Inclus (v1)** : cinq panneaux séquentiels au maximum — moins selon le segment,
+voir 9.2 bis —, un marqueur de première connexion,
 une entrée de rejeu dans les Réglages.
 **Exclu (v1)** : voir § *Hors périmètre*.
 
@@ -231,7 +285,7 @@ lien partagé, public en partie non technique. Version courante `1.7.0`.
 
 ## 4. Périmètre
 
-**Inclus** — 6 panneaux séquentiels ; marqueur local de première connexion avec
+**Inclus** — cinq panneaux séquentiels au maximum, modulés par segment ; marqueur local de première connexion avec
 règle de migration ; entrée de rejeu dans les Réglages ; ligne « et ensuite ? »
 dans les quatre états vides existants ; documentation et recette.
 
@@ -256,7 +310,7 @@ contact réel avec chaque écran (v2), au plus deux coach marks différés (v2).
    **La séquence n'apparaît à aucun de ces trois moments.**
 4. Au premier rendu où `App.gate()` renvoie `null`, et seulement après
    l'extinction de la fenêtre d'entrée (`ENTER_WINDOW_MS`, 1400 ms), le calque
-   se monte : voile, puis panneau 1/6.
+   se monte : voile, puis premier panneau du segment détecté.
 5. « Suivant » remplace le contenu du panneau **sans reconstruire l'écran** et
    écrit l'étape courante sur l'appareil.
 6. « Passer » (panneaux 1 à 5) ou « Commencer » (panneau 6) démonte le calque,
@@ -294,9 +348,10 @@ contact réel avec chaque écran (v2), au plus deux coach marks différés (v2).
   `data-draft`** : `captureDrafts` balaye tout le document (`js/ui.js:142`).
 - **R10** — Le bandeau de nouvelle version est ajourné tant que la séquence est
   affichée ; il apparaît dès son démontage.
-- **R11** — La touche Échap ferme la séquence. Le gestionnaire global
-  (`js/app.js:484`) doit la connaître, sinon Échap provoque un rendu complet
-  **sans** rien fermer.
+- **R11** — La touche Échap ferme la séquence. `showModal()` la sert nativement,
+  mais le gestionnaire global (`js/app.js:484`) doit tout de même la connaître : sinon
+  il provoque en plus un rendu complet de l'écran de fond à chaque appui, et sur le
+  chemin de repli tier B — où il n'y a pas de `<dialog>` — Échap ne fermerait rien.
 - **R12** — L'état au repos du balisage est l'état **final** : sans animation,
   chaque panneau est complet, lisible et actionnable.
 - **R13** — Aucun texte de la séquence n'est posé directement sur le voile : en
@@ -343,6 +398,16 @@ Forme de l'enregistrement :
 | `migrated` | installation antérieure reconnue, séquence jamais montrée |
 
 ## 8. Détection de la première connexion
+
+> **Statut probatoire de cette section — décision O.** Aucune des treize sources
+> consultées ne prescrit de mécanisme de détection du premier lancement ni de garde
+> anti-rejeu (limite de P4). Tout ce qui suit est une **extrapolation** appuyée sur le
+> code de ce produit, non un relevé de pratiques. La solution reste la bonne pour
+> BrainstO. — elle est vérifiable, testable et sans alternative ici, puisque aucun
+> marqueur serveur n'est atteignable — mais son statut doit être exact.
+> Le point de rupture de P4 s'applique en plein : sur appareil partagé ou après
+> effacement du stockage, un marqueur local rejoue la séquence à tort, et rien dans ce
+> produit ne peut l'empêcher.
 
 ### 8.1 Quatre notions à ne pas confondre
 
@@ -408,14 +473,19 @@ et onglet, plafonnés à 7 jours par l'ITP) · le user-agent · la présence de
 
 ### 9.1 Vue d'ensemble
 
+**Cinq panneaux, et cinq seulement** — décision **J**, tirée de P2. Ils ne sont pas
+choisis : ce sont exactement les cinq parties de l'application. Le panneau
+d'introduction de la version précédente a été retiré, parce qu'il faisait doublon avec
+l'accroche déjà affichée à l'entrée, « Préparer les réunions de l'équipe, ensemble. »
+(`js/ui.js:459`).
+
 | N° | Partie | Icône | Objectif pédagogique | Sortie |
 |---|---|---|---|---|
-| 1 / 6 | À quoi ça sert | `sparkle` | situer l'outil dans le cycle d'une réunion | Passer |
-| 2 / 6 | Les sujets | `message` | un sujet = un point à traiter ; où l'on en ajoute | Passer |
-| 3 / 6 | Le débat | `users` | **le geste non devinable** : appuyer sur une bulle | Passer |
-| 4 / 6 | Propositions et votes | `idea` | trois voix, un vote par personne, la barre de répartition | Passer |
-| 5 / 6 | La conclusion | `checkCircle` | choix unique, mention « En tête » | Passer |
-| 6 / 6 | La réunion | `print` | la synthèse projetable ; où revoir la présentation | Commencer |
+| 1 / 5 | Les sujets | `message` | un sujet = un point à traiter ; où l'on en ajoute | Passer |
+| 2 / 5 | Le débat | `users` | **le geste non devinable** : appuyer sur une bulle | Passer |
+| 3 / 5 | Propositions et votes | `idea` | trois voix, un vote par personne, la barre de répartition | Passer |
+| 4 / 5 | La conclusion | `checkCircle` | choix unique, mention « En tête » | Passer |
+| 5 / 5 | La réunion | `print` | la synthèse projetable ; où revoir la présentation | Commencer |
 
 Toutes ces icônes existent déjà dans `Utils.icon` (`js/utils.js:65-102`) **et
 sont déjà associées à ces écrans** dans `ui.js`. C'est le vrai levier du « ça a
@@ -424,52 +494,65 @@ exact qu'il retrouvera dans la barre.
 
 ### 9.2 Contenu rédigé
 
-Surtitre commun : `icône + NOM DE LA PARTIE + « n / 6 »`, en capitales, gris
+Surtitre commun : `icône + NOM DE LA PARTIE + « n / 5 »`, en capitales, gris
 `--faint`, sur le modèle de `sectionTitle()` (`js/ui.js:48`). Le compteur est
 **textuel** — `font-variant-numeric: tabular-nums` est déjà global, le chiffre ne
 saute pas d'un panneau à l'autre, et six caractères remplacent une rangée de
-pastilles.
+pastilles. Il satisfait aussi P2 : la longueur est visible dès le premier panneau.
 
-**1 / 6 — BRAINSTO.**
-Titre : « Préparer la réunion avant la réunion »
-Corps : « L'équipe dépose ses sujets ici, en discute, vote, et arrive en réunion
-avec des décisions déjà mûres. Six écrans, une minute. »
-
-**2 / 6 — LES SUJETS**
+**1 / 5 — LES SUJETS**
 Titre : « Un sujet par point à traiter »
-Corps : « La liste va du plus récemment actif au plus ancien. Le bouton + ajoute
-un sujet ; vous pouvez le proposer sans le signer. »
+Corps : « L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment
+actif au plus ancien. Le bouton + en ajoute un ; vous pouvez le proposer sans le
+signer. »
 
-**3 / 6 — LE DÉBAT**
+**2 / 5 — LE DÉBAT**
 Titre : « On en discute, chacun à son rythme »
 Corps : « La discussion se lit comme un fil de messages. Appuyez sur une bulle
 pour réagir, la citer, ou en tirer une proposition. »
 
-**4 / 6 — PROPOSITIONS**
+**3 / 5 — PROPOSITIONS**
 Titre : « Les idées deviennent des propositions »
 Corps : « Une proposition se vote pour, contre ou abstention — un vote par
 personne, modifiable. La barre montre où en est l'équipe. »
-Illustration : la vraie `.vote-bar` en miniature dans un `.note`, jamais une
+Appui visuel : la vraie `.vote-bar` en miniature dans un `.note`, jamais une
 flèche vers l'écran.
 
-**5 / 6 — LA CONCLUSION**
+**4 / 5 — LA CONCLUSION**
 Titre : « Ce que vous présenterez »
 Corps : « Chaque sujet se referme sur une conclusion. Chacun en choisit une
 seule ; la mieux votée porte la mention En tête. »
 
-**6 / 6 — LA RÉUNION**
+**5 / 5 — LA RÉUNION**
 Titre : « Tout tient sur une page »
 Corps : « Réglages, puis Ouvrir la synthèse : sujets, votes et conclusions,
 prêts à projeter. Vous pourrez revoir cette présentation depuis les Réglages. »
 Ornement : `Utils.logoMark(44)` **au repos** — anneau et point, sans animation.
 Bouton unique : « Commencer ». Plus de « Passer » : il n'y a plus rien à passer.
 
-**Variante mode local** — remplacer le corps du panneau 1 par : « En mode local,
-les données restent sur cet appareil. Le vote et les réactions prennent leur
-sens à plusieurs. » Ne rien promettre d'un collectif absent.
+**Le libellé de la sortie dit la suite** (P3) : « Passer » sur les panneaux 1 à 4,
+« Commencer » sur le dernier. Jamais « Fermer », qui ne dit rien de ce qui arrive.
 
-**Variante espace déjà peuplé** — ajouter au panneau 2 : « L'équipe a déjà
-commencé : ses sujets sont dans la liste. »
+### 9.2 bis Deux traitements selon le segment — décision M
+
+C'est la conséquence la plus importante de la recherche, et elle n'était pas dans la
+version précédente de ce document.
+
+| Segment | Détection | Traitement | Fondement |
+|---|---|---|---|
+| **Premier arrivant** — espace vide (`Store.view.topics.length === 0`) | état observable, jamais un rôle déclaré | **Les cinq panneaux.** C'est le seul cas où la séquence en amont est justifiée | Point de rupture de P1 : sur un écran vide où rien ne se passe sans qu'un collègue agisse, il n'existe aucun « moment de l'usage » où déporter l'explication |
+| **Personne qui rejoint** — espace déjà peuplé | idem | **Deux panneaux** : *Le débat* (le geste de la bulle) et *La conclusion* (ce à quoi ça sert). Le reste est déporté au moment de l'usage, dans les états vides | P1 s'applique pleinement : les écrans existent, ils s'enseigneront d'eux-mêmes. Et P6 : cette personne n'a pas à traverser les étapes du premier arrivant |
+| **Mode local** — solo | `Sync.connection.localMode` | **Trois panneaux** : sujets, débat, conclusion. Ni votes ni réunion : ils n'ont aucun sens seul | Ne rien promettre d'un collectif absent |
+
+Le compteur s'adapte : « 1 / 2 », « 1 / 3 », « 1 / 5 » selon le segment. Il ne
+promet jamais plus d'étapes qu'il n'en reste.
+
+**Variante de corps en mode local**, panneau *Les sujets* : « En mode local, les
+données restent sur cet appareil. Le vote et les réactions prennent leur sens à
+plusieurs. »
+
+**Variante de corps sur espace peuplé**, panneau *Le débat* : « L'équipe a déjà
+lancé des sujets. Ouvrez-en un : la discussion s'y trouve. »
 
 ### 9.3 Machine à états
 
@@ -479,7 +562,7 @@ commencé : ses sujets sont dans la liste. »
 | `running(n)` | Suivant | `running(n+1)` | mutation en place, `step` écrit |
 | `running(n)` | Précédent | `running(n-1)` | mutation en place |
 | `running(n)` | Passer | `done(skipped)` | démontage, focus rendu |
-| `running(6)` | Commencer | `done` | démontage, focus rendu |
+| `running(dernier)` | Commencer | `done` | démontage, focus rendu |
 | `running(n)` | un gate réapparaît | `paused(n)` | démontage immédiat, `step` conservé |
 | `paused(n)` | gate franchi | `running(n)` | remontage à l'étape n |
 | `running(n)` | Échap | `done(skipped)` | comme Passer (R11) |
@@ -548,24 +631,34 @@ d'accueil ne sont **pas** réemployés : le README dit qu'ils n'appartiennent pa
 la marque et n'existent que pendant l'animation.
 
 **Chorégraphie** — trois gestes seulement, et ils ne sont pas du même régime :
-l'arrivée est vue une fois (régime « séquence d'accueil », dépense autorisée), la
-**transition est vue cinq fois en trente secondes** (régime « révélation des
-cartes », 220 ms plafond), la sortie une fois.
+l'arrivée est vue une fois (régime expressif, dépense autorisée — c'est l'option D de
+la décision 16 du corpus local, qui nomme explicitement l'onboarding), la
+**transition est vue quatre fois en trente secondes** (régime des actions
+fréquentes, borne basse), la sortie une fois.
+
+**Révision issue de la recherche — décision L.** La version précédente de ce document
+donnait 220 ms à la transition, avec un déplacement de 8 px sur le texte. Deux
+raisons de la corriger : P8 place la transition inter-étapes sous 150 ms, et le
+critère normatif de mouvement ne vise que le **déplacement** et le changement de
+taille — **un fondu d'opacité seul sort du champ du critère**. Supprimer le
+déplacement entre étapes ne compense donc pas le risque vestibulaire : il l'élimine.
 
 ```
-Arrivée (une fois, 400 ms)          Transition n → n+1 (5 fois, 220 ms)
-ms  0    100   200   300   400      ms  0    100   200
+Arrivée (une fois, 400 ms)          Transition n → n+1 (4 fois, 140 ms)
+ms  0    100   200   300   400      ms  0    100
 voile [======240======]             voile ——— inchangé, aucun repaint ———
-panneau   [====220====]  (dép. 180) texte_n [=100=]        opacity → 0
-                                    texte_n+1    [==160==]  (départ 60)
+panneau   [====220====]  (dép. 180) texte_n [=100=]         opacity 1 → 0
+  ↳ opacity + translateY 8px        texte_n+1  [=100=]      opacity 0 → 1
+    (vu une fois, replié sous          (départ 40 — recouvrement 60 ms)
+     mouvement réduit)               ↳ OPACITÉ SEULE, aucun déplacement
 ```
 
 Durées existantes uniquement : `--dur-slow` (240 ms) pour la pose du voile,
-`--dur-fast` (100 ms) pour la sortie du contenu, `--dur-base` (160 ms) pour son
-entrée, `--reveal-duration` / `--reveal-distance` (220 ms, 8 px) pour le
-vocabulaire de déplacement. **Courbe unique : `--ease-out`.** `--ease-in` est
-réservé aux points de convergence, `--ease-spring` au point du monogramme — un
-dépassement sur un élément d'interface se lit comme un défaut.
+`--dur-fast` (100 ms) pour les deux moitiés de la transition, `--reveal-duration` /
+`--reveal-distance` (220 ms, 8 px) pour l'entrée du premier panneau — seul endroit où
+le vocabulaire de déplacement du dépôt est employé. **Courbe unique :
+`--ease-out`.** `--ease-in` est réservé aux points de convergence, `--ease-spring` au
+point du monogramme — un dépassement sur un élément d'interface se lit comme un défaut.
 
 **Le voile ne se refond jamais entre deux panneaux** : c'est le seul repère fixe
 de la séquence. **Aucune boucle** : une animation en boucle est de fréquence
@@ -573,20 +666,48 @@ infinie, et la seule du fichier (`pulse-dot`) porte une information d'état rée
 **Rien de tout cela ne chevauche la séquence d'accueil** : le calque attend
 l'extinction de `ENTER_WINDOW_MS`. Une seule chose bouge à la fois.
 
-Propriétés animées : `opacity` et `transform`, rien d'autre. Interdites :
-`width`, `height`, `top/left/inset`, marges, `box-shadow`, `border-radius`,
-`filter`, `backdrop-filter`, `letter-spacing`, `font-weight`.
+Propriétés animées : `opacity` partout, `transform` **uniquement** sur l'entrée du
+premier panneau. Interdites : `width`, `height`, `top/left/inset`, marges,
+`box-shadow`, `border-radius`, `filter`, `backdrop-filter`, `letter-spacing`,
+`font-weight`.
 
 ## 11. Accessibilité — cahier des charges opposable
 
-- Conteneur `role="dialog" aria-modal="true"`, **avec** `aria-labelledby` vers le
-  titre et `aria-describedby` vers le corps. À noter : les feuilles et fenêtres
+**Révision issue de la recherche — décision K.** Le calque est un **`<dialog>` ouvert
+par `showModal()`**, et non un `div` appareillé à la main. L'élément natif fournit
+d'un coup le piège de focus, le calque supérieur et l'inertie réelle de
+l'arrière-plan — ce qui satisfait P7 **sans aucune bibliothèque**, donc sans toucher à
+la règle « zéro dépendance ». C'est plus court à écrire, plus sûr, et plus proche de
+la norme que le dispositif manuel prévu dans la version précédente.
+
+**Réserve dirimante, et elle ne vient pas de la recherche mais de la baseline du
+dépôt** : `tests/qa/feature-baseline.json` donne à `js-dialog-showmodal` un plancher
+WebKit **15.4**, un mode d'échec **`throws`** et une sévérité **`high`** ; or
+`tests/qa/browser-matrix.json` classe `safari-ios-15.0` (iOS 15.0 → 15.3) en **tier
+B**, où « une dégradation cosmétique documentée est tolérée, **jamais une perte de
+fonction** ». Un `showModal()` non gardé y lève une exception et emporte la séquence.
+Donc :
+
+- **L'appel est gardé** par un test de disponibilité de la méthode. Si elle manque, le
+  panneau se rend en carte ordinaire dans le flux, non modale, sans voile : la
+  séquence reste lisible et actionnable, seule l'inertie du fond est perdue. C'est une
+  dégradation cosmétique documentée, admise au tier B — pas une perte de fonction.
+- Le même plancher 15.4 gouverne déjà `:focus-visible`, que l'application utilise
+  (anomalie A4 du registre de mission). Le tier A est à 15.4 : `<dialog>` n'y ajoute
+  aucune contrainte. Seule la sonde tier B exige le repli.
+
+Le reste du cahier des charges tient inchangé :
+
+- Nom accessible **obligatoire** par `aria-labelledby` pointant le titre **visible** du
+  panneau, plus `aria-describedby` vers le corps. À noter : les feuilles et fenêtres
   actuelles posent `role="dialog" aria-modal="true"` **sans nom accessible**
   (`js/ui.js:383`, `:397`) — la séquence ne doit pas reproduire ce défaut.
-- **Piège de focus obligatoire**, et non facultatif : `aria-modal` est un contrat
-  que le dépôt ne tient pas (aucune interception de `Tab`, aucun `inert` ni
-  `aria-hidden` sur `#app`). Poser `inert` sur `#app` **plus** `aria-hidden` en
-  repli, et cycler `Tab` / `Maj+Tab` sur les commandes du panneau.
+- **Ce que `showModal()` ne fait pas** : le corpus normatif décrit **un** dialogue, pas
+  une **séquence** (limite de P7). Le passage d'une étape à la suivante reste donc à
+  spécifier à la main, et il n'a aucune source : le focus se replace sur le conteneur
+  du panneau, `aria-labelledby` pointe le nouveau titre, et le changement est annoncé
+  par la région live. C'est le point de la spécification le plus faiblement étayé, et
+  il figure en tête des vérifications différées.
 - **Focus initial sur le conteneur du panneau** (`tabindex="-1"`), pas sur
   « Suivant » : sinon le lecteur d'écran annonce « Suivant, bouton » et
   l'explication est perdue. Ordre de tabulation : titre → corps → Précédent →
@@ -659,11 +780,16 @@ Propriétés animées : `opacity` et `transform`, rien d'autre. Interdites :
 | A14 | Navigation privée : la séquence s'affiche au plus une fois par chargement, jamais en boucle |
 | A15 | Aperçu d'impression du mode réunion : aucune trace du calque |
 | A16 | `node tests/{parity,sync,session,onboarding}.test.js` verts ; `node tests/qa/compat-scan.js` sans défaut tier A/B |
+| A17 | **Chemin de repli tier B** : avec `showModal` rendu indisponible, la séquence s'affiche en carte non modale, reste navigable, et Échap la ferme. Aucune exception en console |
+| A18 | **Les trois segments produisent trois séquences distinctes** : espace vide → cinq panneaux ; espace peuplé → deux ; mode local → trois. Le compteur ne promet jamais plus d'étapes qu'il n'en reste |
+| A19 | Entre deux panneaux, **aucun déplacement** : seule l'opacité change, et le mur de transition reste sous 150 ms |
+| A20 | Le voile ne se refond pas entre deux panneaux — vérifiable à l'œil : le fond ne clignote pas |
 
 ## 14. Cas de test
 
 **`tests/onboarding.test.js`** — style `tests/session.test.js` (assertions
-maison, horodatage figé, sortie non nulle en cas d'échec), sur la fonction pure :
+maison, horodatage figé, sortie non nulle en cas d'échec), sur la fonction pure.
+La fonction reçoit aussi le segment observé, ce qui la rend testable sans DOM :
 
 - premier lancement, aucune connexion → séquence due à l'étape 1
 - installation antérieure reconnue par l'adresse → rien
@@ -677,6 +803,9 @@ maison, horodatage figé, sortie non nulle en cas d'échec), sur la fonction pur
   comme absent, aucune exception (R5)
 - stockage indisponible → séquence due, marquée en mémoire (R6)
 - non-collision des clés de `CONFIG.KEYS`
+- **segment** : espace vide → cinq panneaux ; espace peuplé → deux ; mode local →
+  trois ; espace peuplé **et** mode local → trois (le mode local gagne)
+- le compteur annoncé égale le nombre de panneaux du segment, jamais cinq par défaut
 
 **Recette manuelle** (à verser dans `docs/CHECKLIST_TEST.md`) : premier
 lancement sur stockage vidé · Passer puis réouverture · migration sur appareil
@@ -712,7 +841,8 @@ tier A/B, un « non observé » sur WebKit iOS, Blink, `qa-pwa-offline` ou
 
 ## 16. Version pour ticket
 
-> Ajouter une séquence d'onboarding de 6 panneaux, jouée une seule fois au
+> Ajouter une séquence d'onboarding de cinq panneaux au maximum — deux ou trois
+> selon le segment détecté —, jouée une seule fois au
 > premier passage effectif dans l'espace (après connexion, verrou et nom), qui
 > présente les parties de l'app : sujets, débat, propositions et votes,
 > conclusion, réunion. Détection par une clé locale unique
@@ -728,7 +858,7 @@ tier A/B, un « non observé » sur WebKit iOS, Blink, `qa-pwa-offline` ou
 |---|---|---|---|---|
 | **L0** | Clé, révision et **règle pure** + tests | `js/config.js`, `tests/onboarding.test.js` | 1er | `node tests/onboarding.test.js` vert, trois autres suites toujours vertes, **aucun effet visible** |
 | **L1** | Mécanique du calque : point de montage, montage/démontage, piège de focus, région live, Échap, ajournement du bandeau, **un seul panneau** | `index.html`, `js/ui.js`, `js/app.js`, `css/app.css` | 2e | Le risque architectural est levé en production avec un contenu minimal ; verrou, brouillons, retour arrière et Échap éprouvés |
-| **L2** | Les 6 panneaux, navigation avant/arrière, compteur, variantes local et espace peuplé | `js/ui.js`, `css/app.css` | 3e | 320 px sans défilement horizontal, cibles ≥ 44 px, contrastes tenus dans les deux thèmes |
+| **L2** | Les cinq panneaux, navigation avant/arrière, compteur adaptatif, et les trois segments de 9.2 bis | `js/ui.js`, `css/app.css` | 3e | 320 px sans défilement horizontal, cibles ≥ 44 px, contrastes tenus dans les deux thèmes ; les trois segments produisent trois séquences distinctes |
 | **L3** | Mouvement : arrivée, transitions, sortie, repli | `css/app.css` | 4e — **coupable** | État au repos = état final vérifié ; aucun flou ajouté ; aucune boucle |
 | **L4** | Rejeu depuis les Réglages | `js/ui.js` | 5e | Rejeu avec un brouillon en cours → brouillon intact |
 | **L5** | Ligne « et ensuite ? » dans les 4 états vides + documentation | `js/ui.js`, `README.md`, `docs/CHECKLIST_TEST.md`, `docs/GUIDE_UTILISATEUR.md` | 6e | Checklist complète ; dépôt auto-documenté |
@@ -762,7 +892,9 @@ ne sont pas négociables.
 | Télémétrie d'onboarding | Exigerait le backend (hors dépôt), casserait la parité, et déposerait une mesure nominative dans le JSON que tous les clients téléchargent — dans une app qui efface l'identité dès qu'on choisit l'anonymat |
 | Vidéo, image, illustration, police | Aucune dépendance ni ressource distante ; poids de précache |
 | Rôles déclarés (installateur / invité) | Rien dans l'état ne les distingue ; la différenciation se fait sur l'état observable |
-| Carrousel horizontal | Six glissements font un diaporama là où un fondu de 160 ms suffit |
+| Carrousel horizontal | Quatre glissements font un diaporama là où un fondu de 100 ms suffit ; et le tutoriel en cartes défilables est déconseillé par la recherche |
+| Checklist de démarrage persistante | Décision **N**, point de rupture de P5 : sur un produit ouvert 1–2 ×/semaine, une liste jamais terminée devient un reproche permanent |
+| Piège de focus écrit à la main | Décision **K** : l'élément natif le fournit, sans dépendance et plus conformément à la norme |
 
 ## Suites — v2 et chantiers voisins
 
@@ -780,6 +912,10 @@ agir — là où les panneaux font seulement savoir.
    « Code d'espace » enfoui dans le diagnostic (`js/ui.js:1283`). Dans un outil
    dont la valeur est collective, c'est probablement la friction la plus coûteuse
    du produit — et aucun onboarding ne la corrige.
+   Quand ce chantier s'ouvrira, P6 le cadre déjà : l'invitation se loge dans une
+   **étape existante**, jamais en étape supplémentaire, et le parcours de la personne
+   invitée se conçoit dans le même mouvement — c'est justement lui que la décision M
+   traite ici.
 2. **Un lien partagé ne peut rien pré-remplir.** `parseRoute` ne lit que le hash
    (`js/app.js:281`) et il n'existe aucun `location.search` / `URLSearchParams`
    dans le dépôt : chacun doit retrouver une URL `…/exec` de 120 caractères dans
