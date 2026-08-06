@@ -21,6 +21,12 @@ de l'application, elle se rouvre directement. Il redevient obligatoire après
 ouverte, cela revient au même. Le code lui-même n'est jamais enregistré sur le
 téléphone.
 
+Si le code vous est malgré tout redemandé à chaque ouverture, c'est que le
+téléphone n'enregistre rien : lien ouvert dans la fenêtre d'une messagerie, ou
+navigation privée. Réglages → **Réglages sur l'appareil** vous le dit
+franchement. Ouvrez l'application dans votre vrai navigateur, puis ajoutez-la à
+l'écran d'accueil.
+
 Vous pouvez aussi choisir « Continuer sans connexion (mode local) » pour
 essayer l'outil seul : les données resteront sur votre appareil.
 

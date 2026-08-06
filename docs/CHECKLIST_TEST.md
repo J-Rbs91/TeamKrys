@@ -9,6 +9,8 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] `node tests/parity.test.js` → tous les tests passent.
 - [ ] `node tests/sync.test.js` → tous les tests passent.
 - [ ] `node tests/session.test.js` → tous les tests passent.
+- [ ] `node tests/release.test.js` → tous les tests passent (versions accordées,
+      service worker qui prend la main, coquille complète).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -45,6 +47,17 @@ du navigateur ouverte : **zéro erreur console** attendue.
       synchronisation repart.
 - [ ] Code changé côté serveur, puis reconnexion avec le nouveau code → l'ancienne
       session n'ouvre plus rien.
+- [ ] Réglages → **Réglages sur l'appareil** affiche « mémorisés », et **Verrou**
+      annonce le temps restant. En navigation privée : « NON mémorisés », et un
+      message le dit au démarrage.
+
+## 2 bis. Mise à jour (le piège qui fait croire qu'un correctif n'est pas publié)
+
+- [ ] Depuis un appareil déjà équipé de la version précédente : charger une
+      première fois (la nouvelle version s'installe), puis **recharger** →
+      Réglages → **Version** affiche bien la nouvelle.
+- [ ] Le bandeau « nouvelle version disponible » recharge la page immédiatement.
+- [ ] Aucune page ne se recharge toute seule pendant qu'on écrit un message.
 - [ ] Réglages → « Se déconnecter de l'équipe » → retour à l'écran d'accueil,
       adresse et vérificateur oubliés.
 

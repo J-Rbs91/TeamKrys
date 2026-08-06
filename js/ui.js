@@ -1252,6 +1252,15 @@
       ]);
     }
 
+    var lockState = App.lockStatus();
+
+    function lockLabel(state) {
+      if (!state.enabled) { return "aucun code sur cet espace"; }
+      if (!state.remembered) { return "code redemandé à chaque ouverture (rien n'est mémorisé)"; }
+      var minutes = Math.round(state.remainingMs / 60000);
+      return "ouvert — code redemandé après " + minutes + " min sans activité";
+    }
+
     var diagRows = el("div", { class: "card card-static stack" }, [
       el("div", { class: "row" }, [
         sectionTitle("sync", "Synchronisation"),
@@ -1279,6 +1288,12 @@
         diagRow("Stockage local", diagnostics.persistent
           ? "IndexedDB"
           : "mémoire — non persistant", !diagnostics.persistent),
+        /* Deux lignes qui répondent d'avance à « pourquoi me redemande-t-il le
+         * code ? » — la réponse est toujours l'une des deux. */
+        diagRow("Réglages sur l'appareil", lockState.remembered
+          ? "mémorisés"
+          : "NON mémorisés — navigation privée ou fenêtre in-app", !lockState.remembered),
+        diagRow("Verrou", lockLabel(lockState), lockState.enabled && !lockState.remembered),
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
         diagRow("Version", CONFIG.APP_VERSION)
       ])

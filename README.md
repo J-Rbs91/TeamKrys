@@ -65,6 +65,7 @@ apps-script/appsscript.json manifeste du projet Apps Script
 tests/parity.test.js       parité client / backend, action par action
 tests/sync.test.js         deux clients face à un faux backend (réception, file)
 tests/session.test.js      verrou par inactivité : quand l'ouverture exige le code
+tests/release.test.js      une version publiée atteint-elle vraiment les appareils
 ```
 
 ---
@@ -441,9 +442,32 @@ Incrémenter **ensemble** :
 - `CONFIG.APP_VERSION` dans `js/config.js` ;
 - `CACHE_VERSION` dans `service-worker.js`.
 
-Sans quoi les appareils garderont l'ancienne coquille en cache. Au chargement
-suivant, un bandeau « nouvelle version disponible » propose la mise à jour ;
-le rechargement n'a lieu que si l'utilisateur l'a demandé.
+Sans quoi les appareils garderont l'ancienne coquille en cache.
+
+⚠️ **Le piège qui fait croire qu'un correctif n'a pas été publié.** Le service
+worker appelle `skipWaiting()` à l'installation, et ce n'est pas cosmétique :
+sans lui, la nouvelle version s'installe puis reste *en attente* pendant que
+l'ancienne continue de servir la coquille depuis son cache. L'utilisateur
+recharge, recharge encore, et exécute toujours l'ancien code — indéfiniment,
+tant qu'il n'a pas touché le bandeau. Le symptôme est trompeur : « j'ai
+rechargé, le correctif n'est pas là », alors que le correctif est bien en
+ligne.
+
+Le déroulé réel d'une publication est donc :
+
+1. **premier chargement** après publication : la page tourne encore sur
+   l'ancienne version, pendant que la nouvelle s'installe et s'active seule ;
+2. **chargement suivant** : la nouvelle version s'exécute, sans que personne
+   n'ait rien eu à faire.
+
+Le bandeau « nouvelle version disponible » ne fait plus qu'offrir ce second
+chargement immédiatement. Le rechargement n'a lieu que si l'utilisateur le
+demande : on n'arrache jamais la page sous ses doigts.
+
+Ces invariants (versions accordées, `skipWaiting()` à l'installation, coquille
+complète) sont verrouillés par `tests/release.test.js` : ils ne se voient pas
+depuis le poste de développement, où le service worker n'a jamais d'ancienne
+version à remplacer.
 
 ---
 
@@ -453,6 +477,7 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 node tests/parity.test.js
 node tests/sync.test.js
 node tests/session.test.js
+node tests/release.test.js
 node tests/qa/compat-scan.js
 ```
 

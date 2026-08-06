@@ -255,6 +255,18 @@
     UI.force();
   };
 
+  /* Pour le diagnostic des réglages : dire où en est le verrou, plutôt que de
+   * laisser deviner pourquoi le code est (ou n'est pas) redemandé. */
+  App.lockStatus = function () {
+    var remaining = CONFIG.LOCK_IDLE_MS - (Date.now() - lastActivity);
+    return {
+      enabled: !!lockVerifier,
+      unlocked: unlocked,
+      remainingMs: remaining > 0 ? remaining : 0,
+      remembered: Utils.storage.writable()
+    };
+  };
+
   App.gate = function () {
     if (!App.connectionConfigured() || App.editingConnection) { return "connection"; }
     if (App.needsUnlock()) { return "lock"; }
@@ -412,32 +424,40 @@
 
   /* ---------------------------------------------------- Service worker --- */
 
+  /* Le service worker s'active désormais seul (skipWaiting) : la nouvelle
+   * version est en place pour le PROCHAIN chargement, sans que personne n'ait
+   * rien à toucher. La bannière ne sert donc plus qu'à proposer ce
+   * rechargement tout de suite — c'est elle, et non le service worker, qui
+   * décide de recharger, pour ne jamais interrompre une saisie en cours. */
+  function offerReload() {
+    UI.showUpdateBanner(function () {
+      updateRequested = true;
+      window.location.reload();
+    });
+  }
+
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) { return; }
     navigator.serviceWorker.register("service-worker.js").then(function (registration) {
       function watch(worker) {
         if (!worker) { return; }
         worker.addEventListener("statechange", function () {
-          if (worker.state === "installed" && navigator.serviceWorker.controller) {
-            UI.showUpdateBanner(function () {
-              updateRequested = true;
-              worker.postMessage({ type: "SKIP_WAITING" });
-            });
+          /* « installed » ou « activated » : avec skipWaiting, l'état d'attente
+           * peut être franchi avant même que cet écouteur soit posé. */
+          if (navigator.serviceWorker.controller
+            && (worker.state === "installed" || worker.state === "activated")) {
+            offerReload();
           }
         });
       }
-      if (registration.waiting && navigator.serviceWorker.controller) {
-        UI.showUpdateBanner(function () {
-          updateRequested = true;
-          registration.waiting.postMessage({ type: "SKIP_WAITING" });
-        });
-      }
+      if (registration.waiting && navigator.serviceWorker.controller) { offerReload(); }
       registration.addEventListener("updatefound", function () { watch(registration.installing); });
     }).catch(function () { /* hors ligne ou contexte non sécurisé */ });
 
     navigator.serviceWorker.addEventListener("controllerchange", function () {
-      /* ⚠️ On ne recharge QUE si l'utilisateur a demandé la mise à jour :
-       * sinon le tout premier chargement partirait en boucle. */
+      /* ⚠️ On ne recharge QUE si l'utilisateur a demandé la mise à jour : le
+       * tout premier chargement partirait en boucle, et une activation
+       * automatique arracherait la page sous les doigts de l'utilisateur. */
       if (updateRequested) { window.location.reload(); }
     });
   }
@@ -505,6 +525,14 @@
     Sync.subscribe(function () { UI.refreshStatus(); });
 
     bindGlobalEvents();
+
+    /* Sans écriture possible, rien n'est retenu : ni l'adresse, ni le nom, ni
+     * la session. L'application semble alors « tout oublier » à chaque
+     * ouverture — autant le dire, sinon la cause reste introuvable. */
+    if (!Utils.storage.writable()) {
+      UI.toast("Cet appareil n'enregistre rien : l'adresse et le code seront redemandés "
+        + "à chaque ouverture. (Navigation privée, ou fenêtre in-app d'une messagerie ?)", "error");
+    }
 
     Sync.boot().then(function () {
       UI.force();

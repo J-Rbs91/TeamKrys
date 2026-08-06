@@ -133,7 +133,8 @@ signalé immédiatement.
 | « Réponse illisible du serveur » | l'adresse ne finit pas par `/exec`, ou le déploiement n'est pas accessible à « tout le monde » | recopier l'adresse du déploiement, vérifier les droits |
 | « Code d'accès refusé » | le code saisi ne correspond pas à `ACCESS_CODE` | vérifier le code auprès de la personne qui a installé le backend |
 | Modifications du script sans effet | déploiement pas mis à jour | créer une **nouvelle version** du déploiement |
-| L'application reste sur l'ancienne version | cache du service worker | publier en incrémentant `APP_VERSION` **et** `CACHE_VERSION`, puis « Mettre à jour » dans le bandeau |
+| L'application reste sur l'ancienne version | cache du service worker | publier en incrémentant `APP_VERSION` **et** `CACHE_VERSION`, puis **charger deux fois** : le premier chargement installe la nouvelle version, le second l'exécute (« Mettre à jour » dans le bandeau fait le second tout de suite) |
+| Le code d'accès est redemandé à chaque ouverture | l'appareil n'enregistre rien : navigation privée, ou lien ouvert dans la fenêtre in-app d'une messagerie | ouvrir l'application dans le vrai navigateur et l'installer sur l'écran d'accueil ; Réglages → **Réglages sur l'appareil** dit lequel des deux cas s'applique |
 | Les données n'apparaissent plus | déconnexion ou changement d'adresse | Réglages → Modifier l'adresse ou le code |
 | Espace vide après une mise à jour du script | le script pointe vers un autre fichier que le vôtre | **ne rien écrire de plus** : exécuter `diagnoseStorage()`, puis renseigner `DATA_FILE_ID` avec le bon identifiant |
 | « Fichier de données introuvable » | aucun fichier repérable sur ce Drive | `setupProject()` pour un espace neuf, ou `DATA_FILE_ID` pour un espace existant |

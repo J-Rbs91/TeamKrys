@@ -7,7 +7,7 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.6.0";
+var CACHE_VERSION = "brainsto-v1.6.1";
 
 var SHELL = [
   "./",
@@ -29,6 +29,18 @@ var SHELL = [
 ];
 
 self.addEventListener("install", function (event) {
+  /* ⚠️ SANS skipWaiting, une version publiée n'atteint JAMAIS un appareil déjà
+   * équipé tant que personne ne touche la bannière : le nouveau service worker
+   * s'installe puis reste en attente, pendant que l'ancien continue de servir
+   * la coquille depuis SON cache. Recharger la page n'y change rien — c'est
+   * même le symptôme classique : « j'ai rechargé, le correctif n'est pas là ».
+   *
+   * On active donc la nouvelle version dès qu'elle est prête. La page ouverte
+   * n'est PAS rechargée de force (voir registerServiceWorker dans js/app.js) :
+   * elle continue avec le code qu'elle a déjà chargé, et le rechargement
+   * suivant exécute la nouvelle version. La bannière garde son rôle : proposer
+   * ce rechargement tout de suite. */
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_VERSION).then(function (cache) {
       /* addAll échoue en bloc si une ressource manque : on tolère les absences. */

@@ -394,6 +394,23 @@
     }
   };
 
+  /* localStorage peut exister et ne RIEN retenir : navigation privée Safari,
+   * fenêtre in-app d'une messagerie, quota plein, stockage cloisonné. Les
+   * lectures renvoient alors sagement leur valeur par défaut et l'application
+   * paraît « oublier » l'adresse et le code à chaque ouverture, sans que rien
+   * n'ait échoué visiblement. On teste donc l'écriture pour de bon, une fois. */
+  var writable = null;
+  Utils.storage.writable = function () {
+    if (writable !== null) { return writable; }
+    var probe = "brainsto.probe";
+    try {
+      root.localStorage.setItem(probe, "1");
+      writable = root.localStorage.getItem(probe) === "1";
+      root.localStorage.removeItem(probe);
+    } catch (e) { writable = false; }
+    return writable;
+  };
+
   /* --------------------------------------------------------------- Divers --- */
 
   /* Empreinte courte et STABLE d'un texte, pour comparer à l'œil deux appareils
