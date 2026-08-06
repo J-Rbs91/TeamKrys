@@ -196,6 +196,77 @@
     return svg;
   };
 
+  /* ------------------------------------------------------------ Monogramme --- */
+
+  /* Le monogramme « O. » en SVG, dessiné aux mêmes proportions que
+   * assets/icons/icon.svg — mais sur fond transparent : dans l'application il
+   * se pose sur le canvas, pas sur une vignette.
+   *
+   * Pourquoi du SVG et non deux <div> comme avant : un anneau en `border` ne
+   * sait pas se tracer. Le trait, lui, s'anime par `stroke-dashoffset`, ce qui
+   * donne le seul geste qui raconte le produit — le cercle se referme (la
+   * discussion tourne), puis le point s'en détache (la décision en sort).
+   *
+   * Le cercle est tourné de -90° pour que le tracé PARTE DU HAUT : sans cette
+   * rotation, un <circle> commence à 3 h et le geste devient illisible.
+   *
+   * L'animation elle-même vit dans app.css et ne se joue qu'à l'arrivée sur un
+   * écran, sous `prefers-reduced-motion: no-preference`. L'état AU REPOS de ce
+   * balisage est l'état FINAL : sans animation, le monogramme est complet et
+   * bien placé — jamais un cercle à moitié tracé.
+   */
+  var LOGO = { cx: 43.5, cy: 50, r: 19.44, w: 9.12, dx: 81.78, dy: 67.2, dr: 6.8 };
+  /* Périmètre du cercle : longueur du tiret qui sert au tracé. Calculé, pas
+   * saisi — un rayon modifié ne doit pas laisser une valeur en dur derrière. */
+  var LOGO_C = 2 * Math.PI * LOGO.r;
+
+  Utils.logoMark = function (size) {
+    var px = size || 44;
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("width", String(px));
+    svg.setAttribute("height", String(px));
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.setAttribute("class", "logo-mark");
+
+    var ring = document.createElementNS(SVG_NS, "circle");
+    ring.setAttribute("cx", String(LOGO.cx));
+    ring.setAttribute("cy", String(LOGO.cy));
+    ring.setAttribute("r", String(LOGO.r));
+    ring.setAttribute("stroke", "currentColor");
+    ring.setAttribute("stroke-width", String(LOGO.w));
+    /* Bouts DROITS, volontairement — c'est le seul endroit du fichier où l'on
+     * s'écarte des bouts arrondis du jeu d'icônes. Le tracé se fait avec un
+     * tiret d'exactement une circonférence : avec des bouts arrondis, les deux
+     * extrémités se recouvrent d'un demi-trait une fois le cercle refermé et
+     * laissent un épaississement visible en haut de l'anneau. Bouts droits,
+     * elles se rejoignent au pixel près. */
+    ring.setAttribute("class", "logo-ring");
+    ring.style.setProperty("--logo-c", LOGO_C.toFixed(2));
+    svg.appendChild(ring);
+
+    /* Le point est la SEULE dépense d'accent de l'écran d'accueil. C'est là que
+     * l'identité se loge — pas dans une couleur répandue sur toute l'interface. */
+    var dot = document.createElementNS(SVG_NS, "circle");
+    dot.setAttribute("cx", String(LOGO.dx));
+    dot.setAttribute("cy", String(LOGO.dy));
+    dot.setAttribute("r", String(LOGO.dr));
+    dot.setAttribute("fill", "var(--accent)");
+    dot.setAttribute("class", "logo-dot");
+    /* Origine de transformation en UNITÉS UTILISATEUR, pas en pourcentage.
+     * Un `transform-origin: 50% 50%` sur un élément SVG se résout contre le
+     * viewBox entier tant que `transform-box: fill-box` n'est pas appliqué —
+     * et là où cette propriété manque, le point ne grossirait pas sur
+     * lui-même mais depuis le centre du dessin. Des coordonnées absolues n'ont
+     * besoin d'aucune propriété supplémentaire pour être justes. */
+    dot.style.transformOrigin = LOGO.dx + "px " + LOGO.dy + "px";
+    svg.appendChild(dot);
+
+    return svg;
+  };
+
   /* Découpe un titre en caractères animables (montée décalée, cf. app.css).
    * Les espaces restent des espaces insécables pour ne pas casser la ligne. */
   Utils.splitChars = function (text, className) {

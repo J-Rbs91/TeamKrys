@@ -1,143 +1,219 @@
 /* BrainstO. — feuille de style unique.
  *
- * Direction artistique : « atelier chaud », transposition du langage visuel
- * HorizonX (horizonx.so) au contexte d'un outil d'équipe utilisé debout, en
- * magasin, plusieurs fois par jour.
+ * Direction artistique : « poste de travail ». Le registre visé est celui des
+ * outils collaboratifs où l'on discute, propose et décide — chrome neutre,
+ * contenu au premier plan, une seule couleur d'accent. Il a remplacé le
+ * registre « atelier chaud » (transposition de HorizonX) parce que les deux
+ * ne répondaient pas à la même question : l'un cherchait à ne ressembler à
+ * aucun outil interne, celui-ci cherche à se faire oublier pendant qu'on
+ * travaille dedans, plusieurs fois par jour, debout, en magasin.
  *
- *   canvas crème #faede3   — au lieu du blanc clinique : moins fatigant sur une
- *                            journée, et l'application ne ressemble à aucun
- *                            autre outil interne ;
- *   encre #171717          — jamais de noir pur, le contraste reste éditorial ;
- *   surfaces en verre      — blancs superposés + flou, réservés aux éléments
- *                            qui flottent (barres collantes, feuilles, FAB) ;
- *   rayons larges          — 30 px cartes, 19 px champs, 100 px pastilles ;
- *   ombres diffuses        — 0 20px 70px à 7 % : la carte lévite, elle ne
- *                            « tombe » pas ;
- *   typographie éditoriale — surtitres 11 px / 700 / +0.08em, titres en
- *                            interlettrage serré, échelle fluide (clamp) ;
- *   révélation décalée     — translateY(36px) + scale(.96), courbe
- *                            cubic-bezier(.16,1,.3,1), 45 ms d'écart par carte.
+ * Les cinq décisions qui font ce registre, et ce qu'elles ont remplacé :
  *
- * Deux règles n'ont PAS bougé, elles priment sur l'esthétique :
- *  - zéro requête réseau : typographie système, icônes en SVG inline, grain en
- *    data-URI. Aucune police distante, aucun CDN, aucune image externe ;
- *  - lisibilité et cibles tactiles ≥ 44 px sur tous les écrans.
+ *   ÉCHELLE DE NEUTRES     — 12 paliers d'ardoise froide, construits par ratio
+ *     au lieu de 5 couleurs   de contraste et non à l'œil. C'est là que se joue
+ *                             la qualité perçue : cinq couleurs ne donnaient pas
+ *                             de quoi hiérarchiser sans emprunter au bleu.
+ *
+ *   UN SEUL ACCENT         — le teal de marque cesse d'être un fond pour
+ *     au lieu d'un teal        devenir la seule dépense de couleur : action
+ *     répandu partout         principale, sélection, focus, point du logo.
+ *                             Partout ailleurs, du neutre.
+ *
+ *   SURFACES FRANCHES      — le flou ne subsiste que là où une surface flotte
+ *     au lieu du verre        RÉELLEMENT au-dessus d'un contenu qui doit rester
+ *     généralisé              perceptible : barre collante et feuilles. Ailleurs,
+ *                             un aplat opaque — le contraste d'un texte ne doit
+ *                             pas dépendre de ce qui passe derrière.
+ *
+ *   DEUX ÉLÉVATIONS        — une ombre par empilement réel, pas par décoration.
+ *     au lieu de sept          Le reste se délimite par l'espacement, puis par un
+ *     ombres diffuses         filet. Les rayons descendent de 30 px à 12/8/6.
+ *
+ *   MOUVEMENT FONCTIONNEL  — la cascade de révélation passe de 550 ms à 220 ms
+ *     au lieu de la cascade   et de 36 px à 8 px. Ce qui est vu cent fois par
+ *                             jour doit être court ; ce qui est vu une fois par
+ *                             ouverture — le monogramme — peut être un geste.
+ *
+ * Trois règles n'ont PAS bougé, elles priment sur l'esthétique :
+ *  - zéro requête réseau : typographie système, icônes en SVG inline. Aucune
+ *    police distante, aucun CDN, aucune image externe, aucune bibliothèque
+ *    d'animation — le mouvement est en CSS ;
+ *  - lisibilité et cibles tactiles ≥ 44 px sur tous les écrans ;
+ *  - `--line-field` tient seul le seuil de 3:1 des composants d'interface
+ *    (WCAG 2.2, SC 1.4.11) : il délimite, quand `--line` ne fait qu'habiller.
+ *
+ * Tous les couples de ce fichier ont été vérifiés au ratio, dans les deux
+ * modes, y compris sur les surfaces creuses et élevées — pas seulement sur le
+ * fond principal, qui est le contrôle qui ne trouve jamais rien.
  */
 
 /* ============================================================== Jetons ==== */
 
 :root {
-  /* — Fond et matière ------------------------------------------------ */
-  /* Palette d'équipe, du plus sombre au plus clair :
-       01161E Ink Black · 124559 Dark Teal · 598392 Air Force Blue ·
-       AEC3B0 Ash Grey · EFF6E0 Beige
-     Le jour, le Beige est le fond et l'Ink Black l'encre ; la nuit, les deux
-     s'échangent. Aucune teinte étrangère à ces cinq couleurs, à la seule
-     exception des trois signaux (voir « Sémantique »). */
-  --canvas: #eff6e0;
-  --canvas-deep: #e5eed9;
-  --aura-1: rgba(255, 255, 255, 0.9);
-  --aura-2: rgba(18, 69, 89, 0.05);
-  --grain-opacity: 0.05;
-  --grain-blend: multiply;
+  /* — Échelle de neutres ---------------------------------------------- */
+  /* Ardoise froide, teinte ~205°, chroma volontairement basse : assez teintée
+     pour ne pas être un gris d'usine, assez neutre pour que l'accent reste la
+     seule couleur qu'on remarque. Douze paliers, parce qu'une hiérarchie à
+     trois niveaux de gris s'écrase dès qu'un écran devient dense. */
+  --n-0: #ffffff;
+  --n-25: #fbfcfd;
+  --n-50: #f5f7f9;
+  --n-100: #eaeef2;
+  --n-200: #dde4ea;
+  --n-300: #cbd5dd;
+  --n-400: #a9b6c0;
+  --n-500: #7c8a95;
+  --n-600: #5b6874;
+  --n-700: #55646f;
+  --n-800: #37444f;
+  --n-900: #17202a;
+  --n-950: #0c1317;
+  /* --n-400, --n-800 et --n-950 ne sont pas référencés aujourd'hui. Ils
+     restent : une échelle trouée oblige à improviser un palier intermédiaire
+     le jour où il manque, et c'est ainsi qu'une échelle se met à diverger.
+     Les ALIAS morts, eux, ont été retirés — un alias ne se justifie que par
+     son usage. */
 
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-soft: rgba(255, 255, 255, 0.45);
-  --surface-strong: rgba(255, 255, 255, 0.86);
-  /* Composite exact de --surface-strong sur --canvas : un navigateur privé de
-     backdrop-filter (repli @supports en fin de fichier) rend la même
-     luminance qu'un navigateur qui sait flouter. */
-  --surface-opaque: #fdfefb;
-  --surface-sunken: rgba(1, 22, 30, 0.05);
-  /* Feuilles et fenêtres : presque opaques. Un panneau modal translucide
-     posé sur un fond flouté vire au gris sale — il doit trancher. */
-  --surface-sheet: rgba(252, 254, 248, 0.96);
+  /* — Fond et surfaces ------------------------------------------------ */
+  /* Le fond est légèrement teinté et les surfaces sont blanches : c'est ce
+     rapport — et non une ombre — qui fait qu'une carte se détache. Le blanc
+     clinique reste donc du côté du contenu, jamais du côté du décor. */
+  --canvas: var(--n-50);
+  --surface: var(--n-0);
+  --surface-soft: var(--n-25);
+  --surface-strong: var(--n-0);
+  /* Repli exact quand le moteur ne sait pas flouter (@supports en fin de
+     fichier) : même luminance qu'une surface floutée sur ce fond. */
+  --surface-opaque: var(--n-0);
+  --surface-sunken: var(--n-100);
+  --surface-sheet: var(--n-0);
 
-  /* — Encre et texte -------------------------------------------------- */
-  --ink: #01161e;
-  --on-ink: #eff6e0;
-  --text: #01161e;
-  /* Encres secondaires : des teintes de la palette, pas l'encre principale
-     rendue transparente. Un texte à 56 % d'opacité sur un fond teinté prend
-     la couleur du fond ; ici il reste dans la famille. */
-  --muted: #366476;
-  --faint: #4f7382;
+  /* — Encre ----------------------------------------------------------- */
+  /* Quatre niveaux de texte réellement distincts, tous au-dessus de 4,5:1 sur
+     les trois fonds où ils apparaissent — y compris `--faint`, qui porte les
+     horodatages et qui est le niveau qu'on affaiblit sans y penser. */
+  --ink: var(--n-900);
+  --on-ink: var(--n-0);
+  --text: var(--n-900);
+  --muted: var(--n-700);
+  --faint: var(--n-600);
+
+  /* — Accent ---------------------------------------------------------- */
+  /* Descendant direct du Dark Teal d'origine (#124559), remonté en luminosité
+     et en saturation jusqu'à ce qu'il porte du texte blanc ET tienne comme
+     texte sur fond clair — ce que #124559 ne faisait ni l'un ni l'autre.
+     5,93:1 sur blanc, 5,52:1 sur le canvas, 5,06:1 sur son propre fond pâle.
+     C'est la SEULE couleur non sémantique du fichier. */
+  /* --accent est l'accent en TRAIT : contour de focus, bord de champ actif,
+     liseré, point du monogramme. Petites surfaces, jamais un aplat.
+     --accent-surface est l'accent en APLAT : bouton principal, FAB, bulle,
+     réaction choisie. En mode clair les deux coïncident ; en mode sombre non,
+     et c'est tout l'intérêt de les avoir séparés — un teal clair suffisamment
+     lumineux pour se lire en trait sur du noir devient une lampe une fois
+     étalé sur la largeur d'une bulle. */
+  --accent: #0e6d84;
+  --accent-surface: #0e6d84;
+  --accent-surface-hover: #0b5a6d;
+  --accent-bg: #e3eff3;
+  --on-accent: #ffffff;
+  /* Encre SECONDAIRE sur l'accent (horodatage d'une bulle, compteur d'une
+     réaction choisie). Une couleur explicite, pas une opacité : un texte à
+     55 % sur un aplat teinté tombe à 2,93:1, sous le seuil, et c'est
+     invisible tant qu'on ne mesure pas. Celle-ci tient 4,69:1. */
+  --on-accent-soft: #d5e8ed;
 
   /* — Traits ---------------------------------------------------------- */
-  /* --line habille, --line-field délimite : seul le second dessine le bord
-     d'un champ de saisie, donc seul lui doit tenir le seuil de 3:1. */
-  --line: rgba(1, 22, 30, 0.1);
-  --line-strong: rgba(1, 22, 30, 0.18);
-  --line-field: rgba(1, 22, 30, 0.5);
-  --focus-ring: rgba(1, 22, 30, 0.48);
-  --glass-line: rgba(255, 255, 255, 0.62);
-  --abstain: rgba(1, 22, 30, 0.42);
+  /* `--line` habille (séparateurs, filets : aucune information n'en dépend).
+     `--line-field` délimite — bord des champs, contour des contrôles — et tient
+     seul le seuil de 3:1 des composants d'interface. Vérifié sur les trois
+     fonds : 3,54:1 sur surface, 3,30:1 sur canvas, 3,04:1 sur creux. */
+  --line: var(--n-200);
+  --line-strong: var(--n-300);
+  --line-field: var(--n-500);
+  --glass-line: var(--n-200);
+  --abstain: var(--n-500);
 
-  /* — Sémantique (couleur forte + fond teinté, comme les notifications
-       HorizonX : le statut se lit d'un coup d'œil, sans lire le mot).
-       La palette ne contient aucune teinte chaude : le danger et
-       l'avertissement sont les seuls emprunts du fichier, et ils restent
-       cantonnés au signal — jamais une surface, jamais un texte courant. */
-  --success: #14724a;
-  --success-bg: rgba(20, 114, 74, 0.14);
-  --danger: #c0301b;
-  --danger-bg: rgba(192, 48, 27, 0.12);
-  --on-danger: #eff6e0;
-  --warning: #8f5405;
-  --warning-bg: rgba(143, 84, 5, 0.13);
-  --info: #124559;
-  --info-bg: rgba(18, 69, 89, 0.12);
-  --neutral-bg: rgba(1, 22, 30, 0.06);
+  /* — Sémantique ------------------------------------------------------ */
+  /* Chaque statut porte une couleur ET une forme (pastille, icône, libellé) :
+     aucune information ne repose sur la teinte seule. Les trois signaux sont
+     les seules teintes chaudes ou vertes du fichier, et restent cantonnés au
+     signal — jamais une surface, jamais un texte courant. */
+  --success: #0f7a52;
+  --success-bg: #e2f3ea;
+  --danger: #bf2f2f;
+  --danger-bg: #fdeded;
+  --on-danger: #ffffff;
+  --warning: #8a5300;
+  --warning-bg: #fbf0dd;
+  --info: var(--accent);
+  --info-bg: var(--accent-bg);
+  --neutral-bg: var(--n-100);
 
   /* — Rayons ---------------------------------------------------------- */
-  --radius-card: 30px;
-  --radius-lg: 19px;
-  --radius: 16px;
-  --radius-sm: 12px;
+  /* Trois valeurs, cohérentes par niveau, plus la pastille. Les 30 px des
+     cartes sont tombés à 12 : un rayon généreux adoucit tout, y compris les
+     défauts d'alignement, et signe l'application grand public là où celle-ci
+     est un outil de travail. */
+  --radius-card: 12px;
+  --radius-lg: 10px;
+  --radius: 8px;
+  --radius-sm: 6px;
   --radius-chip: 100px;
 
-  /* — Ombres ---------------------------------------------------------- */
-  --shadow-card: 0 20px 70px rgba(1, 22, 30, 0.1);
-  --shadow-card-hover: 0 8px 32px rgba(1, 22, 30, 0.13);
-  /* Portée vers le bas plutôt qu'en halo : dans un formulaire dense, un halo
-     omnidirectionnel bave sur le champ du dessus et donne l'impression que les
-     deux éléments se chevauchent. Le halo reste réservé au FAB, isolé. */
-  --shadow-cta: 0 6px 18px rgba(1, 22, 30, 0.22);
-  --shadow-glow: 0 0 22px rgba(1, 22, 30, 0.26);
-  --shadow-float: 0 18px 44px rgba(1, 22, 30, 0.2);
-  --shadow-bubble: 0 6px 18px rgba(1, 22, 30, 0.06);
-  --shadow-bubble-mine: 0 8px 22px rgba(1, 22, 30, 0.18);
-  --scrim: rgba(1, 22, 30, 0.32);
+  /* — Élévation ------------------------------------------------------- */
+  /* Deux niveaux, et chacun correspond à un empilement RÉEL :
+       niveau 1 — ce qui est posé sur le fond et se manipule (cartes, champs) ;
+       niveau 2 — ce qui flotte au-dessus du contenu (feuilles, FAB, menus).
+     La carte ne « lévite » plus : elle se détache par le rapport entre sa
+     surface blanche et le fond teinté, ce qui coûte zéro pixel de flou. */
+  --shadow-1: 0 1px 2px rgba(23, 32, 42, 0.06), 0 1px 1px rgba(23, 32, 42, 0.04);
+  --shadow-2: 0 8px 24px rgba(23, 32, 42, 0.12), 0 2px 6px rgba(23, 32, 42, 0.06);
+  --shadow-card: var(--shadow-1);
+  --shadow-cta: 0 1px 2px rgba(23, 32, 42, 0.12);
+  --scrim: rgba(12, 19, 23, 0.44);
 
-  /* — Flou de verre --------------------------------------------------- */
-  --blur-sm: saturate(150%) blur(16px);
-  --blur-md: saturate(160%) blur(26px);
-  --blur-lg: saturate(170%) blur(48px);
+  /* — Flou ------------------------------------------------------------ */
+  /* Ne subsiste que sur les deux surfaces qui passent réellement au-dessus du
+     contenu. Partout ailleurs le flou a été retiré : il coûte cher au rendu sur
+     téléphone d'entrée de gamme et rend le contraste d'un texte dépendant de ce
+     qui défile derrière. */
+  --blur-md: saturate(140%) blur(16px);
 
   /* — Mouvement ------------------------------------------------------- */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Deux courbes seulement. `--ease-out` amortit ; `--ease-spring` dépasse
+     légèrement puis revient, et ne sert QU'au point du monogramme — un
+     dépassement sur un élément d'interface se lit comme un défaut. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-fast: 0.15s;
-  --dur-base: 0.25s;
-  --dur-slow: 0.4s;
-  --reveal-distance: 36px;
-  --reveal-scale: 0.96;
-  --reveal-duration: 0.55s;
-  --reveal-stagger: 45ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 0.1s;
+  --dur-base: 0.16s;
+  --dur-slow: 0.24s;
+  /* Révélation des cartes : vue à chaque arrivée sur un écran, plusieurs fois
+     par jour. La règle de fréquence la borne à ~200 ms — d'où 8 px au lieu de
+     36, aucun changement d'échelle, et un décalage de 18 ms plafonné à six
+     crans (au-delà, la dernière carte d'une longue liste attendrait une
+     seconde pour rien). */
+  --reveal-distance: 8px;
+  --reveal-duration: 0.22s;
+  --reveal-stagger: 18ms;
 
   /* — Typographie fluide ---------------------------------------------- */
+  /* La hiérarchie passe d'abord par la GRAISSE, ce qui préserve la densité :
+     cinq tailles suffisent là où sept commençaient à se ressembler. */
   --fs-eyebrow: 11px;
-  --fs-xs: clamp(0.75rem, calc(0.715rem + 0.143vw), 0.84375rem);
+  --fs-xs: clamp(0.75rem, calc(0.715rem + 0.143vw), 0.8125rem);
   --fs-sm: 0.875rem;
   --fs-body: 1rem;
   --fs-lead: clamp(1rem, calc(0.96rem + 0.18vw), 1.0625rem);
-  --page-title: clamp(1.375rem, calc(1.24rem + 0.56vw), 1.75rem);
-  --display: clamp(2.25rem, calc(1.85rem + 1.9vw), 3.25rem);
+  --page-title: clamp(1.25rem, calc(1.15rem + 0.44vw), 1.5rem);
+  --display: clamp(2rem, calc(1.7rem + 1.4vw), 2.75rem);
 
   /* — Gabarit --------------------------------------------------------- */
   --measure: 760px;
   --tap: 44px;
-  --field-h: 55px;
+  --field-h: 46px;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -153,73 +229,81 @@
   color-scheme: light dark;
 }
 
-/* Le sombre n'est pas l'inverse du clair : c'est la même palette lue par
-   l'autre bout. Le Beige devient l'encre, l'Ink Black devient le fond, et
-   l'Air Force Blue — inutilisable en texte comme en aplat, il échoue au
-   contraste des deux côtés — devient la LUMIÈRE : l'élévation d'une surface
-   se mesure à la quantité de bleu qu'on ajoute au fond. */
+/* Le sombre n'est pas l'inverse du clair : les valeurs sont RECALCULÉES, pas
+   retournées. L'élévation y passe par la luminosité de la surface — sur un fond
+   sombre une ombre diffuse ne fait flotter personne, quel que soit son alpha —
+   et les couleurs de statut se désaturent pour ne pas vibrer sur du sombre.
+   Le clair reste le mode de conception : c'est lui qui est lu en magasin, en
+   plein jour, et c'est là que les défauts de hiérarchie se voient. */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Le fond n'est pas l'Ink Black pur : il est relevé de 12 % de Dark Teal,
-       pour que la vignette (--canvas-deep) garde de quoi descendre encore. */
-    --canvas: #031c25;
-    --canvas-deep: #01161e;
-    --aura-1: rgba(89, 131, 146, 0.14);
-    --aura-2: rgba(174, 195, 176, 0.05);
-    --grain-opacity: 0.035;
-    /* overlay amplifie la chroma d'un bleu saturé et fait virer le fond :
-       soft-light pose le bruit sans toucher à la teinte. */
-    --grain-blend: soft-light;
+    --n-0: #1b262d;
+    --n-25: #18232a;
+    --n-50: #141d23;
+    --n-100: #111a20;
+    --n-200: #24313a;
+    --n-300: #33434e;
+    --n-400: #4d5d68;
+    --n-500: #6b7a85;
+    --n-600: #8e9da8;
+    --n-700: #a3b1bc;
+    --n-800: #c6d1d9;
+    --n-900: #e8eef3;
+    --n-950: #0c1317;
 
-    --surface: rgba(89, 131, 146, 0.1);
-    --surface-soft: rgba(89, 131, 146, 0.06);
-    --surface-strong: rgba(89, 131, 146, 0.16);
-    --surface-opaque: #112c37;
-    --surface-sunken: rgba(174, 195, 176, 0.06);
-    --surface-sheet: rgba(25, 55, 65, 0.96);
+    /* Ici le fond est le palier le PLUS sombre et les surfaces remontent :
+       exactement l'inverse du clair, où le fond est teinté et la surface
+       blanche. C'est ce qui fait que le sombre n'est pas une inversion. */
+    --canvas: #0c1317;
+    --surface: #141d23;
+    --surface-soft: #111a20;
+    --surface-strong: #1b262d;
+    --surface-opaque: #1b262d;
+    --surface-sunken: #0f171c;
+    --surface-sheet: #17222a;
 
-    /* Le fond est déjà saturé : le filtre du verre doit redescendre, sinon
-       chaque surface tire au bleu franc au lieu de laisser passer le fond. */
-    --blur-sm: saturate(115%) blur(18px);
-    --blur-md: saturate(120%) blur(28px);
-    --blur-lg: saturate(125%) blur(50px);
+    --ink: #e8eef3;
+    --on-ink: #0c1317;
+    --text: #e8eef3;
+    --muted: #a3b1bc;
+    --faint: #8e9da8;
 
-    --ink: #eff6e0;
-    --on-ink: #01161e;
-    --text: #eff6e0;
-    --muted: #99af9f;
-    --faint: #84a3a1;
+    /* Le teal clair vire au criard sur fond sombre s'il garde sa saturation :
+       il est éclairci et légèrement désaturé. 7,48:1 sur la surface la plus
+       claire, et il porte du texte très sombre (7,94:1). */
+    --accent: #4fc3dd;
+    /* L'aplat descend là où le trait monte : 7,78:1 pour l'encre posée dessus,
+       4,89:1 pour l'encre secondaire — deux valeurs inatteignables sur le teal
+       clair, qui plafonnait la première à 4,77:1 et interdisait la seconde. */
+    --accent-surface: #0d4f61;
+    --accent-surface-hover: #115f75;
+    --accent-bg: rgba(79, 195, 221, 0.14);
+    --on-accent: #e8eef3;
+    --on-accent-soft: #9fc4d1;
 
-    --line: rgba(174, 195, 176, 0.1);
-    --line-strong: rgba(174, 195, 176, 0.26);
-    --line-field: rgba(174, 195, 176, 0.5);
-    --focus-ring: rgba(174, 195, 176, 0.55);
-    --glass-line: rgba(239, 246, 224, 0.12);
-    --abstain: rgba(174, 195, 176, 0.62);
+    --line: #24313a;
+    --line-strong: #33434e;
+    --line-field: #6b7a85;
+    --glass-line: rgba(232, 238, 243, 0.08);
+    --abstain: #6b7a85;
 
-    --success: #6fc08e;
-    --success-bg: rgba(111, 192, 142, 0.14);
-    --danger: #ff8a73;
-    --danger-bg: rgba(255, 138, 115, 0.14);
-    --on-danger: #01161e;
-    --warning: #e0a458;
-    --warning-bg: rgba(224, 164, 88, 0.14);
-    --info: #95b1b1;
-    --info-bg: rgba(149, 177, 177, 0.14);
-    --neutral-bg: rgba(174, 195, 176, 0.12);
+    --success: #5fd39b;
+    --success-bg: rgba(95, 211, 155, 0.14);
+    --danger: #ff8b7c;
+    --danger-bg: rgba(255, 139, 124, 0.14);
+    --on-danger: #0c1317;
+    --warning: #e6b169;
+    --warning-bg: rgba(230, 177, 105, 0.14);
+    --info: var(--accent);
+    --info-bg: var(--accent-bg);
+    --neutral-bg: rgba(232, 238, 243, 0.07);
 
-    /* L'ombre est de l'Ink Black, le halo est de l'Ash Grey. Sur fond sombre
-       une ombre diffuse ne fait plus léviter quoi que ce soit : la lévitation
-       vient désormais du liseré clair (--glass-line) et de l'écart de
-       luminance entre la surface et le fond, pas d'un alpha plus fort. */
-    --shadow-card: 0 20px 70px rgba(1, 22, 30, 0.55);
-    --shadow-card-hover: 0 8px 32px rgba(1, 22, 30, 0.6);
-    --shadow-cta: 0 6px 20px rgba(1, 22, 30, 0.55);
-    --shadow-glow: 0 0 26px rgba(174, 195, 176, 0.18);
-    --shadow-float: 0 18px 44px rgba(1, 22, 30, 0.7);
-    --shadow-bubble: 0 6px 18px rgba(1, 22, 30, 0.4);
-    --shadow-bubble-mine: 0 8px 22px rgba(1, 22, 30, 0.5);
-    --scrim: rgba(1, 22, 30, 0.62);
+    /* L'ombre n'élève plus, elle ancre. Ce qui élève, c'est l'écart de
+       luminance entre `--surface` et `--canvas`, doublé du liseré clair. */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+    --shadow-cta: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --scrim: rgba(4, 8, 10, 0.66);
   }
 }
 
@@ -246,34 +330,16 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Aura : deux halos très larges, fixes. Ils donnent de la profondeur au crème
-   sans jamais passer devant le contenu (position fixe, derrière tout). */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -20vmax;
-  z-index: -2;
-  pointer-events: none;
-  background:
-    radial-gradient(46vmax 40vmax at 18% -6%, var(--aura-1), transparent 62%),
-    radial-gradient(52vmax 44vmax at 108% 8%, var(--aura-2), transparent 60%),
-    radial-gradient(60vmax 50vmax at 50% 118%, var(--canvas-deep), transparent 64%);
-}
-
-/* Grain : bruit SVG en data-URI (aucune requête). Il casse la platitude des
-   aplats et des dégradés — c'est ce qui distingue une surface « imprimée »
-   d'un aplat CSS. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: var(--grain-opacity);
-  mix-blend-mode: var(--grain-blend);
-  background-size: 160px 160px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-}
+/* L'aura (trois dégradés radiaux plein écran) et le grain (bruit SVG posé en
+   `mix-blend-mode` sur toute la page) ont été RETIRÉS ici, et c'est une
+   décision, pas un oubli.
+   Ils servaient à casser la platitude d'un fond crème. Le fond n'est plus
+   crème : c'est un neutre légèrement teinté sur lequel des surfaces blanches
+   se détachent d'elles-mêmes — la profondeur vient du rapport entre les deux,
+   pas d'une texture posée par-dessus. Ce qui restait était donc décoratif, et
+   ce décor coûtait deux couches fixes plein écran, dont une en mode de fusion,
+   recomposées à chaque défilement sur un téléphone d'entrée de gamme.
+   Le fond uni est déclaré sur `html, body` ci-dessus. */
 
 button, input, textarea, select { font: inherit; color: inherit; }
 
@@ -322,8 +388,7 @@ p { margin: 0; }
   background: var(--surface);
   -webkit-backdrop-filter: var(--blur-md);
   backdrop-filter: var(--blur-md);
-  border-bottom: 1px solid var(--glass-line);
-  box-shadow: 0 1px 0 var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .topbar-titles { flex: 1; min-width: 0; }
@@ -354,7 +419,7 @@ p { margin: 0; }
 
 .content {
   flex: 1;
-  padding: 20px calc(var(--safe-right) + 16px) calc(var(--safe-bottom) + 112px) calc(var(--safe-left) + 16px);
+  padding: 16px calc(var(--safe-right) + 14px) calc(var(--safe-bottom) + 104px) calc(var(--safe-left) + 14px);
   max-width: var(--measure);
   width: 100%;
   margin: 0 auto;
@@ -362,8 +427,12 @@ p { margin: 0; }
 
 .content.flush { padding-left: 0; padding-right: 0; }
 
-.stack { display: flex; flex-direction: column; gap: 12px; }
-.stack-lg { display: flex; flex-direction: column; gap: 22px; }
+/* Trois écarts, dans un rapport de 1 à 2 à 4 : 6 px à l'intérieur d'un champ
+   (.field), 14 px entre deux blocs d'une même section (.stack), 26 px entre
+   deux sections (.stack-lg). C'est ce RAPPORT qui fait lire les groupes, pas la
+   valeur absolue — un espacement uniforme, même généreux, n'en crée aucun. */
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack-lg { display: flex; flex-direction: column; gap: 26px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
@@ -374,23 +443,87 @@ p { margin: 0; }
    (classe posée par UI.render au changement de route). Rejouer l'animation à
    chaque message reçu rendrait la liste nerveuse : une animation d'entrée
    doit signaler une entrée, pas une mise à jour. */
+/* Le changement d'échelle a disparu du geste : un `scale` sur une carte de la
+   largeur de l'écran se lit comme un défaut de rendu, pas comme une entrée.
+   Reste une translation de 8 px, qui suffit à dire « ceci arrive ». */
 @keyframes reveal {
-  from { opacity: 0; transform: translateY(var(--reveal-distance)) scale(var(--reveal-scale)); }
+  from { opacity: 0; transform: translateY(var(--reveal-distance)); }
   to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .reveal {
     animation: reveal var(--reveal-duration) var(--ease-out) backwards;
-    animation-delay: calc(var(--reveal-index, 0) * var(--reveal-stagger));
-    will-change: transform, opacity;
+    /* Décalage PLAFONNÉ à six crans. Sans plafond, la trentième carte d'une
+       longue liste attend 1,4 s avant d'apparaître — l'utilisateur, lui, a
+       déjà commencé à défiler et voit du vide se remplir sous ses yeux. */
+    animation-delay: calc(min(var(--reveal-index, 0), 6) * var(--reveal-stagger));
   }
 }
 
-/* Montée caractère par caractère du logotype : le seul moment « cinéma » de
-   l'application, réservé aux écrans d'accueil et de verrou, qui sont vides. */
+/* ------------------------------------------------------- Monogramme animé --- */
+
+/* C'est le seul geste expressif de l'application, et il est cantonné aux deux
+   écrans qui sont vides de toute façon : l'accueil et le verrou. Il n'est vu
+   qu'à l'ouverture — pas à chaque interaction — ce qui est la condition pour
+   qu'une séquence de cette longueur reste supportable. La règle de fréquence
+   interdirait exactement la même animation sur un bouton.
+   Il ne retarde rien : sur l'écran de verrou, le champ de code est saisissable
+   dès le premier rendu, l'animation se joue derrière.
+   Ce qu'il raconte : le cercle se referme — la discussion tourne — puis le
+   point s'en détache — la décision en sort. C'est le seul endroit où le sens
+   du produit passe par le mouvement plutôt que par un libellé.
+   Coût de rendu : `stroke-dashoffset`, `transform` et `opacity` uniquement.
+   Aucun filtre, aucune ombre animée, aucune bibliothèque. */
+
+/* Le cercle part du haut. Sans cette rotation, un <circle> commence son tracé
+   à 3 h et le geste devient illisible. Rotation posée sur l'élément, pas dans
+   l'animation : elle doit tenir aussi quand l'animation ne se joue pas. */
+.logo-ring {
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+/* ÉTAT AU REPOS = ÉTAT FINAL. Rien n'est masqué ni décalé ici : sans
+   animation — mouvement réduit activé, ou moteur qui ignore la requête — le
+   monogramme est complet et bien placé. C'est le mode de panne à ne jamais
+   produire : un logo figé à moitié tracé, sans message d'erreur. */
+@keyframes logo-ring-draw {
+  from { stroke-dashoffset: var(--logo-c); }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Le point ne se contente pas d'apparaître : il vient du bord de l'anneau et
+   sort. Le vecteur (-20.55, -9.23) est l'écart entre sa position finale et le
+   point de l'anneau situé dans sa direction — c'est ce qui fait lire une
+   trajectoire, et non un fondu. */
+@keyframes logo-dot-eject {
+  from { opacity: 0; transform: translate(-20.55px, -9.23px) scale(0.2); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .screen--enter .logo-ring {
+    stroke-dasharray: var(--logo-c);
+    animation: logo-ring-draw 0.56s var(--ease-out) 0.06s backwards;
+  }
+
+  /* L'origine de transformation est posée en unités utilisateur par
+     Utils.logoMark, pas ici : elle relève de la géométrie du dessin, et une
+     valeur en pourcentage exigerait `transform-box: fill-box` pour être juste. */
+  .screen--enter .logo-dot {
+    /* La courbe dépasse puis revient : le point « atterrit ». C'est le seul
+       usage de --ease-spring du fichier. */
+    animation: logo-dot-eject 0.42s var(--ease-spring) 0.46s backwards;
+  }
+}
+
+/* Montée caractère par caractère du logotype. Raccourcie : 0,85 s par
+   caractère produisait une séquence qui courait encore quand l'utilisateur
+   avait déjà tapé son code. */
 @keyframes char-rise {
-  from { opacity: 0; transform: translateY(110%) rotate(4deg); }
+  from { opacity: 0; transform: translateY(60%); }
   to { opacity: 1; transform: none; }
 }
 
@@ -398,9 +531,8 @@ p { margin: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .wm-char {
-    transform-origin: 50% 100%;
-    animation: char-rise 0.85s var(--ease-out) backwards;
-    animation-delay: calc(60ms + var(--ci) * 22ms);
+    animation: char-rise 0.4s var(--ease-out) backwards;
+    animation-delay: calc(280ms + var(--ci) * 26ms);
   }
 }
 
@@ -414,41 +546,46 @@ p { margin: 0; }
   gap: 8px;
   min-height: var(--tap);
   padding: 0 20px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-chip);
-  background: var(--surface-strong);
+  border: 1px solid var(--line-field);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
   font-size: var(--fs-sm);
   font-weight: 600;
   letter-spacing: -0.015em;
   cursor: pointer;
   user-select: none;
-  -webkit-backdrop-filter: var(--blur-sm);
-  backdrop-filter: var(--blur-sm);
   transition:
-    transform var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
     background var(--dur-fast) linear,
+    border-color var(--dur-fast) linear,
+    box-shadow var(--dur-fast) linear,
     opacity var(--dur-fast) linear;
 }
 
-.btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+/* Le retour à l'appui ne passe plus par un `scale` : sur un bouton pressé des
+   dizaines de fois par jour, un changement de fond est instantané là où une
+   transformation demande une image de plus. */
+.btn:active { background: var(--surface-sunken); }
+/* L'état désactivé est celui qu'on affaiblit sans y penser. 0,4 d'opacité
+   mettait le libellé à 2,4:1 — sous le seuil, alors qu'un bouton désactivé
+   doit rester lisible pour qu'on comprenne ce qui est indisponible. */
+.btn:disabled { opacity: 1; color: var(--faint); background: var(--surface-sunken); border-color: var(--line); cursor: default; }
 
+/* L'action principale est la première dépense d'accent. Une seule par écran. */
 .btn-primary {
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--accent-surface);
+  color: var(--on-accent);
   border-color: transparent;
   box-shadow: var(--shadow-cta);
 }
 
-.btn-primary:not(:disabled):hover { box-shadow: var(--shadow-cta), var(--shadow-glow); }
+.btn-primary:not(:disabled):hover { background: var(--accent-surface-hover); }
+.btn-primary:not(:disabled):active { background: var(--accent-surface-hover); }
+.btn-primary:disabled { background: var(--surface-sunken); color: var(--faint); }
 
 .btn-outline {
   background: transparent;
   border-color: var(--line-field);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 .btn-outline:not(:disabled):hover { background: var(--surface-soft); }
@@ -458,8 +595,7 @@ p { margin: 0; }
   padding: 0 12px;
   color: var(--muted);
   font-weight: 550;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  border-color: transparent;
 }
 
 .btn-ghost:not(:disabled):hover { color: var(--text); background: var(--surface-soft); }
@@ -468,8 +604,6 @@ p { margin: 0; }
   background: var(--danger-bg);
   color: var(--danger);
   border-color: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 .btn-block { width: 100%; }
@@ -486,20 +620,18 @@ p { margin: 0; }
   min-height: var(--tap);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 50%;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  transition: background var(--dur-fast) linear, transform var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) linear;
 }
 
 .btn-icon:hover { background: var(--surface-sunken); }
-.btn-icon:active { transform: scale(0.92); }
+.btn-icon:active { background: var(--neutral-bg); }
 
 .btn-back {
   display: inline-flex;
@@ -509,7 +641,7 @@ p { margin: 0; }
   min-width: var(--tap);
   padding: 0 10px 0 4px;
   border: 0;
-  border-radius: var(--radius-chip);
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text);
   font-size: var(--fs-sm);
@@ -531,33 +663,35 @@ p { margin: 0; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 54px;
-  padding: 0 22px 0 18px;
+  height: 48px;
+  padding: 0 20px 0 16px;
   border: 0;
   border-radius: var(--radius-chip);
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--accent-surface);
+  color: var(--on-accent);
   font-size: var(--fs-sm);
   font-weight: 650;
   letter-spacing: -0.015em;
   cursor: pointer;
-  /* Le FAB flotte seul au-dessus du contenu : c'est le seul endroit où le
-     halo HorizonX ne gêne rien et fait tout le travail. */
-  box-shadow: var(--shadow-float), var(--shadow-glow);
-  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  /* Le FAB est le seul élément du fichier qui flotte VRAIMENT au-dessus d'un
+     contenu qui défile : il garde donc l'élévation de niveau 2, et il est le
+     seul à la porter en permanence. Le halo lumineux, lui, est parti — il
+     n'indiquait aucun empilement, il faisait joli. */
+  box-shadow: var(--shadow-2);
+  transition: background var(--dur-fast) linear;
 }
 
-.fab:active { transform: scale(0.96); }
+.fab:active { background: var(--accent-surface-hover); }
 
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .fab {
-    animation: reveal 0.5s var(--ease-out) 0.18s backwards;
+    animation: reveal var(--reveal-duration) var(--ease-out) 0.1s backwards;
   }
 }
 
 /* ============================================================== Champs ==== */
 
-.field { display: flex; flex-direction: column; gap: 7px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
 
 /* Un seul niveau de capitales par écran : le surtitre de section (.section-title).
    Les libellés de champ restent en casse normale, sinon la carte entière crie
@@ -577,10 +711,10 @@ p { margin: 0; }
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 12px 16px;
-  border: 1px solid var(--glass-line);
-  border-radius: var(--radius-lg);
-  background: var(--surface-soft);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
   font-size: var(--fs-xs);
   color: var(--muted);
   line-height: 1.5;
@@ -591,10 +725,10 @@ p { margin: 0; }
 .input, .textarea, .select {
   width: 100%;
   min-height: var(--field-h);
-  padding: 15px 18px;
+  padding: 11px 14px;
   border: 1px solid var(--line-field);
-  border-radius: var(--radius-lg);
-  background: var(--surface-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
   font-size: var(--fs-body);
   outline: none;
@@ -603,7 +737,7 @@ p { margin: 0; }
   transition: border-color var(--dur-fast) linear, box-shadow var(--dur-base) var(--ease-out), background var(--dur-fast) linear;
 }
 
-.select { padding-right: 42px; cursor: pointer; }
+.select { padding-right: 38px; cursor: pointer; }
 
 /* La liste déroulante est peinte par le système, hors de la page : elle ignore
    le fond sur lequel le champ repose et compose son voile translucide sur sa
@@ -626,9 +760,9 @@ p { margin: 0; }
 .textarea { resize: vertical; min-height: 108px; line-height: 1.55; }
 
 .input:focus, .textarea:focus, .select:focus {
-  border-color: var(--ink);
-  background: var(--surface-opaque);
-  box-shadow: 0 0 0 4px var(--focus-ring);
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
 .input::placeholder, .textarea::placeholder { color: var(--faint); }
@@ -642,10 +776,10 @@ p { margin: 0; }
 }
 
 .search-wrap { position: relative; }
-.search-wrap .input { padding-left: 48px; }
+.search-wrap .input { padding-left: 42px; }
 .search-icon {
   position: absolute;
-  left: 17px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--muted);
@@ -659,28 +793,24 @@ p { margin: 0; }
   display: block;
   width: 100%;
   text-align: left;
-  padding: 18px 20px;
-  border: 1px solid var(--glass-line);
+  padding: 14px 16px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--surface);
-  -webkit-backdrop-filter: var(--blur-sm);
-  backdrop-filter: var(--blur-sm);
   color: inherit;
   cursor: pointer;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-1);
   transition:
-    transform var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) linear,
     background var(--dur-fast) linear;
 }
 
-.card:not(.card-static):hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card-hover), var(--shadow-card);
-  background: var(--surface-strong);
-}
-
-.card:not(.card-static):active { transform: translateY(0) scale(0.995); }
+/* La carte ne lévite plus au survol. Une carte de liste n'est pas passée
+   au-dessus de ses voisines parce qu'on la pointe : elle est désignée. Le
+   déplacement de 2 px décalait aussi la ligne suivante du regard, sur une
+   liste qu'on parcourt de haut en bas. */
+.card:not(.card-static):hover { border-color: var(--line-strong); background: var(--surface-soft); }
+.card:not(.card-static):active { background: var(--surface-sunken); }
 
 .card-static { cursor: default; }
 
@@ -847,8 +977,8 @@ p { margin: 0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 8vh 0 26px;
+  gap: 10px;
+  padding: 5vh 0 22px;
   text-align: center;
 }
 
@@ -863,29 +993,14 @@ p { margin: 0; }
 
 .tagline { color: var(--muted); font-size: var(--fs-lead); max-width: 30ch; }
 
+/* Le monogramme est désormais un <svg> construit par Utils.logoMark : un
+   anneau en `border` ne sait pas se tracer, un trait SVG si. Sa couleur suit
+   `currentColor` pour l'anneau et `--accent` pour le point — la seule dépense
+   d'accent de l'écran. Le geste vit dans la section « Révélation ». */
 .logo-mark {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 7px;
-  margin-bottom: 6px;
-}
-
-.logo-ring {
-  width: 38px;
-  height: 38px;
-  border: 8px solid var(--ink);
-  border-radius: 50%;
-}
-
-.logo-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--ink); margin-bottom: 3px; }
-
-@media (prefers-reduced-motion: no-preference) {
-  .screen--enter .logo-mark {
-    animation: reveal 0.7s var(--ease-out) backwards;
-    --reveal-distance: 14px;
-    --reveal-scale: 0.8;
-  }
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ink);
 }
 
 /* ======================================================== Statut de sync ==== */
@@ -966,8 +1081,9 @@ p { margin: 0; }
   flex-direction: column;
 }
 
-/* Navigation secondaire : contrôle segmenté en verre, sur le modèle des
-   sélecteurs HorizonX (fond translucide, pastille encrée pour l'actif). */
+/* Navigation secondaire : contrôle segmenté, collant sous la barre du haut.
+   Il garde le flou — c'est l'une des trois seules surfaces qui passent
+   réellement au-dessus d'un contenu qui défile. */
 .quickbar {
   position: sticky;
   top: 0;
@@ -1000,8 +1116,6 @@ p { margin: 0; }
   border-radius: var(--radius-chip);
   background: var(--surface-strong);
   border: 1px solid var(--glass-line);
-  -webkit-backdrop-filter: var(--blur-sm);
-  backdrop-filter: var(--blur-sm);
   font-size: var(--fs-eyebrow);
   font-weight: 650;
   letter-spacing: 0.04em;
@@ -1051,31 +1165,31 @@ p { margin: 0; }
   display: block;
   width: 100%;
   text-align: left;
-  padding: 11px 15px 8px;
-  border: 1px solid var(--glass-line);
-  border-radius: 22px;
-  background: var(--surface-strong);
-  -webkit-backdrop-filter: var(--blur-sm);
-  backdrop-filter: var(--blur-sm);
+  padding: 9px 13px 7px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
   color: var(--text);
   cursor: pointer;
   word-break: break-word;
   overflow-wrap: anywhere;
-  box-shadow: var(--shadow-bubble);
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  transition: background var(--dur-fast) linear;
 }
 
+/* « Mes » messages portent l'accent. C'est la seule information du fil qui a
+   besoin d'être distinguée d'un coup d'œil, et elle l'est aussi par
+   l'alignement à droite — la couleur ne la porte pas seule. */
 .msg-row.mine .bubble {
-  background: var(--ink);
+  background: var(--accent-surface);
   border-color: transparent;
-  color: var(--on-ink);
-  border-bottom-right-radius: 7px;
-  box-shadow: var(--shadow-bubble-mine);
+  color: var(--on-accent);
+  border-bottom-right-radius: 4px;
 }
 
-.msg-row:not(.mine) .bubble { border-bottom-left-radius: 7px; }
-.msg-row.grouped .bubble { border-radius: 22px; }
-.bubble:active { transform: scale(0.99); }
+.msg-row:not(.mine) .bubble { border-bottom-left-radius: 4px; }
+.msg-row.grouped .bubble { border-radius: 14px; }
+.bubble:active { background: var(--surface-sunken); }
+.msg-row.mine .bubble:active { background: var(--accent-surface-hover); }
 
 .bubble-text { white-space: pre-wrap; font-size: 15.5px; line-height: 1.45; }
 
@@ -1088,8 +1202,12 @@ p { margin: 0; }
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  opacity: 0.55;
+  color: var(--faint);
 }
+
+/* Sur une bulle d'accent, l'encre secondaire est un jeton dédié : `--faint`
+   est calibré pour les fonds neutres et deviendrait illisible ici. */
+.msg-row.mine .bubble-meta { color: var(--on-accent-soft); }
 
 .quote {
   position: relative;
@@ -1171,12 +1289,13 @@ p { margin: 0; }
    repérer « ce que j'ai voté » sans relire les six marques. */
 .reaction.mine {
   border-color: transparent;
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--accent-surface);
+  color: var(--on-accent);
+  border-color: transparent;
 }
 
-.reaction.mine .mark { color: var(--on-ink); }
-.reaction.mine .reaction-count { color: var(--on-ink); opacity: 0.75; }
+.reaction.mine .mark { color: var(--on-accent); }
+.reaction.mine .reaction-count { color: var(--on-accent); }
 .reaction-count { font-size: 11px; font-weight: 700; color: var(--muted); }
 
 /* ============================================================ Composeur ==== */
@@ -1220,15 +1339,15 @@ p { margin: 0; }
   height: var(--tap);
   border: 0;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--accent-surface);
+  color: var(--on-accent);
   cursor: pointer;
   box-shadow: var(--shadow-cta);
-  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) linear;
+  transition: background var(--dur-fast) linear;
 }
 
-.send-btn:active { transform: scale(0.92); }
-.send-btn:disabled { opacity: 0.35; box-shadow: none; }
+.send-btn:active { background: var(--accent-surface-hover); }
+.send-btn:disabled { background: var(--surface-sunken); color: var(--faint); box-shadow: none; }
 
 .quote-preview {
   display: flex;
@@ -1274,8 +1393,6 @@ p { margin: 0; }
   z-index: var(--z-overlay);
   display: flex;
   background: var(--scrim);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
   animation: fade-in var(--dur-base) var(--ease-out);
 }
 
@@ -1284,8 +1401,10 @@ p { margin: 0; }
 .overlay.bottom { align-items: flex-end; }
 .overlay.center { align-items: center; justify-content: center; padding: 16px; }
 
+/* Le `scale` est parti : une feuille qui grandit en montant se lit comme un
+   zoom, alors que le geste doit dire « ceci vient du bas ». */
 @keyframes slide-up {
-  from { transform: translateY(28px) scale(0.985); opacity: 0; }
+  from { transform: translateY(16px); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
 
@@ -1295,11 +1414,9 @@ p { margin: 0; }
   overflow-y: auto;
   padding: 10px 18px calc(var(--safe-bottom) + 18px);
   border-radius: var(--radius-card) var(--radius-card) 0 0;
-  border-top: 1px solid var(--glass-line);
+  border-top: 1px solid var(--line);
   background: var(--surface-sheet);
-  -webkit-backdrop-filter: var(--blur-lg);
-  backdrop-filter: var(--blur-lg);
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--shadow-2);
   animation: slide-up var(--dur-slow) var(--ease-out);
 }
 
@@ -1396,25 +1513,24 @@ p { margin: 0; }
 
 .emoji-btn.mine {
   border-color: transparent;
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--accent-surface);
+  color: var(--on-accent);
+  border-color: transparent;
 }
 
-.emoji-btn.mine .mark { color: var(--on-ink); }
-.emoji-btn.mine .emoji-label { color: var(--on-ink); opacity: 0.72; }
+.emoji-btn.mine .mark { color: var(--on-accent); }
+.emoji-btn.mine .emoji-label { color: var(--on-accent); }
 
 .modal {
   width: 100%;
   max-width: 480px;
   max-height: 88vh;
   overflow-y: auto;
-  padding: 24px;
-  border: 1px solid var(--glass-line);
+  padding: 20px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--surface-sheet);
-  -webkit-backdrop-filter: var(--blur-lg);
-  backdrop-filter: var(--blur-lg);
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--shadow-2);
   animation: slide-up var(--dur-slow) var(--ease-out);
 }
 
@@ -1450,14 +1566,14 @@ p { margin: 0; }
 }
 
 .toast {
-  padding: 13px 18px;
-  border-radius: var(--radius-chip);
+  padding: 11px 16px;
+  border-radius: var(--radius);
   background: var(--ink);
   color: var(--on-ink);
   font-size: var(--fs-sm);
   font-weight: 550;
   text-align: center;
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--shadow-2);
   animation: slide-up var(--dur-base) var(--ease-out);
 }
 
@@ -1475,13 +1591,11 @@ p { margin: 0; }
   align-items: center;
   gap: 10px;
   width: min(94vw, 520px);
-  padding: 10px 10px 10px 18px;
-  border: 1px solid var(--glass-line);
-  border-radius: var(--radius-chip);
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
   background: var(--surface-strong);
-  -webkit-backdrop-filter: var(--blur-lg);
-  backdrop-filter: var(--blur-lg);
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--shadow-2);
   font-size: var(--fs-xs);
   animation: slide-up var(--dur-slow) var(--ease-out);
 }
@@ -1526,19 +1640,17 @@ p { margin: 0; }
 
 .vote-actions { display: flex; gap: 7px; }
 .vote-actions .btn { flex: 1; }
-.vote-actions .btn.active { background: var(--ink); color: var(--on-ink); border-color: transparent; box-shadow: var(--shadow-cta); }
+.vote-actions .btn.active { background: var(--accent-surface); color: var(--on-accent); border-color: transparent; }
 
 .pre-wrap { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
 
 .lead { display: inline-flex; align-items: center; gap: 5px; }
 
-/* Conclusion en tête : liseré doré-encre à gauche, la carte se distingue sans
-   crier. */
-/* Liseré interne plutôt qu'une bordure : sur un rayon de 30 px, un
-   `border-left` déborde en croissant sur les coins et ressemble à un bug. */
+/* Conclusion en tête : liseré d'accent à gauche, la carte se distingue sans
+   crier. Liseré INTERNE plutôt qu'un `border-left` : sur un coin arrondi, une
+   bordure latérale déborde en croissant et ressemble à un défaut de rendu. */
 .card.is-lead {
-  background: var(--surface-strong);
-  box-shadow: inset 3px 0 0 var(--ink), var(--shadow-card);
+  box-shadow: inset 3px 0 0 var(--accent), var(--shadow-1);
 }
 
 /* ============================================================== Réunion ==== */
@@ -1594,7 +1706,7 @@ p { margin: 0; }
   }
 }
 
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
 
 .visually-hidden {
   position: absolute;
@@ -1606,13 +1718,15 @@ p { margin: 0; }
   border: 0;
 }
 
-/* Repli sans backdrop-filter (Firefox ancien, mode économie) : on remplace le
-   verre par des aplats opaques, jamais par de la transparence illisible. */
+/* Repli sans backdrop-filter (Firefox ancien, mode économie).
+   La liste s'est BEAUCOUP raccourcie : cartes, bulles, feuilles, fenêtres et
+   bandeau sont désormais opaques par construction et n'ont plus rien à replier.
+   Ne restent que les trois barres collantes, les seules surfaces du fichier qui
+   passent réellement au-dessus d'un contenu qui défile. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .topbar, .quickbar, .composer, .card, .bubble, .sheet, .modal, .update-banner, .day-sep, .status-pill {
+  .topbar, .quickbar, .composer {
     background: var(--surface-opaque);
   }
-  .msg-row.mine .bubble { background: var(--ink); }
 }
 
 /* Au-delà du mobile, la mise en page respire : deux colonnes pour les listes
