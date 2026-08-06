@@ -47,7 +47,11 @@ Statuts d'un sujet : *En discussion*, *Prêt pour la réunion*, *Clôturé*,
 
 C'est le cœur de l'outil : une conversation de groupe.
 
-- Vos messages sont **à droite**, ceux des autres **à gauche** avec leur nom.
+- Vos messages **signés** sont à **droite**, sur fond coloré. Ceux des autres
+  sont à **gauche**, sur fond neutre, avec leur nom et leurs initiales.
+- Un message que vous avez publié **en anonyme** s'affiche comme celui d'un
+  autre : à gauche, en neutre, pastille « ? ». Il reste bien le vôtre — le menu
+  de la bulle vous propose toujours « Modifier » et « Signer avec mon nom ».
 - La barre de saisie est collée en bas ; le bouton rond **↑** envoie.
 - Appuyez sur une bulle pour ouvrir le menu :
 
@@ -62,8 +66,8 @@ C'est le cœur de l'outil : une conversation de groupe.
 ### Réactions
 
 Une réaction par personne et par message. Appuyer de nouveau sur la même
-retire votre réaction. Les réactions s'affichent en pastilles sous la bulle ;
-la vôtre est entourée.
+retire votre réaction. Les réactions s'affichent en pastilles accrochées au
+**bas de la bulle**, sur son bord gauche ; la vôtre est en couleur pleine.
 
 ### Citer
 
@@ -78,6 +82,10 @@ anonyme **même après l'avoir envoyé**, et le re-signer ensuite. En anonyme,
 votre identité est **effacée** des données partagées : les autres voient
 seulement « Anonyme ». Votre téléphone se souvient localement des messages que
 vous avez écrits, pour que vous puissiez toujours les modifier.
+
+L'anonymat vaut aussi **sur votre propre écran** : le message se pose à gauche
+comme celui d'un autre, sans rien qui le désigne comme vôtre. Un regard
+par-dessus votre épaule ne suffit donc pas à vous attribuer un message anonyme.
 
 Le bouton « Anonyme / Signer » au-dessus de la barre de saisie règle la
 signature des **prochains** messages.

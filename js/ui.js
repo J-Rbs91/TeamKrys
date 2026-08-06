@@ -553,7 +553,7 @@
     /* Un compteur à zéro n'apprend rien : on ne montre que ce qui existe, et
      * un sujet encore vide le dit avec des mots. */
     var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
-      topic.messages.length ? countChip("users", topic.messages.length, "message") : null,
+      topic.messages.length ? countChip("message", topic.messages.length, "message") : null,
       topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
       topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "conclusion") : null
     ]);
@@ -662,8 +662,10 @@
 
   /* ------------------------------------------------------- Écran débat --- */
 
-  function messageGroupKey(message, mine) {
-    if (message.anon) { return "anon:" + (mine ? "me:" : "") + message.id; }
+  /* Deux messages anonymes ne se regroupent JAMAIS, même consécutifs : les
+   * empiler laisserait entendre qu'ils viennent de la même personne. */
+  function messageGroupKey(message) {
+    if (message.anon) { return "anon:" + message.id; }
     return "id:" + (message.authorId || message.authorName);
   }
 
@@ -717,15 +719,25 @@
   }
 
   function messageRow(topic, message, previous) {
-    var mine = App.ownsMessage(message);
+    /* Deux notions distinctes, à ne pas confondre :
+     *   `owns`  — mes droits sur le message (modifier, signer / anonymiser) ;
+     *   `mine`  — le CÔTÉ où la bulle se pose et sa couleur.
+     * Un message publié en anonyme se présente toujours comme celui d'un
+     * autre : à gauche, en neutre, pastille « ? ». Sinon un regard par-dessus
+     * l'épaule suffirait à désigner l'auteur, et l'anonymat ne tiendrait que
+     * sur les appareils des autres. Mes droits, eux, ne changent pas. */
+    var owns = App.ownsMessage(message);
+    var mine = owns && !message.anon;
     var grouped = false;
     if (previous) {
-      var samePerson = messageGroupKey(previous, App.ownsMessage(previous)) === messageGroupKey(message, mine);
+      var samePerson = messageGroupKey(previous) === messageGroupKey(message);
       var sameDay = Utils.sameDay(previous.createdAt, message.createdAt);
       grouped = samePerson && sameDay;
     }
 
-    var classes = "msg-row" + (mine ? " mine" : "") + (grouped ? " grouped" : " first");
+    var reactions = reactionsRow(topic, message);
+    var classes = "msg-row" + (mine ? " mine" : "") + (grouped ? " grouped" : " first") +
+      (reactions ? " has-reactions" : "");
     var col = el("div", { class: "msg-col" });
 
     if (!grouped && !mine) {
@@ -734,10 +746,8 @@
       col.appendChild(el("div", { class: "msg-author", "aria-hidden": "true", text: message.authorName }));
     }
 
-    var locked = mine && Core.isMessageLocked(message, App.user.id);
-    var metaBits = [];
-    if (mine && message.anon) { metaBits.push("Anonyme"); }
-    metaBits.push(Utils.formatTime(message.createdAt));
+    var locked = owns && Core.isMessageLocked(message, App.user.id);
+    var metaBits = [Utils.formatTime(message.createdAt)];
     if (message.updatedAt && message.updatedAt !== message.createdAt) { metaBits.push("modifié"); }
 
     /* L'auteur figure TOUJOURS dans le nom accessible : le regroupement est une
@@ -762,7 +772,6 @@
     ]);
 
     col.appendChild(bubble);
-    var reactions = reactionsRow(topic, message);
     if (reactions) { col.appendChild(reactions); }
 
     /* Pastille d'initiales à gauche des messages des autres : elle n'apparaît
@@ -885,7 +894,7 @@
     });
 
     if (!topic.messages.length) {
-      threadInner.appendChild(emptyState("users", "La discussion démarre ici",
+      threadInner.appendChild(emptyState("message", "La discussion démarre ici",
         "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer."));
     }
 
