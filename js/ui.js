@@ -66,11 +66,10 @@
     ]);
   }
 
-  /* Logotype animé caractère par caractère (écrans vides uniquement). */
+  /* Logotype. Il monte d'un seul tenant (cf. app.css) : c'est du texte, pas une
+   * suite de <span> — inutile d'en fabriquer neuf pour animer un bloc. */
   function wordmark(text) {
-    var node = el("div", { class: "wordmark", "aria-label": text });
-    node.appendChild(Utils.splitChars(text, "wm-char"));
-    return node;
+    return el("div", { class: "wordmark", text: text });
   }
 
   function heroBlock(tagline) {
@@ -95,11 +94,11 @@
   var forceNext = false;
   /* Instant de la dernière entrée sur un écran, et durée pendant laquelle un
    * rendu qui retombe au même endroit doit REPRENDRE l'animation au lieu de la
-   * perdre. 1100 ms couvre la séquence la plus longue du thème — le monogramme,
-   * ~900 ms — avec de la marge. Au-delà, l'entrée est finie : un rendu tardif
+   * perdre. 1400 ms couvre la séquence la plus longue du thème — l'accueil,
+   * dont la signature se pose à 1060 ms — avec de la marge. Au-delà, l'entrée est finie : un rendu tardif
    * ne doit surtout rien rejouer. */
   var enterAt = 0;
-  var ENTER_WINDOW_MS = 1100;
+  var ENTER_WINDOW_MS = 1400;
 
   /* État d'interface local (jamais partagé). */
   UI.local = {

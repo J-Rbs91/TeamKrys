@@ -201,22 +201,51 @@ quand l'utilisateur vit la centième.
 | Retour à l'appui, survol | 100 ms | plusieurs fois par minute |
 | Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
 | Feuille, fenêtre | 240 ms | quotidien |
-| **Monogramme** | ~900 ms, en trois temps | une fois par ouverture |
+| **Séquence d'accueil** | 1060 ms, en quatre temps | une fois par ouverture |
 
 La cascade de révélation passait de 550 ms, 36 px et un changement d'échelle, à
 45 ms de décalage **sans plafond** : la trentième carte d'une longue liste
 attendait 1,4 s pendant que l'utilisateur, lui, avait déjà commencé à défiler.
 
-Le **monogramme animé** est le seul geste expressif de l'application, et il est
-cantonné aux deux écrans qui sont vides de toute façon — accueil et verrou. Il
-n'est vu qu'à l'ouverture, ce qui est la condition pour qu'une séquence de cette
-longueur reste supportable : la même animation sur un bouton serait interdite
-par la règle ci-dessus. Il ne retarde rien — sur l'écran de verrou, le champ de
-code est saisissable dès le premier rendu.
+#### La séquence d'accueil
 
-Ce qu'il raconte : **le cercle se referme — la discussion tourne — puis le point
-s'en détache — la décision en sort.** C'est le seul endroit où le sens du produit
-passe par le mouvement plutôt que par un libellé.
+C'est le seul geste expressif de l'application, cantonné aux deux écrans vides —
+accueil et verrou. Il n'est vu **qu'à l'ouverture**, ce qui est la condition pour
+qu'une séquence de cette longueur reste supportable : la même animation sur un
+bouton serait interdite par la règle ci-dessus. Il ne retarde rien — sur l'écran
+de verrou, le champ de code est saisissable dès le premier rendu.
+
+Ce qu'il raconte, en quatre temps qui **se chevauchent** :
+
+| | Quand | Ce qui se passe | Ce que ça dit |
+|---|---|---|---|
+| 1 | 0 → 520 ms | quatre points convergent vers le centre et s'y fondent | les idées qui arrivent |
+| 2 | 220 → 740 ms | le cercle se referme pendant qu'ils disparaissent | la discussion les absorbe |
+| 3 | 660 → 980 ms | un point unique apparaît à côté | la décision qui en sort |
+| 4 | 700 → 980 ms · 820 → 1060 ms | le logotype monte d'un bloc, puis la signature se révèle | — |
+
+Le point (3) et le logotype (4) se terminent **sur le même instant**. C'est
+délibéré : joués l'un après l'autre, le monogramme et le logotype se lisaient
+comme deux séquences successives ; résolus ensemble, ils n'en font qu'une. Et
+c'est le chevauchement qui tient le total à 1060 ms alors que la somme des temps
+dépasse 1,8 s — enchaînés bout à bout, ce serait un diaporama.
+
+Trois décisions moins évidentes :
+
+- **Les quatre points n'appartiennent pas à la marque.** Ils n'existent que
+  pendant l'animation : au repos leur opacité est nulle, et leur animation s'y
+  termine aussi. Sans mouvement ils ne s'affichent jamais, et le monogramme
+  reste l'anneau et son point.
+- **Ils accélèrent au lieu de freiner** (`--ease-in`, la seule occurrence du
+  fichier). Avec la courbe amortie du reste du thème, ils parcouraient 80 % du
+  trajet dans les 150 premières millisecondes puis stagnaient : on ne voyait
+  plus une convergence mais quatre pastilles clignoter au centre.
+- **La signature est animée**, alors qu'elle ne l'était pas. Immobile, elle
+  s'affichait dès la première image et restait seule sous un logo en train de se
+  dessiner, à annoncer un nom pas encore arrivé. Un élément non animé au milieu
+  d'une séquence n'est pas neutre : il la contredit.
+
+Et trois points d'implémentation :
 
 - Le monogramme est construit en **SVG inline** par `Utils.logoMark` : un anneau
   en `border` ne sait pas se tracer, un trait SVG oui (`stroke-dashoffset`). Le
@@ -225,19 +254,46 @@ passe par le mouvement plutôt que par un libellé.
 - Les bouts du trait sont **droits**, seul écart au jeu d'icônes : le tiret vaut
   exactement une circonférence, et des bouts arrondis se recouvriraient d'un
   demi-trait une fois le cercle refermé, laissant un épaississement en haut.
-- L'origine de transformation du point est en **unités utilisateur**, pas en
+- Les origines de transformation sont en **unités utilisateur**, pas en
   pourcentage : un pourcentage exigerait `transform-box: fill-box` pour être
   juste, et se résoudrait sinon contre le viewBox entier.
-- Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
-  aurait été une dépendance distante de plus, contre la règle du dépôt, pour
-  trois transitions de propriétés que le navigateur sait déjà interpoler.
+
+Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
+aurait été une dépendance distante de plus, contre la règle du dépôt, pour des
+transitions de propriétés que le navigateur sait déjà interpoler.
+
+#### Une entrée survit à un nouveau rendu
+
+Le rendu **détruit et reconstruit** le nœud de l'écran à chaque appel. La classe
+`screen--enter`, posée au seul changement d'écran, était donc perdue dès qu'un
+second rendu suivait — ce qui arrivait systématiquement au démarrage :
+`Sync.boot()` résout, appelle `UI.force()`, et le second rendu arrivait une
+milliseconde après le premier. **Aucune animation d'entrée n'était visible sur
+l'écran de connexion**, ni le logotype, ni la cascade des cartes.
+
+`UI.render` mémorise désormais l'**instant** de l'entrée. Tant que la fenêtre
+est ouverte (`ENTER_WINDOW_MS`, 1400 ms), un rendu qui retombe au même endroit
+repose la classe et publie le temps écoulé dans `--enter-elapsed`, que
+`app.css` retranche de chaque délai. Un délai négatif démarre l'animation en
+cours de route : elle **reprend** au lieu de recommencer — ce qui serait un
+clignotement — et de disparaître.
+
+`Utils.now()` s'appuie sur `performance.now()` et non `Date.now()` : l'heure
+système peut reculer, et un écart négatif ferait passer une animation pour
+terminée.
+
+#### Le repli
 
 **L'état au repos du balisage est l'état final.** Sans animation — préférence de
 mouvement réduit activée, ou moteur qui ignore la requête — le monogramme est
 complet et bien placé. C'est le mode de panne à ne jamais produire : un logo
-figé à moitié tracé, sans message d'erreur. Cette invariance est vérifiée, pas
-supposée : `stroke-dashoffset` vaut `0px`, le point `transform: none` et
-`opacity: 1` dans les trois configurations testées.
+figé à moitié tracé, sans message d'erreur.
+
+Cette invariance est vérifiée, pas supposée. Sous `prefers-reduced-motion:
+reduce` : `stroke-dashoffset` vaut `0px` et `stroke-dasharray` `none` (anneau
+complet), le point et le logotype sont à `transform: none` et `opacity: 1`, et
+les quatre points de convergence restent à opacité nulle — un décor ne doit pas
+se figer à l'écran, il doit ne pas s'y afficher.
 
 ### Icônes d'application et écran de démarrage
 
