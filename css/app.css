@@ -457,7 +457,7 @@ p { margin: 0; }
     /* Décalage PLAFONNÉ à six crans. Sans plafond, la trentième carte d'une
        longue liste attend 1,4 s avant d'apparaître — l'utilisateur, lui, a
        déjà commencé à défiler et voit du vide se remplir sous ses yeux. */
-    animation-delay: calc(min(var(--reveal-index, 0), 6) * var(--reveal-stagger));
+    animation-delay: calc(min(var(--reveal-index, 0), 6) * var(--reveal-stagger) - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -506,7 +506,8 @@ p { margin: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .logo-ring {
     stroke-dasharray: var(--logo-c);
-    animation: logo-ring-draw 0.56s var(--ease-out) 0.06s backwards;
+    animation: logo-ring-draw 0.56s var(--ease-out) backwards;
+    animation-delay: calc(0.06s - var(--enter-elapsed, 0ms));
   }
 
   /* L'origine de transformation est posée en unités utilisateur par
@@ -515,7 +516,8 @@ p { margin: 0; }
   .screen--enter .logo-dot {
     /* La courbe dépasse puis revient : le point « atterrit ». C'est le seul
        usage de --ease-spring du fichier. */
-    animation: logo-dot-eject 0.42s var(--ease-spring) 0.46s backwards;
+    animation: logo-dot-eject 0.42s var(--ease-spring) backwards;
+    animation-delay: calc(0.46s - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -532,7 +534,7 @@ p { margin: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .wm-char {
     animation: char-rise 0.4s var(--ease-out) backwards;
-    animation-delay: calc(280ms + var(--ci) * 26ms);
+    animation-delay: calc(280ms + var(--ci) * 26ms - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -685,7 +687,8 @@ p { margin: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .fab {
-    animation: reveal var(--reveal-duration) var(--ease-out) 0.1s backwards;
+    animation: reveal var(--reveal-duration) var(--ease-out) backwards;
+    animation-delay: calc(0.1s - var(--enter-elapsed, 0ms));
   }
 }
 

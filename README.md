@@ -239,15 +239,32 @@ figé à moitié tracé, sans message d'erreur. Cette invariance est vérifiée,
 supposée : `stroke-dashoffset` vaut `0px`, le point `transform: none` et
 `opacity: 1` dans les trois configurations testées.
 
-### Ce qui reste à faire
+### Icônes d'application et écran de démarrage
 
-Les **icônes d'application** (`assets/icons/`) n'ont pas été régénérées. Le
-monogramme y est dessiné à l'identique, et son fond très sombre reste cohérent
-avec la nouvelle palette, mais son point n'a pas pris l'accent. Les régénérer
-suppose un rastériseur SVG → PNG (192, 512, maskable) qu'aucune règle du dépôt
-n'autorise à installer. À faire hors dépôt, en une passe, pour les quatre
-fichiers ensemble — modifier `icon.svg` seul désaccorderait l'onglet du
-navigateur de l'icône installée sur l'écran d'accueil.
+Les quatre icônes sont **générées**, pas dessinées à la main :
+[`tools/build-icons.py`](tools/build-icons.py) les produit depuis une source
+unique, en Python standard — le dépôt interdit toute dépendance, et l'icône
+n'est qu'un aplat plus deux cercles.
+
+```
+python3 tools/build-icons.py
+```
+
+Ce script existe pour un défaut précis, et invisible sur toute maquette.
+L'écran de démarrage d'une application installée est composé par le système :
+il peint le `background_color` du manifeste, puis pose l'icône par-dessus. Si
+le fond de l'icône n'est pas **exactement** `background_color`, un disque se
+découpe au milieu de l'écran. C'est ce qui se produisait — fond `#031C25`,
+icône `#01161E` — et il faut installer l'application pour le voir.
+
+Le script **refuse de générer** si les deux valeurs divergent. C'est le seul
+couplage du fichier, et il est vérifié à l'exécution plutôt que confié à la
+vigilance.
+
+> Sur un téléphone où l'application est déjà installée, l'écran de démarrage
+> peut rester l'ancien un moment : Android conserve le manifeste et les icônes
+> jusqu'à ce que le service worker se renouvelle. Désinstaller puis réinstaller
+> est le seul moyen sûr de le rafraîchir immédiatement.
 
 ### Icônes et réactions
 

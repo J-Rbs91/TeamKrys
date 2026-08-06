@@ -286,6 +286,18 @@
 
   Utils.nowISO = function () { return new Date().toISOString(); };
 
+  /* Horloge MONOTONE, en millisecondes, pour mesurer une durée écoulée.
+   * `performance.now()` et non `Date.now()` : l'heure système peut reculer —
+   * changement d'heure, synchronisation NTP, utilisateur qui la règle — et un
+   * écart négatif ferait passer une animation pour terminée, ou l'inverse.
+   * Repli sur Date.now() là où performance manque, ce qui n'arrive plus sur le
+   * parc visé mais ne coûte rien à couvrir. */
+  Utils.now = function () {
+    return (typeof performance !== "undefined" && performance.now)
+      ? performance.now()
+      : Date.now();
+  };
+
   function pad(n) { return n < 10 ? "0" + n : String(n); }
 
   Utils.formatTime = function (iso) {

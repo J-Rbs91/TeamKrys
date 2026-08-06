@@ -93,6 +93,13 @@
   var lastSignature = null;
   var lastPlace = null;
   var forceNext = false;
+  /* Instant de la dernière entrée sur un écran, et durée pendant laquelle un
+   * rendu qui retombe au même endroit doit REPRENDRE l'animation au lieu de la
+   * perdre. 1100 ms couvre la séquence la plus longue du thème — le monogramme,
+   * ~900 ms — avec de la marge. Au-delà, l'entrée est finie : un rendu tardif
+   * ne doit surtout rien rejouer. */
+  var enterAt = 0;
+  var ENTER_WINDOW_MS = 1100;
 
   /* État d'interface local (jamais partagé). */
   UI.local = {
@@ -1621,10 +1628,34 @@
 
     /* Les animations d'entrée ne se jouent qu'en ARRIVANT sur un écran. Une
      * mise à jour de données (message reçu, vote) ne doit pas relancer la
-     * cascade : une animation d'entrée qui se répète devient du clignotement. */
+     * cascade : une animation d'entrée qui se répète devient du clignotement.
+     *
+     * Mais le rendu DÉTRUIT et reconstruit le nœud à chaque appel. Une entrée
+     * suivie d'un second rendu perdait donc son animation en cours de route —
+     * et c'était le cas systématiquement au démarrage : `Sync.boot()` résout,
+     * appelle `UI.force()`, et le deuxième rendu arrivait une milliseconde
+     * après le premier. L'animation d'accueil vivait une milliseconde, puis son
+     * nœud disparaissait. Aucune animation d'entrée n'a donc jamais été visible
+     * sur l'écran de connexion.
+     *
+     * On mémorise l'INSTANT de l'entrée, pas seulement le fait qu'elle a eu
+     * lieu. Tant que la fenêtre d'entrée est ouverte, un rendu qui retombe au
+     * même endroit repose la classe ET publie le temps déjà écoulé
+     * (`--enter-elapsed`), que app.css retranche de chaque délai. Un délai
+     * négatif démarre l'animation en cours de route : elle REPREND où elle en
+     * était au lieu de recommencer — ce qui serait un clignotement, et de
+     * disparaître — ce qui était le défaut. */
     var place = (App.gate() || "") + "|" + App.route.raw;
     var entering = place !== lastPlace;
     lastPlace = place;
+
+    var elapsed = 0;
+    if (entering) {
+      enterAt = Utils.now();
+    } else if (enterAt !== 0) {
+      elapsed = Utils.now() - enterAt;
+      if (elapsed < ENTER_WINDOW_MS) { entering = true; } else { enterAt = 0; elapsed = 0; }
+    }
 
     var drafts = captureDrafts();
 
@@ -1636,7 +1667,10 @@
 
     Utils.clear(appRoot);
     var screen = currentScreen();
-    if (entering) { screen.classList.add("screen--enter"); }
+    if (entering) {
+      screen.classList.add("screen--enter");
+      screen.style.setProperty("--enter-elapsed", elapsed + "ms");
+    }
     appRoot.appendChild(screen);
     renderOverlay();
     restoreDrafts(drafts);
