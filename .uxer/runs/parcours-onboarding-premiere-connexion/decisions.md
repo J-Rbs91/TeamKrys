@@ -1,0 +1,18 @@
+# Décisions durables — parcours-onboarding-premiere-connexion
+
+<!-- mission UXER parcours-onboarding-premiere-connexion — profil standard — créé le 2026-08-06T23:41:49+00:00 -->
+
+Une décision entre ici quand elle engage la suite du travail et qu'elle ne se
+redébat pas. Les discussions restent hors de ce fichier.
+
+| Date | Décision | Motif | Réversible |
+|---|---|---|---|
+| 2026-08-06 | **A** — Séquence de six panneaux en feuille basse. Ni visite ancrée, ni spotlight, ni coach marks | Quatre constats indépendants : les écrans à surligner n'existent pas au premier lancement (`js/ui.js:879`, `1029`, `1066`, FAB conditionné `:654`) ; la seule mise en évidence sans mesure JS est rognée par `overflow:hidden` (`css/app.css:377`, `:1129`) et inopérante sur les trois barres à `backdrop-filter` ; le thème a documenté la suppression de ses deux couches plein écran composées (`css/app.css:339-346`) ; un anneau d'accent sur le voile clair tombe à 2,02:1 | Non — c'est le socle de tout le reste |
+| 2026-08-06 | **B** — La séquence n'est **jamais** un gate. Elle se monte après `App.gate() === null` | Un défaut dans un gate empêcherait d'atteindre les réglages **et** le bandeau de mise à jour, dont le clic est le seul chemin de retour arrière chez quelqu'un qui ne peut pas vider son cache (`js/app.js:439-442`) | Non |
+| 2026-08-06 | **C** — Le calque vit **hors** du cycle de `UI.render`. L'étape n'entre pas dans `UI.local` | `UI.set` incrémente `UI.local.version`, qui entre dans `signature()` (`js/ui.js:1627`) : chaque « Suivant » reconstruirait `#app`, perdrait le focus et recréerait la région live — donc n'annoncerait rien. Précédents du dépôt : `UI.showUpdateBanner` (`:1710`) et `UI.refreshStatus` (`:319`) | Non |
+| 2026-08-06 | **D** — Règle de décision **pure** dans `js/config.js`, panneaux dans `js/ui.js`. **Aucun fichier ajouté** | `config.js` héberge déjà `CONFIG.sessionUsable` (`:113`), pure et testée sous Node ; et tout fichier JS nouveau devrait être déclaré dans `index.html` **et** dans `SHELL` — un oubli casse le démarrage à froid hors ligne, et seulement lui | Oui, à coût faible |
+| 2026-08-06 | **E** — Règle de migration obligatoire : enregistrement absent **mais** adresse, mode local ou nom présents ⇒ marquer « déjà vu » et ne rien afficher | Sans elle, le déploiement rejoue la séquence chez toute l'équipe existante. C'est le défaut le plus visible que ce chantier puisse produire | Non |
+| 2026-08-06 | **F** — Le rejeu automatique n'est jamais indexé sur `APP_VERSION` ; un entier dédié le gouverne | Un correctif de patch rejouerait la séquence chez tout le monde | Oui |
+| 2026-08-06 | **G** — Aucune action de synchronisation, aucune télémétrie, aucun asset distant | `apps-script/` est hors dépôt (`.gitignore:1-5`) ; et l'état partagé est téléchargé par tous les clients, ce qui rendrait une mesure nominative lisible par l'équipe dans une app qui efface l'identité sur demande | Non |
+| 2026-08-06 | **H** — Aucune illustration produite pour la séquence ; le sens est porté par les icônes de l'interface réelle | Le jeu d'icônes tient dans un trait de 1,7 px et `currentColor` (`js/utils.js:65-102`) ; le pack local `professional-minimal-ui` note que le registre vide est celui où l'illustration est la plus dispensable | Oui |
+| 2026-08-06 | **I** — La fréquence occasionnelle prime sur l'étiquette « outil interne » pour toutes les décisions de guidage | Le pack `client-owner-portal` avertit que les besoins d'un usage occasionnel et d'un outil interne quotidien sont **opposés** ; BrainstO. est un outil interne à fréquence de portail (1–2 ×/semaine) | Oui |
