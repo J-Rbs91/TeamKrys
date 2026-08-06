@@ -515,7 +515,10 @@
         heroBlock("Espace de l'équipe verrouillé"),
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("lock", "Verrou de l'équipe"),
-          field("Code d'accès", codeInput, "Le code vous est communiqué par l'équipe. Il n'est jamais enregistré sur cet appareil."),
+          field("Code d'accès", codeInput,
+            "Le code vous est communiqué par l'équipe. Il n'est jamais enregistré sur cet appareil. "
+            + "Une fois déverrouillé, l'accès reste ouvert : le code n'est redemandé qu'après une "
+            + "heure sans activité."),
           el("button", {
             class: "btn btn-primary btn-block", type: "button",
             onclick: function () { App.unlock(codeInput.value); }

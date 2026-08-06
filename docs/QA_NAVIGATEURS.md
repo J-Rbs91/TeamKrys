@@ -90,8 +90,11 @@ en thème clair **et** sombre, console ouverte, **zéro erreur** attendue.
 - [ ] Composeur de messages, **clavier ouvert** : champ visible, dernier message
       lisible, bouton d'envoi atteignable.
 - [ ] Focus sur le champ de message : **la page ne zoome pas**.
-- [ ] Application en arrière-plan plus de 3 minutes : reverrouillage au retour,
+- [ ] Application en arrière-plan quelques minutes : retour **sans code demandé**,
       resynchronisation immédiate, brouillon intact.
+- [ ] Application en arrière-plan au-delà de `LOCK_IDLE_MS` (une heure ; abaisser
+      la constante le temps du test) : reverrouillage au retour, brouillon intact
+      après déverrouillage.
 - [ ] Mode avion : ouverture, dernières données, action mise en file.
 - [ ] Zones sûres : rien sous l'encoche ni sous la barre d'accueil, **y compris
       en paysage**.

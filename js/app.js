@@ -10,7 +10,8 @@
 
   var lockVerifier = null;     // hachage conservé sur l'appareil (jamais le code)
   var unlocked = false;
-  var hiddenSince = null;
+  var lastActivity = 0;        // dernière manipulation réelle, en mémoire
+  var savedActivity = 0;       // dernière valeur écrite sur l'appareil
   var ownItems = [];           // identifiants créés sur CET appareil (jamais partagé)
   var updateRequested = false;
 
@@ -51,6 +52,50 @@
     return ownItems.indexOf(id) >= 0;
   };
 
+  /* ------------------------------------------------------------ Session --- */
+
+  /* Ce que l'application accepte de garder sur l'appareil entre deux ouvertures :
+   * le jeton serveur et l'heure de la dernière manipulation. JAMAIS le code —
+   * il reste inconnu de l'appareil, comme avant.
+   *
+   * Le jeton, lui, ne vivait qu'en mémoire vive : c'est ce qui obligeait à
+   * ressaisir le code à chaque ouverture. On le pose donc sur le disque, mais
+   * sous conditions strictes : il disparaît au reverrouillage, à la
+   * déconnexion, au refus du serveur, et il expire seul après LOCK_IDLE_MS.
+   * Le compromis est explicite — un accès physique à l'appareil déverrouillé
+   * dans l'heure donne le jeton, exactement comme il donnait déjà l'accès à
+   * l'application ouverte. */
+
+  function writeSession(at) {
+    if (!lockVerifier || !unlocked) { return; }
+    savedActivity = at;
+    Utils.storage.set(CONFIG.KEYS.session, {
+      v: lockVerifier, t: Sync.connection.token || "", at: at
+    });
+  }
+
+  function clearSession() {
+    savedActivity = 0;
+    Utils.storage.remove(CONFIG.KEYS.session);
+  }
+
+  function startSession() {
+    lastActivity = Date.now();
+    writeSession(lastActivity);
+  }
+
+  /* Toute manipulation repousse l'échéance. L'écriture, elle, est espacée. */
+  function touch() {
+    var now = Date.now();
+    lastActivity = now;
+    if (now - savedActivity >= CONFIG.SESSION_TOUCH_MS) { writeSession(now); }
+  }
+
+  function sessionExpired() {
+    if (!lockVerifier || !unlocked) { return false; }
+    return Date.now() - lastActivity > CONFIG.LOCK_IDLE_MS;
+  }
+
   /* ---------------------------------------------------------- Connexion --- */
 
   App.connectionConfigured = function () {
@@ -61,9 +106,24 @@
     var url = Utils.storage.get(CONFIG.KEYS.apiUrl, "");
     var localMode = Utils.storage.get(CONFIG.KEYS.localMode, false) === true;
     lockVerifier = Utils.storage.get(CONFIG.KEYS.lockVerifier, null);
-    /* Le jeton ne vit qu'en mémoire : rouvrir l'application reverrouille. */
-    unlocked = localMode || !lockVerifier;
-    Sync.setConnection({ url: url || "", token: "", localMode: localMode, unlocked: unlocked });
+
+    /* Rouvrir l'application ne reverrouille plus : on reprend la session tant
+     * que la dernière manipulation date de moins d'une heure. */
+    var token = "";
+    if (localMode || !lockVerifier) {
+      unlocked = true;
+    } else {
+      var session = CONFIG.sessionUsable(
+        Utils.storage.get(CONFIG.KEYS.session, null), lockVerifier, Date.now()
+      );
+      unlocked = !!session;
+      if (session) { token = session.token; }
+      else { clearSession(); }
+    }
+
+    Sync.setConnection({ url: url || "", token: token, localMode: localMode, unlocked: unlocked });
+    /* Ouvrir l'application EST une manipulation : l'heure repart d'ici. */
+    if (unlocked) { startSession(); }
   }
 
   App.saveConnection = function (url, code) {
@@ -104,6 +164,7 @@
       unlocked = true;
       App.editingConnection = false;
       Sync.setConnection({ url: clean, token: result.token, localMode: false, unlocked: true });
+      if (result.verifier) { startSession(); } else { clearSession(); }
       if (!result.reachable) {
         UI.toast("Adresse enregistrée, mais le serveur n'a pas répondu. Réessai automatique.", "error");
       } else {
@@ -130,6 +191,7 @@
     Utils.storage.set(CONFIG.KEYS.localMode, true);
     Utils.storage.remove(CONFIG.KEYS.apiUrl);
     Utils.storage.remove(CONFIG.KEYS.lockVerifier);
+    clearSession();
     lockVerifier = null;
     unlocked = true;
     App.editingConnection = false;
@@ -142,6 +204,7 @@
     Utils.storage.remove(CONFIG.KEYS.apiUrl);
     Utils.storage.remove(CONFIG.KEYS.lockVerifier);
     Utils.storage.remove(CONFIG.KEYS.localMode);
+    clearSession();
     lockVerifier = null;
     unlocked = false;
     App.editingConnection = false;
@@ -174,6 +237,7 @@
       return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
         unlocked = true;
         Sync.setConnection({ token: token, unlocked: true });
+        startSession();
         Sync.start();
         Sync.now();
         UI.force();
@@ -184,6 +248,7 @@
   App.relock = function () {
     if (!lockVerifier) { return; }
     unlocked = false;
+    clearSession();
     Sync.setConnection({ token: "", unlocked: false });
     Sync.stop();
     UI.set({ sheet: null, modal: null });
@@ -382,20 +447,36 @@
   function bindGlobalEvents() {
     window.addEventListener("hashchange", onHashChange);
 
+    /* Ce qui compte comme manipulation : un doigt, un clic, une touche. La
+     * boucle de synchronisation, qui tourne toute seule y compris onglet
+     * masqué, ne repousse RIEN — sinon l'application ne se verrouillerait
+     * jamais. */
+    ["pointerdown", "touchstart", "keydown"].forEach(function (name) {
+      window.addEventListener(name, touch, { passive: true, capture: true });
+    });
+
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) {
-        hiddenSince = Date.now();
+        /* On fige l'heure exacte AVANT de partir : le système peut tuer
+         * l'application sans prévenir, et c'est cette valeur qui décidera au
+         * retour s'il faut redemander le code. */
+        writeSession(lastActivity);
         return;
       }
-      var away = hiddenSince ? Date.now() - hiddenSince : 0;
-      hiddenSince = null;
-      if (away > CONFIG.LOCK_BACKGROUND_MS) {
-        App.relock();
-        return;
-      }
+      if (sessionExpired()) { App.relock(); return; }
+      touch();
       Sync.now();
       Sync.start();
     });
+
+    /* iOS ne garantit pas visibilitychange à la fermeture ; pagehide, si. */
+    window.addEventListener("pagehide", function () { writeSession(lastActivity); });
+
+    /* Une heure sans rien toucher doit reverrouiller MÊME application ouverte
+     * à l'écran. Un contrôle par minute suffit et ne coûte rien. */
+    setInterval(function () {
+      if (sessionExpired()) { App.relock(); }
+    }, CONFIG.IDLE_CHECK_MS);
 
     window.addEventListener("online", function () { UI.refreshStatus(); Sync.now(); });
     window.addEventListener("offline", function () { UI.refreshStatus(); });

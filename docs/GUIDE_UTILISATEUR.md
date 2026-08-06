@@ -15,8 +15,11 @@ vote, et on arrive avec une conclusion claire.
    - iPhone : *Partager* → **Sur l'écran d'accueil**
    - Android : menu ⋮ → **Installer l'application**
 
-Le **code est redemandé à chaque ouverture** : c'est normal, il n'est jamais
-enregistré sur le téléphone.
+Le code **n'est pas redemandé à chaque ouverture** : tant que vous vous servez
+de l'application, elle se rouvre directement. Il redevient obligatoire après
+**une heure sans y toucher** — téléphone posé, application fermée ou laissée
+ouverte, cela revient au même. Le code lui-même n'est jamais enregistré sur le
+téléphone.
 
 Vous pouvez aussi choisir « Continuer sans connexion (mode local) » pour
 essayer l'outil seul : les données resteront sur votre appareil.

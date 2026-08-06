@@ -8,6 +8,7 @@ du navigateur ouverte : **zéro erreur console** attendue.
 
 - [ ] `node tests/parity.test.js` → tous les tests passent.
 - [ ] `node tests/sync.test.js` → tous les tests passent.
+- [ ] `node tests/session.test.js` → tous les tests passent.
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -32,10 +33,18 @@ du navigateur ouverte : **zéro erreur console** attendue.
 
 ## 2. Verrou
 
-- [ ] Fermer puis rouvrir l'application → le code est **redemandé**.
+- [ ] Fermer puis rouvrir l'application dans la foulée → **aucun code demandé**,
+      le contenu s'affiche directement.
 - [ ] Mauvais code → refusé, même en mode avion.
 - [ ] Bon code → contenu affiché.
-- [ ] Laisser l'app en arrière-plan plus de 3 minutes → reverrouillage au retour.
+- [ ] Plus d'une heure sans toucher à l'application → le code est **redemandé**,
+      qu'elle ait été fermée, en arrière-plan ou laissée ouverte à l'écran.
+      (Pour ne pas attendre une heure : ramener `LOCK_IDLE_MS` à `60 * 1000`
+      dans `js/config.js` le temps du test, **et le remettre ensuite**.)
+- [ ] Verrouillé par inactivité, puis bon code → on revient sur le contenu et la
+      synchronisation repart.
+- [ ] Code changé côté serveur, puis reconnexion avec le nouveau code → l'ancienne
+      session n'ouvre plus rien.
 - [ ] Réglages → « Se déconnecter de l'équipe » → retour à l'écran d'accueil,
       adresse et vérificateur oubliés.
 
@@ -78,8 +87,8 @@ du navigateur ouverte : **zéro erreur console** attendue.
       d'une même personne, **l'auteur est annoncé sur les trois** ; sur un
       message cité, l'expéditeur est annoncé **avant** la personne citée ; un
       message verrouillé annonce « verrouillé ».
-- [ ] Message en cours d'écriture, application en arrière-plan > 3 minutes,
-      retour et déverrouillage : **le brouillon est toujours là**.
+- [ ] Message en cours d'écriture, application en arrière-plan au-delà du délai
+      d'inactivité, retour et déverrouillage : **le brouillon est toujours là**.
 - [ ] Erreur pendant la saisie, clavier ouvert (couper le réseau et envoyer) :
       le message d'erreur est **visible à l'écran**.
 - [ ] Composeur qui grandit jusqu'à 4 lignes, ou aperçu « en réponse à … »
