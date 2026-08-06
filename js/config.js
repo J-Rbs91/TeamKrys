@@ -10,7 +10,7 @@
     APP_NAME: "BrainstO.",
 
     /* À incrémenter EN MÊME TEMPS que CACHE_VERSION dans service-worker.js. */
-    APP_VERSION: "1.5.0",
+    APP_VERSION: "1.6.0",
 
     /* Sel public partagé avec le backend. Ce n'est PAS un secret : il sert
      * uniquement à séparer les deux hachages (jeton serveur / vérificateur local). */
@@ -50,8 +50,24 @@
      * qui se compte en secondes. Ignoré si le serveur ne sait pas grouper. */
     BATCH_COALESCE_MS: 150,
 
-    /* Reverrouillage après ce délai passé en arrière-plan. */
-    LOCK_BACKGROUND_MS: 3 * 60 * 1000,
+    /* Reverrouillage après ce délai SANS manipulation — que l'application soit
+     * restée ouverte à l'écran, en arrière-plan, ou complètement fermée.
+     *
+     * Redemander le code à chaque ouverture protégeait surtout contre le
+     * propriétaire du téléphone, qui consulte l'application vingt fois par
+     * jour : le verrou existe pour l'appareil oublié sur une table, pas pour
+     * la personne qui vient d'écrire un message il y a deux minutes. */
+    LOCK_IDLE_MS: 60 * 60 * 1000,
+
+    /* Écriture de l'horodatage d'activité espacée d'autant : un doigt qui fait
+     * défiler une conversation ne doit pas écrire dans localStorage à chaque
+     * geste. Conséquence assumée : après une fermeture brutale, l'échéance peut
+     * être en retard de ce délai — dans le sens prudent. */
+    SESSION_TOUCH_MS: 30 * 1000,
+
+    /* Contrôle périodique de l'inactivité, pour reverrouiller une application
+     * laissée ouverte à l'écran sans que personne n'y touche. */
+    IDLE_CHECK_MS: 60 * 1000,
 
     /* Délai maximal d'une requête réseau. */
     REQUEST_TIMEOUT_MS: 20000,
@@ -63,6 +79,7 @@
     KEYS: {
       apiUrl: "brainsto.apiUrl",
       lockVerifier: "brainsto.lockVerifier",
+      session: "brainsto.session",
       user: "brainsto.user",
       ownItems: "brainsto.ownItems",
       localMode: "brainsto.localMode",
@@ -80,6 +97,27 @@
    * permet pas de reconstituer le jeton. */
   CONFIG.verifierInput = function (code) {
     return "lock|" + CONFIG.PW_SALT + "|" + String(code == null ? "" : code);
+  };
+
+  /* Une session déverrouillée survit à la fermeture de l'application tant qu'il
+   * s'est écoulé moins de LOCK_IDLE_MS depuis la dernière manipulation.
+   *
+   * Fonction PURE, et c'est volontaire : c'est la seule règle du verrou qui
+   * décide, à froid, si l'on entre sans code. Elle est testée séparément
+   * (tests/session.test.js) plutôt que vérifiée à la main sur un téléphone.
+   *
+   * Renvoie la session utilisable, ou null — auquel cas le code est redemandé.
+   * Trois refus : enregistrement abîmé, code changé depuis (le vérificateur ne
+   * correspond plus), et horodatage hors fenêtre. Une date FUTURE est refusée
+   * elle aussi : horloge reculée ou enregistrement bricolé, on ne s'y fie pas. */
+  CONFIG.sessionUsable = function (saved, verifier, now) {
+    if (!saved || typeof saved !== "object") { return null; }
+    if (typeof saved.v !== "string" || typeof saved.t !== "string") { return null; }
+    if (typeof saved.at !== "number" || !isFinite(saved.at)) { return null; }
+    if (!verifier || saved.v !== verifier) { return null; }
+    var age = now - saved.at;
+    if (age < 0 || age > CONFIG.LOCK_IDLE_MS) { return null; }
+    return { verifier: saved.v, token: saved.t, at: saved.at };
   };
 
   root.CONFIG = CONFIG;

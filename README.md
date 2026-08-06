@@ -64,6 +64,7 @@ apps-script/Code.gs        backend : stockage Drive, verrou, dédup, protocole
 apps-script/appsscript.json manifeste du projet Apps Script
 tests/parity.test.js       parité client / backend, action par action
 tests/sync.test.js         deux clients face à un faux backend (réception, file)
+tests/session.test.js      verrou par inactivité : quand l'ouverture exige le code
 ```
 
 ---
@@ -378,10 +379,31 @@ signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
   code)` — un hachage **différent**, qui permet de valider le déverrouillage
   hors ligne sans permettre de reconstituer le jeton serveur.
 - Le code lui-même n'est **jamais** enregistré.
-- Le jeton ne vit qu'en mémoire vive : le verrou est redemandé à **chaque
-  ouverture**, et après 3 minutes passées en arrière-plan.
+- Le verrou est **à durée d'inactivité**, pas à durée de session : le code est
+  redemandé après `LOCK_IDLE_MS` (**une heure**) sans la moindre manipulation —
+  application fermée, en arrière-plan ou laissée ouverte à l'écran, c'est le
+  même compteur. En deçà, rouvrir l'application entre directement.
 - Si le serveur refuse le jeton en cours de session, l'application se
   reverrouille immédiatement.
+
+Ce que la session pose sur l'appareil, et le compromis assumé :
+
+- `brainsto.session` conserve le **jeton serveur** et l'heure de la dernière
+  manipulation — c'est le prix à payer pour ne pas ressaisir le code vingt fois
+  par jour. Le code, lui, reste inconnu de l'appareil.
+- Cet enregistrement est effacé au reverrouillage, à la déconnexion, au passage
+  en mode local et au refus du serveur ; il expire seul au-delà d'une heure, et
+  il est refusé si le vérificateur ne correspond plus (code changé depuis) ou si
+  son horodatage est dans le futur (horloge reculée).
+- Ce qui est réellement cédé : un accès physique à l'appareil **dans l'heure**
+  qui suit la dernière manipulation donne le jeton — mais il donnait déjà
+  l'accès à l'application, qui était alors ouverte. Au-delà d'une heure, il ne
+  reste rien à prendre.
+- Ce qui compte comme manipulation : un doigt, un clic, une touche. La boucle de
+  synchronisation, qui tourne toute seule y compris onglet masqué, ne repousse
+  **rien** — sinon l'application ne se verrouillerait jamais.
+- La règle de décision est une fonction pure, `CONFIG.sessionUsable`, couverte
+  par `tests/session.test.js`.
 
 Le sel est une constante publique partagée par l'application et le script : il
 sert seulement à séparer les deux hachages, ce n'est pas un secret.
@@ -430,6 +452,7 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 ```bash
 node tests/parity.test.js
 node tests/sync.test.js
+node tests/session.test.js
 node tests/qa/compat-scan.js
 ```
 
