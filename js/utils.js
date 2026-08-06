@@ -432,6 +432,38 @@
     }
   };
 
+  /* ------------------------------------------------------- Base64 URL --- */
+
+  /* Variante « URL-safe » de base64 : « + » et « / » deviennent « - » et
+   * « _ », et le remplissage « = » saute. Le base64 ordinaire ne survit pas au
+   * voyage — les messageries transforment « + » en espace et coupent souvent
+   * le lien au premier « / » de trop. Sans remplissage, `atob` a besoin qu'on
+   * le lui remette. */
+  function utf8Bytes(text) {
+    return encodeURIComponent(String(text)).replace(/%([0-9A-F]{2})/gi, function (m, hex) {
+      return String.fromCharCode(parseInt(hex, 16));
+    });
+  }
+
+  Utils.b64urlEncode = function (text) {
+    try {
+      return root.btoa(utf8Bytes(text)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    } catch (e) { return ""; }
+  };
+
+  Utils.b64urlDecode = function (text) {
+    var value = String(text == null ? "" : text).replace(/-/g, "+").replace(/_/g, "/");
+    while (value.length % 4) { value += "="; }
+    try {
+      var raw = root.atob(value);
+      var out = "";
+      for (var i = 0; i < raw.length; i++) {
+        out += "%" + ("0" + raw.charCodeAt(i).toString(16)).slice(-2);
+      }
+      return decodeURIComponent(out);
+    } catch (e) { return ""; }
+  };
+
   /* --------------------------------------------------------------- Divers --- */
 
   /* Empreinte courte et STABLE d'un texte, pour comparer à l'œil deux appareils

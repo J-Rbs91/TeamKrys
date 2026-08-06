@@ -89,6 +89,14 @@ l'ancien code, et si le fichier de données a été abîmé, renommer la copie e
 L'adresse et le code se transmettent de la main à la main (message privé,
 oral) — jamais dans un dépôt public, jamais dans une capture d'écran partagée.
 
+Le plus simple, depuis un téléphone déjà connecté : **Réglages → Inviter
+quelqu'un**. Le lien produit règle l'adresse de l'équipe à la place de la
+personne invitée ; il ne lui reste que le code à saisir.
+
+Le code **ne figure jamais** dans ce lien, et ne doit pas y être ajouté : un
+lien traverse des messageries, des aperçus, des sauvegardes. Envoyez-le par un
+autre canal — un second message, un appel.
+
 ---
 
 ## 2. Le site (GitHub Pages)
@@ -103,14 +111,22 @@ Rien d'autre à faire : le site est statique, il n'y a ni build ni dépendance.
 
 ## 3. Sur le téléphone de chaque personne
 
-1. Ouvrir l'adresse du site.
+1. Ouvrir l'adresse du site — ou, mieux, le **lien d'invitation** reçu d'une
+   personne déjà connectée (Réglages → *Inviter quelqu'un*).
 2. **Installer l'application** (facultatif mais recommandé) :
    - iPhone (Safari) : bouton *Partager* → **Sur l'écran d'accueil** ;
    - Android (Chrome) : menu ⋮ → **Installer l'application**.
 3. Au premier lancement :
-   - coller l'**adresse du script** (celle qui se termine par `/exec`) ;
-   - saisir le **code d'accès** s'il y en a un ;
+   - par un lien d'invitation : l'adresse est **déjà réglée**, il ne reste que
+     le **code d'accès** à saisir ;
+   - sans lien : coller l'**adresse du script** (celle qui se termine par
+     `/exec`), puis saisir le code d'accès s'il y en a un ;
    - choisir son **nom**.
+
+Un « code d'espace » (quatre lettres et chiffres, par ex. `E793-B22A`) est
+affiché à l'arrivée par invitation et dans Réglages → Synchronisation. Le
+comparer de vive voix confirme qu'on rejoint bien le même espace, sans avoir à
+relire l'adresse du script.
 
 L'application vérifie tout de suite l'adresse et le code : un code erroné est
 signalé immédiatement.

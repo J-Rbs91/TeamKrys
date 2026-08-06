@@ -431,6 +431,12 @@
   /* ---------------------------------------------------- Accueil : connexion --- */
 
   function screenConnection() {
+    /* Arrivée par un lien d'invitation : l'adresse est déjà réglée, il ne
+     * reste que le code — qui, lui, ne voyage jamais dans le lien. On garde
+     * l'adresse hors du champ de saisie : la retoucher n'a aucun sens ici, et
+     * un champ prérempli invite à la modifier par erreur. */
+    var invite = App.invite;
+
     var urlInput = el("input", {
       class: "input", type: "url", inputmode: "url", autocomplete: "off",
       autocapitalize: "off", spellcheck: "false",
@@ -445,28 +451,60 @@
     });
 
     var submit = function () {
-      App.saveConnection(Utils.trim(urlInput.value), codeInput.value);
+      App.saveConnection(invite ? invite.url : Utils.trim(urlInput.value), codeInput.value);
     };
+
+    var card = invite
+      ? el("div", { class: "card card-static stack" }, [
+        sectionTitle("link", "Invitation à rejoindre l'équipe"),
+        el("div", { class: "hint", text:
+          "L'adresse de l'espace est déjà réglée par le lien que vous avez reçu. "
+          + "Saisissez le code d'accès que l'équipe vous a communiqué séparément." }),
+        /* L'empreinte permet de confirmer de vive voix qu'on rejoint le bon
+         * espace, sans jamais afficher l'adresse du script elle-même. */
+        el("div", { class: "diag" }, [
+          el("div", { class: "diag-row" }, [
+            el("span", { class: "diag-label", text: "Code d'espace" }),
+            el("span", { class: "diag-value", text: Utils.fingerprint(invite.url) })
+          ])
+        ]),
+        invite.replaces ? el("div", { class: "hint is-danger", text:
+          "Cet appareil est déjà rattaché à un autre espace. Le rejoindre "
+          + "remplacera l'espace actuel ici ; les données de l'autre équipe ne "
+          + "sont pas supprimées côté serveur." }) : null,
+        field("Code d'accès", codeInput,
+          "Laissez vide si l'équipe n'a pas défini de code. Il n'est jamais enregistré sur l'appareil."),
+        el("button", { class: "btn btn-primary btn-block", type: "button", onclick: submit },
+          [el("span", { text: "Rejoindre l'équipe" }), icon("forward", 18)]),
+        el("button", { class: "btn btn-ghost btn-block", type: "button",
+          text: "Saisir une autre adresse",
+          onclick: function () { App.clearInvite(); } })
+      ])
+      : el("div", { class: "card card-static stack" }, [
+        sectionTitle("link", "Rejoindre l'espace de l'équipe"),
+        field("Adresse du script de l'équipe", urlInput,
+          "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
+        field("Code d'accès", codeInput,
+          "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
+        el("button", { class: "btn btn-primary btn-block", type: "button", onclick: submit },
+          [el("span", { text: "Enregistrer et continuer" }), icon("forward", 18)])
+      ]);
 
     return el("div", { class: "screen" }, [
       /* Écran secondaire lorsqu'on revient modifier la connexion : bouton retour. */
       App.connectionConfigured() ? topbar({
-        title: "Connexion",
-        back: function () { App.editingConnection = false; UI.force(); },
+        title: invite ? "Invitation" : "Connexion",
+        back: function () { App.editingConnection = false; App.invite = null; UI.force(); },
         backLabel: "Retour"
       }) : null,
       el("div", { class: "content stack-lg" }, [
-        heroBlock("Préparer les réunions de l'équipe, ensemble."),
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("link", "Rejoindre l'espace de l'équipe"),
-          field("Adresse du script de l'équipe", urlInput,
-            "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
-          field("Code d'accès", codeInput,
-            "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
-          el("button", { class: "btn btn-primary btn-block", type: "button", onclick: submit },
-            [el("span", { text: "Enregistrer et continuer" }), icon("forward", 18)])
-        ]), 1),
-        reveal(el("button", {
+        heroBlock(invite
+          ? "Vous êtes invité·e à rejoindre l'équipe."
+          : "Préparer les réunions de l'équipe, ensemble."),
+        reveal(card, 1),
+        /* Le mode local est une impasse pour qui arrive par une invitation :
+           il ferait rater l'espace qu'on vient tout juste de lui ouvrir. */
+        invite ? null : reveal(el("button", {
           class: "btn btn-ghost btn-block", type: "button",
           text: "Continuer sans connexion (mode local)",
           onclick: function () { App.useLocalMode(); }
@@ -1252,6 +1290,15 @@
       el("div", { class: "hint", text: connected
         ? "Connecté à l'espace de l'équipe."
         : "Mode local : les données restent sur cet appareil." }),
+      /* Le lien d'invitation porte l'adresse de l'espace, jamais le code : la
+         personne invitée n'a plus qu'à saisir celui-ci. D'où l'insistance du
+         libellé — un code recopié dans le même message annulerait tout. */
+      connected ? el("button", { class: "btn btn-outline btn-block", type: "button",
+        onclick: function () { App.shareInvite(); } },
+      [icon("link", 16), el("span", { text: "Inviter quelqu'un" })]) : null,
+      connected ? el("div", { class: "hint", text:
+        "Envoie un lien qui règle déjà l'adresse de l'équipe. Le code d'accès "
+        + "n'y figure pas : communiquez-le par un autre canal." }) : null,
       el("button", { class: "btn btn-outline btn-block", type: "button",
         onclick: function () { App.editConnection(); } },
       [icon("edit", 16), el("span", { text: "Modifier l'adresse ou le code" })]),
@@ -1571,6 +1618,27 @@
     ]);
   }
 
+  /* Dernier recours : ni partage natif, ni presse-papier (navigateur ancien,
+   * fenêtre in-app, contexte non sécurisé). Le lien est alors donné à recopier
+   * — sélectionné d'avance pour que ce soit un geste, pas une corvée. */
+  function inviteModal(spec) {
+    var linkInput = el("input", {
+      class: "input", type: "text", readonly: true, spellcheck: "false",
+      value: spec.link,
+      onclick: function (e) { e.target.select(); }
+    });
+    setTimeout(function () { try { linkInput.select(); } catch (e) { /* ignoré */ } }, 0);
+
+    return modal("Lien d'invitation", el("div", { class: "stack" }, [
+      el("div", { class: "hint", text:
+        "Copiez ce lien et envoyez-le. Le code d'accès n'y figure pas : "
+        + "communiquez-le séparément." }),
+      linkInput
+    ]), [
+      el("button", { class: "btn btn-primary", type: "button", text: "Fermer", onclick: closeOverlay })
+    ]);
+  }
+
   function renderOverlay() {
     Utils.clear(overlayRoot);
     var spec = UI.local.sheet;
@@ -1581,7 +1649,8 @@
       else if (spec.type === "topicInfo") { node = topicInfoSheet(spec); }
     } else if (UI.local.modal) {
       var m = UI.local.modal;
-      if (m.type === "createTopic") { node = createTopicModal(); }
+      if (m.type === "invite") { node = inviteModal(m); }
+      else if (m.type === "createTopic") { node = createTopicModal(); }
       else if (m.type === "editTopic") { node = editTopicModal(m); }
       else if (m.type === "editMessage") { node = editMessageModal(m); }
       else if (m.type === "createProposal" || m.type === "editProposal") { node = proposalModal(m); }

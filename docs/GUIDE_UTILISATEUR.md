@@ -150,11 +150,32 @@ ou à projeter (les barres et boutons disparaissent à l'impression).
 ## Réglages
 
 - **Votre nom** — le changer mettra à jour vos messages signés.
+- **Inviter quelqu'un** — partage un lien qui règle déjà l'adresse de l'équipe :
+  la personne invitée n'a plus qu'à saisir le code. Voir ci-dessous.
 - **Connexion** — modifier l'adresse ou le code ; « Se déconnecter de l'équipe »
   oublie l'adresse et le déverrouillage sur cet appareil (les données de
   l'équipe restent intactes sur Google Drive).
 - **Diagnostic de synchronisation** — révision, dernière mise à jour, actions
   en attente, version de l'application, bouton « Synchroniser ».
+
+### Inviter quelqu'un
+
+Réglages → **Inviter quelqu'un** propose le lien via le partage du téléphone
+(messagerie, SMS, mail) ; à défaut, il est copié dans le presse-papier.
+
+La personne qui ouvre ce lien arrive sur un écran « Invitation » où l'adresse
+est déjà réglée : **elle n'a que le code d'accès à saisir**.
+
+Le code d'accès **ne figure pas** dans le lien, et il ne faut pas l'y ajouter :
+un lien traverse des messageries, des aperçus, des sauvegardes. Envoyez-le par
+un autre canal — un second message, un appel.
+
+L'écran d'invitation affiche un **code d'espace** (par ex. `E793-B22A`),
+identique à celui de Réglages → Synchronisation. Le comparer de vive voix
+confirme que tout le monde rejoint bien le même espace.
+
+Si l'appareil est déjà rattaché à un autre espace, rien n'est remplacé en
+silence : l'écran le signale et attend une validation explicite.
 
 ---
 

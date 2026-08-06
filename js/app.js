@@ -163,6 +163,7 @@
       lockVerifier = result.verifier;
       unlocked = true;
       App.editingConnection = false;
+      App.invite = null;
       Sync.setConnection({ url: clean, token: result.token, localMode: false, unlocked: true });
       if (result.verifier) { startSession(); } else { clearSession(); }
       if (!result.reachable) {
@@ -186,6 +187,102 @@
     App.editingConnection = true;
     UI.force();
   };
+
+  /* --------------------------------------------------------- Invitation --- */
+
+  /* Un lien d'invitation transporte l'ADRESSE de l'espace, jamais le code :
+   * celui qui reçoit le lien n'a plus qu'à saisir le code, communiqué à part.
+   * Mettre les deux dans un même lien reviendrait à publier la clé avec la
+   * porte — un lien traverse des messageries, des aperçus, des sauvegardes.
+   *
+   * L'adresse voyage dans le FRAGMENT (#) et non dans la requête (?) : un
+   * fragment n'est jamais envoyé au serveur, l'adresse du script de l'équipe
+   * ne se retrouve donc pas dans les journaux de l'hébergeur. */
+  var INVITE_PREFIX = "#/rejoindre/";
+
+  /* {url} quand un lien d'invitation est en cours de traitement, sinon null. */
+  App.invite = null;
+
+  App.inviteLink = function () {
+    var url = Utils.trim(Sync.connection.url);
+    if (!url) { return ""; }
+    var here = String(window.location.href).split("#")[0].split("?")[0];
+    return here + INVITE_PREFIX + Utils.b64urlEncode(url);
+  };
+
+  /* Lit l'invitation portée par l'adresse courante, puis l'EFFACE : sans cela
+   * elle rejouerait à chaque rechargement, et l'adresse de l'équipe resterait
+   * en clair dans la barre d'adresse et les captures d'écran. */
+  function takeInvite() {
+    var hash = String(window.location.hash || "");
+    if (hash.indexOf(INVITE_PREFIX) !== 0) { return ""; }
+
+    var url = Utils.trim(Utils.b64urlDecode(hash.slice(INVITE_PREFIX.length)));
+    var here = String(window.location.href).split("#")[0];
+    try { window.history.replaceState(null, "", here + "#/"); }
+    catch (e) { window.location.hash = "#/"; }
+
+    /* Un lien reçu est une entrée non fiable : même exigence que la saisie
+     * manuelle, sinon un lien bricolé pointerait l'application ailleurs. */
+    if (url.indexOf("https://") !== 0) { return ""; }
+    return url;
+  }
+
+  /* Message à afficher une fois l'interface prête (UI.toast trop tôt se perd). */
+  var invitePending = "";
+
+  function applyInvite(url) {
+    if (!url) { return; }
+    if (Utils.trim(Sync.connection.url) === url) {
+      invitePending = "Vous êtes déjà connecté à cet espace.";
+      return;
+    }
+    App.invite = { url: url, replaces: App.connectionConfigured() };
+    /* Un espace déjà configuré ne s'écrase JAMAIS tout seul : le lien prépare
+     * l'écran de connexion, la validation reste un geste explicite. */
+    if (App.connectionConfigured()) { App.editingConnection = true; }
+  }
+
+  App.clearInvite = function () {
+    App.invite = null;
+    UI.force();
+  };
+
+  App.shareInvite = function () {
+    var link = App.inviteLink();
+    if (!link) {
+      UI.toast("Connectez-vous d'abord à l'espace de l'équipe.", "error");
+      return;
+    }
+
+    var text = CONFIG.APP_NAME + " — l'espace de préparation des réunions de l'équipe.\n\n"
+      + "Ouvrez ce lien : l'adresse de l'équipe y est déjà réglée, il ne reste "
+      + "que le code d'accès à saisir.\n\n"
+      + "Le code ne figure pas dans le lien : je vous l'envoie séparément.";
+
+    if (navigator.share) {
+      navigator.share({ title: CONFIG.APP_NAME, text: text, url: link }).catch(function (error) {
+        /* Un partage annulé n'est pas un échec : ne rien dire. */
+        if (error && error.name === "AbortError") { return; }
+        copyInvite(link);
+      });
+      return;
+    }
+    copyInvite(link);
+  };
+
+  function copyInvite(link) {
+    var clipboard = navigator.clipboard;
+    if (clipboard && clipboard.writeText) {
+      clipboard.writeText(link).then(function () {
+        UI.toast("Lien copié. Envoyez le code d'accès séparément.");
+      }, function () {
+        UI.set({ modal: { type: "invite", link: link } });
+      });
+      return;
+    }
+    UI.set({ modal: { type: "invite", link: link } });
+  }
 
   App.useLocalMode = function () {
     Utils.storage.set(CONFIG.KEYS.localMode, true);
@@ -490,7 +587,13 @@
     UI.init();
     loadUser();
     loadOwnItems();
+    /* Avant `parseRoute` : la lecture efface l'invitation de l'adresse, et le
+     * routeur ne doit pas voir passer un « #/rejoindre/… » qu'il ne connaît
+     * pas. Après `loadConnection` pour l'appliquer : décider quoi en faire
+     * suppose de savoir à quoi l'appareil est déjà connecté. */
+    var invited = takeInvite();
     loadConnection();
+    applyInvite(invited);
     UI.local.showArchived = Utils.storage.get(CONFIG.KEYS.showArchived, false) === true;
     App.route = parseRoute(window.location.hash);
 
@@ -508,6 +611,7 @@
 
     Sync.boot().then(function () {
       UI.force();
+      if (invitePending) { UI.toast(invitePending); invitePending = ""; }
       if (Sync.isConnected()) { Sync.start(); Sync.now(); }
     });
 

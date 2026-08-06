@@ -764,6 +764,10 @@ p { margin: 0; }
 
 .hint { font-size: var(--fs-xs); color: var(--muted); line-height: 1.55; }
 
+/* Consigne qui annonce une conséquence, pas un simple complément : elle doit
+   arrêter l'œil avant le bouton qui la suit. */
+.hint.is-danger { color: var(--danger); font-weight: 600; }
+
 /* Note contextuelle : une consigne qui doit être lue une fois, pas un statut.
    Pastille souple qui peut passer à la ligne, contrairement à .status-pill. */
 .note {
