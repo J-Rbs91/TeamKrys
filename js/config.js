@@ -10,7 +10,7 @@
     APP_NAME: "BrainstO.",
 
     /* À incrémenter EN MÊME TEMPS que CACHE_VERSION dans service-worker.js. */
-    APP_VERSION: "1.6.0",
+    APP_VERSION: "1.6.1",
 
     /* Sel public partagé avec le backend. Ce n'est PAS un secret : il sert
      * uniquement à séparer les deux hachages (jeton serveur / vérificateur local). */

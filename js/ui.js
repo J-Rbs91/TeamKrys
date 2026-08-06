@@ -553,7 +553,7 @@
     /* Un compteur à zéro n'apprend rien : on ne montre que ce qui existe, et
      * un sujet encore vide le dit avec des mots. */
     var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
-      topic.messages.length ? countChip("users", topic.messages.length, "message") : null,
+      topic.messages.length ? countChip("message", topic.messages.length, "message") : null,
       topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
       topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "conclusion") : null
     ]);
@@ -885,7 +885,7 @@
     });
 
     if (!topic.messages.length) {
-      threadInner.appendChild(emptyState("users", "La discussion démarre ici",
+      threadInner.appendChild(emptyState("message", "La discussion démarre ici",
         "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer."));
     }
 
