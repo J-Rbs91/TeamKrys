@@ -70,70 +70,184 @@ tests/sync.test.js         deux clients face à un faux backend (réception, fil
 
 ## Direction artistique
 
-Le langage visuel est une transposition de celui de **HorizonX**
-([horizonx.so](https://horizonx.so/)) au contexte de l'application : un outil
-d'équipe consulté debout, en magasin, plusieurs fois par jour. Les jetons sont
-en tête de [`css/app.css`](css/app.css).
+Le registre visé est celui des outils collaboratifs où l'on discute, propose et
+décide : **chrome neutre, contenu au premier plan, une seule couleur d'accent**.
+Les jetons sont en tête de [`css/app.css`](css/app.css).
 
-La palette est imposée et tient en cinq couleurs :
+> Ce registre a remplacé le précédent — « atelier chaud », transposition de
+> [HorizonX](https://horizonx.so/) — en version 1.5.0. Les deux ne répondaient
+> pas à la même question. L'ancien cherchait à ne ressembler à aucun autre outil
+> interne : fond crème, surfaces en verre, rayons de 30 px, ombres de 70 px,
+> grain imprimé. Celui-ci cherche à se faire oublier pendant qu'on travaille
+> dedans, plusieurs fois par jour, debout, en magasin. Ce qui a été retiré
+> l'a été parce que c'était **du décor sans empilement réel derrière**, pas
+> parce que c'était laid.
 
-| | `#01161E` | `#124559` | `#598392` | `#AEC3B0` | `#EFF6E0` |
-|---|---|---|---|---|---|
-| | Ink Black | Dark Teal | Air Force Blue | Ash Grey | Beige |
+### L'échelle de neutres
 
-Elles ne se répartissent pas au goût : leur **luminance** décide de leur emploi.
-Les deux premières sont trop sombres pour porter du texte, les deux dernières
-trop claires pour servir de fond, et celle du milieu échoue au contraste des
-deux côtés (`#598392` ne fait que 3,72:1 sous du Beige et 4,48:1 sous de l'Ink
-Black : aucun texte ne tient dessus). L'Air Force Blue n'est donc **ni un fond
-ni une encre : c'est la lumière**. L'élévation d'une surface se mesure à la
-quantité de bleu ajoutée au fond — ce qui fournit les six niveaux
-intermédiaires que cinq couleurs ne donnent pas, sans jamais introduire de
-teinte étrangère.
+C'est le changement structurant, et il précède celui de la palette : cinq
+couleurs ne donnaient pas de quoi hiérarchiser. Le fichier porte désormais
+**douze paliers d'ardoise froide** (teinte ~205°, chroma volontairement basse),
+assez teintés pour ne pas être un gris d'usine, assez neutres pour que l'accent
+reste la seule couleur qu'on remarque.
+
+Ils ne sont pas choisis à l'œil : chaque palier est **construit puis vérifié par
+ratio de contraste**, dans les deux modes, et sur les trois fonds où il peut
+apparaître — surface, canvas, surface creuse. Le contrôle qui ne trouve jamais
+rien est celui qu'on ne fait que sur le fond principal.
+
+| Rôle | Clair | Sombre | Ratio le plus défavorable |
+|---|---|---|---|
+| Texte | `#17202A` | `#E8EEF3` | 14,1:1 · 13,2:1 |
+| Texte secondaire (`--muted`) | `#55646F` | `#A3B1BC` | 5,2:1 · 7,0:1 |
+| Texte tertiaire (`--faint`) | `#5B6874` | `#8E9DA8` | 4,9:1 · 5,5:1 |
+| Bord de champ (`--line-field`) | `#7C8A95` | `#6B7A85` | 3,0:1 · 3,5:1 |
+| Filet décoratif (`--line`) | `#DDE4EA` | `#24313A` | — |
+
+Deux jetons portent la conformité et ne doivent pas être confondus :
+`--line` **habille** (filets, séparateurs — aucune information n'en dépend)
+tandis que `--line-field` **délimite** : il dessine le bord des champs et des
+contrôles, et tient seul le seuil de 3:1 exigé par le critère WCAG 2.2
+[SC 1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+— seuil dont la spécification précise qu'il **ne s'arrondit pas** : 2,999:1 ne
+passe pas.
+
+### Un seul accent
+
+Le Dark Teal d'origine (`#124559`) ne pouvait servir ni de fond ni d'encre : il
+échouait au contraste des deux côtés. Il n'a pas été abandonné, il a été
+**remonté en luminosité et en saturation** jusqu'à pouvoir faire les deux.
+
+C'est la **seule couleur non sémantique du fichier**, et elle se dépense en cinq
+endroits, jamais ailleurs : action principale, sélection (réaction choisie, vote
+émis), focus, « mes » messages, et le point du monogramme. Partout ailleurs, du
+neutre. L'identité ne passe pas par une couleur répandue — elle passe par la
+typographie, le rythme d'espacement et ce point d'accent unique.
+
+**Deux jetons, pas un.** `--accent` est l'accent **en trait** — contour de
+focus, bord de champ actif, liseré, point du monogramme. `--accent-surface` est
+l'accent **en aplat** — bouton principal, FAB, bulle, réaction choisie.
+
+| | Clair | Sombre |
+|---|---|---|
+| `--accent` (trait) | `#0E6D84` | `#4FC3DD` |
+| — sur la surface | 5,93:1 | 7,48:1 |
+| `--accent-surface` (aplat) | `#0E6D84` | `#0D4F61` |
+| — encre posée dessus (`--on-accent`) | `#FFFFFF` — 5,93:1 | `#E8EEF3` — 7,78:1 |
+| — encre secondaire (`--on-accent-soft`) | `#D5E8ED` — 4,69:1 | `#9FC4D1` — 4,89:1 |
+
+En mode clair les deux coïncident ; en mode sombre non, et c'est tout l'intérêt
+de les avoir séparés. Un teal assez lumineux pour se lire **en trait** sur du
+noir devient une lampe une fois **étalé** sur la largeur d'une bulle. Le
+constat est aussi chiffré : sur le teal clair, l'encre posée dessus plafonnait à
+4,77:1 et une encre secondaire lisible était impossible — il n'y avait plus de
+place entre le blanc et le fond. L'aplat descend donc là où le trait monte.
+
+> `--on-accent-soft` n'existait pas avant cette refonte, et c'est le jeton qui
+> a corrigé le défaut le plus discret du fichier : l'horodatage d'une bulle
+> était rendu par `opacity: .55`. Sur un aplat teinté, cela donne **2,93:1** —
+> sous le seuil, et parfaitement invisible tant qu'on ne mesure pas. Une encre
+> secondaire est désormais une **couleur**, jamais une opacité.
+
+### Surfaces, élévation, rayons
 
 | Élément | Valeur | Pourquoi ici |
 |---|---|---|
-| Fond | Beige `#EFF6E0` le jour, `#031C25` la nuit | l'Ink Black relevé de 12 % de Dark Teal, pour que la vignette garde de quoi descendre |
-| Encre | Ink Black / Beige, jamais de noir ni de blanc purs | contraste éditorial, plus doux à l'écran |
-| Surfaces | superpositions translucides + flou | réservées à ce qui flotte : barres collantes, feuilles, FAB |
-| Rayons | 30 px cartes, 19 px champs, 100 px pastilles | |
-| Ombres | `0 20px 70px` à 10 % le jour, 55 % la nuit | la carte lévite au lieu de « tomber » |
-| Typographie | système, échelle fluide (`clamp`), surtitres 11 px `+0.08em` | zéro requête réseau, hiérarchie éditoriale |
-| Mouvement | `cubic-bezier(.16,1,.3,1)`, révélation `translateY(36px) scale(.96)` décalée de 45 ms | |
+| Fond | `#F5F7F9` le jour, `#0C1317` la nuit | fond légèrement teinté, surfaces blanches par-dessus : c'est ce rapport qui détache une carte, pas une ombre |
+| Élévations | **deux**, `--shadow-1` et `--shadow-2` | une par empilement réel. Le niveau 2 est réservé à ce qui flotte : feuilles, fenêtres, FAB, bandeau |
+| Rayons | 12 px cartes · 10 px · 8 px champs · 6 px · pastilles | trois valeurs cohérentes par niveau. Un rayon généreux adoucit tout, y compris les défauts d'alignement |
+| Flou | trois surfaces, pas une de plus | barre du haut, barre d'actions, composeur — les seules qui passent réellement au-dessus d'un contenu qui défile |
+| Espacements | rapport **6 / 14 / 26** | intra-champ, inter-blocs, inter-sections. C'est le rapport qui fait lire les groupes, pas la valeur absolue |
+| Typographie | système, échelle fluide (`clamp`), cinq tailles | la hiérarchie passe d'abord par la **graisse**, ce qui préserve la densité |
 
-Trois écarts assumés par rapport à la source, dictés par l'usage :
+Le flou mérite sa ligne. Il était généralisé — cartes, bulles, feuilles,
+fenêtres, bandeau, séparateurs de jour. Un texte posé sur une surface floutée a
+un contraste qui **dépend de ce qui passe derrière**, donc qui change au
+défilement ; et deux couches fixes plein écran, dont une en mode de fusion, se
+recomposent en continu sur un téléphone d'entrée de gamme. Ce qui restait
+justifié est resté ; le reste est devenu opaque par construction — ce qui a
+aussi vidé de moitié le repli `@supports` de fin de fichier.
 
-- **le halo de CTA est directionnel** (`0 6px 18px`) et non omnidirectionnel :
-  dans un formulaire dense, un halo bave sur le champ du dessus. Le halo
-  d'origine reste sur le FAB, qui flotte seul ;
-- **l'état par défaut n'est pas coloré.** « En discussion » et « En vote »
-  concernent presque tous les éléments : les teinter saturerait la liste. La
-  couleur signale ce qui appelle une action ou une issue ;
-- **les révélations ne se jouent qu'à l'arrivée sur un écran**, pas à chaque
-  mise à jour de données — sinon un message reçu relance toute la cascade.
+L'**aura** (trois dégradés radiaux plein écran) et le **grain** (bruit SVG en
+`mix-blend-mode`) ont disparu pour la même raison : ils cassaient la platitude
+d'un fond crème qui n'existe plus.
 
-Le thème sombre n'est pas l'inverse du clair : c'est la même palette lue par
-l'autre bout. Le Beige devient l'encre, l'Ink Black devient le fond, et les
-surfaces s'éclairent à l'Air Force Blue au lieu de s'éclaircir au blanc — sans
-quoi l'identité disparaîtrait la nuit.
+Le thème sombre n'est pas l'inverse du clair : les valeurs y sont
+**recalculées**. Le rapport s'y inverse — le fond est le palier le plus sombre
+et les surfaces remontent, là où le clair a un fond teinté et des surfaces
+blanches. L'élévation passe par la luminosité de la surface, parce que sur du
+`#0C1317` une ombre diffuse ne fait flotter personne quel que soit son alpha :
+l'ombre n'y élève plus, elle ancre. Les couleurs de statut se désaturent pour ne
+pas vibrer. **Le clair reste le mode de conception** : c'est lui qui est lu en
+magasin, en plein jour, et c'est là que les défauts de hiérarchie se voient.
 
-Un point de vocabulaire change avec le fond sombre : **la lévitation ne vient
-plus de l'ombre.** Sur du `#031C25`, une ombre diffuse ne se voit pas, quel que
-soit son alpha. Ce sont le liseré clair du haut de carte (`--glass-line`) et
-l'écart de luminance entre la surface et le fond qui font flotter — l'ombre ne
-fait plus qu'ancrer.
-
-Deux jetons portent la conformité et ne doivent pas être confondus :
-`--line` habille (filets, séparateurs, aucune information n'en dépend) tandis
-que `--line-field` délimite — il dessine le bord des champs de saisie et tient
-seul le seuil de 3:1 exigé par le critère WCAG 1.4.11. Le second n'existait pas
-avant la refonte de palette : les bordures de champs étaient à 1,85:1.
-
-Enfin, la palette ne contient **aucune teinte chaude**. Le rouge de danger
-(`#C0301B` le jour, `#FF8A73` la nuit) et l'ambre d'avertissement sont les
-seuls emprunts du fichier : un danger teinté teal serait un contresens
+Enfin, la palette ne contient **aucune teinte chaude hors signal**. Le rouge de
+danger (`#BF2F2F` le jour, `#FF8B7C` la nuit) et l'ambre d'avertissement sont
+les seuls emprunts du fichier : un danger teinté teal serait un contresens
 sémantique, pas un choix esthétique. Ils restent cantonnés au signal — jamais
-une surface, jamais un texte courant.
+une surface, jamais un texte courant — et chaque statut porte **une couleur et
+une forme** (pastille, icône, libellé), de sorte qu'aucune information ne repose
+sur la teinte seule.
+
+### Mouvement
+
+La règle est la **fréquence** : plus une action est répétée, plus son animation
+doit être courte ou absente. Une transition de 400 ms vue cent fois par jour est
+une taxe, pas un agrément — et la démonstration montre la première occurrence
+quand l'utilisateur vit la centième.
+
+| Ce qui bouge | Durée | Fréquence de vue |
+|---|---|---|
+| Retour à l'appui, survol | 100 ms | plusieurs fois par minute |
+| Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
+| Feuille, fenêtre | 240 ms | quotidien |
+| **Monogramme** | ~900 ms, en trois temps | une fois par ouverture |
+
+La cascade de révélation passait de 550 ms, 36 px et un changement d'échelle, à
+45 ms de décalage **sans plafond** : la trentième carte d'une longue liste
+attendait 1,4 s pendant que l'utilisateur, lui, avait déjà commencé à défiler.
+
+Le **monogramme animé** est le seul geste expressif de l'application, et il est
+cantonné aux deux écrans qui sont vides de toute façon — accueil et verrou. Il
+n'est vu qu'à l'ouverture, ce qui est la condition pour qu'une séquence de cette
+longueur reste supportable : la même animation sur un bouton serait interdite
+par la règle ci-dessus. Il ne retarde rien — sur l'écran de verrou, le champ de
+code est saisissable dès le premier rendu.
+
+Ce qu'il raconte : **le cercle se referme — la discussion tourne — puis le point
+s'en détache — la décision en sort.** C'est le seul endroit où le sens du produit
+passe par le mouvement plutôt que par un libellé.
+
+- Le monogramme est construit en **SVG inline** par `Utils.logoMark` : un anneau
+  en `border` ne sait pas se tracer, un trait SVG oui (`stroke-dashoffset`). Le
+  cercle est tourné de -90° pour que le tracé parte du haut — sans quoi un
+  `<circle>` commence à 3 h et le geste devient illisible.
+- Les bouts du trait sont **droits**, seul écart au jeu d'icônes : le tiret vaut
+  exactement une circonférence, et des bouts arrondis se recouvriraient d'un
+  demi-trait une fois le cercle refermé, laissant un épaississement en haut.
+- L'origine de transformation du point est en **unités utilisateur**, pas en
+  pourcentage : un pourcentage exigerait `transform-box: fill-box` pour être
+  juste, et se résoudrait sinon contre le viewBox entier.
+- Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
+  aurait été une dépendance distante de plus, contre la règle du dépôt, pour
+  trois transitions de propriétés que le navigateur sait déjà interpoler.
+
+**L'état au repos du balisage est l'état final.** Sans animation — préférence de
+mouvement réduit activée, ou moteur qui ignore la requête — le monogramme est
+complet et bien placé. C'est le mode de panne à ne jamais produire : un logo
+figé à moitié tracé, sans message d'erreur. Cette invariance est vérifiée, pas
+supposée : `stroke-dashoffset` vaut `0px`, le point `transform: none` et
+`opacity: 1` dans les trois configurations testées.
+
+### Ce qui reste à faire
+
+Les **icônes d'application** (`assets/icons/`) n'ont pas été régénérées. Le
+monogramme y est dessiné à l'identique, et son fond très sombre reste cohérent
+avec la nouvelle palette, mais son point n'a pas pris l'accent. Les régénérer
+suppose un rastériseur SVG → PNG (192, 512, maskable) qu'aucune règle du dépôt
+n'autorise à installer. À faire hors dépôt, en une passe, pour les quatre
+fichiers ensemble — modifier `icon.svg` seul désaccorderait l'onglet du
+navigateur de l'icône installée sur l'écran d'accueil.
 
 ### Icônes et réactions
 

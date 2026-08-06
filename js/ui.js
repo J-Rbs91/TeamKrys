@@ -75,10 +75,7 @@
 
   function heroBlock(tagline) {
     return el("div", { class: "hero" }, [
-      el("div", { class: "logo-mark", "aria-hidden": "true" }, [
-        el("div", { class: "logo-ring" }),
-        el("div", { class: "logo-dot" })
-      ]),
+      Utils.logoMark(52),
       wordmark(CONFIG.APP_NAME),
       el("div", { class: "tagline", text: tagline })
     ]);
