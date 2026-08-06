@@ -203,9 +203,17 @@
    * se pose sur le canvas, pas sur une vignette.
    *
    * Pourquoi du SVG et non deux <div> comme avant : un anneau en `border` ne
-   * sait pas se tracer. Le trait, lui, s'anime par `stroke-dashoffset`, ce qui
-   * donne le seul geste qui raconte le produit — le cercle se referme (la
-   * discussion tourne), puis le point s'en détache (la décision en sort).
+   * sait pas se tracer. Le trait, lui, s'anime par `stroke-dashoffset`.
+   *
+   * Le geste raconte le produit en trois temps : quatre points CONVERGENT vers
+   * le centre et s'y fondent (les idées qui arrivent), le cercle se referme
+   * pendant qu'ils disparaissent (la discussion les absorbe), puis un point
+   * unique apparaît à côté (la décision qui en sort).
+   *
+   * Les quatre points de convergence n'appartiennent pas à la marque : ils
+   * n'existent QUE pendant l'animation. Au repos ils sont à opacité nulle, et
+   * leur animation s'y termine aussi — sans mouvement, ils ne s'affichent
+   * jamais, et le monogramme reste l'anneau et son point, rien d'autre.
    *
    * Le cercle est tourné de -90° pour que le tracé PARTE DU HAUT : sans cette
    * rotation, un <circle> commence à 3 h et le geste devient illisible.
@@ -230,6 +238,30 @@
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("focusable", "false");
     svg.setAttribute("class", "logo-mark");
+
+    /* Positions de départ, en unités du viewBox, relatives au centre de
+     * l'anneau. Réparties sur les quatre quadrants et à des distances
+     * inégales : quatre points équidistants forment une croix, et une croix se
+     * lit comme un motif décoratif, pas comme des idées qui arrivent. */
+    var SEMENCES = [[-26, -20], [24, -26], [-30, 14], [10, 26]];
+    for (var i = 0; i < SEMENCES.length; i++) {
+      var semence = document.createElementNS(SVG_NS, "circle");
+      semence.setAttribute("cx", String(LOGO.cx));
+      semence.setAttribute("cy", String(LOGO.cy));
+      semence.setAttribute("r", "4.2");
+      semence.setAttribute("fill", "currentColor");
+      semence.setAttribute("class", "logo-seed");
+      semence.style.setProperty("--sx", SEMENCES[i][0] + "px");
+      semence.style.setProperty("--sy", SEMENCES[i][1] + "px");
+      /* Même raison que pour le point : une origine en pourcentage exigerait
+       * `transform-box: fill-box`. En unités utilisateur, elle est juste
+       * partout, sans propriété supplémentaire. */
+      semence.style.transformOrigin = LOGO.cx + "px " + LOGO.cy + "px";
+      /* L'état AU REPOS est l'invisibilité : c'est ce qui rend le repli en
+       * mouvement réduit correct sans règle dédiée. */
+      semence.style.opacity = "0";
+      svg.appendChild(semence);
+    }
 
     var ring = document.createElementNS(SVG_NS, "circle");
     ring.setAttribute("cx", String(LOGO.cx));
@@ -267,24 +299,29 @@
     return svg;
   };
 
-  /* Découpe un titre en caractères animables (montée décalée, cf. app.css).
-   * Les espaces restent des espaces insécables pour ne pas casser la ligne. */
-  Utils.splitChars = function (text, className) {
-    var frag = document.createDocumentFragment();
-    var chars = String(text == null ? "" : text).split("");
-    for (var i = 0; i < chars.length; i++) {
-      var span = document.createElement("span");
-      span.className = className;
-      span.style.setProperty("--ci", String(i));
-      span.textContent = chars[i] === " " ? " " : chars[i];
-      frag.appendChild(span);
-    }
-    return frag;
-  };
+  /* `Utils.splitChars` a été retiré ici. Il découpait le logotype en <span>
+   * animables pour la montée caractère par caractère ; le logotype monte
+   * désormais d'un seul tenant (cf. app.css, .wordmark). Neuf éléments animés
+   * sont redevenus un, et le titre est du texte, pas neuf boîtes en ligne —
+   * ce qui rend aussi sa sélection et sa lecture par synthèse vocale plus
+   * simples. Aucun autre appelant n'existait.
+   */
 
   /* --------------------------------------------------------------- Dates --- */
 
   Utils.nowISO = function () { return new Date().toISOString(); };
+
+  /* Horloge MONOTONE, en millisecondes, pour mesurer une durée écoulée.
+   * `performance.now()` et non `Date.now()` : l'heure système peut reculer —
+   * changement d'heure, synchronisation NTP, utilisateur qui la règle — et un
+   * écart négatif ferait passer une animation pour terminée, ou l'inverse.
+   * Repli sur Date.now() là où performance manque, ce qui n'arrive plus sur le
+   * parc visé mais ne coûte rien à couvrir. */
+  Utils.now = function () {
+    return (typeof performance !== "undefined" && performance.now)
+      ? performance.now()
+      : Date.now();
+  };
 
   function pad(n) { return n < 10 ? "0" + n : String(n); }
 

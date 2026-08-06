@@ -187,6 +187,12 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Accélération. Elle ne sert QU'aux points de convergence du monogramme, et
+     c'est la seule chose du fichier qui ARRIVE quelque part au lieu de se
+     poser. Avec --ease-out, ils parcouraient 80 % du trajet dans les 150
+     premières millisecondes puis stagnaient : la convergence ne se lisait
+     plus, on voyait quatre pastilles clignoter au centre. */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --dur-fast: 0.1s;
   --dur-base: 0.16s;
   --dur-slow: 0.24s;
@@ -457,7 +463,7 @@ p { margin: 0; }
     /* Décalage PLAFONNÉ à six crans. Sans plafond, la trentième carte d'une
        longue liste attend 1,4 s avant d'apparaître — l'utilisateur, lui, a
        déjà commencé à défiler et voit du vide se remplir sous ses yeux. */
-    animation-delay: calc(min(var(--reveal-index, 0), 6) * var(--reveal-stagger));
+    animation-delay: calc(min(var(--reveal-index, 0), 6) * var(--reveal-stagger) - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -470,9 +476,32 @@ p { margin: 0; }
    interdirait exactement la même animation sur un bouton.
    Il ne retarde rien : sur l'écran de verrou, le champ de code est saisissable
    dès le premier rendu, l'animation se joue derrière.
-   Ce qu'il raconte : le cercle se referme — la discussion tourne — puis le
-   point s'en détache — la décision en sort. C'est le seul endroit où le sens
-   du produit passe par le mouvement plutôt que par un libellé.
+
+   CE QU'IL RACONTE, en trois temps qui se chevauchent :
+
+     0 → 520 ms   quatre points convergent vers le centre et s'y fondent
+                  — les idées qui arrivent ;
+   220 → 740 ms   le cercle se referme pendant qu'ils disparaissent
+                  — la discussion les absorbe ;
+   660 → 980 ms   un point unique apparaît à côté
+                  — la décision qui en sort.
+   700 → 980 ms   le logotype monte d'un bloc.
+   820 → 1060 ms  la signature se révèle, en fondu seul.
+
+   Le point et le logotype se terminent SUR LE MÊME INSTANT. C'est délibéré :
+   joués l'un après l'autre, le monogramme et le logotype se lisaient comme
+   deux séquences successives ; résolus ensemble, ils n'en font qu'une.
+
+   La signature ferme la marche, et elle n'a PAS toujours été animée — c'est
+   une correction. Immobile, elle s'affichait dès la première image et restait
+   seule sous un logo en train de se dessiner, à annoncer un nom qui n'était
+   pas encore arrivé. Un élément non animé au milieu d'une séquence n'est pas
+   neutre : il la contredit.
+
+   Le chevauchement est ce qui tient la durée totale à 980 ms alors que la
+   somme des trois temps dépasse 1,3 s. Enchaînés bout à bout, ce serait un
+   diaporama.
+
    Coût de rendu : `stroke-dashoffset`, `transform` et `opacity` uniquement.
    Aucun filtre, aucune ombre animée, aucune bibliothèque. */
 
@@ -487,26 +516,42 @@ p { margin: 0; }
 /* ÉTAT AU REPOS = ÉTAT FINAL. Rien n'est masqué ni décalé ici : sans
    animation — mouvement réduit activé, ou moteur qui ignore la requête — le
    monogramme est complet et bien placé. C'est le mode de panne à ne jamais
-   produire : un logo figé à moitié tracé, sans message d'erreur. */
+   produire : un logo figé à moitié tracé, sans message d'erreur.
+   Les quatre points de convergence, eux, sont à opacité nulle au repos (posée
+   en ligne par Utils.logoMark) : sans mouvement ils ne s'affichent jamais, ce
+   qui est le bon repli pour un élément purement décoratif. */
 @keyframes logo-ring-draw {
   from { stroke-dashoffset: var(--logo-c); }
   to { stroke-dashoffset: 0; }
 }
 
-/* Le point ne se contente pas d'apparaître : il vient du bord de l'anneau et
-   sort. Le vecteur (-20.55, -9.23) est l'écart entre sa position finale et le
-   point de l'anneau situé dans sa direction — c'est ce qui fait lire une
-   trajectoire, et non un fondu. */
-@keyframes logo-dot-eject {
-  from { opacity: 0; transform: translate(-20.55px, -9.23px) scale(0.2); }
-  60% { opacity: 1; }
+/* Les idées convergent. Elles ARRIVENT invisibles, se montrent en chemin, puis
+   s'éteignent au centre : le point d'arrivée n'est pas une accumulation de
+   quatre pastilles au milieu de l'anneau, c'est leur disparition dedans. */
+@keyframes logo-seed-in {
+  from { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.4); }
+  25% { opacity: 0.85; }
+  80% { opacity: 0.85; }
+  to { opacity: 0; transform: none; }
+}
+
+/* La décision. Elle n'arrive de nulle part — elle apparaît, et c'est le sens :
+   ce qui sort de la discussion n'était dans aucune des idées de départ. */
+@keyframes logo-dot-pop {
+  from { opacity: 0; transform: scale(0); }
   to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .screen--enter .logo-seed {
+    animation: logo-seed-in 0.52s var(--ease-in) backwards;
+    animation-delay: calc(0s - var(--enter-elapsed, 0ms));
+  }
+
   .screen--enter .logo-ring {
     stroke-dasharray: var(--logo-c);
-    animation: logo-ring-draw 0.56s var(--ease-out) 0.06s backwards;
+    animation: logo-ring-draw 0.52s var(--ease-out) backwards;
+    animation-delay: calc(0.22s - var(--enter-elapsed, 0ms));
   }
 
   /* L'origine de transformation est posée en unités utilisateur par
@@ -515,24 +560,37 @@ p { margin: 0; }
   .screen--enter .logo-dot {
     /* La courbe dépasse puis revient : le point « atterrit ». C'est le seul
        usage de --ease-spring du fichier. */
-    animation: logo-dot-eject 0.42s var(--ease-spring) 0.46s backwards;
+    animation: logo-dot-pop 0.32s var(--ease-spring) backwards;
+    animation-delay: calc(0.66s - var(--enter-elapsed, 0ms));
   }
 }
 
-/* Montée caractère par caractère du logotype. Raccourcie : 0,85 s par
-   caractère produisait une séquence qui courait encore quand l'utilisateur
-   avait déjà tapé son code. */
-@keyframes char-rise {
-  from { opacity: 0; transform: translateY(60%); }
+/* Le logotype monte d'un seul tenant, de 8 px — la même distance que la
+   révélation des cartes, pour que l'application n'ait qu'un vocabulaire de
+   déplacement. Un seul élément animé, là où la montée caractère par caractère
+   en demandait neuf. */
+@keyframes wordmark-rise {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
 
-.wm-char { display: inline-block; }
+/* La signature est le seul élément de la séquence à ne pas bouger : un fondu
+   seul. Elle arrive en dernier et doit se faire oublier — lui donner le même
+   déplacement que le logotype en ferait un second titre. */
+@keyframes tagline-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 @media (prefers-reduced-motion: no-preference) {
-  .screen--enter .wm-char {
-    animation: char-rise 0.4s var(--ease-out) backwards;
-    animation-delay: calc(280ms + var(--ci) * 26ms);
+  .screen--enter .wordmark {
+    animation: wordmark-rise 0.28s var(--ease-out) backwards;
+    animation-delay: calc(0.7s - var(--enter-elapsed, 0ms));
+  }
+
+  .screen--enter .tagline {
+    animation: tagline-in 0.24s linear backwards;
+    animation-delay: calc(0.82s - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -685,7 +743,8 @@ p { margin: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .fab {
-    animation: reveal var(--reveal-duration) var(--ease-out) 0.1s backwards;
+    animation: reveal var(--reveal-duration) var(--ease-out) backwards;
+    animation-delay: calc(0.1s - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -982,12 +1041,16 @@ p { margin: 0; }
   text-align: center;
 }
 
+/* `overflow: hidden` a été retiré : il servait de fenêtre à la montée
+   caractère par caractère, dont les lettres partaient sous la ligne de base et
+   devaient être coupées. Le logotype monte maintenant d'un bloc, en dehors de
+   sa propre boîte — conservé, le débordement caché aurait rogné les 8 px du
+   geste, qui n'aurait plus rien montré. */
 .wordmark {
   font-size: var(--display);
   font-weight: 680;
   letter-spacing: -0.035em;
   line-height: 1;
-  overflow: hidden;
   padding-bottom: 0.1em;
 }
 
