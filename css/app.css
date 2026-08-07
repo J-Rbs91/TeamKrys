@@ -1757,12 +1757,12 @@ p { margin: 0; }
   max-height: 56vh;
   max-height: 56dvh;
   margin: 0 auto;
-  overflow-y: auto;              /* jamais de hauteur fixe : la police système va jusqu'à 200 % */
-  /* La feuille de l'agent utilisateur pose `overflow: auto` sur `dialog:modal` : ne
-     redéclarer que l'axe vertical laisserait un tirage horizontal caché. */
-  overflow-x: hidden;
-  /* Sans cela, défiler la feuille jusqu'au bout entraîne la page derrière elle. */
-  overscroll-behavior: contain;
+  /* Colonne : le corps défile, la rangée d'actions ne défile pas. À 200 % de police,
+     « Suivant » passait sous le pli interne, sans rien pour indiquer qu'il fallait
+     défiler — une commande de progression inatteignable est une fonction perdue. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 18px 18px calc(var(--safe-bottom) + 18px);
   padding-left: max(18px, var(--safe-left));
   padding-right: max(18px, var(--safe-right));
@@ -1836,6 +1836,18 @@ p { margin: 0; }
    doit donc pas porter d'anneau, sans quoi le titre se retrouverait cerclé d'accent à
    chaque panneau. Deux règles séparées, jamais un groupe : `:focus-visible` est
    rejeté sous iOS 15.4 et emporterait la neutralisation nue avec lui. */
+/* Le corps est le seul élément qui défile. `min-height: 0` est indispensable : sans
+   lui, un enfant flexible refuse de descendre sous sa hauteur de contenu et déborde la
+   colonne au lieu de défiler. */
+.onboard-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Sans cela, défiler le corps jusqu'au bout entraîne la page derrière. */
+  overscroll-behavior: contain;
+}
+
 .onboard .onboard-card,
 .onboard .onboard-title,
 .onboard .onboard-title:focus { outline: none; }
@@ -1928,7 +1940,14 @@ p { margin: 0; }
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 9px;
-  margin-top: 26px;              /* le rapport 6 / 14 / 26 du fichier, sans valeur inventée */
+  /* Ne se comprime jamais : c'est la rangée qui doit rester, pas le texte. */
+  flex: 0 0 auto;
+  /* Le filet EST la marque de débordement. Pas un fondu en dégradé : posé au-dessus
+     d'un texte grossi, il échangerait un problème de découverte contre un problème de
+     lecture. */
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 /* « Passer » est dernier dans le DOM — c'est une sortie, elle ne doit pas précéder

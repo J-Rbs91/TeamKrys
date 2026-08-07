@@ -117,6 +117,21 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 - [ ] La pastille de synchronisation : passer hors ligne, poser une action, revenir en
       ligne. « En attente (1) » puis « À jour » sont **annoncés** sans toucher l'écran.
 
+### 1 quinquies. Déconnexion et stockage
+
+- [ ] Réglages → « Se déconnecter » : la confirmation nomme les trois oublis **et**
+      prévient que les messages anonymes ne seront plus modifiables depuis ce téléphone.
+- [ ] Avec des actions en attente : la confirmation les **compte** et annonce leur perte.
+- [ ] Après déconnexion : l'écran du **nom** est redemandé, et un message anonyme
+      envoyé avant n'offre plus « Modifier ».
+- [ ] Diagnostic → « Stockage local » : dit **durable** ou **évinçable**, jamais
+      « IndexedDB » seul.
+- [ ] Poser une action hors ligne, puis relire le diagnostic : l'état de durabilité a
+      été demandé au moins une fois.
+- [ ] Précache : renommer temporairement un fichier de la liste critique, publier, et
+      vérifier que l'ancienne version **reste en place** au lieu d'être remplacée par
+      une version cassée.
+
 ## 2. Verrou
 
 - [ ] Fermer puis rouvrir l'application dans la foulée → **aucun code demandé**,

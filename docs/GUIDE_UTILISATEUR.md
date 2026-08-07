@@ -196,6 +196,21 @@ L'indicateur en haut à droite dit toujours où l'on en est :
 
 ---
 
+## Se déconnecter
+
+**Réglages → Se déconnecter de l'équipe** oublie, sur cet appareil, l'adresse du
+script, le déverrouillage et votre nom. Les données de l'équipe restent sur Google
+Drive : personne d'autre ne perd quoi que ce soit.
+
+Une conséquence est à connaître, et l'application vous la rappelle avant de confirmer :
+**vous ne pourrez plus modifier vos messages anonymes depuis ce téléphone.** Un message
+anonyme n'a pas d'auteur enregistré — c'est une trace gardée sur l'appareil qui vous
+permettait d'y revenir. L'effacer est précisément ce qui rend l'anonymat vrai, y compris
+pour la personne qui utilisera ce téléphone après vous.
+
+Si des actions attendent d'être envoyées, la confirmation vous le dit et les compte :
+elles seront perdues. Attendez « À jour » avant de vous déconnecter.
+
 ## Bonnes pratiques
 
 - Un sujet = un problème. Les discussions restent lisibles.

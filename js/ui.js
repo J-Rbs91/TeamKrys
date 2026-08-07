@@ -132,6 +132,17 @@
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
     onboardRoot = document.getElementById("onboarding-root");
+
+    /* En capture, sur le document : les champs sont détruits et recréés à chaque rendu,
+     * un écouteur par champ ne survivrait pas. `input` seulement — `change` arrive trop
+     * tard, et `keydown` déclencherait sur une flèche. */
+    document.addEventListener("input", function (event) {
+      var node = event.target;
+      if (!node || !node.getAttribute) { return; }
+      var key = node.getAttribute("data-draft");
+      if (key) { touchedDrafts[key] = true; }
+    }, true);
+
     bindViewport();
   };
 
@@ -143,6 +154,23 @@
    * en cours d'écriture est perdu — ce que la recette annonce pourtant intact.
    * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
   var composerDrafts = {};
+
+  /* ⚠️ Champs ÉDITÉS depuis leur dernière alimentation par le rendu.
+   *
+   * L'ancien critère était « le champ reconstruit est-il vide ? », au motif qu'une
+   * valeur fournie par le rendu devait rester prioritaire. Conséquence : le champ
+   * « Votre nom » des réglages étant pré-rempli, toute réception de message effaçait
+   * une saisie en cours — un message d'un collègue suffisait.
+   *
+   * Le bon critère n'est pas la vacuité, c'est l'édition : c'est d'ailleurs la règle de
+   * la plateforme elle-même pour les valeurs déclaratives, qui ne s'appliquent que tant
+   * que le champ n'a pas été touché. Un champ vidé exprès mérite la même protection
+   * qu'un champ rempli.
+   *
+   * On tient ce marqueur nous-mêmes : le drapeau natif du navigateur est levé aussi
+   * par une écriture programmatique, donc il ne distingue pas la frappe de la
+   * reconstruction — s'y fier reconstruirait le défaut. */
+  var touchedDrafts = {};
 
   function captureDrafts() {
     var snapshot = { values: {}, active: null };
@@ -183,9 +211,12 @@
       /* Repli sur le relais quand l'instantané ne connaît pas la clé : c'est le
        * cas au retour de l'écran de verrou, qui n'a rendu aucun composeur. */
       if (saved === undefined) { saved = composerDrafts[key]; }
-      /* On ne restaure que si le champ neuf est vide : une valeur fournie par
-       * le rendu (édition pré-remplie) reste prioritaire. */
-      if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
+      /* Un champ ÉDITÉ gagne toujours, même contre une valeur pré-remplie, et même
+       * s'il a été vidé — c'est encore une intention. Un champ jamais touché suit
+       * l'ancienne règle : le rendu a la priorité, et le relais ne sert qu'à remplir
+       * un champ neuf resté vide. */
+      if (touchedDrafts[key] && saved !== undefined) { node.value = saved; }
+      else if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
       autoGrow(node);
     }
     if (snapshot.active) {
@@ -1393,9 +1424,13 @@
           (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,
         diagRow("Actions en attente", String(diagnostics.pending.length) +
           (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
+        /* « IndexedDB » seul se lisait comme une garantie de durabilité qui n'était
+         * pas faite : l'éviction est totale et muette. On dit donc les deux states —
+         * disponible, et durable ou non. */
         diagRow("Stockage local", diagnostics.persistent
-          ? "IndexedDB"
-          : "mémoire — non persistant", !diagnostics.persistent),
+          ? ("IndexedDB — " + diagnostics.durability)
+          : "mémoire — non persistant",
+        !diagnostics.persistent || diagnostics.durability === "évinçable"),
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
         diagRow("Version", CONFIG.APP_VERSION)
       ])
@@ -1708,8 +1743,20 @@
           "La conclusion et les votes qui la visaient seront supprimés.",
           "Supprimer", function () { App.actions.deleteConclusion(m.topicId, m.conclusionId); });
       } else if (m.type === "logout") {
+        /* Une perte irréversible et invisible se confirme AVANT, elle ne s'explique pas
+         * après. On nomme donc les trois conséquences, et on compte ce qui attend
+         * d'être envoyé — c'est la seule qui détruit du travail. */
+        var waiting = Sync.diagnostics().pending.length;
         node = confirmModal("Se déconnecter de l'équipe",
-          "L'adresse du script et le déverrouillage seront oubliés sur cet appareil. Les données de l'équipe restent sur Google Drive.",
+          "L'adresse du script, le déverrouillage et votre nom seront oubliés sur cet "
+          + "appareil. Vous ne pourrez plus modifier vos messages anonymes depuis ce "
+          + "téléphone : c'est ce qui les rend anonymes."
+          + (waiting
+            ? " ⚠️ " + waiting + (waiting > 1 ? " actions attendent" : " action attend")
+              + " d'être envoyée" + (waiting > 1 ? "s" : "") + " et sera" + (waiting > 1 ? "nt" : "")
+              + " perdue" + (waiting > 1 ? "s" : "") + "."
+            : "")
+          + " Les données de l'équipe restent sur Google Drive.",
           "Se déconnecter", function () { App.logout(); });
       }
     }
@@ -1775,6 +1822,9 @@
      * disparaître — ce qui était le défaut. */
     var place = (App.gate() || "") + "|" + App.route.raw;
     var entering = place !== lastPlace;
+    /* Changer d'écran clôt le contexte d'édition : sans cette remise à zéro, un
+     * brouillon abandonné battrait indéfiniment une valeur légitimement mise à jour. */
+    if (entering) { touchedDrafts = {}; }
     lastPlace = place;
 
     var elapsed = 0;
@@ -2067,12 +2117,17 @@
      * commandes dans l'ordre de tabulation. */
     var extra = el("div", { class: "onboard-extra-slot" });
     var foot = el("div", { class: "onboard-foot" }, [prev, next, skip]);
-    var card = el("div", { class: "onboard-card" }, [eyebrow, title, text, extra, foot]);
+    /* Le pied est SŒUR du corps, pas son enfant : c'est ce qui le garde visible quand
+     * le corps déborde. Un pied collant obtiendrait le même effet visuel, mais le
+     * contenu extrait du flux est justement ce que les critères de grossissement
+     * reprochent — il masque le focus et rend la lecture difficile. Une colonne
+     * flexible n'a pas ce défaut. */
+    var card = el("div", { class: "onboard-card" }, [eyebrow, title, text, extra]);
     var dialog = el("dialog", {
       class: "onboard",
       "aria-labelledby": "onboard-title",
       "aria-describedby": "onboard-text"
-    }, [live, card]);
+    }, [live, card, foot]);
 
     return {
       dialog: dialog, card: card, live: live, eyebrow: eyebrow,

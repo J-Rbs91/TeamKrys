@@ -200,10 +200,29 @@
     UI.force();
   };
 
+  /* ⚠️ La déconnexion efface l'identité locale ET la liste des éléments propres.
+   *
+   * `ownItems` n'est pas une préférence de confort : c'est la SEULE pièce qui prouve la
+   * paternité d'un message anonyme, puisqu'un tel message n'a plus d'authorId. C'est
+   * donc un porteur de droit, au même titre qu'un jeton de session — et le garder
+   * transmettait à la personne suivante sur ce téléphone le droit de modifier les
+   * messages anonymes de la précédente. L'anonymat restait vrai côté serveur et
+   * devenait faux côté appareil : l'appareil était le maillon conservé.
+   *
+   * Corollaire assumé, et annoncé dans la confirmation : après une déconnexion, on ne
+   * peut plus modifier ses propres messages anonymes depuis cet appareil. Ce n'est pas
+   * une régression, c'est ce que « anonyme » veut dire.
+   *
+   * ⚠️ ORDRE : la file d'actions est vidée par cette même fonction. La confirmation
+   * doit donc annoncer ce qui est en attente AVANT d'arriver ici — effacer les
+   * porteurs de droit sans le dire détruirait du travail non synchronisé. */
   App.logout = function () {
     Utils.storage.remove(CONFIG.KEYS.apiUrl);
     Utils.storage.remove(CONFIG.KEYS.lockVerifier);
     Utils.storage.remove(CONFIG.KEYS.localMode);
+    Utils.storage.remove(CONFIG.KEYS.user);
+    Utils.storage.remove(CONFIG.KEYS.ownItems);
+    ownItems = [];
     clearSession();
     lockVerifier = null;
     unlocked = false;
@@ -213,6 +232,8 @@
     Promise.all([DB.clearQueue(), DB.clearState()]).then(function () {
       Store.setBase(Core.emptyState());
       Store.setQueue([]);
+      /* Identité neuve : la personne suivante repasse par l'écran du nom. */
+      loadUser();
       UI.set({ sheet: null, modal: null });
       App.go("#/");
       UI.force();

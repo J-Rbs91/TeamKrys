@@ -56,7 +56,7 @@ js/api.js                  appels au backend (GET révision / état, POST action
 js/sync.js                 synchronisation optimiste, file, indicateur d'état
 js/ui.js                   rendu des écrans, feuilles et fenêtres
 js/app.js                  démarrage, navigation, verrou, actions utilisateur
-service-worker.js          hors ligne : précache de la coquille
+service-worker.js          hors ligne : précache de la coquille, critique et optionnel
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/                      installation, guide utilisateur, checklist de test
@@ -483,6 +483,50 @@ signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
 > sait pas répondre.
 
 ---
+
+### Le précache échoue plutôt que de mentir
+
+La coquille est précachée en **deux listes**, et la différence n'est pas cosmétique.
+
+Ce dont dépend un démarrage à froid — le document, la feuille de style, les huit
+scripts — part dans un `addAll` unique passé à `waitUntil`, **sans `catch`**. Une
+ressource manquante fait donc échouer l'installation : l'ancien service worker reste
+actif avec son cache **complet**, et l'équipe garde une version qui fonctionne.
+
+C'était l'inverse. Chaque ressource avait son propre `catch` « pour tolérer les
+absences », puis `activate` purgeait l'ancien cache en entier. Une installation
+partielle réussissait donc, et laissait un cache neuf incomplet avec plus aucun
+ancien : au premier démarrage hors ligne, un script manquant donnait une application
+blanche, jusqu'au prochain passage en ligne.
+
+La purge d'`activate` peut alors rester inconditionnelle, et c'est le vrai gain :
+l'activation n'a lieu que si l'installation a réussi, donc la complétude du nouveau
+cache devient **structurelle** au lieu d'être vérifiée après coup.
+
+Le manifeste et les icônes sont récupérés **hors** de `waitUntil`, avec un `catch` par
+ressource : ils servent à l'installation sur l'écran d'accueil, jamais au démarrage, et
+leur absence ne doit pas priver l'équipe d'une mise à jour.
+
+> ⚠️ La liste critique doit rester **courte et exacte**. Une entrée qui renverrait 404
+> en production bloquerait toutes les mises à jour, silencieusement. L'état du stockage
+> est lisible dans l'écran de diagnostic.
+
+### Durabilité du stockage
+
+« Disponible » et « durable » sont deux choses différentes. Le mode par défaut est *au
+mieux* : sous pression de stockage, une origine est évincée **en entier**, d'un coup, et
+sans le dire — la file d'actions en attente part avec.
+
+La persistance se **demande**, et le refus est le cas normal : les moteurs décident
+seuls, souvent sur l'historique de fréquentation. Elle est donc demandée au seul moment
+où c'est justifié — quand une action non synchronisée vient d'entrer dans la file, donc
+depuis le geste qui l'a créée. Pas au démarrage : une demande faite au chargement est
+refusée sans que personne ne le sache, ou présentée hors contexte à qui devrait y
+consentir.
+
+Rien ne promet « enregistré » pour autant, et le diagnostic dit désormais les **deux**
+états — disponible, et durable ou évinçable. Afficher « IndexedDB » seul se lisait comme
+une garantie qui n'était pas faite.
 
 ## Verrou par code d'accès
 
