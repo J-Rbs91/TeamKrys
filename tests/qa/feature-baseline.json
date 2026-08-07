@@ -19,19 +19,34 @@
       "id": "css-has",
       "label": ":has()",
       "kind": "css",
-      "detect": [":has\\("],
-      "support": { "webkit": "15.4", "chromium": "105", "firefox": "121" },
+      "detect": [
+        ":has\\("
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "105",
+        "firefox": "121"
+      },
       "failure": "rule-dropped",
       "severity": "high",
-      "guard": ["@supports\\s+selector\\(\\s*:has"],
+      "guard": [
+        "@supports\\s+selector\\(\\s*:has"
+      ],
       "impact": "Sur Gecko avant 121, la règle entière est rejetée — pas seulement le sélecteur. Vérifier que la mise en page reste correcte quand la règle disparaît, ou isoler la règle dans un bloc @supports selector(:has(*))."
     },
     {
       "id": "css-is-where",
       "label": ":is() / :where()",
       "kind": "css",
-      "detect": [":is\\(", ":where\\("],
-      "support": { "webkit": "14", "chromium": "88", "firefox": "78" },
+      "detect": [
+        ":is\\(",
+        ":where\\("
+      ],
+      "support": {
+        "webkit": "14",
+        "chromium": "88",
+        "firefox": "78"
+      },
       "failure": "rule-dropped",
       "severity": "medium",
       "impact": "Même piège que :has() sur les moteurs plus anciens : la règle entière saute."
@@ -40,8 +55,14 @@
       "id": "css-focus-visible",
       "label": ":focus-visible",
       "kind": "css",
-      "detect": [":focus-visible"],
-      "support": { "webkit": "15.4", "chromium": "86", "firefox": "85" },
+      "detect": [
+        ":focus-visible"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "86",
+        "firefox": "85"
+      },
       "failure": "rule-dropped",
       "severity": "medium",
       "impact": "Perte de l'indicateur de focus au clavier : régression d'accessibilité, pas seulement cosmétique. Doubler avec :focus si le plancher descend sous iOS 15.4."
@@ -50,8 +71,14 @@
       "id": "css-nesting",
       "label": "imbrication CSS native",
       "kind": "css",
-      "detect": ["^\\s{2,}&[\\s.:>+~\\[]"],
-      "support": { "webkit": "17.2", "chromium": "120", "firefox": "117" },
+      "detect": [
+        "^\\s{2,}&[\\s.:>+~\\[]"
+      ],
+      "support": {
+        "webkit": "17.2",
+        "chromium": "120",
+        "firefox": "117"
+      },
       "failure": "rule-dropped",
       "severity": "high",
       "impact": "Fonction très récente : elle mettrait hors-jeu une grande partie du parc. À proscrire dans ce projet tant que le plancher est iOS 15.4."
@@ -60,19 +87,35 @@
       "id": "css-dvh",
       "label": "unités dvh / svh / lvh",
       "kind": "css",
-      "detect": ["\\b\\d+(?:\\.\\d+)?(?:dvh|svh|lvh|dvw|svw|lvw)\\b", "\\b(?:dvh|svh|lvh)\\b\\s*[;)]"],
-      "support": { "webkit": "15.4", "chromium": "108", "firefox": "101" },
+      "detect": [
+        "\\b\\d+(?:\\.\\d+)?(?:dvh|svh|lvh|dvw|svw|lvw)\\b",
+        "\\b(?:dvh|svh|lvh)\\b\\s*[;)]"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "108",
+        "firefox": "101"
+      },
       "failure": "declaration-ignored",
       "severity": "high",
-      "guard": ["100vh[\\s\\S]{0,400}?(?:dvh|svh|lvh)", "@supports\\s*\\(height:\\s*100dvh\\)"],
+      "guard": [
+        "100vh[\\s\\S]{0,400}?(?:dvh|svh|lvh)",
+        "@supports\\s*\\(height:\\s*100dvh\\)"
+      ],
       "impact": "Sans repli en vh, la hauteur devient nulle ou auto : écrans pleine hauteur cassés sur Chrome Android < 108 et Samsung Internet < 21. Toujours déclarer la ligne vh avant la ligne dvh."
     },
     {
       "id": "css-color-mix",
       "label": "color-mix()",
       "kind": "css",
-      "detect": ["color-mix\\s*\\("],
-      "support": { "webkit": "16.2", "chromium": "111", "firefox": "113" },
+      "detect": [
+        "color-mix\\s*\\("
+      ],
+      "support": {
+        "webkit": "16.2",
+        "chromium": "111",
+        "firefox": "113"
+      },
       "failure": "declaration-ignored",
       "severity": "high",
       "impact": "Une couleur non calculée fait retomber sur la valeur héritée : texte invisible ou surface transparente. C'est la fonction la plus récente du thème — premier suspect sur navigateur constructeur."
@@ -81,8 +124,14 @@
       "id": "css-oklch",
       "label": "oklch() / lab() / lch()",
       "kind": "css",
-      "detect": ["\\b(?:oklch|oklab|lch|lab)\\s*\\("],
-      "support": { "webkit": "15.4", "chromium": "111", "firefox": "113" },
+      "detect": [
+        "\\b(?:oklch|oklab|lch|lab)\\s*\\("
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "111",
+        "firefox": "113"
+      },
       "failure": "declaration-ignored",
       "severity": "high",
       "impact": "Même conséquence que color-mix(). À éviter tant que le plancher Blink est sous 111."
@@ -91,19 +140,50 @@
       "id": "css-backdrop-filter",
       "label": "backdrop-filter",
       "kind": "css",
-      "detect": ["(?<!-webkit-)backdrop-filter\\s*:"],
-      "support": { "webkit": "9", "chromium": "76", "firefox": "103" },
+      "detect": [
+        "(?<!-webkit-)backdrop-filter\\s*:"
+      ],
+      "support": {
+        "webkit": "9",
+        "chromium": "76",
+        "firefox": "103"
+      },
       "failure": "declaration-ignored",
       "severity": "low",
-      "guard": ["@supports\\s+not\\s+\\(\\(backdrop-filter", "-webkit-backdrop-filter"],
+      "guard": [
+        "@supports\\s+not\\s+\\(\\(backdrop-filter",
+        "-webkit-backdrop-filter"
+      ],
       "impact": "Le flou disparaît, les surfaces flottantes deviennent translucides sans séparation. Le repli @supports du thème doit rester lisible : contraste du texte à vérifier sur Firefox < 103."
+    },
+    {
+      "id": "css-backdrop-inherit",
+      "label": "propriété personnalisée dans ::backdrop",
+      "kind": "css",
+      "detect": [
+        "::backdrop[^{]*\\{[^}]*var\\(\\s*--[A-Za-z0-9-]+\\s*\\)"
+      ],
+      "support": {
+        "webkit": "17.4",
+        "chromium": "122",
+        "firefox": "120"
+      },
+      "failure": "declaration-ignored",
+      "severity": "high",
+      "impact": "`::backdrop` n'hérite de son élément d'origine que depuis Safari 17.4, Chromium 122 et Firefox 120. En dessous, une propriété personnalisée n'y est pas définie : `var()` est invalide AU CALCUL, la déclaration devient `unset`, et le fond retombe sur `transparent` — le voile d'un `<dialog>` modal disparaît purement et simplement, sans erreur. ⚠️ L'idiome habituel du dépôt ne sauve rien ici : une invalidité au calcul ne rejoue pas la cascade, donc une déclaration littérale écrite AVANT ne reprend pas la main. Seul le repli DANS le var() fonctionne — `var(--scrim, rgba(12, 19, 23, 0.44))` — doublé par thème si la valeur en dépend. Détecté par l'absence de virgule de repli dans le var()."
     },
     {
       "id": "css-flex-gap",
       "label": "gap en flexbox",
       "kind": "css",
-      "detect": ["(?:^|[;{\\s])gap\\s*:"],
-      "support": { "webkit": "14.1", "chromium": "84", "firefox": "63" },
+      "detect": [
+        "(?:^|[;{\\s])gap\\s*:"
+      ],
+      "support": {
+        "webkit": "14.1",
+        "chromium": "84",
+        "firefox": "63"
+      },
       "failure": "declaration-ignored",
       "severity": "high",
       "impact": "Tout l'espacement des listes et des barres repose dessus : sans gap, les éléments se collent. Perte majeure sous iOS 14.0."
@@ -112,8 +192,14 @@
       "id": "css-inset-shorthand",
       "label": "raccourci inset",
       "kind": "css",
-      "detect": ["(?:^|[;{\\s])inset\\s*:"],
-      "support": { "webkit": "14.1", "chromium": "87", "firefox": "66" },
+      "detect": [
+        "(?:^|[;{\\s])inset\\s*:"
+      ],
+      "support": {
+        "webkit": "14.1",
+        "chromium": "87",
+        "firefox": "66"
+      },
       "failure": "declaration-ignored",
       "severity": "high",
       "impact": "Un élément positionné sans inset reste à sa place d'origine : feuilles et fenêtres modales décalées ou hors écran."
@@ -122,8 +208,14 @@
       "id": "css-env-safe-area",
       "label": "env(safe-area-inset-*)",
       "kind": "css",
-      "detect": ["env\\s*\\(\\s*safe-area-inset"],
-      "support": { "webkit": "11.2", "chromium": "69", "firefox": "62" },
+      "detect": [
+        "env\\s*\\(\\s*safe-area-inset"
+      ],
+      "support": {
+        "webkit": "11.2",
+        "chromium": "69",
+        "firefox": "62"
+      },
       "failure": "declaration-ignored",
       "severity": "medium",
       "impact": "Sans valeur de repli dans env(), le contenu passe sous l'encoche ou sous la barre d'accueil. Toujours écrire env(safe-area-inset-bottom, 0px)."
@@ -132,8 +224,14 @@
       "id": "css-clamp",
       "label": "clamp()",
       "kind": "css",
-      "detect": ["clamp\\s*\\("],
-      "support": { "webkit": "13.4", "chromium": "79", "firefox": "75" },
+      "detect": [
+        "clamp\\s*\\("
+      ],
+      "support": {
+        "webkit": "13.4",
+        "chromium": "79",
+        "firefox": "75"
+      },
       "failure": "declaration-ignored",
       "severity": "medium",
       "impact": "Toute l'échelle typographique fluide repose dessus : sans clamp(), la taille de police retombe sur l'héritage."
@@ -142,8 +240,14 @@
       "id": "css-min-max",
       "label": "min() / max()",
       "kind": "css",
-      "detect": ["[\\s:(](?:min|max)\\s*\\([^)]*[,]"],
-      "support": { "webkit": "11.1", "chromium": "79", "firefox": "75" },
+      "detect": [
+        "[\\s:(](?:min|max)\\s*\\([^)]*[,]"
+      ],
+      "support": {
+        "webkit": "11.1",
+        "chromium": "79",
+        "firefox": "75"
+      },
       "failure": "declaration-ignored",
       "severity": "medium"
     },
@@ -151,8 +255,14 @@
       "id": "css-aspect-ratio",
       "label": "aspect-ratio",
       "kind": "css",
-      "detect": ["(?:^|[;{\\s])aspect-ratio\\s*:"],
-      "support": { "webkit": "15", "chromium": "88", "firefox": "89" },
+      "detect": [
+        "(?:^|[;{\\s])aspect-ratio\\s*:"
+      ],
+      "support": {
+        "webkit": "15",
+        "chromium": "88",
+        "firefox": "89"
+      },
       "failure": "declaration-ignored",
       "severity": "medium"
     },
@@ -160,8 +270,14 @@
       "id": "css-position-sticky",
       "label": "position: sticky",
       "kind": "css",
-      "detect": ["position\\s*:\\s*sticky"],
-      "support": { "webkit": "13", "chromium": "56", "firefox": "32" },
+      "detect": [
+        "position\\s*:\\s*sticky"
+      ],
+      "support": {
+        "webkit": "13",
+        "chromium": "56",
+        "firefox": "32"
+      },
       "failure": "declaration-ignored",
       "severity": "medium",
       "impact": "Les barres collantes redeviennent statiques. Sur WebKit, sticky reste sensible aux ancêtres qui ont overflow ou transform : à vérifier sur appareil, pas seulement en simulateur."
@@ -170,8 +286,14 @@
       "id": "css-overscroll-behavior",
       "label": "overscroll-behavior",
       "kind": "css",
-      "detect": ["overscroll-behavior"],
-      "support": { "webkit": "16", "chromium": "63", "firefox": "59" },
+      "detect": [
+        "overscroll-behavior"
+      ],
+      "support": {
+        "webkit": "16",
+        "chromium": "63",
+        "firefox": "59"
+      },
       "failure": "declaration-ignored",
       "severity": "medium",
       "impact": "Sous iOS 16, le défilement d'une feuille entraîne la page derrière elle, et le geste de rafraîchissement d'Android peut recharger l'application au milieu d'une saisie."
@@ -180,8 +302,14 @@
       "id": "css-scroll-behavior",
       "label": "scroll-behavior: smooth",
       "kind": "css",
-      "detect": ["scroll-behavior\\s*:"],
-      "support": { "webkit": "15.4", "chromium": "61", "firefox": "36" },
+      "detect": [
+        "scroll-behavior\\s*:"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "61",
+        "firefox": "36"
+      },
       "failure": "declaration-ignored",
       "severity": "low"
     },
@@ -189,8 +317,14 @@
       "id": "css-color-scheme",
       "label": "color-scheme",
       "kind": "css",
-      "detect": ["(?:^|[;{\\s])color-scheme\\s*:"],
-      "support": { "webkit": "13", "chromium": "81", "firefox": "96" },
+      "detect": [
+        "(?:^|[;{\\s])color-scheme\\s*:"
+      ],
+      "support": {
+        "webkit": "13",
+        "chromium": "81",
+        "firefox": "96"
+      },
       "failure": "declaration-ignored",
       "severity": "medium",
       "impact": "Sans color-scheme, les contrôles natifs (champs, sélecteurs, barres de défilement) restent clairs dans le thème sombre."
@@ -199,8 +333,14 @@
       "id": "css-prefers-color-scheme",
       "label": "prefers-color-scheme",
       "kind": "css",
-      "detect": ["prefers-color-scheme"],
-      "support": { "webkit": "12.1", "chromium": "76", "firefox": "67" },
+      "detect": [
+        "prefers-color-scheme"
+      ],
+      "support": {
+        "webkit": "12.1",
+        "chromium": "76",
+        "firefox": "67"
+      },
       "failure": "rule-dropped",
       "severity": "low",
       "impact": "Le thème sombre ne s'applique pas ; le thème clair reste lisible. Dégradation acceptable."
@@ -209,8 +349,14 @@
       "id": "css-prefers-reduced-motion",
       "label": "prefers-reduced-motion",
       "kind": "css",
-      "detect": ["prefers-reduced-motion"],
-      "support": { "webkit": "10.1", "chromium": "74", "firefox": "63" },
+      "detect": [
+        "prefers-reduced-motion"
+      ],
+      "support": {
+        "webkit": "10.1",
+        "chromium": "74",
+        "firefox": "63"
+      },
       "failure": "rule-dropped",
       "severity": "medium",
       "impact": "Le thème anime seulement dans (prefers-reduced-motion: no-preference) : sur un moteur qui ignore la requête, les animations ne se déclenchent pas du tout. Vérifier que l'interface reste visible sans animation, jamais bloquée à l'état initial."
@@ -219,8 +365,14 @@
       "id": "css-container-queries",
       "label": "@container",
       "kind": "css",
-      "detect": ["@container\\b"],
-      "support": { "webkit": "16", "chromium": "105", "firefox": "110" },
+      "detect": [
+        "@container\\b"
+      ],
+      "support": {
+        "webkit": "16",
+        "chromium": "105",
+        "firefox": "110"
+      },
       "failure": "rule-dropped",
       "severity": "high"
     },
@@ -228,8 +380,14 @@
       "id": "css-text-wrap-balance",
       "label": "text-wrap: balance / pretty",
       "kind": "css",
-      "detect": ["text-wrap\\s*:\\s*(?:balance|pretty)"],
-      "support": { "webkit": "17.5", "chromium": "114", "firefox": "121" },
+      "detect": [
+        "text-wrap\\s*:\\s*(?:balance|pretty)"
+      ],
+      "support": {
+        "webkit": "17.5",
+        "chromium": "114",
+        "firefox": "121"
+      },
       "failure": "declaration-ignored",
       "severity": "low"
     },
@@ -237,8 +395,14 @@
       "id": "css-accent-color",
       "label": "accent-color",
       "kind": "css",
-      "detect": ["accent-color\\s*:"],
-      "support": { "webkit": "15.4", "chromium": "93", "firefox": "92" },
+      "detect": [
+        "accent-color\\s*:"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "93",
+        "firefox": "92"
+      },
       "failure": "declaration-ignored",
       "severity": "low"
     },
@@ -246,8 +410,14 @@
       "id": "css-mix-blend-mode",
       "label": "mix-blend-mode",
       "kind": "css",
-      "detect": ["mix-blend-mode\\s*:"],
-      "support": { "webkit": "8", "chromium": "41", "firefox": "32" },
+      "detect": [
+        "mix-blend-mode\\s*:"
+      ],
+      "support": {
+        "webkit": "8",
+        "chromium": "41",
+        "firefox": "32"
+      },
       "failure": "declaration-ignored",
       "severity": "low",
       "impact": "Le grain et les superpositions perdent leur fusion. Vérifier qu'aucun texte ne devient illisible si le mélange est ignoré."
@@ -256,8 +426,14 @@
       "id": "css-font-variant-numeric",
       "label": "font-variant-numeric",
       "kind": "css",
-      "detect": ["font-variant-numeric"],
-      "support": { "webkit": "9.1", "chromium": "52", "firefox": "34" },
+      "detect": [
+        "font-variant-numeric"
+      ],
+      "support": {
+        "webkit": "9.1",
+        "chromium": "52",
+        "firefox": "34"
+      },
       "failure": "declaration-ignored",
       "severity": "low",
       "impact": "Les chiffres tabulaires retombent en chasse proportionnelle : les compteurs de votes sautent d'un pixel à chaque mise à jour. Cosmétique."
@@ -266,8 +442,14 @@
       "id": "css-line-clamp",
       "label": "-webkit-line-clamp",
       "kind": "css",
-      "detect": ["-webkit-line-clamp"],
-      "support": { "webkit": "5", "chromium": "6", "firefox": "68" },
+      "detect": [
+        "-webkit-line-clamp"
+      ],
+      "support": {
+        "webkit": "5",
+        "chromium": "6",
+        "firefox": "68"
+      },
       "failure": "declaration-ignored",
       "severity": "low",
       "impact": "Exige display:-webkit-box et -webkit-box-orient:vertical dans la même règle, sur tous les moteurs. Sans troncature, le texte s'étale : vérifier que la carte ne se déforme pas."
@@ -276,8 +458,14 @@
       "id": "css-supports",
       "label": "@supports",
       "kind": "css",
-      "detect": ["@supports\\b"],
-      "support": { "webkit": "9", "chromium": "28", "firefox": "22" },
+      "detect": [
+        "@supports\\b"
+      ],
+      "support": {
+        "webkit": "9",
+        "chromium": "28",
+        "firefox": "22"
+      },
       "failure": "rule-dropped",
       "severity": "low",
       "impact": "Un moteur qui ignore @supports ignore le bloc : un repli placé dans @supports not (...) ne s'applique alors pas. Toujours écrire la valeur de repli hors du bloc."
@@ -286,8 +474,14 @@
       "id": "css-webkit-overflow-scrolling",
       "label": "-webkit-overflow-scrolling",
       "kind": "css",
-      "detect": ["-webkit-overflow-scrolling"],
-      "support": { "webkit": "5", "chromium": false, "firefox": false },
+      "detect": [
+        "-webkit-overflow-scrolling"
+      ],
+      "support": {
+        "webkit": "5",
+        "chromium": false,
+        "firefox": false
+      },
       "failure": "declaration-ignored",
       "severity": "low",
       "ignore_unsupported": true,
@@ -297,8 +491,14 @@
       "id": "js-optional-chaining",
       "label": "chaînage optionnel ?.",
       "kind": "js",
-      "detect": ["\\?\\.[A-Za-z_$\\[(]"],
-      "support": { "webkit": "13.4", "chromium": "80", "firefox": "74" },
+      "detect": [
+        "\\?\\.[A-Za-z_$\\[(]"
+      ],
+      "support": {
+        "webkit": "13.4",
+        "chromium": "80",
+        "firefox": "74"
+      },
       "failure": "syntax",
       "severity": "critical",
       "impact": "Erreur d'analyse : le fichier entier ne s'exécute pas, l'application reste sur un écran vide. Aucun repli possible sans transpilation — donc plancher dur à iOS 13.4."
@@ -307,8 +507,16 @@
       "id": "js-nullish",
       "label": "coalescence ??  et affectations logiques",
       "kind": "js",
-      "detect": ["\\?\\?[=\\s]", "\\|\\|=", "&&="],
-      "support": { "webkit": "14", "chromium": "85", "firefox": "79" },
+      "detect": [
+        "\\?\\?[=\\s]",
+        "\\|\\|=",
+        "&&="
+      ],
+      "support": {
+        "webkit": "14",
+        "chromium": "85",
+        "firefox": "79"
+      },
       "failure": "syntax",
       "severity": "critical",
       "impact": "Les affectations logiques (||=, &&=, ??=) sont arrivées après ?? : iOS 14 est le vrai plancher si elles sont utilisées."
@@ -317,8 +525,14 @@
       "id": "js-class-fields",
       "label": "champs de classe / champs privés",
       "kind": "js",
-      "detect": ["^\\s*#[A-Za-z_$][\\w$]*\\s*[=;(]"],
-      "support": { "webkit": "14.1", "chromium": "84", "firefox": "90" },
+      "detect": [
+        "^\\s*#[A-Za-z_$][\\w$]*\\s*[=;(]"
+      ],
+      "support": {
+        "webkit": "14.1",
+        "chromium": "84",
+        "firefox": "90"
+      },
       "failure": "syntax",
       "severity": "critical"
     },
@@ -326,19 +540,35 @@
       "id": "js-crypto-randomuuid",
       "label": "crypto.randomUUID()",
       "kind": "js",
-      "detect": ["crypto\\.randomUUID"],
-      "support": { "webkit": "15.4", "chromium": "92", "firefox": "95" },
+      "detect": [
+        "crypto\\.randomUUID"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "92",
+        "firefox": "95"
+      },
       "failure": "throws",
       "severity": "critical",
-      "guard": ["typeof\\s+[\\w.$]*crypto\\.randomUUID", "[\\w.$]*crypto\\.randomUUID\\s*\\?", "randomUUID\\s*(?:&&|\\?\\.)"],
+      "guard": [
+        "typeof\\s+[\\w.$]*crypto\\.randomUUID",
+        "[\\w.$]*crypto\\.randomUUID\\s*\\?",
+        "randomUUID\\s*(?:&&|\\?\\.)"
+      ],
       "impact": "Sert à identifier les actions de la file de synchronisation : sans repli, aucune action ne part et rien n'est envoyé au serveur. Deuxième piège, indépendant de la version : la fonction n'existe que dans un contexte sécurisé — donc absente en http:// sur IP locale pendant les essais réseau."
     },
     {
       "id": "js-crypto-subtle",
       "label": "crypto.subtle (WebCrypto)",
       "kind": "js",
-      "detect": ["crypto\\.subtle"],
-      "support": { "webkit": "11", "chromium": "37", "firefox": "34" },
+      "detect": [
+        "crypto\\.subtle"
+      ],
+      "support": {
+        "webkit": "11",
+        "chromium": "37",
+        "firefox": "34"
+      },
       "failure": "throws",
       "severity": "critical",
       "impact": "Porte le verrou par code d'accès (SHA-256). Indisponible hors contexte sécurisé : en http:// sur une IP locale, crypto.subtle est undefined et le déverrouillage échoue sans que le code soit en cause. Toujours recetter en https:// ou sur localhost."
@@ -347,8 +577,14 @@
       "id": "js-crypto-getrandomvalues",
       "label": "crypto.getRandomValues()",
       "kind": "js",
-      "detect": ["crypto\\.getRandomValues"],
-      "support": { "webkit": "6.1", "chromium": "11", "firefox": "21" },
+      "detect": [
+        "crypto\\.getRandomValues"
+      ],
+      "support": {
+        "webkit": "6.1",
+        "chromium": "11",
+        "firefox": "21"
+      },
       "failure": "throws",
       "severity": "high",
       "impact": "Repli légitime de crypto.randomUUID : disponible bien plus largement, et hors contexte sécurisé sur la plupart des moteurs."
@@ -357,8 +593,14 @@
       "id": "js-globalthis",
       "label": "globalThis",
       "kind": "js",
-      "detect": ["\\bglobalThis\\b"],
-      "support": { "webkit": "12.1", "chromium": "71", "firefox": "65" },
+      "detect": [
+        "\\bglobalThis\\b"
+      ],
+      "support": {
+        "webkit": "12.1",
+        "chromium": "71",
+        "firefox": "65"
+      },
       "failure": "throws",
       "severity": "high",
       "impact": "Utilisé comme espace de noms partagé entre les modules du projet : une référence non définie casse le démarrage complet."
@@ -367,52 +609,95 @@
       "id": "js-service-worker",
       "label": "navigator.serviceWorker",
       "kind": "js",
-      "detect": ["navigator\\.serviceWorker"],
-      "support": { "webkit": "11.3", "chromium": "45", "firefox": "44" },
+      "detect": [
+        "navigator\\.serviceWorker"
+      ],
+      "support": {
+        "webkit": "11.3",
+        "chromium": "45",
+        "firefox": "44"
+      },
       "failure": "throws",
       "severity": "high",
-      "guard": ["'serviceWorker'\\s+in\\s+navigator", "\"serviceWorker\"\\s+in\\s+navigator", "navigator\\.serviceWorker\\s*(?:&&|\\?\\.)"],
+      "guard": [
+        "'serviceWorker'\\s+in\\s+navigator",
+        "\"serviceWorker\"\\s+in\\s+navigator",
+        "navigator\\.serviceWorker\\s*(?:&&|\\?\\.)"
+      ],
       "impact": "Absent en navigation privée sur WebKit et dans plusieurs fenêtres in-app. Toujours tester la présence avant usage : sans Service Worker, l'application doit rester utilisable en ligne, seulement privée de hors ligne."
     },
     {
       "id": "js-cache-api",
       "label": "Cache API (caches)",
       "kind": "js",
-      "detect": ["\\bcaches\\b"],
-      "support": { "webkit": "11.1", "chromium": "40", "firefox": "41" },
+      "detect": [
+        "\\bcaches\\b"
+      ],
+      "support": {
+        "webkit": "11.1",
+        "chromium": "40",
+        "firefox": "41"
+      },
       "failure": "throws",
       "severity": "high",
-      "guard": ["'caches'\\s+in\\s+", "typeof\\s+caches"],
+      "guard": [
+        "'caches'\\s+in\\s+",
+        "typeof\\s+caches"
+      ],
       "impact": "Même exposition que le Service Worker : absente là où il est absent."
     },
     {
       "id": "js-indexeddb",
       "label": "IndexedDB",
       "kind": "js",
-      "detect": ["\\bindexedDB\\b"],
-      "support": { "webkit": "10.3", "chromium": "24", "firefox": "16" },
+      "detect": [
+        "\\bindexedDB\\b"
+      ],
+      "support": {
+        "webkit": "10.3",
+        "chromium": "24",
+        "firefox": "16"
+      },
       "failure": "throws",
       "severity": "critical",
-      "guard": ["'indexedDB'\\s+in\\s+", "typeof\\s+indexedDB", "indexedDB\\s*(?:&&|\\?\\.)"],
+      "guard": [
+        "'indexedDB'\\s+in\\s+",
+        "typeof\\s+indexedDB",
+        "indexedDB\\s*(?:&&|\\?\\.)"
+      ],
       "impact": "Porte la file d'actions hors ligne : c'est la seule chose qui empêche une action de disparaître. Points de rupture connus, à vérifier sur appareil : ouverture en navigation privée WebKit, purge du stockage après plusieurs jours sans visite dans le navigateur (les applications installées sur l'écran d'accueil sont traitées différemment), et éviction sous pression de stockage sur Android. Toute erreur d'ouverture doit être visible pour l'utilisateur, jamais avalée."
     },
     {
       "id": "js-localstorage",
       "label": "localStorage",
       "kind": "js",
-      "detect": ["localStorage"],
-      "support": { "webkit": "4", "chromium": "5", "firefox": "3.5" },
+      "detect": [
+        "localStorage"
+      ],
+      "support": {
+        "webkit": "4",
+        "chromium": "5",
+        "firefox": "3.5"
+      },
       "failure": "throws",
       "severity": "high",
-      "guard": ["try\\s*\\{"],
+      "guard": [
+        "try\\s*\\{"
+      ],
       "impact": "Porte l'adresse du script et le vérificateur de verrou. Lève une exception, et non undefined, quand le quota est nul (navigation privée sur WebKit ancien) ou quand les cookies tiers sont refusés dans une fenêtre in-app : tout accès doit être enveloppé dans try/catch."
     },
     {
       "id": "js-abortcontroller",
       "label": "AbortController",
       "kind": "js",
-      "detect": ["AbortController"],
-      "support": { "webkit": "12.1", "chromium": "66", "firefox": "57" },
+      "detect": [
+        "AbortController"
+      ],
+      "support": {
+        "webkit": "12.1",
+        "chromium": "66",
+        "firefox": "57"
+      },
       "failure": "throws",
       "severity": "medium",
       "impact": "Sert aux délais d'attente réseau. Sans lui, une requête bloquée n'est jamais annulée : l'indicateur reste en cours de synchronisation indéfiniment."
@@ -421,8 +706,14 @@
       "id": "js-fetch",
       "label": "fetch()",
       "kind": "js",
-      "detect": ["\\bfetch\\s*\\("],
-      "support": { "webkit": "10.1", "chromium": "42", "firefox": "39" },
+      "detect": [
+        "\\bfetch\\s*\\("
+      ],
+      "support": {
+        "webkit": "10.1",
+        "chromium": "42",
+        "firefox": "39"
+      },
       "failure": "throws",
       "severity": "critical"
     },
@@ -430,8 +721,14 @@
       "id": "js-scrollintoview-options",
       "label": "scrollIntoView({ behavior })",
       "kind": "js",
-      "detect": ["scrollIntoView\\s*\\(\\s*\\{"],
-      "support": { "webkit": "15.4", "chromium": "61", "firefox": "36" },
+      "detect": [
+        "scrollIntoView\\s*\\(\\s*\\{"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "61",
+        "firefox": "36"
+      },
       "failure": "silent-noop",
       "severity": "medium",
       "impact": "Sous iOS 15.4, l'objet d'options est ignoré : le défilement automatique vers le dernier message ne se produit pas, sans erreur. Piège typique — l'application croit avoir défilé."
@@ -440,8 +737,14 @@
       "id": "js-structuredclone",
       "label": "structuredClone()",
       "kind": "js",
-      "detect": ["structuredClone"],
-      "support": { "webkit": "15.4", "chromium": "98", "firefox": "94" },
+      "detect": [
+        "structuredClone"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "98",
+        "firefox": "94"
+      },
       "failure": "throws",
       "severity": "high"
     },
@@ -449,8 +752,14 @@
       "id": "js-object-hasown",
       "label": "Object.hasOwn()",
       "kind": "js",
-      "detect": ["Object\\.hasOwn"],
-      "support": { "webkit": "15.4", "chromium": "93", "firefox": "92" },
+      "detect": [
+        "Object\\.hasOwn"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "93",
+        "firefox": "92"
+      },
       "failure": "throws",
       "severity": "high"
     },
@@ -458,8 +767,16 @@
       "id": "js-array-at",
       "label": "Array.prototype.at()",
       "kind": "js",
-      "detect": ["\\]\\.at\\s*\\(", "\\)\\.at\\s*\\(", "[\\w$]\\.at\\s*\\(\\s*-"],
-      "support": { "webkit": "15.4", "chromium": "92", "firefox": "90" },
+      "detect": [
+        "\\]\\.at\\s*\\(",
+        "\\)\\.at\\s*\\(",
+        "[\\w$]\\.at\\s*\\(\\s*-"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "92",
+        "firefox": "90"
+      },
       "failure": "throws",
       "severity": "high"
     },
@@ -467,8 +784,14 @@
       "id": "js-string-replaceall",
       "label": "String.prototype.replaceAll()",
       "kind": "js",
-      "detect": ["\\.replaceAll\\s*\\("],
-      "support": { "webkit": "13.1", "chromium": "85", "firefox": "77" },
+      "detect": [
+        "\\.replaceAll\\s*\\("
+      ],
+      "support": {
+        "webkit": "13.1",
+        "chromium": "85",
+        "firefox": "77"
+      },
       "failure": "throws",
       "severity": "high"
     },
@@ -476,8 +799,15 @@
       "id": "js-promise-allsettled",
       "label": "Promise.allSettled() / Promise.any()",
       "kind": "js",
-      "detect": ["Promise\\.allSettled", "Promise\\.any"],
-      "support": { "webkit": "14", "chromium": "85", "firefox": "79" },
+      "detect": [
+        "Promise\\.allSettled",
+        "Promise\\.any"
+      ],
+      "support": {
+        "webkit": "14",
+        "chromium": "85",
+        "firefox": "79"
+      },
       "failure": "throws",
       "severity": "high",
       "verify": true
@@ -486,8 +816,14 @@
       "id": "js-broadcastchannel",
       "label": "BroadcastChannel",
       "kind": "js",
-      "detect": ["BroadcastChannel"],
-      "support": { "webkit": "15.4", "chromium": "54", "firefox": "38" },
+      "detect": [
+        "BroadcastChannel"
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "54",
+        "firefox": "38"
+      },
       "failure": "throws",
       "severity": "medium"
     },
@@ -495,8 +831,14 @@
       "id": "js-visualviewport",
       "label": "visualViewport",
       "kind": "js",
-      "detect": ["visualViewport"],
-      "support": { "webkit": "13", "chromium": "61", "firefox": "91" },
+      "detect": [
+        "visualViewport"
+      ],
+      "support": {
+        "webkit": "13",
+        "chromium": "61",
+        "firefox": "91"
+      },
       "failure": "throws",
       "severity": "medium",
       "impact": "Seul moyen fiable de connaître la place restante quand le clavier virtuel est ouvert. Sans lui, la zone de saisie peut passer sous le clavier sur iOS."
@@ -505,8 +847,14 @@
       "id": "js-resizeobserver",
       "label": "ResizeObserver",
       "kind": "js",
-      "detect": ["ResizeObserver"],
-      "support": { "webkit": "13.1", "chromium": "64", "firefox": "69" },
+      "detect": [
+        "ResizeObserver"
+      ],
+      "support": {
+        "webkit": "13.1",
+        "chromium": "64",
+        "firefox": "69"
+      },
       "failure": "throws",
       "severity": "medium"
     },
@@ -514,8 +862,14 @@
       "id": "js-intersectionobserver",
       "label": "IntersectionObserver",
       "kind": "js",
-      "detect": ["IntersectionObserver"],
-      "support": { "webkit": "12.1", "chromium": "51", "firefox": "55" },
+      "detect": [
+        "IntersectionObserver"
+      ],
+      "support": {
+        "webkit": "12.1",
+        "chromium": "51",
+        "firefox": "55"
+      },
       "failure": "throws",
       "severity": "medium"
     },
@@ -523,8 +877,14 @@
       "id": "js-requestidlecallback",
       "label": "requestIdleCallback()",
       "kind": "js",
-      "detect": ["requestIdleCallback"],
-      "support": { "webkit": false, "chromium": "47", "firefox": "55" },
+      "detect": [
+        "requestIdleCallback"
+      ],
+      "support": {
+        "webkit": false,
+        "chromium": "47",
+        "firefox": "55"
+      },
       "failure": "throws",
       "severity": "high",
       "verify": true,
@@ -534,8 +894,14 @@
       "id": "js-dialog-showmodal",
       "label": "<dialog>.showModal()",
       "kind": "js",
-      "detect": ["showModal\\s*\\("],
-      "support": { "webkit": "15.4", "chromium": "37", "firefox": "98" },
+      "detect": [
+        "showModal\\s*\\("
+      ],
+      "support": {
+        "webkit": "15.4",
+        "chromium": "37",
+        "firefox": "98"
+      },
       "failure": "throws",
       "severity": "high"
     },
@@ -543,19 +909,34 @@
       "id": "js-navigator-share",
       "label": "navigator.share()",
       "kind": "js",
-      "detect": ["navigator\\.share"],
-      "support": { "webkit": "12.2", "chromium": "89", "firefox": false },
+      "detect": [
+        "navigator\\.share"
+      ],
+      "support": {
+        "webkit": "12.2",
+        "chromium": "89",
+        "firefox": false
+      },
       "failure": "throws",
       "severity": "medium",
-      "guard": ["navigator\\.share\\s*(?:&&|\\?\\.)", "'share'\\s+in\\s+navigator"],
+      "guard": [
+        "navigator\\.share\\s*(?:&&|\\?\\.)",
+        "'share'\\s+in\\s+navigator"
+      ],
       "impact": "Absent de Firefox Android et de plusieurs fenêtres in-app. Exige en outre un geste utilisateur : un appel différé échoue même là où la fonction existe."
     },
     {
       "id": "js-clipboard-write",
       "label": "navigator.clipboard",
       "kind": "js",
-      "detect": ["navigator\\.clipboard"],
-      "support": { "webkit": "13.4", "chromium": "66", "firefox": "63" },
+      "detect": [
+        "navigator\\.clipboard"
+      ],
+      "support": {
+        "webkit": "13.4",
+        "chromium": "66",
+        "firefox": "63"
+      },
       "failure": "throws",
       "severity": "medium",
       "impact": "Exige un contexte sécurisé et un geste utilisateur. Sur WebKit, l'écriture doit partir directement du gestionnaire d'événement, sans await intercalé."
@@ -564,8 +945,15 @@
       "id": "js-notification",
       "label": "Notification / Push",
       "kind": "js",
-      "detect": ["\\bNotification\\b", "pushManager"],
-      "support": { "webkit": "16.4", "chromium": "42", "firefox": "44" },
+      "detect": [
+        "\\bNotification\\b",
+        "pushManager"
+      ],
+      "support": {
+        "webkit": "16.4",
+        "chromium": "42",
+        "firefox": "44"
+      },
       "failure": "throws",
       "severity": "high",
       "impact": "Sur iOS, les notifications web n'existent que dans une application installée sur l'écran d'accueil, jamais dans l'onglet Safari."
@@ -574,19 +962,34 @@
       "id": "js-vibrate",
       "label": "navigator.vibrate()",
       "kind": "js",
-      "detect": ["navigator\\.vibrate"],
-      "support": { "webkit": false, "chromium": "32", "firefox": "16" },
+      "detect": [
+        "navigator\\.vibrate"
+      ],
+      "support": {
+        "webkit": false,
+        "chromium": "32",
+        "firefox": "16"
+      },
       "failure": "throws",
       "severity": "medium",
-      "guard": ["navigator\\.vibrate\\s*(?:&&|\\?\\.)", "'vibrate'\\s+in\\s+navigator"],
+      "guard": [
+        "navigator\\.vibrate\\s*(?:&&|\\?\\.)",
+        "'vibrate'\\s+in\\s+navigator"
+      ],
       "impact": "N'a jamais existé sur iOS. Aucun retour haptique ne doit être une condition de fonctionnement."
     },
     {
       "id": "js-beforeinstallprompt",
       "label": "beforeinstallprompt",
       "kind": "js",
-      "detect": ["beforeinstallprompt"],
-      "support": { "webkit": false, "chromium": "68", "firefox": false },
+      "detect": [
+        "beforeinstallprompt"
+      ],
+      "support": {
+        "webkit": false,
+        "chromium": "68",
+        "firefox": false
+      },
       "failure": "silent-noop",
       "severity": "medium",
       "impact": "Propre à Chromium. Sur iOS et sur Firefox, l'événement ne se déclenche jamais : la consigne d'installation doit être écrite à la main pour ces plateformes."
@@ -595,8 +998,14 @@
       "id": "js-navigator-online",
       "label": "navigator.onLine",
       "kind": "js",
-      "detect": ["navigator\\.onLine"],
-      "support": { "webkit": "4", "chromium": "5", "firefox": "3" },
+      "detect": [
+        "navigator\\.onLine"
+      ],
+      "support": {
+        "webkit": "4",
+        "chromium": "5",
+        "firefox": "3"
+      },
       "failure": "silent-noop",
       "severity": "medium",
       "impact": "Signale l'existence d'une interface réseau, pas l'accès à Internet : vrai sur un portail Wi-Fi captif du magasin, où toutes les requêtes échouent pourtant. Ne jamais en faire la seule condition d'un envoi ; c'est l'échec du fetch qui fait foi."
@@ -605,8 +1014,14 @@
       "id": "js-eval-inline-handler",
       "label": "gestionnaire en attribut HTML (onclick=…)",
       "kind": "html",
-      "detect": ["\\son(?:click|change|input|submit|load|error)\\s*="],
-      "support": { "webkit": "1", "chromium": "1", "firefox": "1" },
+      "detect": [
+        "\\son(?:click|change|input|submit|load|error)\\s*="
+      ],
+      "support": {
+        "webkit": "1",
+        "chromium": "1",
+        "firefox": "1"
+      },
       "failure": "silent-noop",
       "severity": "medium",
       "impact": "Fonctionne partout, mais tombe sous n'importe quelle politique de sécurité de contenu et brouille la règle du projet (aucune insertion de HTML brut). À proscrire."
@@ -615,11 +1030,31 @@
   "fallback_rules": {
     "_": "Un repli CSS ne vaut que par sa place : la valeur ancienne d'abord, la valeur récente ensuite. Écrites dans l'ordre inverse, les deux déclarations sont valides sur un moteur récent et c'est l'ancienne qui l'emporte — la valeur moderne n'a alors jamais d'effet nulle part. Ce défaut est invisible en lecture rapide et ne remonte dans aucun test.",
     "modern_values": [
-      { "id": "dvh", "pattern": "\\b\\d+(?:\\.\\d+)?(?:dvh|svh|lvh|dvw|svw|lvw)\\b", "label": "unités dvh / svh / lvh" },
-      { "id": "color-mix", "pattern": "color-mix\\s*\\(", "label": "color-mix()" },
-      { "id": "oklch", "pattern": "\\b(?:oklch|oklab|lch|lab)\\s*\\(", "label": "couleurs oklch()" },
-      { "id": "clamp", "pattern": "clamp\\s*\\(", "label": "clamp()" },
-      { "id": "env", "pattern": "env\\s*\\(", "label": "env()" }
+      {
+        "id": "dvh",
+        "pattern": "\\b\\d+(?:\\.\\d+)?(?:dvh|svh|lvh|dvw|svw|lvw)\\b",
+        "label": "unités dvh / svh / lvh"
+      },
+      {
+        "id": "color-mix",
+        "pattern": "color-mix\\s*\\(",
+        "label": "color-mix()"
+      },
+      {
+        "id": "oklch",
+        "pattern": "\\b(?:oklch|oklab|lch|lab)\\s*\\(",
+        "label": "couleurs oklch()"
+      },
+      {
+        "id": "clamp",
+        "pattern": "clamp\\s*\\(",
+        "label": "clamp()"
+      },
+      {
+        "id": "env",
+        "pattern": "env\\s*\\(",
+        "label": "env()"
+      }
     ]
   }
 }

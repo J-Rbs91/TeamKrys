@@ -152,3 +152,26 @@ propres tickets.
 | A5 | `statusPill` change en silence : « En attente (n) » n'est ni `role="status"` ni annoncé | `js/ui.js:310-317` | Accessibilité |
 | A7 | `[hidden]` n'était **pas fiable** : sa règle vient de la feuille de l'agent utilisateur, et `.btn{display:inline-flex}` la battait — un bouton marqué `hidden` restait visible, silencieusement. **Corrigé en U2** par une règle explicite. Le défaut préexistait, mais aucun code du dépôt n'utilisait `hidden` : il n'avait jamais eu d'effet | `css/app.css` | Moyenne — **corrigée** |
 | A6 | État vide filtré sans sortie : « Aucun sujet ne correspond. » sans bouton pour effacer la recherche, alors que la décision 12 du corpus local exige « un bouton qui élargit réellement » | `js/ui.js:618-620` | Moyenne — **traitée en U6** |
+
+## Vérification de l'arbitrage final (2026-08-07, version 1.9.0)
+
+Niveaux de preuve selon la convention UXER : 0 non consulté, 1 documentation lue,
+2 code lu, 3 interaction observée.
+
+| Décision | Vérification | Niveau |
+| --- | --- | --- |
+| D1 déconnexion | Exécution directe : après `logout()`, `KEYS.user` et `KEYS.ownItems` absents, `ownItems === []`, `loadUser()` rappelé après la purge de la file. Confirmation lue, compte d'actions en attente correct. | 3 |
+| D2 durabilité | `DB.requestPersistence()` déclenchée par `DB.enqueue`, pas au démarrage. Garde `hasStorageManager()` vérifiée sous Node. Diagnostic affiche `durable` / `évinçable`. | 3 |
+| D3 précache | Lecture du fichier et raisonnement sur le contrat `waitUntil` : `addAll` sans `catch` → installation en échec → pas d'`activate` → pas de purge. Non rejoué sur appareil réel : le démarrage à froid hors ligne est dans la recette d'appareil, qui reste due. | 2 |
+| D4 pied de séquence | Mesuré au banc, 320×568, police système à 200 % : `.onboard-card` défile, `.onboard-foot` de 438 à 550 dans un champ de 568, « Suivant » visible, `scrollWidth === clientWidth`. Corps résiduel ≈ 155 px. | 3 |
+| D5 brouillons | Rendu tiers simulé pendant une saisie : le nom en cours n'est plus écrasé. Champ délibérément vidé : survit au rendu. Champ jamais touché : toujours prérempli. | 3 |
+
+**Suites.** onboarding 27/27, session 9/9, sync 15/15, `compat-scan` sans blocage au
+tier B ou supérieur. `parity.test.js` échoue avant comme après ces changements — il lit
+`apps-script/Code.gs`, absent du dépôt. Vérifié par mise de côté des changements, donc
+préexistant, et jamais présenté comme vert.
+
+**Ce que cette vérification ne couvre pas.** D3 n'est établi qu'au niveau 2 : le
+scénario qui compte — installation partielle, puis démarrage à froid hors ligne — n'est
+observable que sur appareil réel. Aucun moteur n'a été consulté sur cette suite ; les
+verdicts moteur de la ronde précédente ne s'y appliquent pas.

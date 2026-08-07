@@ -132,6 +132,17 @@
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
     onboardRoot = document.getElementById("onboarding-root");
+
+    /* En capture, sur le document : les champs sont détruits et recréés à chaque rendu,
+     * un écouteur par champ ne survivrait pas. `input` seulement — `change` arrive trop
+     * tard, et `keydown` déclencherait sur une flèche. */
+    document.addEventListener("input", function (event) {
+      var node = event.target;
+      if (!node || !node.getAttribute) { return; }
+      var key = node.getAttribute("data-draft");
+      if (key) { touchedDrafts[key] = true; }
+    }, true);
+
     bindViewport();
   };
 
@@ -143,6 +154,23 @@
    * en cours d'écriture est perdu — ce que la recette annonce pourtant intact.
    * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
   var composerDrafts = {};
+
+  /* ⚠️ Champs ÉDITÉS depuis leur dernière alimentation par le rendu.
+   *
+   * L'ancien critère était « le champ reconstruit est-il vide ? », au motif qu'une
+   * valeur fournie par le rendu devait rester prioritaire. Conséquence : le champ
+   * « Votre nom » des réglages étant pré-rempli, toute réception de message effaçait
+   * une saisie en cours — un message d'un collègue suffisait.
+   *
+   * Le bon critère n'est pas la vacuité, c'est l'édition : c'est d'ailleurs la règle de
+   * la plateforme elle-même pour les valeurs déclaratives, qui ne s'appliquent que tant
+   * que le champ n'a pas été touché. Un champ vidé exprès mérite la même protection
+   * qu'un champ rempli.
+   *
+   * On tient ce marqueur nous-mêmes : le drapeau natif du navigateur est levé aussi
+   * par une écriture programmatique, donc il ne distingue pas la frappe de la
+   * reconstruction — s'y fier reconstruirait le défaut. */
+  var touchedDrafts = {};
 
   function captureDrafts() {
     var snapshot = { values: {}, active: null };
@@ -183,9 +211,12 @@
       /* Repli sur le relais quand l'instantané ne connaît pas la clé : c'est le
        * cas au retour de l'écran de verrou, qui n'a rendu aucun composeur. */
       if (saved === undefined) { saved = composerDrafts[key]; }
-      /* On ne restaure que si le champ neuf est vide : une valeur fournie par
-       * le rendu (édition pré-remplie) reste prioritaire. */
-      if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
+      /* Un champ ÉDITÉ gagne toujours, même contre une valeur pré-remplie, et même
+       * s'il a été vidé — c'est encore une intention. Un champ jamais touché suit
+       * l'ancienne règle : le rendu a la priorité, et le relais ne sert qu'à remplir
+       * un champ neuf resté vide. */
+      if (touchedDrafts[key] && saved !== undefined) { node.value = saved; }
+      else if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
       autoGrow(node);
     }
     if (snapshot.active) {
@@ -293,6 +324,12 @@
   /* --------------------------------------------------------------- Toasts --- */
 
   UI.toast = function (text, kind) {
+    /* Voir UI.holdToast : en modal, un toast serait recouvert par le calque supérieur
+     * et retiré de l'arbre d'accessibilité avec l'arrière-plan inerte. */
+    if (UI.onboardingHoldsToasts && UI.onboardingHoldsToasts()) {
+      UI.holdToast(text, kind);
+      return;
+    }
     if (!toastRoot) { return; }
     /* Un élément fixe reste accroché au viewport de MISE EN PAGE : clavier
      * ouvert, le moteur décale le viewport visuel et le toast s'afficherait
@@ -316,8 +353,17 @@
 
   function statusPill() {
     var status = Sync.status();
-    var pill = el("div", { class: "status-pill status-" + status.code, title: status.error || "" }, [
-      el("span", { class: "status-dot" }),
+    /* `role="status"` : « En attente (3) » devenait « À jour » sans que rien ne le
+     * dise. C'est la seule information de l'écran qui change SEULE, sans geste — donc
+     * exactement le cas d'une région d'annonce. `polite` par défaut avec ce rôle, et
+     * c'est ce qu'il faut : la synchronisation n'a pas à couper la lecture en cours.
+     * La pastille est mise à jour en place par UI.refreshStatus, jamais recréée : la
+     * région préexiste donc à son contenu, condition pour qu'elle annonce. */
+    var pill = el("div", {
+      class: "status-pill status-" + status.code, title: status.error || "",
+      role: "status"
+    }, [
+      el("span", { class: "status-dot", "aria-hidden": "true" }),
       el("span", { class: "status-label", text: status.label })
     ]);
     return pill;
@@ -382,14 +428,36 @@
 
   function closeOverlay() { UI.set({ sheet: null, modal: null }); }
 
+  /* Identifiant du titre d'un calque. Un seul calque existe à la fois —
+   * `renderOverlay` vide sa racine avant de rendre —, donc une valeur fixe ne peut pas
+   * entrer en collision, et elle évite de fabriquer un compteur pour rien. */
+  var OVERLAY_TITLE_ID = "overlay-title";
+
+  /* Le nom accessible d'un dialogue vient de son titre VISIBLE, comme l'ARIA APG le
+   * prescrit. Sans lui, les feuilles et les fenêtres de cette application
+   * s'annonçaient « boîte de dialogue », et rien de plus. */
+  function overlayTitle(title, className) {
+    if (!title) { return null; }
+    if (title instanceof Node) {
+      title.id = OVERLAY_TITLE_ID;
+      return title;
+    }
+    return el("div", { class: className, id: OVERLAY_TITLE_ID, text: title });
+  }
+
   function sheet(title, children) {
+    var titleNode = overlayTitle(title, "sheet-title");
     return el("div", {
       class: "overlay bottom",
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
-      el("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, [
-        el("div", { class: "sheet-handle" }),
-        title ? (title instanceof Node ? title : el("div", { class: "sheet-title", text: title })) : null,
+      el("div", {
+        class: "sheet", role: "dialog", "aria-modal": "true",
+        /* Pointer un nœud absent vaut moins que ne rien pointer. */
+        "aria-labelledby": titleNode ? OVERLAY_TITLE_ID : null
+      }, [
+        el("div", { class: "sheet-handle", "aria-hidden": "true" }),
+        titleNode,
         children,
         el("button", { class: "btn btn-block btn-outline", type: "button", text: "Fermer", style: { marginTop: "14px" }, onclick: closeOverlay })
       ])
@@ -401,8 +469,11 @@
       class: "overlay center",
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
-      el("div", { class: "modal", role: "dialog", "aria-modal": "true" }, [
-        el("div", { class: "modal-title", text: title }),
+      el("div", {
+        class: "modal", role: "dialog", "aria-modal": "true",
+        "aria-labelledby": title ? OVERLAY_TITLE_ID : null
+      }, [
+        overlayTitle(title, "modal-title"),
         children,
         el("div", { class: "modal-actions" }, actions)
       ])
@@ -1288,6 +1359,10 @@
     if (state === "passée") { return "Vous avez passé la présentation."; }
     if (state === "en cours") { return "Présentation commencée, pas terminée."; }
     if (state === "migrée") { return "Vous utilisiez déjà l'application : la présentation ne vous a pas été montrée."; }
+    if (state === "sans-mémoire") {
+      return "Cet appareil n'enregistre rien : la présentation ne peut pas être mémorisée, "
+        + "et elle réapparaîtra à la prochaine ouverture.";
+    }
     return "La présentation n'a pas encore été vue sur cet appareil.";
   }
 
@@ -1349,9 +1424,13 @@
           (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,
         diagRow("Actions en attente", String(diagnostics.pending.length) +
           (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
+        /* « IndexedDB » seul se lisait comme une garantie de durabilité qui n'était
+         * pas faite : l'éviction est totale et muette. On dit donc les deux states —
+         * disponible, et durable ou non. */
         diagRow("Stockage local", diagnostics.persistent
-          ? "IndexedDB"
-          : "mémoire — non persistant", !diagnostics.persistent),
+          ? ("IndexedDB — " + diagnostics.durability)
+          : "mémoire — non persistant",
+        !diagnostics.persistent || diagnostics.durability === "évinçable"),
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
         diagRow("Version", CONFIG.APP_VERSION)
       ])
@@ -1664,8 +1743,20 @@
           "La conclusion et les votes qui la visaient seront supprimés.",
           "Supprimer", function () { App.actions.deleteConclusion(m.topicId, m.conclusionId); });
       } else if (m.type === "logout") {
+        /* Une perte irréversible et invisible se confirme AVANT, elle ne s'explique pas
+         * après. On nomme donc les trois conséquences, et on compte ce qui attend
+         * d'être envoyé — c'est la seule qui détruit du travail. */
+        var waiting = Sync.diagnostics().pending.length;
         node = confirmModal("Se déconnecter de l'équipe",
-          "L'adresse du script et le déverrouillage seront oubliés sur cet appareil. Les données de l'équipe restent sur Google Drive.",
+          "L'adresse du script, le déverrouillage et votre nom seront oubliés sur cet "
+          + "appareil. Vous ne pourrez plus modifier vos messages anonymes depuis ce "
+          + "téléphone : c'est ce qui les rend anonymes."
+          + (waiting
+            ? " ⚠️ " + waiting + (waiting > 1 ? " actions attendent" : " action attend")
+              + " d'être envoyée" + (waiting > 1 ? "s" : "") + " et sera" + (waiting > 1 ? "nt" : "")
+              + " perdue" + (waiting > 1 ? "s" : "") + "."
+            : "")
+          + " Les données de l'équipe restent sur Google Drive.",
           "Se déconnecter", function () { App.logout(); });
       }
     }
@@ -1731,6 +1822,9 @@
      * disparaître — ce qui était le défaut. */
     var place = (App.gate() || "") + "|" + App.route.raw;
     var entering = place !== lastPlace;
+    /* Changer d'écran clôt le contexte d'édition : sans cette remise à zéro, un
+     * brouillon abandonné battrait indéfiniment une valeur légitimement mise à jour. */
+    if (entering) { touchedDrafts = {}; }
     lastPlace = place;
 
     var elapsed = 0;
@@ -2002,7 +2096,10 @@
     var text = el("p", { class: "hint onboard-text", id: "onboard-text", text: "" });
 
     var skip = el("button", {
+      /* Le libellé visible reste court ; le nom accessible, lui, est entendu hors de
+       * tout contexte visuel — « Passer » seul n'y dit pas quoi. */
       class: "btn btn-ghost onboard-skip", type: "button", text: "Passer",
+      "aria-label": "Passer la présentation",
       onclick: function () { UI.closeOnboarding(true); }
     });
     var prev = el("button", {
@@ -2020,12 +2117,17 @@
      * commandes dans l'ordre de tabulation. */
     var extra = el("div", { class: "onboard-extra-slot" });
     var foot = el("div", { class: "onboard-foot" }, [prev, next, skip]);
-    var card = el("div", { class: "onboard-card" }, [eyebrow, title, text, extra, foot]);
+    /* Le pied est SŒUR du corps, pas son enfant : c'est ce qui le garde visible quand
+     * le corps déborde. Un pied collant obtiendrait le même effet visuel, mais le
+     * contenu extrait du flux est justement ce que les critères de grossissement
+     * reprochent — il masque le focus et rend la lecture difficile. Une colonne
+     * flexible n'a pas ce défaut. */
+    var card = el("div", { class: "onboard-card" }, [eyebrow, title, text, extra]);
     var dialog = el("dialog", {
       class: "onboard",
       "aria-labelledby": "onboard-title",
       "aria-describedby": "onboard-text"
-    }, [live, card]);
+    }, [live, card, foot]);
 
     return {
       dialog: dialog, card: card, live: live, eyebrow: eyebrow,
@@ -2114,6 +2216,19 @@
       UI.closeOnboarding(true);
     });
 
+    /* ⚠️ Le geste de retour d'Android n'est intercepté par un `<dialog>` modal que
+     * depuis Chromium 120. En dessous — le plancher du tier A est 108 —, il navigue
+     * SANS que `cancel` ne parte : on se retrouvait alors avec une navigation
+     * effectuée ET le panneau toujours ouvert, posé sur un autre écran, annonçant
+     * « Étape 2 / 5 » de quelque chose qu'on a quitté.
+     *
+     * Une navigation vaut donc sortie, sur tous les moteurs : c'est exactement ce que
+     * `CloseWatcher` fait au-dessus de 120, où `cancel` a déjà fermé avant que ce
+     * gestionnaire ne puisse partir. La séquence, elle, ne navigue jamais d'elle-même
+     * — il n'y a pas de faux positif à craindre. */
+    onboard.onNavigate = function () { UI.closeOnboarding(true); };
+    window.addEventListener("hashchange", onboard.onNavigate);
+
     onboardAnnounce();
   }
 
@@ -2121,6 +2236,7 @@
     if (!onboard) { return null; }
     var kept = { panels: onboard.panels, step: onboard.step, segment: onboard.segment };
     var focus = onboard.returnFocus;
+    if (onboard.onNavigate) { window.removeEventListener("hashchange", onboard.onNavigate); }
     if (onboard.modal && typeof onboard.dialog.close === "function") {
       try { onboard.dialog.close(); } catch (error) { /* déjà fermé */ }
     }
@@ -2139,10 +2255,10 @@
      * ressortir le poserait sur l'écran de verrou, puis il se retrouverait derrière
      * le calque remonté, avec un bouton focusable hors du piège de focus. C'est
      * exactement l'état que le report cherche à éviter. */
-    if (pendingToast && pausing !== true) {
-      var said = pendingToast;
-      pendingToast = null;
-      UI.toast(said.text, said.kind);
+    if (heldToasts.length && pausing !== true) {
+      var held = heldToasts;
+      heldToasts = [];
+      held.forEach(function (item) { UI.toast(item.text, item.kind); });
     }
 
     if (pendingUpdate && pausing !== true) {
@@ -2155,15 +2271,23 @@
 
   UI.onboardingActive = function () { return !!onboard; };
 
-  /* Message à dire APRÈS le démontage. Sous le calque supérieur, un toast est
-   * recouvert pendant toute sa durée de vie, et l'arrière-plan étant inerte il n'est
-   * probablement pas annoncé non plus : un message d'erreur qu'on ne peut ni voir ni
-   * entendre n'existe pas. */
-  var pendingToast = null;
+  /* Un toast levé pendant la séquence est-il perdu ? Oui, et seulement en modal :
+   * `showModal()` place le dialogue dans le calque supérieur, donc au-dessus des
+   * toasts malgré `--z-toast`, et l'arrière-plan étant inerte sa région `aria-live`
+   * est retirée de l'arbre d'accessibilité — ni vu, ni entendu. Sur le chemin de
+   * repli, il n'y a ni calque supérieur ni inertie : le toast se voit, on n'y touche
+   * pas.
+   *
+   * Les messages sont donc mis de côté et dits au démontage. Plafonné à trois : après
+   * une trentaine de secondes, une rafale de dix n'apprendrait rien de plus, et la
+   * première erreur est celle qui compte. */
+  var heldToasts = [];
 
-  UI.toastAfterOnboarding = function (text, kind) {
-    if (!onboard) { UI.toast(text, kind); return; }
-    pendingToast = { text: text, kind: kind };
+  UI.onboardingHoldsToasts = function () { return !!onboard && onboard.modal === true; };
+
+  UI.holdToast = function (text, kind) {
+    if (heldToasts.length >= 3) { return; }
+    heldToasts.push({ text: text, kind: kind });
   };
 
   UI.startOnboarding = function (plan) {

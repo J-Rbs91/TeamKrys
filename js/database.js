@@ -51,6 +51,53 @@
 
   DB.isPersistent = function () { return memory.available; };
 
+  /* ------------------------------------------------- Durabilité du stockage --- */
+
+  /* « Disponible » et « durable » sont deux choses différentes, et `isPersistent`
+   * ci-dessus ne mesure que la première — d'où un diagnostic qui affichait
+   * « IndexedDB » là où l'utilisateur lisait une promesse qui n'était pas faite.
+   *
+   * Le mode par défaut est « au mieux » : sous pression de stockage, une origine est
+   * évincée EN ENTIER, d'un coup, et sans le dire. La file d'actions en attente part
+   * avec. La persistance, quand elle est accordée, exempte de cette éviction.
+   *
+   * ⚠️ Elle se DEMANDE, et le refus est le cas normal : les moteurs décident seuls,
+   * souvent sur l'historique de fréquentation du site. Rien ne doit donc promettre
+   * « enregistré » : ce garde-fou réduit un risque, il ne le supprime pas. */
+  var durability = "inconnue";
+  var askedPersistence = false;
+
+  DB.durability = function () { return durability; };
+
+  function hasStorageManager() {
+    return typeof navigator !== "undefined" && !!navigator.storage;
+  }
+
+  function readDurability() {
+    if (!hasStorageManager() || !navigator.storage.persisted) { return; }
+    navigator.storage.persisted().then(function (granted) {
+      durability = granted ? "durable" : "évinçable";
+    }, function () { /* refus de répondre : on n'en sait pas plus qu'avant */ });
+  }
+
+  /* ⚠️ Appelée au moment où une action non synchronisée vient d'entrer dans la file,
+   * donc depuis le geste qui l'a créée — et NON au démarrage. Une demande faite au
+   * chargement est refusée sans que personne ne le sache, ou présentée hors contexte
+   * à qui devrait y consentir : un mauvais moment brûle la demande. Une seule fois
+   * par chargement. */
+  DB.requestPersistence = function () {
+    if (askedPersistence) { return; }
+    askedPersistence = true;
+    if (!hasStorageManager() || !navigator.storage.persist) { return; }
+    try {
+      navigator.storage.persist().then(function (granted) {
+        durability = granted ? "durable" : "évinçable";
+      }, function () { /* refusé ou impossible : l'état reste ce qu'il était */ });
+    } catch (error) { /* contexte non sécurisé, ou hors d'un document */ }
+  };
+
+  readDurability();
+
   DB.unavailableReason = function () { return memory.reason; };
 
   /* Les deux branches (IndexedDB et repli mémoire) doivent rendre EXACTEMENT la
@@ -88,6 +135,9 @@
 
   /* Ajoute une action et ne résout QU'APRÈS attribution définitive de la clé. */
   DB.enqueue = function (action) {
+    /* Une écriture non répliquée vient d'être créée : c'est le seul moment où il est
+     * juste de demander à ne pas être évincé. */
+    DB.requestPersistence();
     return withStore(STORE_QUEUE, "readwrite", function (store) {
       if (!store) {
         memory.seq += 1;

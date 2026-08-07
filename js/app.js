@@ -200,10 +200,29 @@
     UI.force();
   };
 
+  /* ⚠️ La déconnexion efface l'identité locale ET la liste des éléments propres.
+   *
+   * `ownItems` n'est pas une préférence de confort : c'est la SEULE pièce qui prouve la
+   * paternité d'un message anonyme, puisqu'un tel message n'a plus d'authorId. C'est
+   * donc un porteur de droit, au même titre qu'un jeton de session — et le garder
+   * transmettait à la personne suivante sur ce téléphone le droit de modifier les
+   * messages anonymes de la précédente. L'anonymat restait vrai côté serveur et
+   * devenait faux côté appareil : l'appareil était le maillon conservé.
+   *
+   * Corollaire assumé, et annoncé dans la confirmation : après une déconnexion, on ne
+   * peut plus modifier ses propres messages anonymes depuis cet appareil. Ce n'est pas
+   * une régression, c'est ce que « anonyme » veut dire.
+   *
+   * ⚠️ ORDRE : la file d'actions est vidée par cette même fonction. La confirmation
+   * doit donc annoncer ce qui est en attente AVANT d'arriver ici — effacer les
+   * porteurs de droit sans le dire détruirait du travail non synchronisé. */
   App.logout = function () {
     Utils.storage.remove(CONFIG.KEYS.apiUrl);
     Utils.storage.remove(CONFIG.KEYS.lockVerifier);
     Utils.storage.remove(CONFIG.KEYS.localMode);
+    Utils.storage.remove(CONFIG.KEYS.user);
+    Utils.storage.remove(CONFIG.KEYS.ownItems);
+    ownItems = [];
     clearSession();
     lockVerifier = null;
     unlocked = false;
@@ -213,6 +232,8 @@
     Promise.all([DB.clearQueue(), DB.clearState()]).then(function () {
       Store.setBase(Core.emptyState());
       Store.setQueue([]);
+      /* Identité neuve : la personne suivante repasse par l'écran du nom. */
+      loadUser();
       UI.set({ sheet: null, modal: null });
       App.go("#/");
       UI.force();
@@ -393,6 +414,10 @@
    * enregistrement ne porte pas. */
   App.onboardingState = function () {
     var saved = Utils.storage.get(CONFIG.KEYS.onboarding, null);
+    /* ⚠️ Avant de dire « pas encore vue », vérifier que cet appareil peut retenir
+     * quoi que ce soit. Sans cette branche, la phrase s'affiche juste après que la
+     * séquence a été vue et terminée — parce que l'écriture a échoué en silence. */
+    if (!saved && !Utils.storage.available()) { return "sans-mémoire"; }
     if (!saved || typeof saved !== "object") { return "inconnue"; }
     if (saved.migrated === true) { return "migrée"; }
     if (saved.done === true) { return saved.skipped === true ? "passée" : "vue"; }
@@ -416,8 +441,10 @@
      * probablement pas annoncé non plus. Un message d'erreur qu'on ne peut ni voir ni
      * entendre n'existe pas. */
     if (!stored) {
-      UI.toastAfterOnboarding(
-        "Cet appareil n'enregistre rien : la présentation ne sera pas mémorisée.", "error");
+      /* `UI.toast` met lui-même de côté les messages levés pendant la séquence, et les
+       * dit au démontage : sous le calque supérieur, un toast est recouvert et retiré
+       * de l'arbre d'accessibilité avec l'arrière-plan inerte. */
+      UI.toast("Cet appareil n'enregistre rien : la présentation ne sera pas mémorisée.", "error");
     }
   };
 
@@ -571,6 +598,11 @@
           }
         });
       }
+      /* Un worker peut être DÉJÀ en cours d'installation quand `register()` résout :
+       * `updatefound` est alors parti avant que nous n'écoutions, et `waiting` est
+       * encore nul — sans cette ligne, cette mise à jour n'a aucun bandeau, et il faut
+       * attendre le chargement suivant pour en proposer un. */
+      watch(registration.installing);
       if (registration.waiting && navigator.serviceWorker.controller) {
         UI.showUpdateBanner(function () {
           updateRequested = true;
