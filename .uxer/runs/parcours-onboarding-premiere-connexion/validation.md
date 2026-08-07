@@ -44,6 +44,29 @@ dépôt.
 | Appareil déjà utilisé, aucun enregistrement | rien, enregistrement écrit avec `migrated: true` — **la branche critique fonctionne dans l'application réelle** |
 | Enregistrement illisible sur appareil ancien | rien, traité comme absent puis migré — un JSON corrompu ne transforme pas un ancien appareil en neuf |
 
+### U3 — les cinq panneaux (2026-08-07)
+
+Parcours complet du segment `full` dans Chromium : les cinq surtitres, titres et
+corps s'enchaînent correctement, le compteur va de « 1 / 5 » à « 5 / 5 »,
+l'annonce porte le numéro **et** le titre, la barre de vote apparaît au panneau 3
+et le monogramme au panneau 5, « Suivant » devient « Commencer » au dernier.
+
+**Mesures dans un cadre réel de 320 × 780** — c'est la largeur critique :
+
+| Mesure | Valeur | Verdict |
+|---|---|---|
+| `scrollWidth` / `clientWidth` | 320 / 320 | aucun débordement horizontal |
+| Éléments dépassant à droite | aucun | — |
+| Bas du panneau / hauteur de la fenêtre | 780 / 780 | la feuille colle bien au bas |
+| « Suivant » | 127 × 44 | cible tenue |
+| « Précédent » | 44 × 44 | cible tenue |
+| « Passer » | 77 × 44 | cible tenue, alors que c'est le piège habituel |
+
+**Défaut trouvé au rendu et corrigé** : le conteneur du panneau reçoit le focus par
+programme à chaque étape, et la règle globale `:focus-visible` — à spécificité
+égale mais plus bas dans le fichier — dessinait un anneau d'accent **autour de tout
+le panneau**. Battue par un sélecteur descendant, pas par `!important`.
+
 **⚠️ Portée du banc.** Chromium uniquement, donc **Blink**. Le moteur du tier A sur
 iPhone est **WebKit**, et il n'est pas testable ici : le chemin de repli
 `.onboard--flat` (sonde tier B, iOS 15.0 → 15.3) n'a **pas** été exercé, non plus

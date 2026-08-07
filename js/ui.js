@@ -1747,6 +1747,19 @@
    * attendre pour rien ; en dessous, deux choses bougeraient en même temps. */
   var ONBOARD_DELAY_MS = 360;
 
+  /* Les cinq parties de l'application, dans l'ordre où on les traverse. Ce ne sont
+   * pas des panneaux choisis : la liste EST le cycle réel.
+   *
+   * Les icônes sont celles de l'interface, à l'identique — `message` sur les cartes
+   * de sujet, `users` pour les participants, `idea` et `checkCircle` dans la
+   * quickbar, `print` sur « Ouvrir la synthèse ». C'est le vrai levier du « ça a
+   * toujours fait partie de l'application » : le signe vu dans le panneau est celui
+   * qu'on retrouvera dans la barre.
+   *
+   * `textLocal` et `textJoining` remplacent le corps quand le segment le demande :
+   * on ne promet pas un collectif absent à quelqu'un qui est seul, et on n'explique
+   * pas comment créer le premier sujet à quelqu'un qui arrive sur un espace déjà
+   * actif. */
   var ONBOARD_TEXT = {
     topics: {
       icon: "message",
@@ -1754,12 +1767,78 @@
       title: "Un sujet par point à traiter",
       text: "L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment "
         + "actif au plus ancien. Le bouton + en ajoute un ; vous pouvez le proposer "
-        + "sans le signer."
+        + "sans le signer.",
+      textLocal: "En mode local, les données restent sur cet appareil. Le vote et les "
+        + "réactions prennent leur sens à plusieurs."
+    },
+    debate: {
+      icon: "users",
+      eyebrow: "Le débat",
+      title: "On en discute, chacun à son rythme",
+      text: "La discussion se lit comme un fil de messages. Appuyez sur une bulle "
+        + "pour réagir, la citer, ou en tirer une proposition.",
+      textJoining: "L'équipe a déjà lancé des sujets. Ouvrez-en un : la discussion "
+        + "s'y trouve. Appuyez sur une bulle pour réagir, la citer, ou en tirer une "
+        + "proposition."
+    },
+    proposals: {
+      icon: "idea",
+      eyebrow: "Propositions",
+      title: "Les idées deviennent des propositions",
+      text: "Une proposition se vote pour, contre ou abstention — un vote par "
+        + "personne, modifiable. La barre montre où en est l'équipe.",
+      extra: "votebar"
+    },
+    conclusion: {
+      icon: "checkCircle",
+      eyebrow: "La conclusion",
+      title: "Ce que vous présenterez",
+      text: "Chaque sujet se referme sur une conclusion. Chacun en choisit une "
+        + "seule ; la mieux votée porte la mention En tête."
+    },
+    meeting: {
+      icon: "print",
+      eyebrow: "La réunion",
+      title: "Tout tient sur une page",
+      text: "Réglages, puis Ouvrir la synthèse : sujets, votes et conclusions, prêts "
+        + "à projeter. Vous pourrez revoir cette présentation depuis les Réglages.",
+      extra: "logo"
     }
   };
 
   function onboardPanel(id) {
     return ONBOARD_TEXT[id] || ONBOARD_TEXT.topics;
+  }
+
+  function onboardBody(spec, segment) {
+    if (segment === "local" && spec.textLocal) { return spec.textLocal; }
+    if (segment === "joining" && spec.textJoining) { return spec.textJoining; }
+    return spec.text;
+  }
+
+  /* Appui visuel, jamais une flèche vers l'écran : on montre la forme réelle de
+   * l'objet dont on parle, en miniature, dans le panneau. La barre de vote est
+   * reprise telle quelle — mêmes classes, donc mêmes couleurs sémantiques — avec
+   * des proportions d'exemple. `aria-hidden` : le corps du panneau dit déjà les
+   * trois voix, le lecteur d'écran n'a pas à entendre une décoration. */
+  function onboardExtra(kind) {
+    if (kind === "votebar") {
+      return el("div", { class: "note onboard-extra", "aria-hidden": "true" }, [
+        el("div", { class: "vote-bar", style: { margin: "0", flex: "1" } }, [
+          el("span", { class: "vote-for", style: { width: "55%" } }),
+          el("span", { class: "vote-against", style: { width: "27%" } }),
+          el("span", { class: "vote-abstain", style: { width: "18%" } })
+        ])
+      ]);
+    }
+    if (kind === "logo") {
+      /* Le monogramme AU REPOS — anneau et point, sans animation. La séquence
+       * d'accueil ne se rejoue pas ici : deux gestes expressifs à la suite en
+       * feraient un diaporama. */
+      return el("div", { class: "onboard-extra onboard-mark", "aria-hidden": "true" },
+        [Utils.logoMark(40)]);
+    }
+    return null;
   }
 
   /* Le libellé de la sortie dit ce qui se passe ensuite : « Suivant » tant qu'il
@@ -1781,7 +1860,13 @@
     }));
 
     onboard.title.textContent = spec.title;
-    onboard.text.textContent = spec.text;
+    onboard.text.textContent = onboardBody(spec, onboard.segment);
+
+    /* L'appui visuel est le seul nœud recréé d'une étape à l'autre : il n'est
+     * jamais focusable, donc le focus n'en dépend pas. */
+    Utils.clear(onboard.extra);
+    Utils.append(onboard.extra, onboardExtra(spec.extra));
+    onboard.extra.hidden = !spec.extra;
 
     onboard.prev.hidden = index === 0;
     onboard.skip.hidden = last;
@@ -1799,7 +1884,8 @@
     /* La région existe depuis le montage ; on n'y écrit qu'ensuite, sinon elle
      * n'annonce rien. `polite` et jamais `assertive` : couper un toast d'erreur
      * serait pire que d'attendre une seconde. */
-    onboard.live.textContent = "Étape " + (index + 1) + " sur " + total + ", " + spec.eyebrow + ".";
+    onboard.live.textContent = "Étape " + (index + 1) + " sur " + total
+      + ", " + spec.eyebrow + ". " + spec.title + ".";
   }
 
   function onboardBuild() {
@@ -1825,8 +1911,9 @@
     /* « Passer » est DERNIER dans le DOM et premier à l'écran (`order` en CSS) :
      * c'est une sortie, pas une action principale — elle ne doit pas précéder les
      * commandes dans l'ordre de tabulation. */
+    var extra = el("div", { class: "onboard-extra-slot" });
     var foot = el("div", { class: "onboard-foot" }, [prev, next, skip]);
-    var card = el("div", { class: "onboard-card", tabindex: "-1" }, [eyebrow, title, text, foot]);
+    var card = el("div", { class: "onboard-card", tabindex: "-1" }, [eyebrow, title, text, extra, foot]);
     var dialog = el("dialog", {
       class: "onboard",
       "aria-labelledby": "onboard-title",
@@ -1835,7 +1922,7 @@
 
     return {
       dialog: dialog, card: card, live: live, eyebrow: eyebrow,
-      title: title, text: text, skip: skip, prev: prev, next: next
+      title: title, text: text, extra: extra, skip: skip, prev: prev, next: next
     };
   }
 
@@ -1849,7 +1936,7 @@
       returnFocus: document.activeElement,
       dialog: nodes.dialog, card: nodes.card, live: nodes.live,
       eyebrow: nodes.eyebrow, title: nodes.title, text: nodes.text,
-      skip: nodes.skip, prev: nodes.prev, next: nodes.next
+      extra: nodes.extra, skip: nodes.skip, prev: nodes.prev, next: nodes.next
     };
 
     /* Un clavier ouvert derrière le calque n'a plus d'objet : aucune étape ne

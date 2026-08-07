@@ -1774,7 +1774,15 @@ p { margin: 0; }
   white-space: nowrap;
 }
 
-.onboard-card { outline: none; }
+/* Le conteneur reçoit le focus par programme à chaque étape — pour que le titre
+   soit lu avant les commandes — mais il n'est JAMAIS atteignable au clavier
+   (tabindex="-1"). Il ne doit donc pas porter d'anneau de focus, sans quoi tout le
+   panneau se retrouve cerclé d'accent.
+   La règle globale `:focus-visible` vit plus bas dans ce fichier et gagnerait à
+   spécificité égale : on la bat par le sélecteur descendant, pas par !important. */
+.onboard .onboard-card,
+.onboard .onboard-card:focus,
+.onboard .onboard-card:focus-visible { outline: none; }
 .onboard-card > * + * { margin-top: 14px; }
 
 .onboard-eyebrow { display: flex; align-items: center; gap: 8px; }
@@ -1788,6 +1796,19 @@ p { margin: 0; }
 
 /* 34ch : la mesure des états vides. Au-delà, l'œil perd la ligne. */
 .onboard-text { max-width: 34ch; }
+
+/* Emplacement de l'appui visuel : vide sur trois panneaux sur cinq, et alors
+   masqué par l'attribut — d'où la règle [hidden] plus haut dans ce fichier, sans
+   laquelle il occuperait sa marge pour rien. */
+.onboard-extra { align-items: center; }
+.onboard-mark {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+}
 
 .onboard-foot {
   display: flex;
