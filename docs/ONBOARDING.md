@@ -408,6 +408,15 @@ Forme de l'enregistrement :
 > Le point de rupture de P4 s'applique en plein : sur appareil partagé ou après
 > effacement du stockage, un marqueur local rejoue la séquence à tort, et rien dans ce
 > produit ne peut l'empêcher.
+>
+> **Réconciliation avec le code.** Ce document a d'abord décrit un contexte portant un
+> drapeau `storageOk` transmis à la règle. Le code ne le fait pas, et c'est
+> volontaire : quand le stockage est refusé, l'enregistrement est de toute façon absent
+> **et** les trois indices de migration le sont aussi — une sonde ne changerait donc
+> aucune branche de la décision. Elle sert ailleurs, et elle existe :
+> `Utils.storage.available()` alimente l'état lu dans les Réglages, pour que
+> l'application ne prétende pas « pas encore vue » juste après l'avoir été. La garde
+> anti-rejeu, elle, reste le drapeau en mémoire — au plus un affichage par chargement.
 
 ### 8.1 Quatre notions à ne pas confondre
 
@@ -663,8 +672,12 @@ point du monogramme — un dépassement sur un élément d'interface se lit comm
 **Le voile ne se refond jamais entre deux panneaux** : c'est le seul repère fixe
 de la séquence. **Aucune boucle** : une animation en boucle est de fréquence
 infinie, et la seule du fichier (`pulse-dot`) porte une information d'état réelle.
-**Rien de tout cela ne chevauche la séquence d'accueil** : le calque attend
-l'extinction de `ENTER_WINDOW_MS`. Une seule chose bouge à la fois.
+**Rien de tout cela ne chevauche la séquence d'accueil** : le calque attend la fin de
+la **cascade de révélation** — `--reveal-duration` (220 ms) plus six crans de
+`--reveal-stagger` (18 ms), soit 328 ms, arrondi à 360. Ce n'est **pas**
+`ENTER_WINDOW_MS` (1400 ms) : cette constante-là borne la *reprise* d'une animation,
+pas sa durée, et attendre 1,4 s ferait patienter pour rien. Une seule chose bouge à la
+fois.
 
 Propriétés animées : `opacity` partout, `transform` **uniquement** sur l'entrée du
 premier panneau. Interdites : `width`, `height`, `top/left/inset`, marges,
@@ -752,6 +765,14 @@ Le reste du cahier des charges tient inchangé :
   si la règle de décision est absente.
 - `js/app.js:484` (Échap) est le seul point du chantier qui touche `app.js` en
   dehors du point de décision — R11.
+- **La garde de chargement mixte va dans `js/app.js`, pas dans `js/ui.js`.** C'est
+  `onboardingDecide()` qui appelle la règle, et il s'exécute **avant** `Sync.boot()` :
+  sans garde, un `js/config.js` de cache ancien y lève une exception qui gèle le
+  démarrage **et** empêche la file d'actions d'être relue. `js/ui.js` en porte une
+  seconde, sur `App.onboardingState`, sans laquelle l'écran des Réglages ne se rend
+  plus. L'enjeu n'est pas l'affichage de la séquence, c'est le démarrage.
+- Le calque est masqué à l'impression en **nommant `.onboard`** dans la règle
+  d'exclusion existante, plutôt qu'en lui posant une classe `no-print`.
 - `UI.showUpdateBanner` (`js/ui.js:1710`) doit s'ajourner (R10) : son bouton est
   focusable, il vit sur `document.body`, il échapperait au piège de focus et se
   poserait en bas de l'écran, exactement sous les commandes du panneau.

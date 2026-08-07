@@ -602,6 +602,7 @@
       url: Sync.connection.url,
       localMode: Sync.connection.localMode,
       persistent: DB.isPersistent(),
+      durability: DB.durability ? DB.durability() : "inconnue",
       storageReason: DB.unavailableReason ? DB.unavailableReason() : null,
       revision: Store.base.revision,
       updatedAt: Store.base.updatedAt,

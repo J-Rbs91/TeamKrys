@@ -56,7 +56,7 @@ js/api.js                  appels au backend (GET révision / état, POST action
 js/sync.js                 synchronisation optimiste, file, indicateur d'état
 js/ui.js                   rendu des écrans, feuilles et fenêtres
 js/app.js                  démarrage, navigation, verrou, actions utilisateur
-service-worker.js          hors ligne : précache de la coquille
+service-worker.js          hors ligne : précache de la coquille, critique et optionnel
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/                      installation, guide utilisateur, checklist de test
@@ -65,6 +65,7 @@ apps-script/appsscript.json manifeste du projet Apps Script
 tests/parity.test.js       parité client / backend, action par action
 tests/sync.test.js         deux clients face à un faux backend (réception, file)
 tests/session.test.js      verrou par inactivité : quand l'ouverture exige le code
+tests/onboarding.test.js   présentation initiale : qui la voit, qui y échappe
 ```
 
 ---
@@ -203,6 +204,8 @@ quand l'utilisateur vit la centième.
 | Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
 | Feuille, fenêtre | 240 ms | quotidien |
 | **Séquence d'accueil** | 1060 ms, en quatre temps | une fois par ouverture |
+| Arrivée de la présentation initiale | 240 ms le voile, 220 ms la carte, chevauchés | une fois par appareil |
+| Changement de panneau de la présentation | 100 ms, **opacité seule** | quatre fois en trente secondes |
 
 La cascade de révélation passait de 550 ms, 36 px et un changement d'échelle, à
 45 ms de décalage **sans plafond** : la trentième carte d'une longue liste
@@ -262,6 +265,44 @@ Et trois points d'implémentation :
 Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
 aurait été une dépendance distante de plus, contre la règle du dépôt, pour des
 transitions de propriétés que le navigateur sait déjà interpoler.
+
+#### La présentation initiale
+
+À sa première entrée effective dans l'espace, un nouvel arrivant voit l'application
+se présenter en cinq panneaux — les cinq parties, dans l'ordre où on les traverse.
+Le cadrage complet, la détection de la première connexion et le plan-séquence sont
+dans [`docs/ONBOARDING.md`](docs/ONBOARDING.md) ; ne sont retenus ici que les trois
+points qui touchent le mouvement et la structure de l'application.
+
+**Le calque vit hors du cycle de `UI.render`.** C'est la décision qui tient tout le
+reste. `UI.set` incrémente `UI.local.version`, qui entre dans `signature()` : si
+l'étape courante y vivait, chaque « Suivant » reconstruirait `#app`, perdrait le
+focus, et recréerait la région d'annonce **avec** son contenu — or une région live
+insérée en même temps que son texte n'annonce rien. Le calque mute donc son propre
+sous-arbre, comme `UI.refreshStatus`, et ses nœuds de commande ne sont jamais
+recréés.
+
+**C'est un `<dialog>` ouvert par `showModal()`.** Le voile est son `::backdrop`
+natif — donc aucune couche plein écran de plus, ce que le retrait de l'aura et du
+grain interdisait — et le piège de focus comme l'inertie de l'arrière-plan viennent
+de l'élément lui-même, sans bibliothèque. L'appel est **gardé** : `compat-scan`
+donne à `showModal()` un plancher WebKit 15.4 et un mode d'échec `throws`, or iOS
+15.0 → 15.3 est en tier B, où une perte de fonction est interdite. Sans garde, la
+séquence lèverait une exception sur cette sonde ; avec, elle retombe sur une carte
+non modale.
+
+**Deux régimes de mouvement, pas un.** L'arrivée est vue une fois : elle a droit à
+un geste. La transition entre panneaux est vue quatre fois en trente secondes : elle
+tient en 100 ms, et **en opacité seule**. Ce dernier point n'est pas une économie —
+le critère d'accessibilité sur le mouvement ne vise que le déplacement et le
+changement de taille, donc un fondu d'opacité en sort du champ. On n'atténue pas le
+risque, on le supprime. Et le voile ne se refond jamais entre deux panneaux : c'est
+le seul repère fixe de la séquence.
+
+L'invariance du repli est **vérifiée** par `tests/onboarding.test.js`, qui lit
+`css/app.css` : toute animation de la séquence doit vivre dans un bloc
+`no-preference`, aucune règle en dehors ne doit poser un état masqué, et le fondu du
+voile doit être porté par la classe d'arrivée — sinon il rejouerait à chaque étape.
 
 #### Une entrée survit à un nouveau rendu
 
@@ -477,6 +518,50 @@ temps d'un aller-retour.
 
 ---
 
+### Le précache échoue plutôt que de mentir
+
+La coquille est précachée en **deux listes**, et la différence n'est pas cosmétique.
+
+Ce dont dépend un démarrage à froid — le document, la feuille de style, les huit
+scripts — part dans un `addAll` unique passé à `waitUntil`, **sans `catch`**. Une
+ressource manquante fait donc échouer l'installation : l'ancien service worker reste
+actif avec son cache **complet**, et l'équipe garde une version qui fonctionne.
+
+C'était l'inverse. Chaque ressource avait son propre `catch` « pour tolérer les
+absences », puis `activate` purgeait l'ancien cache en entier. Une installation
+partielle réussissait donc, et laissait un cache neuf incomplet avec plus aucun
+ancien : au premier démarrage hors ligne, un script manquant donnait une application
+blanche, jusqu'au prochain passage en ligne.
+
+La purge d'`activate` peut alors rester inconditionnelle, et c'est le vrai gain :
+l'activation n'a lieu que si l'installation a réussi, donc la complétude du nouveau
+cache devient **structurelle** au lieu d'être vérifiée après coup.
+
+Le manifeste et les icônes sont récupérés **hors** de `waitUntil`, avec un `catch` par
+ressource : ils servent à l'installation sur l'écran d'accueil, jamais au démarrage, et
+leur absence ne doit pas priver l'équipe d'une mise à jour.
+
+> ⚠️ La liste critique doit rester **courte et exacte**. Une entrée qui renverrait 404
+> en production bloquerait toutes les mises à jour, silencieusement. L'état du stockage
+> est lisible dans l'écran de diagnostic.
+
+### Durabilité du stockage
+
+« Disponible » et « durable » sont deux choses différentes. Le mode par défaut est *au
+mieux* : sous pression de stockage, une origine est évincée **en entier**, d'un coup, et
+sans le dire — la file d'actions en attente part avec.
+
+La persistance se **demande**, et le refus est le cas normal : les moteurs décident
+seuls, souvent sur l'historique de fréquentation. Elle est donc demandée au seul moment
+où c'est justifié — quand une action non synchronisée vient d'entrer dans la file, donc
+depuis le geste qui l'a créée. Pas au démarrage : une demande faite au chargement est
+refusée sans que personne ne le sache, ou présentée hors contexte à qui devrait y
+consentir.
+
+Rien ne promet « enregistré » pour autant, et le diagnostic dit désormais les **deux**
+états — disponible, et durable ou évinçable. Afficher « IndexedDB » seul se lisait comme
+une garantie qui n'était pas faite.
+
 ## Verrou par code d'accès
 
 - Le code vit **uniquement** dans une variable en haut du script Apps Script
@@ -560,6 +645,7 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 node tests/parity.test.js
 node tests/sync.test.js
 node tests/session.test.js
+node tests/onboarding.test.js
 node tests/qa/compat-scan.js
 ```
 
@@ -587,6 +673,14 @@ commité par mégarde. Le script conserve par ailleurs sa fonction `runSelfTest(
 à exécuter dans l'éditeur : elle vérifie les mêmes valeurs sur le vrai moteur
 Apps Script, là où la doublure ne peut pas se substituer à Google.
 
+`onboarding.test.js` couvre la règle qui décide si un nouvel arrivant voit la
+présentation de l'application — et surtout celle qui garantit que les appareils
+**déjà utilisés** y échappent au déploiement. Sans cette seconde branche, une mise
+à jour ferait revoir la séquence à toute l'équipe le même jour ; c'est le défaut le
+plus visible que ce chantier puisse produire, et c'est pour lui que la règle a été
+extraite en fonction pure. Le calque lui-même reste du ressort de la recette sur
+appareil ([`docs/ONBOARDING.md`](docs/ONBOARDING.md)).
+
 `compat-scan.js` répond à une autre question : **quelle ligne de ce dépôt casse
 sur quel navigateur mobile ?** Il croise les fonctions web réellement utilisées
 avec une baseline de support hors ligne et la matrice des navigateurs visés — et
@@ -610,3 +704,4 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md) — structure du JSON et liste des actions
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
+- [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion

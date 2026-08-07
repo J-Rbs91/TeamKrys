@@ -429,6 +429,22 @@
     },
     remove: function (key) {
       try { root.localStorage.removeItem(key); } catch (e) { /* ignoré */ }
+    },
+
+    /* Sonde d'écriture. `set` échoue en SILENCE — navigation privée, quota atteint,
+     * stockage cloisonné d'une fenêtre in-app —, et sans sonde l'application ne peut
+     * pas dire « cet appareil n'enregistre rien ». Elle affirme alors des choses
+     * fausses à la place : « pas encore vue » juste après avoir été vue.
+     *
+     * On sonde en ÉCRIVANT : sur plusieurs moteurs, lire réussit là où écrire échoue.
+     * La clé est retirée aussitôt. */
+    available: function () {
+      var probe = "brainsto.probe";
+      try {
+        root.localStorage.setItem(probe, "1");
+        root.localStorage.removeItem(probe);
+        return true;
+      } catch (e) { return false; }
     }
   };
 

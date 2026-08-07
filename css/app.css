@@ -208,7 +208,11 @@
   /* — Typographie fluide ---------------------------------------------- */
   /* La hiérarchie passe d'abord par la GRAISSE, ce qui préserve la densité :
      cinq tailles suffisent là où sept commençaient à se ressembler. */
-  --fs-eyebrow: 11px;
+  /* En rem, et non en px : une taille absolue ignore le réglage de police du système,
+     ce qui est un défaut d'accessibilité partout où elle sert — et ici, le compteur
+     « 3 / 5 », seul repère de progression de la présentation, restait à 11 px même à
+     200 %. Même valeur qu'avant à la racine par défaut. */
+  --fs-eyebrow: 0.6875rem;
   --fs-xs: clamp(0.75rem, calc(0.715rem + 0.143vw), 0.8125rem);
   --fs-sm: 0.875rem;
   --fs-body: 1rem;
@@ -229,6 +233,10 @@
   --z-chrome: 20;
   --z-fab: 25;
   --z-overlay: 60;
+  /* La présentation passe au-dessus des feuilles, sous le bandeau de version.
+     Note : ouverte par showModal(), elle est de toute façon dans le calque
+     supérieur du navigateur ; ce rang ne sert que le chemin de repli. */
+  --z-onboard: 65;
   --z-banner: 70;
   --z-toast: 80;
 
@@ -354,6 +362,12 @@ h2 { font-size: var(--page-title); }
 p { margin: 0; }
 
 .icon { flex: 0 0 auto; display: block; }
+
+/* L'attribut `hidden` du navigateur ne pèse rien : sa règle `[hidden]{display:none}`
+   vient de la feuille de l'agent utilisateur, et le moindre sélecteur de classe la
+   bat. `.btn` pose `display:inline-flex`, donc un bouton marqué `hidden` restait
+   VISIBLE — silencieusement. Cette ligne rend l'attribut fiable partout. */
+[hidden] { display: none !important; }
 
 /* ============================================================ Structure ==== */
 
@@ -766,6 +780,14 @@ p { margin: 0; }
 
 /* Note contextuelle : une consigne qui doit être lue une fois, pas un statut.
    Pastille souple qui peut passer à la ligne, contrairement à .status-pill. */
+/* Un élément flexible garde `min-width: auto`, donc la largeur de son mot le plus
+   long : sans ces trois déclarations, un terme de recherche collé sans espace pousse
+   la carte et fait défiler la PAGE ENTIÈRE latéralement à 320 px. */
+.note-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* Une cible reste une cible, même dans une note : `.btn-sm` plafonne à 36 px. */
+.note .btn-sm { min-height: var(--tap); }
+
 .note {
   display: flex;
   align-items: flex-start;
@@ -1691,6 +1713,257 @@ p { margin: 0; }
   animation: slide-up var(--dur-slow) var(--ease-out);
 }
 
+/* Réponse au « et ensuite ? » d'un état vide : un cran sous le texte principal,
+   sans jamais concurrencer l'action. --faint, la même encre que les surtitres. */
+.empty-next {
+  max-width: 34ch;
+  margin-top: 14px;
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+/* =================================================== Présentation initiale ==== */
+
+/* Une FEUILLE, pas un écran : le niveau 2 est réservé à ce qui flotte, et un
+   panneau plein écran inventerait une troisième élévation.
+
+   C'est un <dialog> ouvert par showModal() : le voile est son ::backdrop natif,
+   donc AUCUNE couche plein écran supplémentaire — ce que le retrait de l'aura et
+   du grain interdisait précisément (voir plus haut dans ce fichier). Le piège de
+   focus et l'inertie de l'arrière-plan viennent de l'élément lui-même.
+
+   Le repli `.onboard--flat` sert les moteurs sans showModal() (iOS 15.0 → 15.3,
+   sonde tier B) : carte non modale, sans voile, qui laisse l'application
+   utilisable derrière. Dégradation cosmétique documentée, jamais perte de
+   fonction. */
+
+.onboard {
+  position: fixed;
+  /* Longhands d'abord, raccourci ensuite : un moteur qui ignore `inset` garde le
+     positionnement, et l'ordre inverse serait le défaut que compat-scan traque. */
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  inset: auto 0 0 0;
+  z-index: var(--z-onboard);
+  display: block;
+  width: 100%;
+  max-width: var(--measure);
+  /* Repli avant valeur moderne, la règle du fichier : sans `dvh`, la barre d'adresse
+     rétractable fait mentir `vh` de sa propre hauteur. Pas 86vh : au-delà, la feuille
+     redeviendrait un écran. */
+  max-height: 56vh;
+  max-height: 56dvh;
+  margin: 0 auto;
+  /* Colonne : le corps défile, la rangée d'actions ne défile pas. À 200 % de police,
+     « Suivant » passait sous le pli interne, sans rien pour indiquer qu'il fallait
+     défiler — une commande de progression inatteignable est une fonction perdue. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 18px calc(var(--safe-bottom) + 18px);
+  padding-left: max(18px, var(--safe-left));
+  padding-right: max(18px, var(--safe-right));
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: var(--surface-sheet);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+}
+
+.onboard:not([open]) { display: none; }
+
+/* Le voile natif. En thème clair, --scrim composé sur du blanc donne 2,94:1 pour
+   du texte blanc : c'est pourquoi RIEN de la présentation n'est posé dessus. Le
+   texte vit sur --surface-sheet, opaque, où --text, --muted et --faint passent
+   dans les deux thèmes. */
+/* ⚠️ Le repli DANS le var() n'est pas une précaution de style, il est indispensable.
+   `::backdrop` n'hérite de son élément d'origine que depuis Firefox 120, Chromium 122
+   et WebKit 17.4 — or la matrice descend à Chromium 100 et à iOS 15.4. En dessous,
+   `--scrim` n'est pas défini sur le pseudo-élément, la déclaration devient invalide au
+   calcul, et le fond retombe à `transparent` : le voile disparaît. Une seconde
+   déclaration littérale ne sauverait rien, l'invalidité au calcul ne rejoue pas la
+   cascade — seul le repli de `var()` s'applique. */
+.onboard::backdrop { background: var(--scrim, rgba(12, 19, 23, 0.44)); }
+
+@media (prefers-color-scheme: dark) {
+  .onboard::backdrop { background: var(--scrim, rgba(4, 8, 10, 0.66)); }
+}
+
+/* Le centrage passe par `margin: 0 auto`, hérité de `.onboard`, et non par un
+   `translateX(-50%)` comme le bandeau de version : un transform au repos sur un
+   élément par ailleurs animé est exactement ce que le contrôle de repli interdit,
+   et il n'apporte rien ici. */
+/* Sélecteur doublé : `.onboard--flat` ne battait `inset` de `.onboard` que par
+   l'ordre source, ce qui est vrai mais fragile. */
+.onboard.onboard--flat {
+  max-width: min(94vw, 520px);
+  /* `--line-field` et non `--line-strong` : sans voile, la carte ne se détache du
+     contenu que par son filet, et `--line-strong` n'y tient que 1,4:1. */
+  border: 1px solid var(--line-field);
+  border-radius: var(--radius-lg);
+  bottom: calc(var(--safe-bottom) + 14px);
+}
+
+/* Région d'annonce : présente dès le montage, remplie ensuite — une région live
+   insérée avec son contenu n'annonce rien. Elle n'occupe aucune place. */
+.onboard-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Le conteneur reçoit le focus par programme à chaque étape — pour que le titre
+   soit lu avant les commandes — mais il n'est JAMAIS atteignable au clavier
+   (tabindex="-1"). Il ne doit donc pas porter d'anneau de focus, sans quoi tout le
+   panneau se retrouve cerclé d'accent.
+   La règle globale `:focus-visible` vit plus bas dans ce fichier et gagnerait à
+   spécificité égale : on la bat par le sélecteur descendant, pas par !important. */
+/* Deux règles séparées, et non un groupe : `:focus-visible` est rejeté par les
+   moteurs sous iOS 15.4 et Firefox 85, et il emporterait avec lui la neutralisation
+   nue — donc l'anneau d'accent reviendrait cercler tout le panneau, précisément sur
+   les moteurs qui empruntent le chemin de repli. */
+/* Le titre reçoit le focus par programme à chaque étape — pour être lu avant les
+   commandes — mais il n'est jamais atteignable au clavier (`tabindex="-1"`). Il ne
+   doit donc pas porter d'anneau, sans quoi le titre se retrouverait cerclé d'accent à
+   chaque panneau. Deux règles séparées, jamais un groupe : `:focus-visible` est
+   rejeté sous iOS 15.4 et emporterait la neutralisation nue avec lui. */
+/* Le corps est le seul élément qui défile. `min-height: 0` est indispensable : sans
+   lui, un enfant flexible refuse de descendre sous sa hauteur de contenu et déborde la
+   colonne au lieu de défiler. */
+.onboard-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Sans cela, défiler le corps jusqu'au bout entraîne la page derrière. */
+  overscroll-behavior: contain;
+}
+
+.onboard .onboard-card,
+.onboard .onboard-title,
+.onboard .onboard-title:focus { outline: none; }
+.onboard .onboard-title:focus-visible { outline: none; }
+.onboard-card > * + * { margin-top: 14px; }
+
+.onboard-eyebrow { display: flex; align-items: center; gap: 8px; }
+
+.onboard-title {
+  font-size: var(--fs-lead);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+
+/* 34ch : la mesure des états vides. Au-delà, l'œil perd la ligne. */
+.onboard-text { max-width: 34ch; }
+
+/* ---- Mouvement ----------------------------------------------------------
+
+   Trois gestes, et ils ne sont pas du même régime. L'ARRIVÉE est vue une fois :
+   c'est le seul endroit où la séquence a droit à une dépense, et la décision 16 du
+   corpus local nomme explicitement l'onboarding comme le cas qui l'autorise. La
+   TRANSITION entre étapes, elle, est vue quatre fois en trente secondes : elle
+   relève de la borne basse, sous 150 ms.
+
+   Elle est aussi en OPACITÉ SEULE, sans le moindre déplacement, et ce n'est pas une
+   économie : le critère normatif de mouvement ne vise que le déplacement et le
+   changement de taille. Un fondu d'opacité en sort — on ne compense donc pas le
+   risque vestibulaire, on l'élimine.
+
+   Le voile ne se refond JAMAIS entre deux panneaux : c'est le seul repère fixe de la
+   séquence, et le faire clignoter quatre fois en ferait un diaporama.
+
+   Tout est enfermé dans `no-preference`, et l'état au repos du balisage est l'état
+   FINAL : sans animation, le panneau est complet, lisible et actionnable. C'est le
+   mode de panne à ne jamais produire. */
+
+@keyframes onboard-rise {
+  from { opacity: 0; transform: translateY(var(--reveal-distance)); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes onboard-step { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Le voile, 240 ms — même valeur que les feuilles : c'est le même événement,
+     une surface qui se pose au-dessus du contenu. */
+  /* Replis DANS les var(), pour la même raison que le fond ci-dessus : sous les
+     planchers, `::backdrop` n'hérite pas, et sans repli l'animation entière serait
+     invalide — le voile apparaîtrait d'un coup au lieu de se poser. */
+  .onboard--enter::backdrop {
+    animation: fade-in var(--dur-slow, 0.24s) var(--ease-out, cubic-bezier(0.2, 0, 0, 1));
+  }
+
+  /* La carte monte de 8 px : le vocabulaire de déplacement unique du dépôt, et le
+     seul endroit de la séquence où il est employé. Décalée de 120 ms pour que le
+     voile ait commencé — on ne voit pas « l'écran s'assombrit » puis « une carte
+     arrive », mais un seul geste. */
+  .onboard--enter .onboard-card {
+    animation: onboard-rise var(--reveal-duration) var(--ease-out) 0.12s backwards;
+  }
+
+  /* Changement d'étape : 100 ms, opacité seule, aucun déplacement. */
+  .onboard-card.is-step { animation: onboard-step var(--dur-fast) var(--ease-out); }
+}
+
+/* Emplacement de l'appui visuel : vide sur trois panneaux sur cinq, et alors
+   masqué par l'attribut — d'où la règle [hidden] plus haut dans ce fichier, sans
+   laquelle il occuperait sa marge pour rien. */
+.onboard-extra { align-items: center; }
+.onboard-mark {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+}
+
+.onboard-foot {
+  display: flex;
+  align-items: center;
+  /* `wrap` parce qu'à 320 px et 150 % de police système, les trois commandes ne
+     tiennent plus sur une ligne : « Suivant » passe dessous plutôt que de déborder.
+     `flex-end` parce qu'au dernier panneau « Passer » est masqué, et avec lui le
+     `margin-right: auto` qui plaquait le pied à droite : sans cela le bouton
+     principal sautait de cent pixels vers la gauche, au moment précis où le pouce
+     vient de taper quatre fois au même endroit. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  /* Ne se comprime jamais : c'est la rangée qui doit rester, pas le texte. */
+  flex: 0 0 auto;
+  /* Le filet EST la marque de débordement. Pas un fondu en dégradé : posé au-dessus
+     d'un texte grossi, il échangerait un problème de découverte contre un problème de
+     lecture. */
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* « Passer » est dernier dans le DOM — c'est une sortie, elle ne doit pas précéder
+   les commandes au clavier — et premier à l'écran. */
+.onboard-skip { order: -1; margin-right: auto; }
+.onboard-next { min-width: 44%; justify-content: center; }
+.onboard-prev { flex: 0 0 var(--tap); padding-left: 0; padding-right: 0; }
+.onboard-foot .btn { min-height: var(--tap); }
+
+/* Paysage : le centrage vertical et une hauteur généreuse tronquent le haut de la
+   carte, qui devient inatteignable. */
+@media (max-height: 480px) {
+  .onboard { max-height: 88vh; max-height: 88dvh; }
+  .onboard-foot { margin-top: 18px; }
+}
+
 /* ========================================================== Propositions ==== */
 
 /* Barre de vote : trois segments détachés et arrondis plutôt qu'un dégradé
@@ -1771,7 +2044,7 @@ p { margin: 0; }
 .print-list li { margin-bottom: 8px; line-height: 1.55; }
 
 @media print {
-  .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .no-print { display: none !important; }
+  .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .onboard, .no-print { display: none !important; }
   html, body { background: #fff; color: #000; }
   body::before, body::after { display: none; }
   .content { padding: 0; max-width: none; }
@@ -1797,7 +2070,17 @@ p { margin: 0; }
   }
 }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* ⚠️ Doublé par `:focus`, et c'est feature-baseline.json qui le prescrit :
+   « Doubler avec :focus si le plancher descend sous iOS 15.4 » — il descend, la sonde
+   tier B est iOS 15.0-15.3. Une règle nue `:focus-visible` y est rejetée en bloc, et
+   il ne reste alors AUCUN indicateur de focus. C'est ce moteur qui prend le repli non
+   modal, donc celui où le clavier est le seul moyen de s'orienter : l'absence
+   d'indicateur y cesse d'être cosmétique.
+   La seconde règle rétablit le comportement moderne — pas d'anneau au pointeur — et
+   elle est elle-même rejetée sur le vieux moteur, où l'anneau apparaît alors aussi au
+   doigt. Dégradation acceptable, et dans le bon sens. */
+:focus, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+:focus:not(:focus-visible) { outline: none; }
 
 .visually-hidden {
   position: absolute;

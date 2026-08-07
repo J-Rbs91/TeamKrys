@@ -9,6 +9,9 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] `node tests/parity.test.js` → tous les tests passent.
 - [ ] `node tests/sync.test.js` → tous les tests passent.
 - [ ] `node tests/session.test.js` → tous les tests passent.
+- [ ] `node tests/onboarding.test.js` → tous les tests passent (règle de
+      présentation, reconnaissance des appareils déjà utilisés, invariant de repli
+      lu dans `css/app.css`).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -31,6 +34,104 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] « Continuer sans connexion (mode local) » fonctionne et affiche **Local**.
 - [ ] Nom vide refusé ; nom saisi → liste des sujets.
 
+### 1 bis. Présentation initiale
+
+À jouer sur un stockage **vidé** (outils de développement → Application → Effacer
+les données du site), sinon l'appareil est reconnu comme déjà utilisé et la
+présentation ne s'affiche pas — c'est le comportement voulu.
+
+- [ ] Après le nom, la présentation s'affiche **une fois**, en feuille basse, avec
+      l'écran des sujets assombri derrière.
+- [ ] Elle n'apparaît **jamais** sur l'écran de connexion, ni sur le verrou, ni sur
+      l'écran du nom. Le champ de code reste saisissable au premier rendu.
+- [ ] Espace vide → **cinq** panneaux. Espace déjà peuplé → **deux**. Mode local →
+      **trois**, sans vote ni réunion. Le compteur suit.
+- [ ] « Suivant » avance, « Précédent » revient, « Passer » sort. Au dernier panneau,
+      « Suivant » devient « Commencer » et « Passer » disparaît.
+- [ ] Fermer l'application au 3ᵉ panneau puis rouvrir → on **reprend au 3ᵉ**.
+- [ ] Après « Commencer » ou « Passer », recharger → la présentation **ne revient pas**.
+- [ ] Sur un appareil qui utilisait déjà l'application, après mise à jour → elle ne
+      s'affiche **pas du tout**, et les réglages disent « vous utilisiez déjà
+      l'application ».
+- [ ] Provoquer un reverrouillage pendant la séquence (`LOCK_IDLE_MS` abaissé) → le
+      verrou **prime**, le calque disparaît, et la séquence reprend à la même étape
+      après déverrouillage.
+- [ ] Réglages → « Revoir la présentation » → elle rejoue depuis le premier panneau.
+      Un prénom en cours de saisie dans « Votre nom » **reste intact**.
+- [ ] Mode avion : la séquence s'affiche et se ferme sans erreur.
+- [ ] Aucune action n'est produite : Réglages → « Actions en attente » et
+      « Révision » inchangés avant et après.
+
+### 1 ter. Présentation — accessibilité
+
+- [ ] VoiceOver / TalkBack : le dialogue s'annonce **avec son titre**, et le titre est
+      lu **avant** les commandes. **Noter mot pour mot** ce qui est entendu à
+      l'apparition : un « boîte de dialogue » sans nom est un défaut, pas un détail.
+- [ ] Le titre est entendu **une** fois, pas deux.
+- [ ] Le **paragraphe** du panneau est lu — à l'étape 1 **comme aux suivantes**. C'est
+      la charge utile ; le titre seul ne suffit pas.
+- [ ] « Suivant » : le nouveau numéro d'étape est **annoncé** sans toucher l'écran.
+- [ ] Balayage en boucle : on ne sort jamais du panneau ; rien de l'écran du dessous
+      n'est lu.
+- [ ] « Passer » ou « Commencer » : le focus atterrit sur un élément de l'écran réel,
+      et le lecteur d'écran l'annonce.
+- [ ] Clavier externe : Tab fait le tour des commandes, un contour de focus est
+      **visible** sur chacune, Échap ferme. À faire sur un appareil ≥ iOS 15.4 **et**
+      sur la sonde 15.0–15.3, où la séquence est non modale : c'est là que le clavier
+      devient le seul moyen de s'orienter, et l'indicateur de focus y est désormais
+      doublé par `:focus` — vérifier qu'il est bien là.
+- [ ] Tab atteint « Précédent » avant « Passer », alors que « Passer » est à gauche à
+      l'écran : décalage assumé (une sortie ne doit pas précéder le chemin principal),
+      à constater sans en faire un blocage.
+- [ ] Police système au maximum (200 %), portrait **et** paysage : aucun texte
+      tronqué, « Suivant » reste atteignable, au besoin en faisant défiler le panneau.
+- [ ] iPhone à encoche, paysage : aucune commande sous la barre gestuelle ni sous
+      l'encoche.
+- [ ] Réglages → Réduire les animations : chaque panneau est **pleinement visible**.
+      Aucun écran vide, aucune carte figée à mi-parcours.
+- [ ] Pincer pour zoomer pendant la séquence : le zoom fonctionne.
+- [ ] Aperçu d'impression du mode réunion : aucune trace du calque.
+- [ ] « Précédent » depuis l'étape 2 : le focus n'est pas perdu, et rien n'annonce un
+      retour en haut du document. (Le bouton se masque alors qu'il peut porter le focus.)
+- [ ] Police système à **130 %** en plus de 200 % : la rangée de commandes ne déborde
+      pas, et **aucun défilement horizontal** n'apparaît dans la feuille.
+- [ ] Panneau 5 sous mouvement réduit : anneau du monogramme **complet** et point
+      présent — c'est le seul composant réutilisé que le test statique ne couvre pas.
+- [ ] Geste de retour du système pendant la séquence : il **ferme** le panneau. Il ne
+      doit jamais naviguer en laissant le panneau ouvert sur un autre écran.
+- [ ] Provoquer une erreur de synchronisation pendant la séquence (mode avion) : le
+      message est **dit au démontage**, pas perdu.
+- [ ] Navigation privée → Réglages → « Revoir la présentation » : l'application dit que
+      cet appareil n'enregistre rien, et le dit **après** la séquence, pas sous elle.
+- [ ] Sonde tier B **avec VoiceOver actif** : le panneau est-il atteint au balayage, à
+      quel rang, l'arrière-plan est-il lu, Échap ferme-t-il ?
+- [ ] iPhone resté en iOS 15.0–15.3 (sonde tier B) : la séquence s'affiche en carte
+      **non modale** sans voile, reste navigable, et aucune erreur n'apparaît. C'est
+      la dégradation attendue.
+
+### 1 quater. Noms accessibles des calques
+
+- [ ] Ouvrir une feuille (infos d'un sujet, menu d'un message) et une fenêtre
+      (nouveau sujet, confirmation) : chacune s'annonce **avec son titre**, jamais
+      « boîte de dialogue » seule.
+- [ ] La pastille de synchronisation : passer hors ligne, poser une action, revenir en
+      ligne. « En attente (1) » puis « À jour » sont **annoncés** sans toucher l'écran.
+
+### 1 quinquies. Déconnexion et stockage
+
+- [ ] Réglages → « Se déconnecter » : la confirmation nomme les trois oublis **et**
+      prévient que les messages anonymes ne seront plus modifiables depuis ce téléphone.
+- [ ] Avec des actions en attente : la confirmation les **compte** et annonce leur perte.
+- [ ] Après déconnexion : l'écran du **nom** est redemandé, et un message anonyme
+      envoyé avant n'offre plus « Modifier ».
+- [ ] Diagnostic → « Stockage local » : dit **durable** ou **évinçable**, jamais
+      « IndexedDB » seul.
+- [ ] Poser une action hors ligne, puis relire le diagnostic : l'état de durabilité a
+      été demandé au moins une fois.
+- [ ] Précache : renommer temporairement un fichier de la liste critique, publier, et
+      vérifier que l'ancienne version **reste en place** au lieu d'être remplacée par
+      une version cassée.
+
 ## 2. Verrou
 
 - [ ] Fermer puis rouvrir l'application dans la foulée → **aucun code demandé**,
@@ -49,6 +150,12 @@ du navigateur ouverte : **zéro erreur console** attendue.
       adresse et vérificateur oubliés.
 
 ## 3. Sujets
+
+- [ ] Espace vide : l'état vide propose « Ajouter un sujet » **et** une ligne
+      « Ensuite : … » qui annonce le reste du cycle.
+- [ ] Recherche sans résultat : le terme cherché est rappelé, et un bouton
+      « Effacer la recherche » ramène la liste. Ce n'est **pas** le même écran que
+      l'espace vide.
 
 - [ ] Liste vide → bouton « Ajouter un sujet » **centré**.
 - [ ] Liste non vide → bouton rond **+** en bas à droite.
