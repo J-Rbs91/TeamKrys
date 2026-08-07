@@ -237,6 +237,93 @@ check("les réglages de la présentation restent cohérents", () => {
     "la révision de séquence ne doit pas être la version de l'application");
 });
 
+/* --------------------------------------- Repli sous mouvement réduit --- */
+
+/* ⚠️ L'invariance « état au repos = état final » est VÉRIFIÉE, pas supposée. Le mode
+ * de panne à ne jamais produire est un panneau invisible : avec le blocage global de
+ * `prefers-reduced-motion: reduce`, une animation d'apparition se termine
+ * instantanément mais retombe sur son style de base. Si ce style porte `opacity: 0`,
+ * la présentation ne s'affiche pas du tout — sans la moindre erreur.
+ *
+ * On lit donc la feuille de style, comme le fait déjà tests/qa/compat-scan.js, et on
+ * exige que TOUTE animation de la séquence vive à l'intérieur d'un bloc
+ * `no-preference`, et qu'aucune règle en dehors ne pose un état masqué. */
+
+const fs = require("fs");
+const CSS = fs.readFileSync(path.join(ROOT, "css/app.css"), "utf8");
+
+/* Étendues des blocs `@media (prefers-reduced-motion: no-preference)`, par
+ * comptage d'accolades — suffisant ici, et sans dépendance. */
+function noPreferenceRanges(source) {
+  const ranges = [];
+  const marker = /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{/g;
+  let match;
+  while ((match = marker.exec(source)) !== null) {
+    let depth = 1;
+    let index = match.index + match[0].length;
+    while (index < source.length && depth > 0) {
+      if (source[index] === "{") { depth += 1; }
+      else if (source[index] === "}") { depth -= 1; }
+      index += 1;
+    }
+    ranges.push([match.index, index]);
+  }
+  return ranges;
+}
+
+const RANGES = noPreferenceRanges(CSS);
+
+function inNoPreference(index) {
+  return RANGES.some(function (range) { return index > range[0] && index < range[1]; });
+}
+
+check("le repli existe : au moins un bloc no-preference est présent", () => {
+  assert(RANGES.length > 0, "sans bloc no-preference, aucune animation n'est repliable");
+});
+
+check("toute animation de la séquence vit dans un bloc no-preference", () => {
+  ["onboard-rise", "onboard-step"].forEach((name) => {
+    const marker = new RegExp("animation:\\s*" + name, "g");
+    let match;
+    let seen = 0;
+    while ((match = marker.exec(CSS)) !== null) {
+      seen += 1;
+      assert(inNoPreference(match.index),
+        "l'animation " + name + " est déclarée hors d'un bloc no-preference");
+    }
+    assert(seen > 0, "l'animation " + name + " n'est référencée nulle part");
+  });
+});
+
+check("aucun état masqué au repos sur la séquence", () => {
+  /* On isole les règles dont le sélecteur porte `.onboard`, hors blocs
+   * no-preference, et on vérifie qu'aucune ne pose un état de départ d'animation. */
+  const rule = /([^{}]+)\{([^{}]*)\}/g;
+  let match;
+  let checked = 0;
+  while ((match = rule.exec(CSS)) !== null) {
+    const selector = match[1];
+    const body = match[2];
+    if (selector.indexOf(".onboard") < 0) { continue; }
+    if (inNoPreference(match.index)) { continue; }
+    checked += 1;
+    assert(!/opacity:\s*0(\.0*)?\s*[;}]/.test(body),
+      "état masqué au repos sur « " + selector.trim().slice(0, 48) + " »");
+    assert(!/transform:\s*translate/.test(body),
+      "déplacement au repos sur « " + selector.trim().slice(0, 48) + " »");
+  }
+  assert(checked > 0, "aucune règle .onboard trouvée : le contrôle ne prouverait rien");
+});
+
+check("le voile ne se refond pas entre deux étapes", () => {
+  /* Le fondu du voile est porté par la classe d'arrivée, pas par le dialogue nu :
+   * s'il était sur `.onboard::backdrop`, il rejouerait à chaque changement d'étape. */
+  assert(/\.onboard--enter::backdrop/.test(CSS),
+    "le fondu du voile doit être porté par la classe d'arrivée");
+  assert(!/(^|[^-])\.onboard::backdrop\s*\{[^}]*animation/.test(CSS),
+    "aucune animation ne doit être posée sur le voile hors de l'arrivée");
+});
+
 /* ------------------------------------------------------------ Rapport --- */
 
 if (failures.length) {

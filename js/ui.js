@@ -1886,6 +1886,17 @@
      * serait pire que d'attendre une seconde. */
     onboard.live.textContent = "Étape " + (index + 1) + " sur " + total
       + ", " + spec.eyebrow + ". " + spec.title + ".";
+
+    /* Fondu du contenu à chaque changement d'étape — jamais au premier affichage,
+     * qui a son propre geste d'arrivée. Relancer une animation CSS exige de retirer
+     * la classe, de forcer un recalcul, puis de la reposer : sans le recalcul, le
+     * navigateur regroupe les deux mutations et ne voit aucun changement. */
+    if (onboard.applied) {
+      onboard.card.classList.remove("is-step");
+      void onboard.card.offsetWidth;
+      onboard.card.classList.add("is-step");
+    }
+    onboard.applied = true;;
   }
 
   function onboardBuild() {
@@ -1971,6 +1982,17 @@
       nodes.dialog.setAttribute("role", "dialog");
     }
     onboard.modal = modal;
+
+    /* La classe d'arrivée porte le seul geste un peu dépensier de la séquence, et
+     * elle est retirée quand il est fini : sans cela, l'animation d'entrée du
+     * panneau et le fondu de changement d'étape se disputeraient la propriété
+     * `animation` de la même carte. */
+    nodes.dialog.classList.add("onboard--enter");
+    setTimeout(function () {
+      if (onboard && onboard.dialog === nodes.dialog) {
+        nodes.dialog.classList.remove("onboard--enter");
+      }
+    }, 420);
 
     /* Échap : servi nativement en modal, à câbler sur le chemin de repli. Le
      * gestionnaire global de js/app.js le connaît aussi, pour ne pas déclencher

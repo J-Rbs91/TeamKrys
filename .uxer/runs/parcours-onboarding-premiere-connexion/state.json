@@ -4,7 +4,7 @@
   "status": "in_progress",
   "execution_profile": "standard",
   "current_phase": "implementation",
-  "current_unit": "U4",
+  "current_unit": "U5",
   "completed_phases": [
     "clarification",
     "audit",
@@ -14,12 +14,13 @@
   "completed_units": [
     "U1",
     "U2",
-    "U3"
+    "U3",
+    "U4"
   ],
-  "last_safe_checkpoint": "2026-08-07T10:06:19+00:00",
+  "last_safe_checkpoint": "2026-08-07T10:09:02+00:00",
   "session_name": "uxer-parcours-onboarding-premiere-connexion",
   "branch": "claude/onboarding-sequence-first-login-4roq0m",
-  "commit_sha": "7b5a8e4",
+  "commit_sha": "aa284d3",
   "files_changed": [
     "docs/ONBOARDING.md",
     "js/config.js",
@@ -40,12 +41,14 @@
     "Chromium headless : sequence montee, compteur, annonce live, focus, persistance, Echap, restitution du focus",
     "Chromium headless : les 4 cas de non-affichage, dont la migration",
     "Chromium : les 5 panneaux, contenu, compteur 1/5 a 5/5, appuis visuels, Commencer au dernier",
-    "Cadre 320x780 : aucun debordement horizontal, feuille collee au bas, cibles 44px"
+    "Cadre 320x780 : aucun debordement horizontal, feuille collee au bas, cibles 44px",
+    "node tests/onboarding.test.js — 27 tests OK (4 nouveaux : invariant de repli lu dans app.css)",
+    "Chromium avec et sans force-prefers-reduced-motion : opacite 1, transform none, panneau visible"
   ],
   "validations_failed": [
     "node tests/parity.test.js — ENOENT apps-script/Code.gs : ECHEC PREEXISTANT, reproduit avec les changements remises, backend gitignore"
   ],
-  "next_action": "Unite U4 : mouvement — arrivee 240ms, transitions opacite seule sous 150ms, repli mouvement reduit",
+  "next_action": "Unite U5 : rejeu depuis les reglages",
   "blocking_issue": null,
   "pause_reason": null,
   "resume_required": false

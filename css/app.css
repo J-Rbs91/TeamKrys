@@ -1751,11 +1751,12 @@ p { margin: 0; }
    dans les deux thèmes. */
 .onboard::backdrop { background: var(--scrim); }
 
+/* Le centrage passe par `margin: 0 auto`, hérité de `.onboard`, et non par un
+   `translateX(-50%)` comme le bandeau de version : un transform au repos sur un
+   élément par ailleurs animé est exactement ce que le contrôle de repli interdit,
+   et il n'apporte rien ici. */
 .onboard--flat {
   max-width: min(94vw, 520px);
-  right: auto;
-  left: 50%;
-  transform: translateX(-50%);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
   bottom: calc(var(--safe-bottom) + 14px);
@@ -1796,6 +1797,50 @@ p { margin: 0; }
 
 /* 34ch : la mesure des états vides. Au-delà, l'œil perd la ligne. */
 .onboard-text { max-width: 34ch; }
+
+/* ---- Mouvement ----------------------------------------------------------
+
+   Trois gestes, et ils ne sont pas du même régime. L'ARRIVÉE est vue une fois :
+   c'est le seul endroit où la séquence a droit à une dépense, et la décision 16 du
+   corpus local nomme explicitement l'onboarding comme le cas qui l'autorise. La
+   TRANSITION entre étapes, elle, est vue quatre fois en trente secondes : elle
+   relève de la borne basse, sous 150 ms.
+
+   Elle est aussi en OPACITÉ SEULE, sans le moindre déplacement, et ce n'est pas une
+   économie : le critère normatif de mouvement ne vise que le déplacement et le
+   changement de taille. Un fondu d'opacité en sort — on ne compense donc pas le
+   risque vestibulaire, on l'élimine.
+
+   Le voile ne se refond JAMAIS entre deux panneaux : c'est le seul repère fixe de la
+   séquence, et le faire clignoter quatre fois en ferait un diaporama.
+
+   Tout est enfermé dans `no-preference`, et l'état au repos du balisage est l'état
+   FINAL : sans animation, le panneau est complet, lisible et actionnable. C'est le
+   mode de panne à ne jamais produire. */
+
+@keyframes onboard-rise {
+  from { opacity: 0; transform: translateY(var(--reveal-distance)); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes onboard-step { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Le voile, 240 ms — même valeur que les feuilles : c'est le même événement,
+     une surface qui se pose au-dessus du contenu. */
+  .onboard--enter::backdrop { animation: fade-in var(--dur-slow) var(--ease-out); }
+
+  /* La carte monte de 8 px : le vocabulaire de déplacement unique du dépôt, et le
+     seul endroit de la séquence où il est employé. Décalée de 120 ms pour que le
+     voile ait commencé — on ne voit pas « l'écran s'assombrit » puis « une carte
+     arrive », mais un seul geste. */
+  .onboard--enter .onboard-card {
+    animation: onboard-rise var(--reveal-duration) var(--ease-out) 0.12s backwards;
+  }
+
+  /* Changement d'étape : 100 ms, opacité seule, aucun déplacement. */
+  .onboard-card.is-step { animation: onboard-step var(--dur-fast) var(--ease-out); }
+}
 
 /* Emplacement de l'appui visuel : vide sur trois panneaux sur cinq, et alors
    masqué par l'attribut — d'où la règle [hidden] plus haut dans ce fichier, sans
