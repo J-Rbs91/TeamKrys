@@ -3,26 +3,38 @@
   "run_id": "parcours-onboarding-premiere-connexion",
   "status": "in_progress",
   "execution_profile": "standard",
-  "current_phase": "visual-direction",
-  "current_unit": "U1",
+  "current_phase": "implementation",
+  "current_unit": "U2",
   "completed_phases": [
     "clarification",
     "audit",
-    "reference-research"
+    "reference-research",
+    "visual-direction"
   ],
-  "completed_units": [],
-  "last_safe_checkpoint": "2026-08-06T23:57:22+00:00",
+  "completed_units": [
+    "U1"
+  ],
+  "last_safe_checkpoint": "2026-08-07T06:39:48+00:00",
   "session_name": "uxer-parcours-onboarding-premiere-connexion",
   "branch": "claude/onboarding-sequence-first-login-4roq0m",
-  "commit_sha": "2ca5495",
+  "commit_sha": "da0d0d7",
   "files_changed": [
-    "docs/ONBOARDING.md"
+    "docs/ONBOARDING.md",
+    "js/config.js",
+    "tests/onboarding.test.js",
+    "service-worker.js",
+    "README.md"
   ],
   "validations_passed": [
-    "compat-scan baseline consultée : plancher dialog/showModal 15.4, échec throws, tier B en perte de fonction sans garde"
+    "compat-scan baseline consultée : plancher dialog/showModal 15.4, échec throws, tier B en perte de fonction sans garde",
+    "node tests/onboarding.test.js — 23 tests OK",
+    "node tests/session.test.js — 9 OK ; node tests/sync.test.js — 15 OK",
+    "node tests/qa/compat-scan.js — rien de bloquant au tier B ou superieur"
   ],
-  "validations_failed": [],
-  "next_action": "Phase visual-direction (effort high autorise par le profil) puis unite U1 : cle, revision et regle pure testee",
+  "validations_failed": [
+    "node tests/parity.test.js — ENOENT apps-script/Code.gs : ECHEC PREEXISTANT, reproduit avec les changements remises, backend gitignore"
+  ],
+  "next_action": "Unite U2 : mecanique du calque — dialog+showModal garde, region live, Echap, ajournement du bandeau, un seul panneau de contenu",
   "blocking_issue": null,
   "pause_reason": null,
   "resume_required": false

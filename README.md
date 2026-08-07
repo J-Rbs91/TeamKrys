@@ -526,6 +526,7 @@ le rechargement n'a lieu que si l'utilisateur l'a demandé.
 node tests/parity.test.js
 node tests/sync.test.js
 node tests/session.test.js
+node tests/onboarding.test.js
 node tests/qa/compat-scan.js
 ```
 
@@ -552,6 +553,14 @@ Le test refuse aussi de passer si un `ACCESS_CODE` ou un `DATA_FILE_ID` a été
 commité par mégarde. Le script conserve par ailleurs sa fonction `runSelfTest()`,
 à exécuter dans l'éditeur : elle vérifie les mêmes valeurs sur le vrai moteur
 Apps Script, là où la doublure ne peut pas se substituer à Google.
+
+`onboarding.test.js` couvre la règle qui décide si un nouvel arrivant voit la
+présentation de l'application — et surtout celle qui garantit que les appareils
+**déjà utilisés** y échappent au déploiement. Sans cette seconde branche, une mise
+à jour ferait revoir la séquence à toute l'équipe le même jour ; c'est le défaut le
+plus visible que ce chantier puisse produire, et c'est pour lui que la règle a été
+extraite en fonction pure. Le calque lui-même reste du ressort de la recette sur
+appareil ([`docs/ONBOARDING.md`](docs/ONBOARDING.md)).
 
 `compat-scan.js` répond à une autre question : **quelle ligne de ce dépôt casse
 sur quel navigateur mobile ?** Il croise les fonctions web réellement utilisées
