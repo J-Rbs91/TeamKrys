@@ -229,6 +229,10 @@
   --z-chrome: 20;
   --z-fab: 25;
   --z-overlay: 60;
+  /* La présentation passe au-dessus des feuilles, sous le bandeau de version.
+     Note : ouverte par showModal(), elle est de toute façon dans le calque
+     supérieur du navigateur ; ce rang ne sert que le chemin de repli. */
+  --z-onboard: 65;
   --z-banner: 70;
   --z-toast: 80;
 
@@ -354,6 +358,12 @@ h2 { font-size: var(--page-title); }
 p { margin: 0; }
 
 .icon { flex: 0 0 auto; display: block; }
+
+/* L'attribut `hidden` du navigateur ne pèse rien : sa règle `[hidden]{display:none}`
+   vient de la feuille de l'agent utilisateur, et le moindre sélecteur de classe la
+   bat. `.btn` pose `display:inline-flex`, donc un bouton marqué `hidden` restait
+   VISIBLE — silencieusement. Cette ligne rend l'attribut fiable partout. */
+[hidden] { display: none !important; }
 
 /* ============================================================ Structure ==== */
 
@@ -1691,6 +1701,115 @@ p { margin: 0; }
   animation: slide-up var(--dur-slow) var(--ease-out);
 }
 
+/* =================================================== Présentation initiale ==== */
+
+/* Une FEUILLE, pas un écran : le niveau 2 est réservé à ce qui flotte, et un
+   panneau plein écran inventerait une troisième élévation.
+
+   C'est un <dialog> ouvert par showModal() : le voile est son ::backdrop natif,
+   donc AUCUNE couche plein écran supplémentaire — ce que le retrait de l'aura et
+   du grain interdisait précisément (voir plus haut dans ce fichier). Le piège de
+   focus et l'inertie de l'arrière-plan viennent de l'élément lui-même.
+
+   Le repli `.onboard--flat` sert les moteurs sans showModal() (iOS 15.0 → 15.3,
+   sonde tier B) : carte non modale, sans voile, qui laisse l'application
+   utilisable derrière. Dégradation cosmétique documentée, jamais perte de
+   fonction. */
+
+.onboard {
+  position: fixed;
+  /* Longhands d'abord, raccourci ensuite : un moteur qui ignore `inset` garde le
+     positionnement, et l'ordre inverse serait le défaut que compat-scan traque. */
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  inset: auto 0 0 0;
+  z-index: var(--z-onboard);
+  display: block;
+  width: 100%;
+  max-width: var(--measure);
+  max-height: 56vh;              /* pas 86vh : au-delà, la feuille redevient un écran */
+  margin: 0 auto;
+  overflow-y: auto;              /* jamais de hauteur fixe : la police système va jusqu'à 200 % */
+  padding: 18px 18px calc(var(--safe-bottom) + 18px);
+  padding-left: max(18px, var(--safe-left));
+  padding-right: max(18px, var(--safe-right));
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: var(--surface-sheet);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+}
+
+.onboard:not([open]) { display: none; }
+
+/* Le voile natif. En thème clair, --scrim composé sur du blanc donne 2,94:1 pour
+   du texte blanc : c'est pourquoi RIEN de la présentation n'est posé dessus. Le
+   texte vit sur --surface-sheet, opaque, où --text, --muted et --faint passent
+   dans les deux thèmes. */
+.onboard::backdrop { background: var(--scrim); }
+
+.onboard--flat {
+  max-width: min(94vw, 520px);
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  bottom: calc(var(--safe-bottom) + 14px);
+}
+
+/* Région d'annonce : présente dès le montage, remplie ensuite — une région live
+   insérée avec son contenu n'annonce rien. Elle n'occupe aucune place. */
+.onboard-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.onboard-card { outline: none; }
+.onboard-card > * + * { margin-top: 14px; }
+
+.onboard-eyebrow { display: flex; align-items: center; gap: 8px; }
+
+.onboard-title {
+  font-size: var(--fs-lead);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+
+/* 34ch : la mesure des états vides. Au-delà, l'œil perd la ligne. */
+.onboard-text { max-width: 34ch; }
+
+.onboard-foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 26px;              /* le rapport 6 / 14 / 26 du fichier, sans valeur inventée */
+}
+
+/* « Passer » est dernier dans le DOM — c'est une sortie, elle ne doit pas précéder
+   les commandes au clavier — et premier à l'écran. */
+.onboard-skip { order: -1; margin-right: auto; }
+.onboard-next { min-width: 44%; justify-content: center; }
+.onboard-prev { flex: 0 0 var(--tap); padding-left: 0; padding-right: 0; }
+.onboard-foot .btn { min-height: var(--tap); }
+
+/* Paysage : le centrage vertical et une hauteur généreuse tronquent le haut de la
+   carte, qui devient inatteignable. */
+@media (max-height: 480px) {
+  .onboard { max-height: 88vh; }
+  .onboard-foot { margin-top: 18px; }
+}
+
 /* ========================================================== Propositions ==== */
 
 /* Barre de vote : trois segments détachés et arrondis plutôt qu'un dégradé
@@ -1771,7 +1890,7 @@ p { margin: 0; }
 .print-list li { margin-bottom: 8px; line-height: 1.55; }
 
 @media print {
-  .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .no-print { display: none !important; }
+  .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .onboard, .no-print { display: none !important; }
   html, body { background: #fff; color: #000; }
   body::before, body::after { display: none; }
   .content { padding: 0; max-width: none; }

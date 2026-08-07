@@ -276,6 +276,119 @@
     UI.force();
   };
 
+  /* ------------------------------------------ Présentation initiale --- */
+
+  /* La règle qui décide est pure et vit dans js/config.js, testée par
+   * tests/onboarding.test.js. Ici, uniquement le câblage : lire, écrire, et dire à
+   * l'interface ce qu'elle doit jouer. */
+
+  var onboardingWanted = false;   // la règle a dit oui, la séquence n'est pas encore jouée
+  var onboardingStep = 0;
+  var onboardingShown = false;    // déjà affichée dans CE chargement
+
+  function onboardingContext() {
+    return {
+      hasConnection: !!Sync.connection.url,
+      localMode: Sync.connection.localMode === true,
+      hasName: !!App.user.name,
+      hasTopics: !!(Store.view && Store.view.topics && Store.view.topics.length)
+    };
+  }
+
+  function onboardingDecide() {
+    return CONFIG.onboardingDue(
+      Utils.storage.get(CONFIG.KEYS.onboarding, null),
+      onboardingContext(),
+      CONFIG.ONBOARDING_REV,
+      Date.now()
+    );
+  }
+
+  /* Une seule écriture, en un seul objet : une écriture partielle est ainsi
+   * impossible si le stockage refuse en cours de route. On conserve l'horodatage du
+   * premier lancement quand il est sain — c'est la seule valeur historique du
+   * dossier. */
+  function writeOnboarding(patch) {
+    var saved = Utils.storage.get(CONFIG.KEYS.onboarding, null);
+    var now = Date.now();
+    var at = (saved && typeof saved.at === "number" && isFinite(saved.at) && saved.at <= now)
+      ? saved.at : now;
+    var record = {
+      s: CONFIG.ONBOARDING_SCHEMA, rev: CONFIG.ONBOARDING_REV, at: at,
+      step: 0, done: false, skipped: false, migrated: false
+    };
+    Object.keys(patch || {}).forEach(function (key) { record[key] = patch[key]; });
+    /* ⚠️ Le retour est volontairement lu : `Utils.storage.set` échoue en SILENCE
+     * (navigation privée, quota). Sans ce test, la présentation reviendrait à
+     * chaque ouverture chez les appareils au stockage refusé. Le garde-fou est
+     * alors le drapeau en mémoire `onboardingShown`, qui vaut pour ce chargement. */
+    return Utils.storage.set(CONFIG.KEYS.onboarding, record) === true;
+  }
+
+  function loadOnboarding() {
+    var plan = onboardingDecide();
+    if (!plan) { return; }
+    if (plan.reason === "migrate") {
+      /* Appareil qui a DÉJÀ servi : on pose la marque et on n'affiche rien. C'est
+       * la branche la plus importante du chantier — sans elle, la mise à jour
+       * ferait revoir la présentation à toute l'équipe le même jour. */
+      writeOnboarding({ done: true, migrated: true });
+      return;
+    }
+    onboardingWanted = true;
+    onboardingStep = plan.step;
+  }
+
+  App.onboardingWanted = function () { return onboardingWanted && !onboardingShown; };
+
+  /* Le segment ne se connaît qu'au moment d'afficher : au démarrage, l'état de
+   * l'équipe n'est pas encore rapatrié, donc on ne sait pas si l'espace est vide.
+   * La règle étant pure, la rappeler ici ne coûte rien et donne la bonne réponse. */
+  App.onboardingPlan = function () {
+    var plan = onboardingDecide();
+    if (!plan || plan.reason === "migrate") { return null; }
+    return {
+      panels: plan.panels,
+      step: Math.min(onboardingStep, plan.panels.length - 1),
+      segment: plan.segment
+    };
+  };
+
+  App.markOnboardingShown = function () { onboardingShown = true; };
+
+  App.noteOnboardingStep = function (step) {
+    onboardingStep = step;
+    writeOnboarding({ step: step });
+  };
+
+  App.finishOnboarding = function (skipped) {
+    onboardingWanted = false;
+    writeOnboarding({ done: true, skipped: skipped === true, step: 0 });
+  };
+
+  /* État lisible dans les réglages. Volontairement sans date exacte : « vue » suffit,
+   * et afficher un horodatage inviterait à en tirer des conclusions que cet
+   * enregistrement ne porte pas. */
+  App.onboardingState = function () {
+    var saved = Utils.storage.get(CONFIG.KEYS.onboarding, null);
+    if (!saved || typeof saved !== "object") { return "inconnue"; }
+    if (saved.migrated === true) { return "migrée"; }
+    if (saved.done === true) { return saved.skipped === true ? "passée" : "vue"; }
+    return "en cours";
+  };
+
+  App.replayOnboarding = function () {
+    if (!writeOnboarding({ done: false, step: 0 })) {
+      UI.toast("Impossible d'enregistrer sur cet appareil : la présentation ne sera pas mémorisée.", "error");
+    }
+    onboardingWanted = true;
+    onboardingStep = 0;
+    onboardingShown = false;
+    UI.set({ sheet: null, modal: null });
+    App.go("#/");
+    UI.force();
+  };
+
   /* ------------------------------------------------------------ Routeur --- */
 
   function parseRoute(hash) {
@@ -482,7 +595,13 @@
     window.addEventListener("offline", function () { UI.refreshStatus(); });
 
     window.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { UI.set({ sheet: null, modal: null }); }
+      if (e.key !== "Escape") { return; }
+      /* La présentation passe d'abord : en modal, le dialogue sert Échap
+       * nativement, mais sans cette branche on déclencherait EN PLUS un rendu
+       * complet de l'écran de fond à chaque appui — et sur le chemin de repli, où
+       * il n'y a pas de <dialog>, Échap ne fermerait rien. */
+      if (UI.onboardingActive()) { UI.closeOnboarding(true); return; }
+      UI.set({ sheet: null, modal: null });
     });
   }
 
@@ -491,6 +610,10 @@
     loadUser();
     loadOwnItems();
     loadConnection();
+    /* Après loadConnection : la décision a besoin de savoir si cet appareil porte
+     * déjà une adresse ou un mode local, sans quoi elle prendrait une installation
+     * existante pour un appareil neuf. */
+    loadOnboarding();
     UI.local.showArchived = Utils.storage.get(CONFIG.KEYS.showArchived, false) === true;
     App.route = parseRoute(window.location.hash);
 

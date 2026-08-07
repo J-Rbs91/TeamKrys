@@ -89,6 +89,7 @@
   var appRoot = null;
   var overlayRoot = null;
   var toastRoot = null;
+  var onboardRoot = null;
   var lastSignature = null;
   var lastPlace = null;
   var forceNext = false;
@@ -125,6 +126,7 @@
     appRoot = document.getElementById("app");
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
+    onboardRoot = document.getElementById("onboarding-root");
     bindViewport();
   };
 
@@ -1703,11 +1705,289 @@
     }
 
     UI.refreshStatus();
+
+    /* La présentation est décidée APRÈS le rendu, et depuis l'extérieur de son
+     * cycle : elle ne participe ni à `signature()` ni à `place`, donc changer
+     * d'étape ne reconstruit pas l'écran. */
+    var gate = App.gate();
+    onboardSyncWithGate(gate);
+    if (!gate) { onboardMaybeStart(elapsed); }
   };
+
+  /* ================================================ Présentation initiale ==== */
+
+  /* ⚠️ Ce calque vit HORS du cycle de UI.render, et c'est la décision qui tient
+   * tout le reste. Si l'étape courante entrait dans UI.local, chaque « Suivant »
+   * incrémenterait UI.local.version, donc la signature, donc reconstruirait #app :
+   * le focus serait perdu — seuls les [data-draft] sont restaurés — et la région
+   * d'annonce serait recréée AVEC son contenu, or une région live insérée en même
+   * temps que son texte n'annonce rien.
+   *
+   * Il mute donc son propre sous-arbre, sur le modèle de UI.refreshStatus. Les
+   * nœuds de commande ne sont jamais recréés : seuls leurs libellés changent, ce
+   * qui garde le focus stable d'une étape à l'autre.
+   *
+   * Corollaire à assumer : ouvert par showModal(), le dialogue passe dans le
+   * calque supérieur, donc AU-DESSUS des toasts. Pendant la trentaine de secondes
+   * de la présentation, un toast d'erreur de synchronisation serait masqué. Le
+   * bandeau de nouvelle version, lui, est ajourné explicitement (voir plus bas)
+   * parce qu'il porte un bouton focusable et qu'il est le seul chemin de mise à
+   * jour chez quelqu'un qui ne peut pas vider son cache. */
+
+  var onboard = null;         // { panels, step, segment, nodes… } quand la présentation est à l'écran
+  var onboardPaused = null;   // le même objet, mis de côté quand un gate reprend la main
+  var pendingUpdate = null;   // rappel du bandeau de version, ajourné
+  var onboardTimer = 0;
+
+  /* Attente avant de poser le calque, comptée depuis l'arrivée sur l'écran. Ce
+   * n'est pas ENTER_WINDOW_MS (1400 ms) : cette constante-là borne la REPRISE
+   * d'une animation, pas sa durée. Ce qu'il faut laisser finir, c'est la cascade
+   * de révélation des cartes — --reveal-duration (220 ms) plus six crans de
+   * --reveal-stagger (18 ms), soit 328 ms. Arrondi à 360. Au-delà, on ferait
+   * attendre pour rien ; en dessous, deux choses bougeraient en même temps. */
+  var ONBOARD_DELAY_MS = 360;
+
+  var ONBOARD_TEXT = {
+    topics: {
+      icon: "message",
+      eyebrow: "Les sujets",
+      title: "Un sujet par point à traiter",
+      text: "L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment "
+        + "actif au plus ancien. Le bouton + en ajoute un ; vous pouvez le proposer "
+        + "sans le signer."
+    }
+  };
+
+  function onboardPanel(id) {
+    return ONBOARD_TEXT[id] || ONBOARD_TEXT.topics;
+  }
+
+  /* Le libellé de la sortie dit ce qui se passe ensuite : « Suivant » tant qu'il
+   * reste une étape, « Commencer » sur la dernière. Jamais « Fermer », qui
+   * n'annonce rien. */
+  function onboardApply() {
+    if (!onboard) { return; }
+    var total = onboard.panels.length;
+    var index = onboard.step;
+    var last = index >= total - 1;
+    var spec = onboardPanel(onboard.panels[index]);
+
+    Utils.clear(onboard.eyebrow);
+    onboard.eyebrow.appendChild(icon(spec.icon, 14));
+    onboard.eyebrow.appendChild(el("span", { text: spec.eyebrow }));
+    onboard.eyebrow.appendChild(el("span", { class: "spacer" }));
+    onboard.eyebrow.appendChild(el("span", {
+      class: "counter", text: (index + 1) + " / " + total
+    }));
+
+    onboard.title.textContent = spec.title;
+    onboard.text.textContent = spec.text;
+
+    onboard.prev.hidden = index === 0;
+    onboard.skip.hidden = last;
+    Utils.clear(onboard.next);
+    onboard.next.appendChild(el("span", { text: last ? "Commencer" : "Suivant" }));
+    if (!last) { onboard.next.appendChild(icon("forward", 18)); }
+
+    /* Le focus se replace en tête à chaque étape : le titre et le texte doivent
+     * être lus avant les commandes. Aucune source normative ne prescrit ce
+     * comportement pour une séquence de dialogues — le corpus ne décrit qu'un
+     * dialogue isolé. C'est une décision, et elle est à vérifier au lecteur
+     * d'écran (docs/ONBOARDING.md, vérifications différées). */
+    onboard.card.focus();
+
+    /* La région existe depuis le montage ; on n'y écrit qu'ensuite, sinon elle
+     * n'annonce rien. `polite` et jamais `assertive` : couper un toast d'erreur
+     * serait pire que d'attendre une seconde. */
+    onboard.live.textContent = "Étape " + (index + 1) + " sur " + total + ", " + spec.eyebrow + ".";
+  }
+
+  function onboardBuild() {
+    var live = el("div", { class: "onboard-live", role: "status", "aria-live": "polite" });
+    var eyebrow = el("div", { class: "section-title onboard-eyebrow" });
+    var title = el("h2", { class: "onboard-title", id: "onboard-title", text: "" });
+    var text = el("p", { class: "hint onboard-text", id: "onboard-text", text: "" });
+
+    var skip = el("button", {
+      class: "btn btn-ghost onboard-skip", type: "button", text: "Passer",
+      onclick: function () { UI.closeOnboarding(true); }
+    });
+    var prev = el("button", {
+      class: "btn btn-outline onboard-prev", type: "button",
+      "aria-label": "Étape précédente",
+      onclick: function () { UI.onboardingGo(-1); }
+    }, [icon("back", 18)]);
+    var next = el("button", {
+      class: "btn btn-primary onboard-next", type: "button",
+      onclick: function () { UI.onboardingGo(1); }
+    });
+
+    /* « Passer » est DERNIER dans le DOM et premier à l'écran (`order` en CSS) :
+     * c'est une sortie, pas une action principale — elle ne doit pas précéder les
+     * commandes dans l'ordre de tabulation. */
+    var foot = el("div", { class: "onboard-foot" }, [prev, next, skip]);
+    var card = el("div", { class: "onboard-card", tabindex: "-1" }, [eyebrow, title, text, foot]);
+    var dialog = el("dialog", {
+      class: "onboard",
+      "aria-labelledby": "onboard-title",
+      "aria-describedby": "onboard-text"
+    }, [live, card]);
+
+    return {
+      dialog: dialog, card: card, live: live, eyebrow: eyebrow,
+      title: title, text: text, skip: skip, prev: prev, next: next
+    };
+  }
+
+  function onboardMount(plan) {
+    if (!onboardRoot || onboard) { return; }
+    var nodes = onboardBuild();
+    onboard = {
+      panels: plan.panels.slice(),
+      step: Math.max(0, Math.min(plan.step || 0, plan.panels.length - 1)),
+      segment: plan.segment,
+      returnFocus: document.activeElement,
+      dialog: nodes.dialog, card: nodes.card, live: nodes.live,
+      eyebrow: nodes.eyebrow, title: nodes.title, text: nodes.text,
+      skip: nodes.skip, prev: nodes.prev, next: nodes.next
+    };
+
+    /* Un clavier ouvert derrière le calque n'a plus d'objet : aucune étape ne
+     * contient de champ de saisie. */
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+
+    onboardRoot.appendChild(nodes.dialog);
+
+    /* ⚠️ showModal() donne d'un coup le piège de focus, le calque supérieur et
+     * l'inertie réelle de l'arrière-plan — donc les exigences d'un dialogue modal
+     * sans une ligne de gestion manuelle du focus.
+     *
+     * Mais tests/qa/feature-baseline.json lui donne un plancher WebKit 15.4, un
+     * mode d'échec « throws » et une sévérité haute, et browser-matrix.json classe
+     * iOS 15.0 → 15.3 en tier B, où une dégradation cosmétique est tolérée mais
+     * JAMAIS une perte de fonction. Un appel non gardé y lèverait une exception et
+     * emporterait la séquence. D'où la garde, et le repli : carte non modale, sans
+     * voile, qui laisse l'application accessible derrière. */
+    var modal = typeof nodes.dialog.showModal === "function";
+    if (modal) {
+      /* Gardé par le `typeof` ci-dessus ET par ce try/catch. Sur les moteurs sans
+         <dialog> — Safari iOS 15.0 → 15.3, la sonde tier B — on retombe sur
+         `.onboard--flat` : carte non modale, sans voile, application accessible
+         derrière. Dégradation cosmétique documentée, pas perte de fonction. */
+      /* qa-allow: js-dialog-showmodal — appel gardé, repli .onboard--flat. */
+      try { nodes.dialog.showModal(); }
+      catch (error) { modal = false; }
+    }
+    if (!modal) {
+      nodes.dialog.classList.add("onboard--flat");
+      nodes.dialog.setAttribute("open", "");
+      nodes.dialog.setAttribute("role", "dialog");
+    }
+    onboard.modal = modal;
+
+    /* Échap : servi nativement en modal, à câbler sur le chemin de repli. Le
+     * gestionnaire global de js/app.js le connaît aussi, pour ne pas déclencher
+     * un rendu complet de l'écran de fond à chaque appui. */
+    nodes.dialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      UI.closeOnboarding(true);
+    });
+
+    onboardApply();
+  }
+
+  function onboardUnmount() {
+    if (!onboard) { return null; }
+    var kept = { panels: onboard.panels, step: onboard.step, segment: onboard.segment };
+    var focus = onboard.returnFocus;
+    if (onboard.modal && typeof onboard.dialog.close === "function") {
+      try { onboard.dialog.close(); } catch (error) { /* déjà fermé */ }
+    }
+    if (onboard.dialog.parentNode) { onboard.dialog.parentNode.removeChild(onboard.dialog); }
+    onboard = null;
+
+    /* Rendre le focus. À la première connexion l'élément déclencheur n'existe pas :
+     * on prend alors le premier élément interactif de l'écran réel. Jamais
+     * document.body, qui renvoie le lecteur d'écran en haut du document sans le
+     * dire. */
+    var target = (focus && focus.isConnected && focus !== document.body) ? focus : null;
+    if (!target && appRoot) { target = appRoot.querySelector("button, [href], input, select, textarea"); }
+    if (target && target.focus) { target.focus(); }
+
+    if (pendingUpdate) {
+      var resume = pendingUpdate;
+      pendingUpdate = null;
+      UI.showUpdateBanner(resume);
+    }
+    return kept;
+  }
+
+  UI.onboardingActive = function () { return !!onboard; };
+
+  UI.startOnboarding = function (plan) {
+    if (!plan || !plan.panels || !plan.panels.length) { return; }
+    onboardPaused = null;
+    onboardMount(plan);
+  };
+
+  UI.onboardingGo = function (delta) {
+    if (!onboard) { return; }
+    var next = onboard.step + delta;
+    if (next < 0) { return; }
+    if (next >= onboard.panels.length) { UI.closeOnboarding(false); return; }
+    onboard.step = next;
+    App.noteOnboardingStep(next);
+    onboardApply();
+  };
+
+  UI.closeOnboarding = function (skipped) {
+    if (!onboard) { return; }
+    onboardUnmount();
+    onboardPaused = null;
+    App.finishOnboarding(skipped === true);
+  };
+
+  /* Un gate qui réapparaît — reverrouillage après une heure, retour sur la
+   * connexion — PRIME sur la présentation : le calque disparaît, l'étape est
+   * conservée, et la séquence reprend une fois le gate franchi. */
+  function onboardSyncWithGate(gate) {
+    if (gate) {
+      if (onboardTimer) { clearTimeout(onboardTimer); onboardTimer = 0; }
+      if (onboard) { onboardPaused = onboardUnmount(); }
+      return;
+    }
+    if (onboardPaused && !onboard) {
+      var resume = onboardPaused;
+      onboardPaused = null;
+      onboardMount(resume);
+    }
+  }
+
+  /* Décidée à chaque rendu, mais armée une seule fois : le calque ne se pose que
+   * lorsque plus aucun gate ne réclame l'écran et que la cascade d'entrée est
+   * finie. */
+  function onboardMaybeStart(elapsed) {
+    if (onboard || onboardPaused || onboardTimer) { return; }
+    if (App.gate()) { return; }
+    if (!App.onboardingWanted || !App.onboardingWanted()) { return; }
+    var wait = Math.max(0, ONBOARD_DELAY_MS - (elapsed || 0));
+    onboardTimer = setTimeout(function () {
+      onboardTimer = 0;
+      if (onboard || App.gate() || !App.onboardingWanted()) { return; }
+      var plan = App.onboardingPlan();
+      if (!plan) { return; }
+      App.markOnboardingShown();
+      UI.startOnboarding(plan);
+    }, wait);
+  }
 
   /* -------------------------------------------------- Bandeau nouvelle version --- */
 
   UI.showUpdateBanner = function (onUpdate) {
+    /* Ajourné pendant la présentation : son bouton est focusable, il vit sur
+     * document.body — donc hors du piège de focus — et il se poserait exactement
+     * sous les commandes du calque. Il apparaît dès le démontage. */
+    if (onboard) { pendingUpdate = onUpdate; return; }
     if (document.querySelector(".update-banner")) { return; }
     var banner = el("div", { class: "update-banner" }, [
       icon("sparkle", 17),

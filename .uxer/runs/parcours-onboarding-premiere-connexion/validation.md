@@ -13,8 +13,42 @@
 
 ## Vérifications manuelles
 
-Aucune — aucune ligne de code applicatif n'a encore été écrite. La phase en cours est
-la recherche ; les unités U1 à U6 ne sont pas commencées.
+### U2 — banc d'essai Chromium headless (2026-08-07)
+
+Le dépôt n'a pas d'outil de test d'interface. J'ai monté un banc **hors du dépôt** :
+les fichiers servis par lien symbolique depuis un serveur statique local, des pages
+d'amorçage qui préparent `localStorage`, et un rapport renvoyé par balise HTTP lue
+dans le journal du serveur. Aucune dépendance installée, aucun fichier ajouté au
+dépôt.
+
+**Scénario joué** (segment mode local, trois panneaux) :
+
+| Étape | Constat |
+|---|---|
+| Ouverture | dialogue monté, **modal** (pas le repli), `open` posé, focus sur `.onboard-card` |
+| Compteur | « 1 / 3 » puis « 2 / 3 » puis « 3 / 3 » — le segment local est bien détecté |
+| Annonce | « Étape 1 sur 3, Les sujets. » à chaque changement, dans la région live |
+| Dernier panneau | « Suivant » devient « Commencer », « Passer » disparaît |
+| Premier panneau | « Précédent » masqué — et il l'est réellement, voir l'anomalie A7 |
+| Persistance | `step` écrit sur l'appareil à chaque avance, et relu au retour |
+| Précédent | revient à l'étape 2, compteur et annonce suivent |
+| Échap | ferme, écrit `done` + `skipped`, et **rend le focus** à un bouton de l'écran réel |
+| Erreurs | aucune exception, aucun rejet de promesse |
+
+**Les quatre cas où la présentation ne doit pas apparaître :**
+
+| Cas | Résultat |
+|---|---|
+| Appareil neuf, stockage vide | gate `connection` : la règle dit « due » mais **rien n'est affiché** — critère A2 tenu |
+| Présentation déjà vue | rien, état lu « vue » |
+| Appareil déjà utilisé, aucun enregistrement | rien, enregistrement écrit avec `migrated: true` — **la branche critique fonctionne dans l'application réelle** |
+| Enregistrement illisible sur appareil ancien | rien, traité comme absent puis migré — un JSON corrompu ne transforme pas un ancien appareil en neuf |
+
+**⚠️ Portée du banc.** Chromium uniquement, donc **Blink**. Le moteur du tier A sur
+iPhone est **WebKit**, et il n'est pas testable ici : le chemin de repli
+`.onboard--flat` (sonde tier B, iOS 15.0 → 15.3) n'a **pas** été exercé, non plus
+que VoiceOver, TalkBack, le clavier virtuel, la barre gestuelle et la police système
+à 200 %. Tout cela reste dans les vérifications restantes.
 
 ## Vérifications restantes
 
@@ -40,4 +74,5 @@ propres tickets.
 | A3 | `role="dialog" aria-modal="true"` sans nom accessible sur les feuilles **et** les fenêtres ; aucun piège de focus nulle part. Les surfaces actuelles s'annoncent « boîte de dialogue » sans titre | `js/ui.js:383`, `:397` | Accessibilité |
 | A4 | `:focus-visible` sans doublon `:focus` : sur Safari iOS 15.0–15.3, classé tier B par `compat-scan`, la règle entière est rejetée et il ne reste **aucun** indicateur de focus au clavier externe | `css/app.css:1800` | Accessibilité |
 | A5 | `statusPill` change en silence : « En attente (n) » n'est ni `role="status"` ni annoncé | `js/ui.js:310-317` | Accessibilité |
+| A7 | `[hidden]` n'était **pas fiable** : sa règle vient de la feuille de l'agent utilisateur, et `.btn{display:inline-flex}` la battait — un bouton marqué `hidden` restait visible, silencieusement. **Corrigé en U2** par une règle explicite. Le défaut préexistait, mais aucun code du dépôt n'utilisait `hidden` : il n'avait jamais eu d'effet | `css/app.css` | Moyenne — **corrigée** |
 | A6 | État vide filtré sans sortie : « Aucun sujet ne correspond. » sans bouton pour effacer la recherche, alors que la décision 12 du corpus local exige « un bouton qui élargit réellement » | `js/ui.js:618-620` | Moyenne — **traitée en U6** |
