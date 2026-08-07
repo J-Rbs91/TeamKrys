@@ -109,6 +109,14 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       **non modale** sans voile, reste navigable, et aucune erreur n'apparaît. C'est
       la dégradation attendue.
 
+### 1 quater. Noms accessibles des calques
+
+- [ ] Ouvrir une feuille (infos d'un sujet, menu d'un message) et une fenêtre
+      (nouveau sujet, confirmation) : chacune s'annonce **avec son titre**, jamais
+      « boîte de dialogue » seule.
+- [ ] La pastille de synchronisation : passer hors ligne, poser une action, revenir en
+      ligne. « En attente (1) » puis « À jour » sont **annoncés** sans toucher l'écran.
+
 ## 2. Verrou
 
 - [ ] Fermer puis rouvrir l'application dans la foulée → **aucun code demandé**,

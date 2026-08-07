@@ -322,8 +322,17 @@
 
   function statusPill() {
     var status = Sync.status();
-    var pill = el("div", { class: "status-pill status-" + status.code, title: status.error || "" }, [
-      el("span", { class: "status-dot" }),
+    /* `role="status"` : « En attente (3) » devenait « À jour » sans que rien ne le
+     * dise. C'est la seule information de l'écran qui change SEULE, sans geste — donc
+     * exactement le cas d'une région d'annonce. `polite` par défaut avec ce rôle, et
+     * c'est ce qu'il faut : la synchronisation n'a pas à couper la lecture en cours.
+     * La pastille est mise à jour en place par UI.refreshStatus, jamais recréée : la
+     * région préexiste donc à son contenu, condition pour qu'elle annonce. */
+    var pill = el("div", {
+      class: "status-pill status-" + status.code, title: status.error || "",
+      role: "status"
+    }, [
+      el("span", { class: "status-dot", "aria-hidden": "true" }),
       el("span", { class: "status-label", text: status.label })
     ]);
     return pill;
@@ -388,14 +397,36 @@
 
   function closeOverlay() { UI.set({ sheet: null, modal: null }); }
 
+  /* Identifiant du titre d'un calque. Un seul calque existe à la fois —
+   * `renderOverlay` vide sa racine avant de rendre —, donc une valeur fixe ne peut pas
+   * entrer en collision, et elle évite de fabriquer un compteur pour rien. */
+  var OVERLAY_TITLE_ID = "overlay-title";
+
+  /* Le nom accessible d'un dialogue vient de son titre VISIBLE, comme l'ARIA APG le
+   * prescrit. Sans lui, les feuilles et les fenêtres de cette application
+   * s'annonçaient « boîte de dialogue », et rien de plus. */
+  function overlayTitle(title, className) {
+    if (!title) { return null; }
+    if (title instanceof Node) {
+      title.id = OVERLAY_TITLE_ID;
+      return title;
+    }
+    return el("div", { class: className, id: OVERLAY_TITLE_ID, text: title });
+  }
+
   function sheet(title, children) {
+    var titleNode = overlayTitle(title, "sheet-title");
     return el("div", {
       class: "overlay bottom",
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
-      el("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, [
-        el("div", { class: "sheet-handle" }),
-        title ? (title instanceof Node ? title : el("div", { class: "sheet-title", text: title })) : null,
+      el("div", {
+        class: "sheet", role: "dialog", "aria-modal": "true",
+        /* Pointer un nœud absent vaut moins que ne rien pointer. */
+        "aria-labelledby": titleNode ? OVERLAY_TITLE_ID : null
+      }, [
+        el("div", { class: "sheet-handle", "aria-hidden": "true" }),
+        titleNode,
         children,
         el("button", { class: "btn btn-block btn-outline", type: "button", text: "Fermer", style: { marginTop: "14px" }, onclick: closeOverlay })
       ])
@@ -407,8 +438,11 @@
       class: "overlay center",
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
-      el("div", { class: "modal", role: "dialog", "aria-modal": "true" }, [
-        el("div", { class: "modal-title", text: title }),
+      el("div", {
+        class: "modal", role: "dialog", "aria-modal": "true",
+        "aria-labelledby": title ? OVERLAY_TITLE_ID : null
+      }, [
+        overlayTitle(title, "modal-title"),
         children,
         el("div", { class: "modal-actions" }, actions)
       ])
