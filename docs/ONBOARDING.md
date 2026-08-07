@@ -281,7 +281,7 @@ sans qu'aucune donnée quitte l'appareil.
 
 PWA vanilla sans dépendance ni build, publiée sur GitHub Pages, backend Apps
 Script hors dépôt. Petite équipe, usage hebdomadaire, entrée fréquente par un
-lien partagé, public en partie non technique. Version courante `1.7.0`.
+lien partagé, public en partie non technique. Version courante `1.8.0`.
 
 ## 4. Périmètre
 

@@ -672,7 +672,11 @@
     /* File locale [{seq, action}] issue d'IndexedDB. */
     queue: [],
     /* Compteur bumpé à chaque changement : sert de signature de rendu. */
-    version: 0
+    version: 0,
+    /* Incrémenté à CHAQUE état serveur réellement adopté. Sert à repérer qu'un
+     * état plus frais s'est installé pendant qu'une lecture était en vol —
+     * voir Sync.pull. */
+    epoch: 0
   };
 
   Store.bump = function () { Store.version += 1; };
@@ -698,6 +702,7 @@
     if (lastBaseKey !== null && key === lastBaseKey) { return false; }
     lastBaseKey = key;
     Store.base = next;
+    Store.epoch += 1;
     Store.rebuild();
     return true;
   };
@@ -725,6 +730,27 @@
   Store.removeEntry = function (entry) {
     Store.queue = Store.queue.filter(function (e) { return e !== entry; });
     Store.rebuild();
+  };
+
+  var pendingIds = { version: -1, ids: {} };
+
+  /* Identifiants des messages encore en file d'envoi, c'est-à-dire visibles chez
+   * leur auteur et chez personne d'autre. L'interface s'en sert pour ne pas
+   * afficher une heure qui n'est pas encore la bonne. */
+  Store.pendingMessageIds = function () {
+    /* Appelée une fois PAR BULLE : sur un fil de deux cents messages, la
+     * recalculer à chaque appel serait payer la file deux cents fois. Elle ne
+     * change qu'avec la vue, dont « version » est la signature. */
+    if (pendingIds.version === Store.version) { return pendingIds.ids; }
+    var ids = {};
+    Store.queue.forEach(function (entry) {
+      var action = entry.action;
+      if (action && action.type === "CREATE_MESSAGE" && action.payload && action.payload.messageId) {
+        ids[action.payload.messageId] = true;
+      }
+    });
+    pendingIds = { version: Store.version, ids: ids };
+    return ids;
   };
 
   /* Recalcule la vue : état serveur + rejeu des actions en attente. */

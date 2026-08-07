@@ -167,6 +167,29 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] Réglages → « Synchroniser maintenant » sur un fil déjà à jour : **le
       défilement ne saute pas** et l'écran ne clignote pas.
 
+### 8 bis. La page qui meurt juste après un envoi
+
+> ⚠️ C'est le scénario du 5 août : message écrit avec du réseau, téléphone
+> rangé dans la seconde, message reçu **deux jours plus tard**. Un envoi
+> ordinaire meurt avec la page ; ces contrôles vérifient qu'il lui survit.
+
+- [ ] Écrire un message puis, **dans la seconde**, revenir à l'écran d'accueil
+      du téléphone (ou fermer l'onglet). Sur l'autre appareil, le message
+      arrive **sans** rouvrir l'application de l'expéditeur.
+- [ ] Même chose en coupant le réseau pendant la frappe et en le rétablissant
+      avant de fermer : le message part quand même.
+- [ ] Après ce rattrapage, rouvrir l'application de l'expéditeur : le message
+      n'apparaît **pas en double** (déduplication serveur), et l'indicateur
+      redescend à **À jour**.
+- [ ] Réglages → « Dernier envoi de secours » apparaît après un tel envoi. S'il
+      apparaît à *chaque* message, la voie ordinaire ne passe plus : regarder
+      « Rythme actuel » et le nombre d'échecs.
+- [ ] Un message pas encore parti affiche **« envoi… »** à la place de son
+      heure ; l'heure s'affiche dès qu'il est remis.
+- [ ] Écrire un message **pendant** qu'une lecture est en cours (envoyer depuis
+      les deux appareils en même temps) : le message envoyé **ne disparaît
+      jamais** de l'écran de son auteur, même une fraction de seconde.
+
 ## 9. PWA
 
 - [ ] Installation sur l'écran d'accueil (iPhone et Android), icône monogramme.

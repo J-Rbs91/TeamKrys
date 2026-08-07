@@ -461,6 +461,11 @@
          * l'application sans prévenir, et c'est cette valeur qui décidera au
          * retour s'il faut redemander le code. */
         writeSession(lastActivity);
+        /* ⚠️ Et on POSTE ce qui reste en file avant de disparaître. Passer en
+         * arrière-plan sur un téléphone, c'est très souvent mourir : le système
+         * gèle la page, puis la tue sans prévenir et sans redonner la main. Un
+         * envoi ordinaire part avec elle ; celui-ci lui survit. */
+        Sync.flush();
         return;
       }
       if (sessionExpired()) { App.relock(); return; }
@@ -470,7 +475,10 @@
     });
 
     /* iOS ne garantit pas visibilitychange à la fermeture ; pagehide, si. */
-    window.addEventListener("pagehide", function () { writeSession(lastActivity); });
+    window.addEventListener("pagehide", function () {
+      writeSession(lastActivity);
+      Sync.flush();
+    });
 
     /* Une heure sans rien toucher doit reverrouiller MÊME application ouverte
      * à l'écran. Un contrôle par minute suffit et ne coûte rien. */

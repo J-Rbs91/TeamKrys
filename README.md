@@ -441,6 +441,40 @@ signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
 > c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
 > sait pas répondre.
 
+### Survivre à la disparition de la page
+
+Le rejeu d'une action manquée reposait entièrement sur la boucle
+d'interrogation — qui **meurt avec la page**. Écrire un message puis ranger son
+téléphone dans la seconde suffisait donc à ce que l'action reste en file, sans
+que rien ne la rejoue avant la prochaine **ouverture** de l'application : des
+heures, ou des jours. Et l'échec du premier envoi n'a rien d'exceptionnel ici,
+puisque Apps Script sérialise tout derrière un `LockService` : un envoi attend
+son tour derrière les lectures des autres appareils.
+
+Trois règles répondent à ça, dans cet ordre :
+
+1. **`Sync.flush()` sur `pagehide` et sur le passage en arrière-plan.** La file
+   part par `navigator.sendBeacon` : le navigateur prend la requête en charge et
+   la poste même si la page n'existe plus. Un beacon n'ayant pas de réponse,
+   l'action **reste en file** et repart au démarrage suivant ; le doublon est
+   absorbé par la déduplication serveur. Perdre un message coûte cher, le poster
+   deux fois ne coûte rien.
+2. **Une écriture a plus de temps qu'une lecture** (`WRITE_TIMEOUT_MS`, 45 s,
+   contre 20 s). Couper une écriture ne l'annule pas côté serveur : ça ne fait
+   que nous en cacher l'issue, et fabriquer un doublon. Une lecture, elle, est
+   rejouée au tour suivant sans rien risquer.
+3. **Une lecture périmée n'écrase jamais un état plus frais.** Une réponse de
+   lecture décrit le serveur au moment où elle a été *calculée* : partie avant
+   une écriture et revenue après elle, l'appliquer remettrait l'état d'avant, et
+   le message qu'on vient d'écrire disparaîtrait de son propre écran.
+   `Store.epoch` marque chaque état adopté ; `Sync.pull` jette sa réponse si un
+   plus frais s'est installé pendant le trajet.
+
+Tant qu'un message n'est pas remis, l'interface affiche **« envoi… »** au lieu
+d'une heure : celle du serveur n'existe pas encore, et celle de l'appareil n'est
+pas celle que les autres verront. C'est un **état**, pas une alerte — il dure le
+temps d'un aller-retour.
+
 ---
 
 ## Verrou par code d'accès
