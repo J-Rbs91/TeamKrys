@@ -1701,6 +1701,16 @@ p { margin: 0; }
   animation: slide-up var(--dur-slow) var(--ease-out);
 }
 
+/* Réponse au « et ensuite ? » d'un état vide : un cran sous le texte principal,
+   sans jamais concurrencer l'action. --faint, la même encre que les surtitres. */
+.empty-next {
+  max-width: 34ch;
+  margin-top: 14px;
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  line-height: 1.5;
+}
+
 /* =================================================== Présentation initiale ==== */
 
 /* Une FEUILLE, pas un écran : le niveau 2 est réservé à ce qui flotte, et un

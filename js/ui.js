@@ -57,12 +57,17 @@
     return node;
   }
 
-  function emptyState(iconName, title, text, action) {
+  /* `next` répond à « et ensuite ? ». Un état vide de PREMIER USAGE est le premier
+   * écran que voit un nouvel arrivant : dire quoi faire ne suffit pas, il faut dire
+   * où cela mène. C'est aussi ce qui permet à la présentation initiale de rester
+   * courte — le reste du cycle s'enseigne ici, au moment de l'usage. */
+  function emptyState(iconName, title, text, action, next) {
     return el("div", { class: "empty" }, [
       el("div", { class: "empty-art" }, [icon(iconName, 32)]),
       el("div", { class: "empty-title", text: title }),
       text ? el("div", { class: "empty-text", text: text }) : null,
-      action || null
+      action || null,
+      next ? el("div", { class: "empty-next", text: next }) : null
     ]);
   }
 
@@ -603,7 +608,8 @@
         el("button", {
           class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
-        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]));
+        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]),
+        "Ensuite : on en discute, on en tire des propositions, on vote, et on retient une conclusion.");
     } else {
       var list = el("div", { class: "stack topics-grid" });
       var index = 0;
@@ -618,7 +624,21 @@
         ]));
       }
       if (!visible.length) {
-        list.appendChild(el("p", { class: "hint", text: "Aucun sujet ne correspond." }));
+        /* Un filtre sans résultat n'est PAS un premier usage : l'utilisateur pense
+         * « j'ai mal cherché », pas « je ne sais pas démarrer ». La réponse est donc
+         * un rappel du filtre actif et une sortie qui l'élargit réellement — un
+         * texte seul laissait l'écran sans issue. */
+        list.appendChild(el("div", { class: "note" }, [
+          icon("search", 16),
+          el("div", { style: { flex: "1" } }, [
+            el("div", { text: "Aucun sujet ne correspond à « " + Utils.trim(UI.local.search) + " »." }),
+            el("button", {
+              class: "btn btn-sm btn-ghost", type: "button",
+              style: { marginTop: "8px" },
+              onclick: function () { UI.set({ search: "" }); }
+            }, [icon("close", 15), el("span", { text: "Effacer la recherche" })])
+          ])
+        ]));
       }
       visible.forEach(function (topic) { list.appendChild(reveal(topicCard(topic), index++)); });
       if (archivedCount > 0) {
@@ -897,7 +917,9 @@
 
     if (!topic.messages.length) {
       threadInner.appendChild(emptyState("message", "La discussion démarre ici",
-        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer."));
+        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer.",
+        null,
+        "Ensuite : une idée qui mûrit devient une proposition, depuis la barre du bas."));
     }
 
     var thread = el("div", { class: "thread", dataset: { thread: topic.id } }, [threadInner]);
@@ -1038,7 +1060,8 @@
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
-        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })])));
+        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })]),
+        "Ensuite : chacun vote pour, contre ou abstention — un vote par personne."));
     } else {
       topic.proposals.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
     }
@@ -1111,7 +1134,9 @@
 
     if (!topic.conclusions.length) {
       list.appendChild(emptyState("checkCircle", "Pas encore de conclusion",
-        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée."));
+        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée.",
+        null,
+        "Ensuite : la conclusion retenue part dans la synthèse de réunion."));
     }
 
     var textarea = bindCounter(el("textarea", {

@@ -65,6 +65,7 @@ apps-script/appsscript.json manifeste du projet Apps Script
 tests/parity.test.js       parité client / backend, action par action
 tests/sync.test.js         deux clients face à un faux backend (réception, file)
 tests/session.test.js      verrou par inactivité : quand l'ouverture exige le code
+tests/onboarding.test.js   présentation initiale : qui la voit, qui y échappe
 ```
 
 ---
@@ -203,6 +204,8 @@ quand l'utilisateur vit la centième.
 | Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
 | Feuille, fenêtre | 240 ms | quotidien |
 | **Séquence d'accueil** | 1060 ms, en quatre temps | une fois par ouverture |
+| Arrivée de la présentation initiale | 240 ms le voile, 220 ms la carte, chevauchés | une fois par appareil |
+| Changement de panneau de la présentation | 100 ms, **opacité seule** | quatre fois en trente secondes |
 
 La cascade de révélation passait de 550 ms, 36 px et un changement d'échelle, à
 45 ms de décalage **sans plafond** : la trentième carte d'une longue liste
@@ -262,6 +265,44 @@ Et trois points d'implémentation :
 Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
 aurait été une dépendance distante de plus, contre la règle du dépôt, pour des
 transitions de propriétés que le navigateur sait déjà interpoler.
+
+#### La présentation initiale
+
+À sa première entrée effective dans l'espace, un nouvel arrivant voit l'application
+se présenter en cinq panneaux — les cinq parties, dans l'ordre où on les traverse.
+Le cadrage complet, la détection de la première connexion et le plan-séquence sont
+dans [`docs/ONBOARDING.md`](docs/ONBOARDING.md) ; ne sont retenus ici que les trois
+points qui touchent le mouvement et la structure de l'application.
+
+**Le calque vit hors du cycle de `UI.render`.** C'est la décision qui tient tout le
+reste. `UI.set` incrémente `UI.local.version`, qui entre dans `signature()` : si
+l'étape courante y vivait, chaque « Suivant » reconstruirait `#app`, perdrait le
+focus, et recréerait la région d'annonce **avec** son contenu — or une région live
+insérée en même temps que son texte n'annonce rien. Le calque mute donc son propre
+sous-arbre, comme `UI.refreshStatus`, et ses nœuds de commande ne sont jamais
+recréés.
+
+**C'est un `<dialog>` ouvert par `showModal()`.** Le voile est son `::backdrop`
+natif — donc aucune couche plein écran de plus, ce que le retrait de l'aura et du
+grain interdisait — et le piège de focus comme l'inertie de l'arrière-plan viennent
+de l'élément lui-même, sans bibliothèque. L'appel est **gardé** : `compat-scan`
+donne à `showModal()` un plancher WebKit 15.4 et un mode d'échec `throws`, or iOS
+15.0 → 15.3 est en tier B, où une perte de fonction est interdite. Sans garde, la
+séquence lèverait une exception sur cette sonde ; avec, elle retombe sur une carte
+non modale.
+
+**Deux régimes de mouvement, pas un.** L'arrivée est vue une fois : elle a droit à
+un geste. La transition entre panneaux est vue quatre fois en trente secondes : elle
+tient en 100 ms, et **en opacité seule**. Ce dernier point n'est pas une économie —
+le critère d'accessibilité sur le mouvement ne vise que le déplacement et le
+changement de taille, donc un fondu d'opacité en sort du champ. On n'atténue pas le
+risque, on le supprime. Et le voile ne se refond jamais entre deux panneaux : c'est
+le seul repère fixe de la séquence.
+
+L'invariance du repli est **vérifiée** par `tests/onboarding.test.js`, qui lit
+`css/app.css` : toute animation de la séquence doit vivre dans un bloc
+`no-preference`, aucune règle en dehors ne doit poser un état masqué, et le fondu du
+voile doit être porté par la classe d'arrivée — sinon il rejouerait à chaque étape.
 
 #### Une entrée survit à un nouveau rendu
 
@@ -585,3 +626,4 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md) — structure du JSON et liste des actions
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
+- [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion
