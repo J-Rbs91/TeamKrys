@@ -152,7 +152,10 @@ ou à projeter (les barres et boutons disparaissent à l'impression).
 À votre toute première entrée dans l'espace, l'application se présente en quelques
 panneaux : les sujets, la discussion, les propositions et leur vote, la conclusion,
 et la synthèse de réunion. Vous pouvez la passer à tout moment, et la reprendre plus
-tard — elle repart là où vous l'avez laissée.
+tard : elle repart là où vous l'avez laissée, **si votre navigateur autorise
+l'enregistrement local**. Ouvert depuis la fenêtre d'une messagerie, ou en navigation
+privée, il ne le fait pas toujours — la présentation réapparaît alors à chaque
+ouverture, et les Réglages vous le disent.
 
 Pour la revoir : **Réglages → Revoir la présentation**.
 

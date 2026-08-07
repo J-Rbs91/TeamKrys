@@ -393,6 +393,10 @@
    * enregistrement ne porte pas. */
   App.onboardingState = function () {
     var saved = Utils.storage.get(CONFIG.KEYS.onboarding, null);
+    /* ⚠️ Avant de dire « pas encore vue », vérifier que cet appareil peut retenir
+     * quoi que ce soit. Sans cette branche, la phrase s'affiche juste après que la
+     * séquence a été vue et terminée — parce que l'écriture a échoué en silence. */
+    if (!saved && !Utils.storage.available()) { return "sans-mémoire"; }
     if (!saved || typeof saved !== "object") { return "inconnue"; }
     if (saved.migrated === true) { return "migrée"; }
     if (saved.done === true) { return saved.skipped === true ? "passée" : "vue"; }
@@ -416,8 +420,10 @@
      * probablement pas annoncé non plus. Un message d'erreur qu'on ne peut ni voir ni
      * entendre n'existe pas. */
     if (!stored) {
-      UI.toastAfterOnboarding(
-        "Cet appareil n'enregistre rien : la présentation ne sera pas mémorisée.", "error");
+      /* `UI.toast` met lui-même de côté les messages levés pendant la séquence, et les
+       * dit au démontage : sous le calque supérieur, un toast est recouvert et retiré
+       * de l'arbre d'accessibilité avec l'arrière-plan inerte. */
+      UI.toast("Cet appareil n'enregistre rien : la présentation ne sera pas mémorisée.", "error");
     }
   };
 
@@ -571,6 +577,11 @@
           }
         });
       }
+      /* Un worker peut être DÉJÀ en cours d'installation quand `register()` résout :
+       * `updatefound` est alors parti avant que nous n'écoutions, et `waiting` est
+       * encore nul — sans cette ligne, cette mise à jour n'a aucun bandeau, et il faut
+       * attendre le chargement suivant pour en proposer un. */
+      watch(registration.installing);
       if (registration.waiting && navigator.serviceWorker.controller) {
         UI.showUpdateBanner(function () {
           updateRequested = true;

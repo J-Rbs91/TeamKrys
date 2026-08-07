@@ -65,15 +65,24 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 ### 1 ter. Présentation — accessibilité
 
 - [ ] VoiceOver / TalkBack : le dialogue s'annonce **avec son titre**, et le titre est
-      lu **avant** les commandes.
+      lu **avant** les commandes. **Noter mot pour mot** ce qui est entendu à
+      l'apparition : un « boîte de dialogue » sans nom est un défaut, pas un détail.
+- [ ] Le titre est entendu **une** fois, pas deux.
+- [ ] Le **paragraphe** du panneau est lu — à l'étape 1 **comme aux suivantes**. C'est
+      la charge utile ; le titre seul ne suffit pas.
 - [ ] « Suivant » : le nouveau numéro d'étape est **annoncé** sans toucher l'écran.
 - [ ] Balayage en boucle : on ne sort jamais du panneau ; rien de l'écran du dessous
       n'est lu.
 - [ ] « Passer » ou « Commencer » : le focus atterrit sur un élément de l'écran réel,
       et le lecteur d'écran l'annonce.
 - [ ] Clavier externe : Tab fait le tour des commandes, un contour de focus est
-      **visible** sur chacune, Échap ferme. ⚠️ Sous iOS 15.0–15.3, l'indicateur de
-      focus est absent — défaut connu du thème, pas de la séquence.
+      **visible** sur chacune, Échap ferme. À faire sur un appareil ≥ iOS 15.4 **et**
+      sur la sonde 15.0–15.3, où la séquence est non modale : c'est là que le clavier
+      devient le seul moyen de s'orienter, et l'indicateur de focus y est désormais
+      doublé par `:focus` — vérifier qu'il est bien là.
+- [ ] Tab atteint « Précédent » avant « Passer », alors que « Passer » est à gauche à
+      l'écran : décalage assumé (une sortie ne doit pas précéder le chemin principal),
+      à constater sans en faire un blocage.
 - [ ] Police système au maximum (200 %), portrait **et** paysage : aucun texte
       tronqué, « Suivant » reste atteignable, au besoin en faisant défiler le panneau.
 - [ ] iPhone à encoche, paysage : aucune commande sous la barre gestuelle ni sous
@@ -82,6 +91,20 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       Aucun écran vide, aucune carte figée à mi-parcours.
 - [ ] Pincer pour zoomer pendant la séquence : le zoom fonctionne.
 - [ ] Aperçu d'impression du mode réunion : aucune trace du calque.
+- [ ] « Précédent » depuis l'étape 2 : le focus n'est pas perdu, et rien n'annonce un
+      retour en haut du document. (Le bouton se masque alors qu'il peut porter le focus.)
+- [ ] Police système à **130 %** en plus de 200 % : la rangée de commandes ne déborde
+      pas, et **aucun défilement horizontal** n'apparaît dans la feuille.
+- [ ] Panneau 5 sous mouvement réduit : anneau du monogramme **complet** et point
+      présent — c'est le seul composant réutilisé que le test statique ne couvre pas.
+- [ ] Geste de retour du système pendant la séquence : il **ferme** le panneau. Il ne
+      doit jamais naviguer en laissant le panneau ouvert sur un autre écran.
+- [ ] Provoquer une erreur de synchronisation pendant la séquence (mode avion) : le
+      message est **dit au démontage**, pas perdu.
+- [ ] Navigation privée → Réglages → « Revoir la présentation » : l'application dit que
+      cet appareil n'enregistre rien, et le dit **après** la séquence, pas sous elle.
+- [ ] Sonde tier B **avec VoiceOver actif** : le panneau est-il atteint au balayage, à
+      quel rang, l'arrière-plan est-il lu, Échap ferme-t-il ?
 - [ ] iPhone resté en iOS 15.0–15.3 (sonde tier B) : la séquence s'affiche en carte
       **non modale** sans voile, reste navigable, et aucune erreur n'apparaît. C'est
       la dégradation attendue.

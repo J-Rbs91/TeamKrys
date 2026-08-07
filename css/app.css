@@ -208,7 +208,11 @@
   /* — Typographie fluide ---------------------------------------------- */
   /* La hiérarchie passe d'abord par la GRAISSE, ce qui préserve la densité :
      cinq tailles suffisent là où sept commençaient à se ressembler. */
-  --fs-eyebrow: 11px;
+  /* En rem, et non en px : une taille absolue ignore le réglage de police du système,
+     ce qui est un défaut d'accessibilité partout où elle sert — et ici, le compteur
+     « 3 / 5 », seul repère de progression de la présentation, restait à 11 px même à
+     200 %. Même valeur qu'avant à la racine par défaut. */
+  --fs-eyebrow: 0.6875rem;
   --fs-xs: clamp(0.75rem, calc(0.715rem + 0.143vw), 0.8125rem);
   --fs-sm: 0.875rem;
   --fs-body: 1rem;
@@ -1880,7 +1884,12 @@ p { margin: 0; }
 @media (prefers-reduced-motion: no-preference) {
   /* Le voile, 240 ms — même valeur que les feuilles : c'est le même événement,
      une surface qui se pose au-dessus du contenu. */
-  .onboard--enter::backdrop { animation: fade-in var(--dur-slow) var(--ease-out); }
+  /* Replis DANS les var(), pour la même raison que le fond ci-dessus : sous les
+     planchers, `::backdrop` n'hérite pas, et sans repli l'animation entière serait
+     invalide — le voile apparaîtrait d'un coup au lieu de se poser. */
+  .onboard--enter::backdrop {
+    animation: fade-in var(--dur-slow, 0.24s) var(--ease-out, cubic-bezier(0.2, 0, 0, 1));
+  }
 
   /* La carte monte de 8 px : le vocabulaire de déplacement unique du dépôt, et le
      seul endroit de la séquence où il est employé. Décalée de 120 ms pour que le

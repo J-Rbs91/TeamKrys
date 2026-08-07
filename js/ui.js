@@ -293,6 +293,12 @@
   /* --------------------------------------------------------------- Toasts --- */
 
   UI.toast = function (text, kind) {
+    /* Voir UI.holdToast : en modal, un toast serait recouvert par le calque supérieur
+     * et retiré de l'arbre d'accessibilité avec l'arrière-plan inerte. */
+    if (UI.onboardingHoldsToasts && UI.onboardingHoldsToasts()) {
+      UI.holdToast(text, kind);
+      return;
+    }
     if (!toastRoot) { return; }
     /* Un élément fixe reste accroché au viewport de MISE EN PAGE : clavier
      * ouvert, le moteur décale le viewport visuel et le toast s'afficherait
@@ -1288,6 +1294,10 @@
     if (state === "passée") { return "Vous avez passé la présentation."; }
     if (state === "en cours") { return "Présentation commencée, pas terminée."; }
     if (state === "migrée") { return "Vous utilisiez déjà l'application : la présentation ne vous a pas été montrée."; }
+    if (state === "sans-mémoire") {
+      return "Cet appareil n'enregistre rien : la présentation ne peut pas être mémorisée, "
+        + "et elle réapparaîtra à la prochaine ouverture.";
+    }
     return "La présentation n'a pas encore été vue sur cet appareil.";
   }
 
@@ -2002,7 +2012,10 @@
     var text = el("p", { class: "hint onboard-text", id: "onboard-text", text: "" });
 
     var skip = el("button", {
+      /* Le libellé visible reste court ; le nom accessible, lui, est entendu hors de
+       * tout contexte visuel — « Passer » seul n'y dit pas quoi. */
       class: "btn btn-ghost onboard-skip", type: "button", text: "Passer",
+      "aria-label": "Passer la présentation",
       onclick: function () { UI.closeOnboarding(true); }
     });
     var prev = el("button", {
@@ -2114,6 +2127,19 @@
       UI.closeOnboarding(true);
     });
 
+    /* ⚠️ Le geste de retour d'Android n'est intercepté par un `<dialog>` modal que
+     * depuis Chromium 120. En dessous — le plancher du tier A est 108 —, il navigue
+     * SANS que `cancel` ne parte : on se retrouvait alors avec une navigation
+     * effectuée ET le panneau toujours ouvert, posé sur un autre écran, annonçant
+     * « Étape 2 / 5 » de quelque chose qu'on a quitté.
+     *
+     * Une navigation vaut donc sortie, sur tous les moteurs : c'est exactement ce que
+     * `CloseWatcher` fait au-dessus de 120, où `cancel` a déjà fermé avant que ce
+     * gestionnaire ne puisse partir. La séquence, elle, ne navigue jamais d'elle-même
+     * — il n'y a pas de faux positif à craindre. */
+    onboard.onNavigate = function () { UI.closeOnboarding(true); };
+    window.addEventListener("hashchange", onboard.onNavigate);
+
     onboardAnnounce();
   }
 
@@ -2121,6 +2147,7 @@
     if (!onboard) { return null; }
     var kept = { panels: onboard.panels, step: onboard.step, segment: onboard.segment };
     var focus = onboard.returnFocus;
+    if (onboard.onNavigate) { window.removeEventListener("hashchange", onboard.onNavigate); }
     if (onboard.modal && typeof onboard.dialog.close === "function") {
       try { onboard.dialog.close(); } catch (error) { /* déjà fermé */ }
     }
@@ -2139,10 +2166,10 @@
      * ressortir le poserait sur l'écran de verrou, puis il se retrouverait derrière
      * le calque remonté, avec un bouton focusable hors du piège de focus. C'est
      * exactement l'état que le report cherche à éviter. */
-    if (pendingToast && pausing !== true) {
-      var said = pendingToast;
-      pendingToast = null;
-      UI.toast(said.text, said.kind);
+    if (heldToasts.length && pausing !== true) {
+      var held = heldToasts;
+      heldToasts = [];
+      held.forEach(function (item) { UI.toast(item.text, item.kind); });
     }
 
     if (pendingUpdate && pausing !== true) {
@@ -2155,15 +2182,23 @@
 
   UI.onboardingActive = function () { return !!onboard; };
 
-  /* Message à dire APRÈS le démontage. Sous le calque supérieur, un toast est
-   * recouvert pendant toute sa durée de vie, et l'arrière-plan étant inerte il n'est
-   * probablement pas annoncé non plus : un message d'erreur qu'on ne peut ni voir ni
-   * entendre n'existe pas. */
-  var pendingToast = null;
+  /* Un toast levé pendant la séquence est-il perdu ? Oui, et seulement en modal :
+   * `showModal()` place le dialogue dans le calque supérieur, donc au-dessus des
+   * toasts malgré `--z-toast`, et l'arrière-plan étant inerte sa région `aria-live`
+   * est retirée de l'arbre d'accessibilité — ni vu, ni entendu. Sur le chemin de
+   * repli, il n'y a ni calque supérieur ni inertie : le toast se voit, on n'y touche
+   * pas.
+   *
+   * Les messages sont donc mis de côté et dits au démontage. Plafonné à trois : après
+   * une trentaine de secondes, une rafale de dix n'apprendrait rien de plus, et la
+   * première erreur est celle qui compte. */
+  var heldToasts = [];
 
-  UI.toastAfterOnboarding = function (text, kind) {
-    if (!onboard) { UI.toast(text, kind); return; }
-    pendingToast = { text: text, kind: kind };
+  UI.onboardingHoldsToasts = function () { return !!onboard && onboard.modal === true; };
+
+  UI.holdToast = function (text, kind) {
+    if (heldToasts.length >= 3) { return; }
+    heldToasts.push({ text: text, kind: kind });
   };
 
   UI.startOnboarding = function (plan) {
