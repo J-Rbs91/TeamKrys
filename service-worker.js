@@ -7,7 +7,7 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.8.0";
+var CACHE_VERSION = "brainsto-v1.8.1";
 
 var SHELL = [
   "./",

@@ -73,6 +73,59 @@ iPhone est **WebKit**, et il n'est pas testable ici : le chemin de repli
 que VoiceOver, TalkBack, le clavier virtuel, la barre gestuelle et la police système
 à 200 %. Tout cela reste dans les vérifications restantes.
 
+### Revue finale QA (2026-08-07) — huit agents du dépôt + revue de code
+
+**Verdicts rendus** : `qa-webkit-ios` NEEDS_CORRECTION · `qa-blink-android` NEEDS_CORRECTION ·
+`qa-gecko-firefox` NEEDS_CORRECTION · `qa-mobile-a11y` NEEDS_CORRECTION ·
+`qa-pwa-offline` NEEDS_CORRECTION · `qa-responsive-touch` NEEDS_CORRECTION ·
+`qa-webview-inapp` NEEDS_INPUT · `qa-mobile-perf` **OK avec réserves**.
+
+**Le défaut capital, trouvé par la revue de code et confirmé indépendamment par
+Blink et par Gecko : la séquence ne s'affichait JAMAIS à la première connexion.**
+`App.onboardingPlan` réévaluait la règle au moment d'afficher ; or à cet instant
+`App.gate()` vaut `null`, donc l'adresse et le prénom existent, et aucun
+enregistrement n'avait encore été écrit — la règle répondait « appareil déjà
+utilisé ». La fonctionnalité était inopérante hors rejeu manuel. Reproduit par
+exécution directe de la règle, corrigé de deux façons cumulées : l'enregistrement
+est posé dès que le démarrage conclut « première fois », et le plan ne re-dérive
+plus que le segment.
+
+**Mon banc d'essai est la cause du silence** : il préremplissait `localStorage`,
+donc il ne traversait jamais les gates. Le scénario manquant a été écrit — stockage
+vide, mode local, prénom, séquence — et c'est lui qui atteste désormais le critère A1.
+
+| # | Défaut corrigé | Trouvé par |
+|---|---|---|
+| 1 | Séquence jamais affichée à la première connexion | revue de code, Blink, Gecko |
+| 2 | `background: var(--scrim)` invalide sur `::backdrop` avant Firefox 120 / Chromium 122 / WebKit 17.4 → **voile absent sur presque tous les planchers de la matrice** | Gecko, WebKit, Blink |
+| 3 | `showModal()` appelé avant que le titre soit écrit → dialogue ouvert **sans nom accessible** | a11y |
+| 4 | Focus sur un conteneur sans nom ni rôle, et région live ne portant pas le corps du panneau | a11y |
+| 5 | Région live insérée et remplie dans la même tâche → étape 1 probablement non annoncée | a11y |
+| 6 | `:focus-visible` sans doublon `:focus` → **aucun indicateur de focus** sur le moteur même qui prend le repli non modal | a11y, WebKit |
+| 7 | Liste de sélecteurs contenant `:focus-visible` → règle rejetée en bloc au tier B | WebKit, Gecko |
+| 8 | `.onboard-foot` sans `flex-wrap` → débordement à 150 % de police | responsive |
+| 9 | Bouton principal sautant de 104 px au dernier panneau (masquer « Passer » emporte son `margin-right: auto`) | responsive |
+| 10 | `vh` sans compagnon `dvh` → feuille rognée en paysage | WebKit, Blink, responsive |
+| 11 | `overflow-x` laissé à `auto` par la feuille de l'agent utilisateur, et pas d'`overscroll-behavior` | responsive, Blink |
+| 12 | Terme de recherche interpolé sans `min-width: 0` ni `overflow-wrap` → **débordement horizontal de la page** à 320 px | responsive |
+| 13 | « Effacer la recherche » à 36 px au lieu de 44 | responsive |
+| 14 | Note « aucun résultat » affichée aussi quand la liste est vide par archivage → guillemets vides et bouton sans effet | revue de code |
+| 15 | « Effacer la recherche » sans effet visible : `restoreDrafts` réinjectait l'ancien terme | revue de code |
+| 16 | `pendingUpdate` ressorti sur une simple pause → bandeau posé sur l'écran de verrou | revue de code |
+| 17 | Bandeau de version déjà posé **recouvrant** les commandes du panneau sur le chemin de repli | PWA |
+| 18 | `CONFIG.onboardingDue` appelé sans garde **avant** `Sync.boot()` → en chargement mixte, démarrage gelé et file d'actions non rejouée | PWA |
+| 19 | `App.onboardingState` appelé sans garde → écran Réglages mort en chargement mixte | PWA |
+| 20 | Toast d'échec d'écriture émis juste avant de monter le calque, donc invisible et non annoncé | a11y |
+| 21 | `hidden` posé sur le bouton portant le focus avant de replacer celui-ci | a11y |
+| 22 | Bord du repli à 1,4:1 du contenu, sans voile pour le détacher | a11y |
+
+**Non corrigé, et assumé** : le calque supérieur masque les toasts pendant la
+séquence (documenté dans le code) ; l'ordre de tabulation ne suit pas l'ordre visuel
+pour « Passer » (décision d'a11y, revendiquée) ; le geste de retour Android sous
+Chromium 120 peut naviguer sans fermer le dialogue (à trancher) ; et la séquence se
+rejoue à chaque ouverture dans une fenêtre in-app à stockage refusé (irréductible,
+borné à une fois par chargement).
+
 ## Vérifications restantes
 
 Toutes celles des critères de réussite du brief, plus la recette a11y sur appareil

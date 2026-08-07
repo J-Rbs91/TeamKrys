@@ -296,6 +296,13 @@
   }
 
   function onboardingDecide() {
+    /* Chargement mixte : la navigation est servie en network-first et les
+     * sous-ressources en cache-first, donc un `index.html` neuf peut cohabiter avec
+     * un `js/config.js` de cache ancien. Sans cette garde, l'appel lèverait une
+     * exception ICI — c'est-à-dire AVANT `Sync.boot()`, donc avant que la file
+     * d'actions ne soit relue et rejouée. Un onboarding raté ne doit jamais coûter
+     * une file d'actions. */
+    if (typeof CONFIG.onboardingDue !== "function") { return null; }
     return CONFIG.onboardingDue(
       Utils.storage.get(CONFIG.KEYS.onboarding, null),
       onboardingContext(),
@@ -337,6 +344,14 @@
     }
     onboardingWanted = true;
     onboardingStep = plan.step;
+
+    /* ⚠️ On POSE l'enregistrement tout de suite, avant même d'avoir affiché quoi que
+     * ce soit. Sans cela, l'appareil traverse les gates — adresse, puis prénom — et
+     * se présente ensuite à la règle avec les signes d'un appareil déjà utilisé,
+     * mais sans enregistrement : elle répond « migrate », et la séquence ne
+     * s'affiche JAMAIS à la première connexion. C'est le défaut que la revue a
+     * trouvé, et il ne se voit pas si l'on préremplit le stockage pour tester. */
+    writeOnboarding({ done: false, step: plan.step });
   }
 
   App.onboardingWanted = function () { return onboardingWanted && !onboardingShown; };
@@ -344,13 +359,20 @@
   /* Le segment ne se connaît qu'au moment d'afficher : au démarrage, l'état de
    * l'équipe n'est pas encore rapatrié, donc on ne sait pas si l'espace est vide.
    * La règle étant pure, la rappeler ici ne coûte rien et donne la bonne réponse. */
+  /* Ce qu'il reste à jouer. La DÉCISION a été prise au démarrage et vit en mémoire :
+   * on ne la rejoue pas ici. Seul le SEGMENT se calcule maintenant, parce qu'il
+   * dépend de l'état de l'équipe, qui n'était pas encore rapatrié au démarrage.
+   *
+   * ⚠️ Ne pas rappeler `onboardingDue` ici : à cet instant l'appareil porte une
+   * adresse et un prénom, et la règle le prendrait pour un appareil déjà utilisé. */
   App.onboardingPlan = function () {
-    var plan = onboardingDecide();
-    if (!plan || plan.reason === "migrate") { return null; }
+    if (!onboardingWanted) { return null; }
+    var segment = CONFIG.onboardingSegment(onboardingContext());
+    var panels = CONFIG.ONBOARDING_PANELS[segment] || CONFIG.ONBOARDING_PANELS.full;
     return {
-      panels: plan.panels,
-      step: Math.min(onboardingStep, plan.panels.length - 1),
-      segment: plan.segment
+      panels: panels.slice(),
+      step: Math.max(0, Math.min(onboardingStep, panels.length - 1)),
+      segment: segment
     };
   };
 
@@ -378,9 +400,7 @@
   };
 
   App.replayOnboarding = function () {
-    if (!writeOnboarding({ done: false, step: 0 })) {
-      UI.toast("Impossible d'enregistrer sur cet appareil : la présentation ne sera pas mémorisée.", "error");
-    }
+    var stored = writeOnboarding({ done: false, step: 0 });
     onboardingWanted = true;
     onboardingStep = 0;
     onboardingShown = false;
@@ -391,6 +411,14 @@
      * aucun écran précis, la séquence est valable où que l'on soit. Une exception de
      * moins à la règle « la séquence ne navigue jamais à la place de l'utilisateur ». */
     UI.replayOnboarding();
+    /* Dit APRÈS la séquence, jamais avant : sous le calque supérieur, un toast est
+     * recouvert pendant toute sa durée de vie, et l'arrière-plan étant inerte il n'est
+     * probablement pas annoncé non plus. Un message d'erreur qu'on ne peut ni voir ni
+     * entendre n'existe pas. */
+    if (!stored) {
+      UI.toastAfterOnboarding(
+        "Cet appareil n'enregistre rien : la présentation ne sera pas mémorisée.", "error");
+    }
   };
 
   /* ------------------------------------------------------------ Routeur --- */

@@ -627,18 +627,37 @@
         /* Un filtre sans résultat n'est PAS un premier usage : l'utilisateur pense
          * « j'ai mal cherché », pas « je ne sais pas démarrer ». La réponse est donc
          * un rappel du filtre actif et une sortie qui l'élargit réellement — un
-         * texte seul laissait l'écran sans issue. */
-        list.appendChild(el("div", { class: "note" }, [
-          icon("search", 16),
-          el("div", { style: { flex: "1" } }, [
-            el("div", { text: "Aucun sujet ne correspond à « " + Utils.trim(UI.local.search) + " »." }),
-            el("button", {
-              class: "btn btn-sm btn-ghost", type: "button",
-              style: { marginTop: "8px" },
-              onclick: function () { UI.set({ search: "" }); }
-            }, [icon("close", 15), el("span", { text: "Effacer la recherche" })])
-          ])
-        ]));
+         * texte seul laissait l'écran sans issue.
+         *
+         * ⚠️ Seulement s'il Y A une recherche : la liste peut aussi être vide parce
+         * que tous les sujets sont archivés, et on afficherait alors des guillemets
+         * vides avec un bouton sans effet. */
+        if (query) {
+          /* Le terme est écourté : il est déjà visible dans le champ juste au-dessus,
+           * et une URL collée pousserait la carte au-delà de la largeur de l'écran. */
+          var shown = Utils.limit(Utils.trim(UI.local.search), 28);
+          if (shown.length < Utils.trim(UI.local.search).length) { shown += "…"; }
+          list.appendChild(el("div", { class: "note" }, [
+            icon("search", 16),
+            el("div", { class: "note-body" }, [
+              el("div", { text: "Aucun sujet ne correspond à « " + shown + " »." }),
+              el("button", {
+                class: "btn btn-sm btn-ghost", type: "button",
+                style: { marginTop: "8px" },
+                onclick: function () {
+                  /* Le champ est vidé AVANT le rendu : `captureDrafts` lit le DOM au
+                   * début du rendu, et `restoreDrafts` réinjecterait sinon l'ancien
+                   * terme dans le champ reconstruit — liste élargie, champ inchangé. */
+                  var field = document.querySelector('[data-draft="topics:search"]');
+                  if (field) { field.value = ""; }
+                  UI.set({ search: "" });
+                }
+              }, [icon("close", 15), el("span", { text: "Effacer la recherche" })])
+            ])
+          ]));
+        } else {
+          list.appendChild(el("p", { class: "hint", text: "Tous les sujets sont archivés." }));
+        }
       }
       visible.forEach(function (topic) { list.appendChild(reveal(topicCard(topic), index++)); });
       if (archivedCount > 0) {
@@ -1359,9 +1378,15 @@
          * c'est une aide, pas un réglage, et encore moins une donnée de dépannage. */
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("sparkle", "Présentation"),
-          el("div", { class: "hint", text: onboardingHint(App.onboardingState()) }),
+          /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces
+           * fonctions n'existent pas, et l'écran des Réglages — donc le diagnostic
+           * et la synchronisation manuelle — ne se rendrait plus du tout. */
+          el("div", { class: "hint", text: typeof App.onboardingState === "function"
+            ? onboardingHint(App.onboardingState()) : onboardingHint("inconnue") }),
           el("button", { class: "btn btn-outline btn-block", type: "button",
-            onclick: function () { App.replayOnboarding(); } },
+            onclick: function () {
+              if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
+            } },
           [icon("sparkle", 16), el("span", { text: "Revoir la présentation" })])
         ]), 3),
         reveal(diagRows, 4)
@@ -1783,6 +1808,7 @@
   var onboard = null;         // { panels, step, segment, nodes… } quand la présentation est à l'écran
   var onboardPaused = null;   // le même objet, mis de côté quand un gate reprend la main
   var pendingUpdate = null;   // rappel du bandeau de version, ajourné
+  var bannerUpdate = null;    // rappel d'un bandeau DÉJÀ posé, à reprendre si le calque monte
   var onboardTimer = 0;
 
   /* Attente avant de poser le calque, comptée depuis l'arrivée sur l'écran. Ce
@@ -1890,7 +1916,8 @@
   /* Le libellé de la sortie dit ce qui se passe ensuite : « Suivant » tant qu'il
    * reste une étape, « Commencer » sur la dernière. Jamais « Fermer », qui
    * n'annonce rien. */
-  function onboardApply() {
+  /* PEINDRE seulement. Voir onboardAnnounce pour la raison de la séparation. */
+  function onboardPaint() {
     if (!onboard) { return; }
     var total = onboard.panels.length;
     var index = onboard.step;
@@ -1920,19 +1947,6 @@
     onboard.next.appendChild(el("span", { text: last ? "Commencer" : "Suivant" }));
     if (!last) { onboard.next.appendChild(icon("forward", 18)); }
 
-    /* Le focus se replace en tête à chaque étape : le titre et le texte doivent
-     * être lus avant les commandes. Aucune source normative ne prescrit ce
-     * comportement pour une séquence de dialogues — le corpus ne décrit qu'un
-     * dialogue isolé. C'est une décision, et elle est à vérifier au lecteur
-     * d'écran (docs/ONBOARDING.md, vérifications différées). */
-    onboard.card.focus();
-
-    /* La région existe depuis le montage ; on n'y écrit qu'ensuite, sinon elle
-     * n'annonce rien. `polite` et jamais `assertive` : couper un toast d'erreur
-     * serait pire que d'attendre une seconde. */
-    onboard.live.textContent = "Étape " + (index + 1) + " sur " + total
-      + ", " + spec.eyebrow + ". " + spec.title + ".";
-
     /* Fondu du contenu à chaque changement d'étape — jamais au premier affichage,
      * qui a son propre geste d'arrivée. Relancer une animation CSS exige de retirer
      * la classe, de forcer un recalcul, puis de la reposer : sans le recalcul, le
@@ -1942,13 +1956,49 @@
       void onboard.card.offsetWidth;
       onboard.card.classList.add("is-step");
     }
-    onboard.applied = true;;
+  }
+
+  /* ANNONCER, et placer le focus. Séparé de la peinture, et appelé APRÈS l'ouverture :
+   * `showModal()` déplace le focus et déclenche l'annonce du dialogue, donc le titre
+   * doit déjà être écrit à cet instant — sinon `aria-labelledby` pointe une chaîne
+   * vide et le dialogue s'annonce sans nom.
+   *
+   * Le focus va sur le TITRE, pas sur le conteneur : un conteneur générique sans nom
+   * ni rôle est lu soit intégralement — surtitre, compteur, titre, texte et trois
+   * boutons d'un coup — soit pas du tout, selon le lecteur d'écran. Un `h2` a une
+   * annonce courte, déterministe, et une sémantique d'en-tête.
+   *
+   * La région porte le CORPS du panneau, pas seulement son titre : c'est la charge
+   * utile, et `aria-describedby` posé sur le dialogue n'est consommé qu'à l'entrée,
+   * pas à chaque changement d'étape.
+   *
+   * Et on n'y écrit RIEN à la première peinture : l'annonce d'ouverture du dialogue
+   * porte déjà le titre, l'y répéter le ferait lire deux fois. */
+  function onboardAnnounce() {
+    if (!onboard) { return; }
+    var index = onboard.step;
+    var spec = onboardPanel(onboard.panels[index]);
+
+    onboard.title.focus();
+
+    if (onboard.applied) {
+      onboard.live.textContent = "Étape " + (index + 1) + " sur " + onboard.panels.length
+        + ". " + spec.title + ". " + onboardBody(spec, onboard.segment);
+    }
+    onboard.applied = true;
+  }
+
+  function onboardApply() {
+    onboardPaint();
+    onboardAnnounce();
   }
 
   function onboardBuild() {
     var live = el("div", { class: "onboard-live", role: "status", "aria-live": "polite" });
     var eyebrow = el("div", { class: "section-title onboard-eyebrow" });
-    var title = el("h2", { class: "onboard-title", id: "onboard-title", text: "" });
+    var title = el("h2", {
+      class: "onboard-title", id: "onboard-title", text: "", tabindex: "-1"
+    });
     var text = el("p", { class: "hint onboard-text", id: "onboard-text", text: "" });
 
     var skip = el("button", {
@@ -1970,7 +2020,7 @@
      * commandes dans l'ordre de tabulation. */
     var extra = el("div", { class: "onboard-extra-slot" });
     var foot = el("div", { class: "onboard-foot" }, [prev, next, skip]);
-    var card = el("div", { class: "onboard-card", tabindex: "-1" }, [eyebrow, title, text, extra, foot]);
+    var card = el("div", { class: "onboard-card" }, [eyebrow, title, text, extra, foot]);
     var dialog = el("dialog", {
       class: "onboard",
       "aria-labelledby": "onboard-title",
@@ -1996,10 +2046,26 @@
       extra: nodes.extra, skip: nodes.skip, prev: nodes.prev, next: nodes.next
     };
 
+    /* ⚠️ Report dans l'AUTRE sens, et il est indispensable : `showUpdateBanner` est
+     * appelé à la résolution de `register()`, donc bien avant que le calque ne se
+     * monte. Le cas fréquent n'est pas « le bandeau arrive pendant la séquence »,
+     * c'est « la séquence monte au-dessus d'un bandeau déjà là ». Or le bandeau est
+     * à `--z-banner` (70) contre `--z-onboard` (65), au même ancrage bas : sur le
+     * chemin de repli, où il n'y a ni calque supérieur ni inertie, il RECOUVRE les
+     * commandes du panneau. On le retire et on garde son rappel. */
+    if (bannerUpdate) {
+      pendingUpdate = bannerUpdate;
+      bannerUpdate = null;
+      var posed = document.querySelector(".update-banner");
+      if (posed && posed.parentNode) { posed.parentNode.removeChild(posed); }
+    }
+
     /* Un clavier ouvert derrière le calque n'a plus d'objet : aucune étape ne
      * contient de champ de saisie. */
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
 
+    /* Peint AVANT d'être posé et ouvert : à l'ouverture, le titre doit exister. */
+    onboardPaint();
     onboardRoot.appendChild(nodes.dialog);
 
     /* ⚠️ showModal() donne d'un coup le piège de focus, le calque supérieur et
@@ -2048,10 +2114,10 @@
       UI.closeOnboarding(true);
     });
 
-    onboardApply();
+    onboardAnnounce();
   }
 
-  function onboardUnmount() {
+  function onboardUnmount(pausing) {
     if (!onboard) { return null; }
     var kept = { panels: onboard.panels, step: onboard.step, segment: onboard.segment };
     var focus = onboard.returnFocus;
@@ -2069,7 +2135,17 @@
     if (!target && appRoot) { target = appRoot.querySelector("button, [href], input, select, textarea"); }
     if (target && target.focus) { target.focus(); }
 
-    if (pendingUpdate) {
+    /* Sur une PAUSE — un gate a reprix la main —, le bandeau reste ajourné : le
+     * ressortir le poserait sur l'écran de verrou, puis il se retrouverait derrière
+     * le calque remonté, avec un bouton focusable hors du piège de focus. C'est
+     * exactement l'état que le report cherche à éviter. */
+    if (pendingToast && pausing !== true) {
+      var said = pendingToast;
+      pendingToast = null;
+      UI.toast(said.text, said.kind);
+    }
+
+    if (pendingUpdate && pausing !== true) {
       var resume = pendingUpdate;
       pendingUpdate = null;
       UI.showUpdateBanner(resume);
@@ -2078,6 +2154,17 @@
   }
 
   UI.onboardingActive = function () { return !!onboard; };
+
+  /* Message à dire APRÈS le démontage. Sous le calque supérieur, un toast est
+   * recouvert pendant toute sa durée de vie, et l'arrière-plan étant inerte il n'est
+   * probablement pas annoncé non plus : un message d'erreur qu'on ne peut ni voir ni
+   * entendre n'existe pas. */
+  var pendingToast = null;
+
+  UI.toastAfterOnboarding = function (text, kind) {
+    if (!onboard) { UI.toast(text, kind); return; }
+    pendingToast = { text: text, kind: kind };
+  };
 
   UI.startOnboarding = function (plan) {
     if (!plan || !plan.panels || !plan.panels.length) { return; }
@@ -2125,7 +2212,7 @@
   function onboardSyncWithGate(gate) {
     if (gate) {
       if (onboardTimer) { clearTimeout(onboardTimer); onboardTimer = 0; }
-      if (onboard) { onboardPaused = onboardUnmount(); }
+      if (onboard) { onboardPaused = onboardUnmount(true); }
       return;
     }
     if (onboardPaused && !onboard) {
@@ -2161,15 +2248,16 @@
      * sous les commandes du calque. Il apparaît dès le démontage. */
     if (onboard) { pendingUpdate = onUpdate; return; }
     if (document.querySelector(".update-banner")) { return; }
+    bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
       icon("sparkle", 17),
       el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",
-        onclick: function () { banner.remove(); onUpdate(); }
+        onclick: function () { bannerUpdate = null; banner.remove(); onUpdate(); }
       }),
       el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard",
-        onclick: function () { banner.remove(); } }, [icon("close", 18)])
+        onclick: function () { bannerUpdate = null; banner.remove(); } }, [icon("close", 18)])
     ]);
     document.body.appendChild(banner);
   };

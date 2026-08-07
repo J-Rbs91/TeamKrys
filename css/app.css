@@ -776,6 +776,14 @@ p { margin: 0; }
 
 /* Note contextuelle : une consigne qui doit être lue une fois, pas un statut.
    Pastille souple qui peut passer à la ligne, contrairement à .status-pill. */
+/* Un élément flexible garde `min-width: auto`, donc la largeur de son mot le plus
+   long : sans ces trois déclarations, un terme de recherche collé sans espace pousse
+   la carte et fait défiler la PAGE ENTIÈRE latéralement à 320 px. */
+.note-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* Une cible reste une cible, même dans une note : `.btn-sm` plafonne à 36 px. */
+.note .btn-sm { min-height: var(--tap); }
+
 .note {
   display: flex;
   align-items: flex-start;
@@ -1739,9 +1747,18 @@ p { margin: 0; }
   display: block;
   width: 100%;
   max-width: var(--measure);
-  max-height: 56vh;              /* pas 86vh : au-delà, la feuille redevient un écran */
+  /* Repli avant valeur moderne, la règle du fichier : sans `dvh`, la barre d'adresse
+     rétractable fait mentir `vh` de sa propre hauteur. Pas 86vh : au-delà, la feuille
+     redeviendrait un écran. */
+  max-height: 56vh;
+  max-height: 56dvh;
   margin: 0 auto;
   overflow-y: auto;              /* jamais de hauteur fixe : la police système va jusqu'à 200 % */
+  /* La feuille de l'agent utilisateur pose `overflow: auto` sur `dialog:modal` : ne
+     redéclarer que l'axe vertical laisserait un tirage horizontal caché. */
+  overflow-x: hidden;
+  /* Sans cela, défiler la feuille jusqu'au bout entraîne la page derrière elle. */
+  overscroll-behavior: contain;
   padding: 18px 18px calc(var(--safe-bottom) + 18px);
   padding-left: max(18px, var(--safe-left));
   padding-right: max(18px, var(--safe-right));
@@ -1759,15 +1776,30 @@ p { margin: 0; }
    du texte blanc : c'est pourquoi RIEN de la présentation n'est posé dessus. Le
    texte vit sur --surface-sheet, opaque, où --text, --muted et --faint passent
    dans les deux thèmes. */
-.onboard::backdrop { background: var(--scrim); }
+/* ⚠️ Le repli DANS le var() n'est pas une précaution de style, il est indispensable.
+   `::backdrop` n'hérite de son élément d'origine que depuis Firefox 120, Chromium 122
+   et WebKit 17.4 — or la matrice descend à Chromium 100 et à iOS 15.4. En dessous,
+   `--scrim` n'est pas défini sur le pseudo-élément, la déclaration devient invalide au
+   calcul, et le fond retombe à `transparent` : le voile disparaît. Une seconde
+   déclaration littérale ne sauverait rien, l'invalidité au calcul ne rejoue pas la
+   cascade — seul le repli de `var()` s'applique. */
+.onboard::backdrop { background: var(--scrim, rgba(12, 19, 23, 0.44)); }
+
+@media (prefers-color-scheme: dark) {
+  .onboard::backdrop { background: var(--scrim, rgba(4, 8, 10, 0.66)); }
+}
 
 /* Le centrage passe par `margin: 0 auto`, hérité de `.onboard`, et non par un
    `translateX(-50%)` comme le bandeau de version : un transform au repos sur un
    élément par ailleurs animé est exactement ce que le contrôle de repli interdit,
    et il n'apporte rien ici. */
-.onboard--flat {
+/* Sélecteur doublé : `.onboard--flat` ne battait `inset` de `.onboard` que par
+   l'ordre source, ce qui est vrai mais fragile. */
+.onboard.onboard--flat {
   max-width: min(94vw, 520px);
-  border: 1px solid var(--line-strong);
+  /* `--line-field` et non `--line-strong` : sans voile, la carte ne se détache du
+     contenu que par son filet, et `--line-strong` n'y tient que 1,4:1. */
+  border: 1px solid var(--line-field);
   border-radius: var(--radius-lg);
   bottom: calc(var(--safe-bottom) + 14px);
 }
@@ -1791,9 +1823,19 @@ p { margin: 0; }
    panneau se retrouve cerclé d'accent.
    La règle globale `:focus-visible` vit plus bas dans ce fichier et gagnerait à
    spécificité égale : on la bat par le sélecteur descendant, pas par !important. */
+/* Deux règles séparées, et non un groupe : `:focus-visible` est rejeté par les
+   moteurs sous iOS 15.4 et Firefox 85, et il emporterait avec lui la neutralisation
+   nue — donc l'anneau d'accent reviendrait cercler tout le panneau, précisément sur
+   les moteurs qui empruntent le chemin de repli. */
+/* Le titre reçoit le focus par programme à chaque étape — pour être lu avant les
+   commandes — mais il n'est jamais atteignable au clavier (`tabindex="-1"`). Il ne
+   doit donc pas porter d'anneau, sans quoi le titre se retrouverait cerclé d'accent à
+   chaque panneau. Deux règles séparées, jamais un groupe : `:focus-visible` est
+   rejeté sous iOS 15.4 et emporterait la neutralisation nue avec lui. */
 .onboard .onboard-card,
-.onboard .onboard-card:focus,
-.onboard .onboard-card:focus-visible { outline: none; }
+.onboard .onboard-title,
+.onboard .onboard-title:focus { outline: none; }
+.onboard .onboard-title:focus-visible { outline: none; }
 .onboard-card > * + * { margin-top: 14px; }
 
 .onboard-eyebrow { display: flex; align-items: center; gap: 8px; }
@@ -1868,6 +1910,14 @@ p { margin: 0; }
 .onboard-foot {
   display: flex;
   align-items: center;
+  /* `wrap` parce qu'à 320 px et 150 % de police système, les trois commandes ne
+     tiennent plus sur une ligne : « Suivant » passe dessous plutôt que de déborder.
+     `flex-end` parce qu'au dernier panneau « Passer » est masqué, et avec lui le
+     `margin-right: auto` qui plaquait le pied à droite : sans cela le bouton
+     principal sautait de cent pixels vers la gauche, au moment précis où le pouce
+     vient de taper quatre fois au même endroit. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 9px;
   margin-top: 26px;              /* le rapport 6 / 14 / 26 du fichier, sans valeur inventée */
 }
@@ -1882,7 +1932,7 @@ p { margin: 0; }
 /* Paysage : le centrage vertical et une hauteur généreuse tronquent le haut de la
    carte, qui devient inatteignable. */
 @media (max-height: 480px) {
-  .onboard { max-height: 88vh; }
+  .onboard { max-height: 88vh; max-height: 88dvh; }
   .onboard-foot { margin-top: 18px; }
 }
 
@@ -1992,7 +2042,17 @@ p { margin: 0; }
   }
 }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* ⚠️ Doublé par `:focus`, et c'est feature-baseline.json qui le prescrit :
+   « Doubler avec :focus si le plancher descend sous iOS 15.4 » — il descend, la sonde
+   tier B est iOS 15.0-15.3. Une règle nue `:focus-visible` y est rejetée en bloc, et
+   il ne reste alors AUCUN indicateur de focus. C'est ce moteur qui prend le repli non
+   modal, donc celui où le clavier est le seul moyen de s'orienter : l'absence
+   d'indicateur y cesse d'être cosmétique.
+   La seconde règle rétablit le comportement moderne — pas d'anneau au pointeur — et
+   elle est elle-même rejetée sur le vieux moteur, où l'anneau apparaît alors aussi au
+   doigt. Dégradation acceptable, et dans le bon sens. */
+:focus, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+:focus:not(:focus-visible) { outline: none; }
 
 .visually-hidden {
   position: absolute;

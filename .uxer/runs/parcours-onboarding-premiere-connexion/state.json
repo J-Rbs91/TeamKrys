@@ -20,10 +20,10 @@
     "U5",
     "U6"
   ],
-  "last_safe_checkpoint": "2026-08-07T10:16:04+00:00",
+  "last_safe_checkpoint": "2026-08-07T20:20:40+00:00",
   "session_name": "uxer-parcours-onboarding-premiere-connexion",
   "branch": "claude/onboarding-sequence-first-login-4roq0m",
-  "commit_sha": "f428d3b",
+  "commit_sha": "b9962b8",
   "files_changed": [
     "docs/ONBOARDING.md",
     "js/config.js",
@@ -52,12 +52,14 @@
     "Chromium : carte de rejeu presente, libelle d etat correct, rejeu remet a zero et monte la sequence a 1/5",
     "Critere A8 tenu : brouillon settings:name intact au rejeu",
     "node tests/onboarding.test.js 27 OK ; session 9 OK ; sync 15 OK ; compat-scan rien de bloquant",
-    "Chromium : sequence 1/5 active et ligne « Ensuite : » presente sur l etat vide, version 1.8.0"
+    "Chromium : sequence 1/5 active et ligne « Ensuite : » presente sur l etat vide, version 1.8.0",
+    "Revue finale QA : 8 agents du depot + revue de code. 22 defauts corriges.",
+    "Chromium : VRAIE premiere connexion (stockage vide, mode local, prenom) — sequence affichee 1/3, focus sur le titre, region live vide a l etape 1 puis porteuse du corps"
   ],
   "validations_failed": [
     "node tests/parity.test.js — ENOENT apps-script/Code.gs : ECHEC PREEXISTANT, reproduit avec les changements remises, backend gitignore"
   ],
-  "next_action": "Revue finale ui-review-qa, puis recette sur appareil reel : WebKit, VoiceOver, TalkBack, repli tier B",
+  "next_action": "Recette sur appareil reel : WebKit, VoiceOver, TalkBack, repli tier B, hors ligne a froid, fenetres in-app",
   "blocking_issue": null,
   "pause_reason": null,
   "resume_required": false
