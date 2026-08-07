@@ -57,12 +57,17 @@
     return node;
   }
 
-  function emptyState(iconName, title, text, action) {
+  /* `next` répond à « et ensuite ? ». Un état vide de PREMIER USAGE est le premier
+   * écran que voit un nouvel arrivant : dire quoi faire ne suffit pas, il faut dire
+   * où cela mène. C'est aussi ce qui permet à la présentation initiale de rester
+   * courte — le reste du cycle s'enseigne ici, au moment de l'usage. */
+  function emptyState(iconName, title, text, action, next) {
     return el("div", { class: "empty" }, [
       el("div", { class: "empty-art" }, [icon(iconName, 32)]),
       el("div", { class: "empty-title", text: title }),
       text ? el("div", { class: "empty-text", text: text }) : null,
-      action || null
+      action || null,
+      next ? el("div", { class: "empty-next", text: next }) : null
     ]);
   }
 
@@ -89,6 +94,7 @@
   var appRoot = null;
   var overlayRoot = null;
   var toastRoot = null;
+  var onboardRoot = null;
   var lastSignature = null;
   var lastPlace = null;
   var forceNext = false;
@@ -125,6 +131,7 @@
     appRoot = document.getElementById("app");
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
+    onboardRoot = document.getElementById("onboarding-root");
     bindViewport();
   };
 
@@ -601,7 +608,8 @@
         el("button", {
           class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
-        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]));
+        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]),
+        "Ensuite : on en discute, on en tire des propositions, on vote, et on retient une conclusion.");
     } else {
       var list = el("div", { class: "stack topics-grid" });
       var index = 0;
@@ -616,7 +624,40 @@
         ]));
       }
       if (!visible.length) {
-        list.appendChild(el("p", { class: "hint", text: "Aucun sujet ne correspond." }));
+        /* Un filtre sans résultat n'est PAS un premier usage : l'utilisateur pense
+         * « j'ai mal cherché », pas « je ne sais pas démarrer ». La réponse est donc
+         * un rappel du filtre actif et une sortie qui l'élargit réellement — un
+         * texte seul laissait l'écran sans issue.
+         *
+         * ⚠️ Seulement s'il Y A une recherche : la liste peut aussi être vide parce
+         * que tous les sujets sont archivés, et on afficherait alors des guillemets
+         * vides avec un bouton sans effet. */
+        if (query) {
+          /* Le terme est écourté : il est déjà visible dans le champ juste au-dessus,
+           * et une URL collée pousserait la carte au-delà de la largeur de l'écran. */
+          var shown = Utils.limit(Utils.trim(UI.local.search), 28);
+          if (shown.length < Utils.trim(UI.local.search).length) { shown += "…"; }
+          list.appendChild(el("div", { class: "note" }, [
+            icon("search", 16),
+            el("div", { class: "note-body" }, [
+              el("div", { text: "Aucun sujet ne correspond à « " + shown + " »." }),
+              el("button", {
+                class: "btn btn-sm btn-ghost", type: "button",
+                style: { marginTop: "8px" },
+                onclick: function () {
+                  /* Le champ est vidé AVANT le rendu : `captureDrafts` lit le DOM au
+                   * début du rendu, et `restoreDrafts` réinjecterait sinon l'ancien
+                   * terme dans le champ reconstruit — liste élargie, champ inchangé. */
+                  var field = document.querySelector('[data-draft="topics:search"]');
+                  if (field) { field.value = ""; }
+                  UI.set({ search: "" });
+                }
+              }, [icon("close", 15), el("span", { text: "Effacer la recherche" })])
+            ])
+          ]));
+        } else {
+          list.appendChild(el("p", { class: "hint", text: "Tous les sujets sont archivés." }));
+        }
       }
       visible.forEach(function (topic) { list.appendChild(reveal(topicCard(topic), index++)); });
       if (archivedCount > 0) {
@@ -895,7 +936,9 @@
 
     if (!topic.messages.length) {
       threadInner.appendChild(emptyState("message", "La discussion démarre ici",
-        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer."));
+        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer.",
+        null,
+        "Ensuite : une idée qui mûrit devient une proposition, depuis la barre du bas."));
     }
 
     var thread = el("div", { class: "thread", dataset: { thread: topic.id } }, [threadInner]);
@@ -1036,7 +1079,8 @@
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
-        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })])));
+        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })]),
+        "Ensuite : chacun vote pour, contre ou abstention — un vote par personne."));
     } else {
       topic.proposals.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
     }
@@ -1109,7 +1153,9 @@
 
     if (!topic.conclusions.length) {
       list.appendChild(emptyState("checkCircle", "Pas encore de conclusion",
-        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée."));
+        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée.",
+        null,
+        "Ensuite : la conclusion retenue part dans la synthèse de réunion."));
     }
 
     var textarea = bindCounter(el("textarea", {
@@ -1233,6 +1279,18 @@
 
   /* ------------------------------------------------------------ Réglages --- */
 
+  /* Ce que l'appareil sait de la présentation, dit sans horodatage : afficher une
+   * date inviterait à en tirer des conclusions que cet enregistrement ne porte pas.
+   * « migrée » est volontairement lisible — c'est ce qui explique à quelqu'un qui
+   * utilisait déjà l'application pourquoi il ne l'a jamais vue. */
+  function onboardingHint(state) {
+    if (state === "vue") { return "Vous avez vu la présentation de l'application."; }
+    if (state === "passée") { return "Vous avez passé la présentation."; }
+    if (state === "en cours") { return "Présentation commencée, pas terminée."; }
+    if (state === "migrée") { return "Vous utilisiez déjà l'application : la présentation ne vous a pas été montrée."; }
+    return "La présentation n'a pas encore été vue sur cet appareil.";
+  }
+
   function screenSettings() {
     var diagnostics = Sync.diagnostics();
 
@@ -1316,7 +1374,22 @@
             onclick: function () { App.go("#/meeting"); } },
           [icon("print", 16), el("span", { text: "Ouvrir la synthèse" })])
         ]), 2),
-        reveal(diagRows, 3)
+        /* Le rejeu vit APRÈS les fonctions utiles et AVANT le diagnostic technique :
+         * c'est une aide, pas un réglage, et encore moins une donnée de dépannage. */
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("sparkle", "Présentation"),
+          /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces
+           * fonctions n'existent pas, et l'écran des Réglages — donc le diagnostic
+           * et la synchronisation manuelle — ne se rendrait plus du tout. */
+          el("div", { class: "hint", text: typeof App.onboardingState === "function"
+            ? onboardingHint(App.onboardingState()) : onboardingHint("inconnue") }),
+          el("button", { class: "btn btn-outline btn-block", type: "button",
+            onclick: function () {
+              if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
+            } },
+          [icon("sparkle", 16), el("span", { text: "Revoir la présentation" })])
+        ]), 3),
+        reveal(diagRows, 4)
       ])
     ]);
   }
@@ -1703,21 +1776,488 @@
     }
 
     UI.refreshStatus();
+
+    /* La présentation est décidée APRÈS le rendu, et depuis l'extérieur de son
+     * cycle : elle ne participe ni à `signature()` ni à `place`, donc changer
+     * d'étape ne reconstruit pas l'écran. */
+    var gate = App.gate();
+    onboardSyncWithGate(gate);
+    if (!gate) { onboardMaybeStart(elapsed); }
   };
+
+  /* ================================================ Présentation initiale ==== */
+
+  /* ⚠️ Ce calque vit HORS du cycle de UI.render, et c'est la décision qui tient
+   * tout le reste. Si l'étape courante entrait dans UI.local, chaque « Suivant »
+   * incrémenterait UI.local.version, donc la signature, donc reconstruirait #app :
+   * le focus serait perdu — seuls les [data-draft] sont restaurés — et la région
+   * d'annonce serait recréée AVEC son contenu, or une région live insérée en même
+   * temps que son texte n'annonce rien.
+   *
+   * Il mute donc son propre sous-arbre, sur le modèle de UI.refreshStatus. Les
+   * nœuds de commande ne sont jamais recréés : seuls leurs libellés changent, ce
+   * qui garde le focus stable d'une étape à l'autre.
+   *
+   * Corollaire à assumer : ouvert par showModal(), le dialogue passe dans le
+   * calque supérieur, donc AU-DESSUS des toasts. Pendant la trentaine de secondes
+   * de la présentation, un toast d'erreur de synchronisation serait masqué. Le
+   * bandeau de nouvelle version, lui, est ajourné explicitement (voir plus bas)
+   * parce qu'il porte un bouton focusable et qu'il est le seul chemin de mise à
+   * jour chez quelqu'un qui ne peut pas vider son cache. */
+
+  var onboard = null;         // { panels, step, segment, nodes… } quand la présentation est à l'écran
+  var onboardPaused = null;   // le même objet, mis de côté quand un gate reprend la main
+  var pendingUpdate = null;   // rappel du bandeau de version, ajourné
+  var bannerUpdate = null;    // rappel d'un bandeau DÉJÀ posé, à reprendre si le calque monte
+  var onboardTimer = 0;
+
+  /* Attente avant de poser le calque, comptée depuis l'arrivée sur l'écran. Ce
+   * n'est pas ENTER_WINDOW_MS (1400 ms) : cette constante-là borne la REPRISE
+   * d'une animation, pas sa durée. Ce qu'il faut laisser finir, c'est la cascade
+   * de révélation des cartes — --reveal-duration (220 ms) plus six crans de
+   * --reveal-stagger (18 ms), soit 328 ms. Arrondi à 360. Au-delà, on ferait
+   * attendre pour rien ; en dessous, deux choses bougeraient en même temps. */
+  var ONBOARD_DELAY_MS = 360;
+
+  /* Les cinq parties de l'application, dans l'ordre où on les traverse. Ce ne sont
+   * pas des panneaux choisis : la liste EST le cycle réel.
+   *
+   * Les icônes sont celles de l'interface, à l'identique — `message` sur les cartes
+   * de sujet, `users` pour les participants, `idea` et `checkCircle` dans la
+   * quickbar, `print` sur « Ouvrir la synthèse ». C'est le vrai levier du « ça a
+   * toujours fait partie de l'application » : le signe vu dans le panneau est celui
+   * qu'on retrouvera dans la barre.
+   *
+   * `textLocal` et `textJoining` remplacent le corps quand le segment le demande :
+   * on ne promet pas un collectif absent à quelqu'un qui est seul, et on n'explique
+   * pas comment créer le premier sujet à quelqu'un qui arrive sur un espace déjà
+   * actif. */
+  var ONBOARD_TEXT = {
+    topics: {
+      icon: "message",
+      eyebrow: "Les sujets",
+      title: "Un sujet par point à traiter",
+      text: "L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment "
+        + "actif au plus ancien. Le bouton + en ajoute un ; vous pouvez le proposer "
+        + "sans le signer.",
+      textLocal: "En mode local, les données restent sur cet appareil. Le vote et les "
+        + "réactions prennent leur sens à plusieurs."
+    },
+    debate: {
+      icon: "users",
+      eyebrow: "Le débat",
+      title: "On en discute, chacun à son rythme",
+      text: "La discussion se lit comme un fil de messages. Appuyez sur une bulle "
+        + "pour réagir, la citer, ou en tirer une proposition.",
+      textJoining: "L'équipe a déjà lancé des sujets. Ouvrez-en un : la discussion "
+        + "s'y trouve. Appuyez sur une bulle pour réagir, la citer, ou en tirer une "
+        + "proposition."
+    },
+    proposals: {
+      icon: "idea",
+      eyebrow: "Propositions",
+      title: "Les idées deviennent des propositions",
+      text: "Une proposition se vote pour, contre ou abstention — un vote par "
+        + "personne, modifiable. La barre montre où en est l'équipe.",
+      extra: "votebar"
+    },
+    conclusion: {
+      icon: "checkCircle",
+      eyebrow: "La conclusion",
+      title: "Ce que vous présenterez",
+      text: "Chaque sujet se referme sur une conclusion. Chacun en choisit une "
+        + "seule ; la mieux votée porte la mention En tête."
+    },
+    meeting: {
+      icon: "print",
+      eyebrow: "La réunion",
+      title: "Tout tient sur une page",
+      text: "Réglages, puis Ouvrir la synthèse : sujets, votes et conclusions, prêts "
+        + "à projeter. Vous pourrez revoir cette présentation depuis les Réglages.",
+      extra: "logo"
+    }
+  };
+
+  function onboardPanel(id) {
+    return ONBOARD_TEXT[id] || ONBOARD_TEXT.topics;
+  }
+
+  function onboardBody(spec, segment) {
+    if (segment === "local" && spec.textLocal) { return spec.textLocal; }
+    if (segment === "joining" && spec.textJoining) { return spec.textJoining; }
+    return spec.text;
+  }
+
+  /* Appui visuel, jamais une flèche vers l'écran : on montre la forme réelle de
+   * l'objet dont on parle, en miniature, dans le panneau. La barre de vote est
+   * reprise telle quelle — mêmes classes, donc mêmes couleurs sémantiques — avec
+   * des proportions d'exemple. `aria-hidden` : le corps du panneau dit déjà les
+   * trois voix, le lecteur d'écran n'a pas à entendre une décoration. */
+  function onboardExtra(kind) {
+    if (kind === "votebar") {
+      return el("div", { class: "note onboard-extra", "aria-hidden": "true" }, [
+        el("div", { class: "vote-bar", style: { margin: "0", flex: "1" } }, [
+          el("span", { class: "vote-for", style: { width: "55%" } }),
+          el("span", { class: "vote-against", style: { width: "27%" } }),
+          el("span", { class: "vote-abstain", style: { width: "18%" } })
+        ])
+      ]);
+    }
+    if (kind === "logo") {
+      /* Le monogramme AU REPOS — anneau et point, sans animation. La séquence
+       * d'accueil ne se rejoue pas ici : deux gestes expressifs à la suite en
+       * feraient un diaporama. */
+      return el("div", { class: "onboard-extra onboard-mark", "aria-hidden": "true" },
+        [Utils.logoMark(40)]);
+    }
+    return null;
+  }
+
+  /* Le libellé de la sortie dit ce qui se passe ensuite : « Suivant » tant qu'il
+   * reste une étape, « Commencer » sur la dernière. Jamais « Fermer », qui
+   * n'annonce rien. */
+  /* PEINDRE seulement. Voir onboardAnnounce pour la raison de la séparation. */
+  function onboardPaint() {
+    if (!onboard) { return; }
+    var total = onboard.panels.length;
+    var index = onboard.step;
+    var last = index >= total - 1;
+    var spec = onboardPanel(onboard.panels[index]);
+
+    Utils.clear(onboard.eyebrow);
+    onboard.eyebrow.appendChild(icon(spec.icon, 14));
+    onboard.eyebrow.appendChild(el("span", { text: spec.eyebrow }));
+    onboard.eyebrow.appendChild(el("span", { class: "spacer" }));
+    onboard.eyebrow.appendChild(el("span", {
+      class: "counter", text: (index + 1) + " / " + total
+    }));
+
+    onboard.title.textContent = spec.title;
+    onboard.text.textContent = onboardBody(spec, onboard.segment);
+
+    /* L'appui visuel est le seul nœud recréé d'une étape à l'autre : il n'est
+     * jamais focusable, donc le focus n'en dépend pas. */
+    Utils.clear(onboard.extra);
+    Utils.append(onboard.extra, onboardExtra(spec.extra));
+    onboard.extra.hidden = !spec.extra;
+
+    onboard.prev.hidden = index === 0;
+    onboard.skip.hidden = last;
+    Utils.clear(onboard.next);
+    onboard.next.appendChild(el("span", { text: last ? "Commencer" : "Suivant" }));
+    if (!last) { onboard.next.appendChild(icon("forward", 18)); }
+
+    /* Fondu du contenu à chaque changement d'étape — jamais au premier affichage,
+     * qui a son propre geste d'arrivée. Relancer une animation CSS exige de retirer
+     * la classe, de forcer un recalcul, puis de la reposer : sans le recalcul, le
+     * navigateur regroupe les deux mutations et ne voit aucun changement. */
+    if (onboard.applied) {
+      onboard.card.classList.remove("is-step");
+      void onboard.card.offsetWidth;
+      onboard.card.classList.add("is-step");
+    }
+  }
+
+  /* ANNONCER, et placer le focus. Séparé de la peinture, et appelé APRÈS l'ouverture :
+   * `showModal()` déplace le focus et déclenche l'annonce du dialogue, donc le titre
+   * doit déjà être écrit à cet instant — sinon `aria-labelledby` pointe une chaîne
+   * vide et le dialogue s'annonce sans nom.
+   *
+   * Le focus va sur le TITRE, pas sur le conteneur : un conteneur générique sans nom
+   * ni rôle est lu soit intégralement — surtitre, compteur, titre, texte et trois
+   * boutons d'un coup — soit pas du tout, selon le lecteur d'écran. Un `h2` a une
+   * annonce courte, déterministe, et une sémantique d'en-tête.
+   *
+   * La région porte le CORPS du panneau, pas seulement son titre : c'est la charge
+   * utile, et `aria-describedby` posé sur le dialogue n'est consommé qu'à l'entrée,
+   * pas à chaque changement d'étape.
+   *
+   * Et on n'y écrit RIEN à la première peinture : l'annonce d'ouverture du dialogue
+   * porte déjà le titre, l'y répéter le ferait lire deux fois. */
+  function onboardAnnounce() {
+    if (!onboard) { return; }
+    var index = onboard.step;
+    var spec = onboardPanel(onboard.panels[index]);
+
+    onboard.title.focus();
+
+    if (onboard.applied) {
+      onboard.live.textContent = "Étape " + (index + 1) + " sur " + onboard.panels.length
+        + ". " + spec.title + ". " + onboardBody(spec, onboard.segment);
+    }
+    onboard.applied = true;
+  }
+
+  function onboardApply() {
+    onboardPaint();
+    onboardAnnounce();
+  }
+
+  function onboardBuild() {
+    var live = el("div", { class: "onboard-live", role: "status", "aria-live": "polite" });
+    var eyebrow = el("div", { class: "section-title onboard-eyebrow" });
+    var title = el("h2", {
+      class: "onboard-title", id: "onboard-title", text: "", tabindex: "-1"
+    });
+    var text = el("p", { class: "hint onboard-text", id: "onboard-text", text: "" });
+
+    var skip = el("button", {
+      class: "btn btn-ghost onboard-skip", type: "button", text: "Passer",
+      onclick: function () { UI.closeOnboarding(true); }
+    });
+    var prev = el("button", {
+      class: "btn btn-outline onboard-prev", type: "button",
+      "aria-label": "Étape précédente",
+      onclick: function () { UI.onboardingGo(-1); }
+    }, [icon("back", 18)]);
+    var next = el("button", {
+      class: "btn btn-primary onboard-next", type: "button",
+      onclick: function () { UI.onboardingGo(1); }
+    });
+
+    /* « Passer » est DERNIER dans le DOM et premier à l'écran (`order` en CSS) :
+     * c'est une sortie, pas une action principale — elle ne doit pas précéder les
+     * commandes dans l'ordre de tabulation. */
+    var extra = el("div", { class: "onboard-extra-slot" });
+    var foot = el("div", { class: "onboard-foot" }, [prev, next, skip]);
+    var card = el("div", { class: "onboard-card" }, [eyebrow, title, text, extra, foot]);
+    var dialog = el("dialog", {
+      class: "onboard",
+      "aria-labelledby": "onboard-title",
+      "aria-describedby": "onboard-text"
+    }, [live, card]);
+
+    return {
+      dialog: dialog, card: card, live: live, eyebrow: eyebrow,
+      title: title, text: text, extra: extra, skip: skip, prev: prev, next: next
+    };
+  }
+
+  function onboardMount(plan) {
+    if (!onboardRoot || onboard) { return; }
+    var nodes = onboardBuild();
+    onboard = {
+      panels: plan.panels.slice(),
+      step: Math.max(0, Math.min(plan.step || 0, plan.panels.length - 1)),
+      segment: plan.segment,
+      returnFocus: document.activeElement,
+      dialog: nodes.dialog, card: nodes.card, live: nodes.live,
+      eyebrow: nodes.eyebrow, title: nodes.title, text: nodes.text,
+      extra: nodes.extra, skip: nodes.skip, prev: nodes.prev, next: nodes.next
+    };
+
+    /* ⚠️ Report dans l'AUTRE sens, et il est indispensable : `showUpdateBanner` est
+     * appelé à la résolution de `register()`, donc bien avant que le calque ne se
+     * monte. Le cas fréquent n'est pas « le bandeau arrive pendant la séquence »,
+     * c'est « la séquence monte au-dessus d'un bandeau déjà là ». Or le bandeau est
+     * à `--z-banner` (70) contre `--z-onboard` (65), au même ancrage bas : sur le
+     * chemin de repli, où il n'y a ni calque supérieur ni inertie, il RECOUVRE les
+     * commandes du panneau. On le retire et on garde son rappel. */
+    if (bannerUpdate) {
+      pendingUpdate = bannerUpdate;
+      bannerUpdate = null;
+      var posed = document.querySelector(".update-banner");
+      if (posed && posed.parentNode) { posed.parentNode.removeChild(posed); }
+    }
+
+    /* Un clavier ouvert derrière le calque n'a plus d'objet : aucune étape ne
+     * contient de champ de saisie. */
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+
+    /* Peint AVANT d'être posé et ouvert : à l'ouverture, le titre doit exister. */
+    onboardPaint();
+    onboardRoot.appendChild(nodes.dialog);
+
+    /* ⚠️ showModal() donne d'un coup le piège de focus, le calque supérieur et
+     * l'inertie réelle de l'arrière-plan — donc les exigences d'un dialogue modal
+     * sans une ligne de gestion manuelle du focus.
+     *
+     * Mais tests/qa/feature-baseline.json lui donne un plancher WebKit 15.4, un
+     * mode d'échec « throws » et une sévérité haute, et browser-matrix.json classe
+     * iOS 15.0 → 15.3 en tier B, où une dégradation cosmétique est tolérée mais
+     * JAMAIS une perte de fonction. Un appel non gardé y lèverait une exception et
+     * emporterait la séquence. D'où la garde, et le repli : carte non modale, sans
+     * voile, qui laisse l'application accessible derrière. */
+    var modal = typeof nodes.dialog.showModal === "function";
+    if (modal) {
+      /* Gardé par le `typeof` ci-dessus ET par ce try/catch. Sur les moteurs sans
+         <dialog> — Safari iOS 15.0 → 15.3, la sonde tier B — on retombe sur
+         `.onboard--flat` : carte non modale, sans voile, application accessible
+         derrière. Dégradation cosmétique documentée, pas perte de fonction. */
+      /* qa-allow: js-dialog-showmodal — appel gardé, repli .onboard--flat. */
+      try { nodes.dialog.showModal(); }
+      catch (error) { modal = false; }
+    }
+    if (!modal) {
+      nodes.dialog.classList.add("onboard--flat");
+      nodes.dialog.setAttribute("open", "");
+      nodes.dialog.setAttribute("role", "dialog");
+    }
+    onboard.modal = modal;
+
+    /* La classe d'arrivée porte le seul geste un peu dépensier de la séquence, et
+     * elle est retirée quand il est fini : sans cela, l'animation d'entrée du
+     * panneau et le fondu de changement d'étape se disputeraient la propriété
+     * `animation` de la même carte. */
+    nodes.dialog.classList.add("onboard--enter");
+    setTimeout(function () {
+      if (onboard && onboard.dialog === nodes.dialog) {
+        nodes.dialog.classList.remove("onboard--enter");
+      }
+    }, 420);
+
+    /* Échap : servi nativement en modal, à câbler sur le chemin de repli. Le
+     * gestionnaire global de js/app.js le connaît aussi, pour ne pas déclencher
+     * un rendu complet de l'écran de fond à chaque appui. */
+    nodes.dialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      UI.closeOnboarding(true);
+    });
+
+    onboardAnnounce();
+  }
+
+  function onboardUnmount(pausing) {
+    if (!onboard) { return null; }
+    var kept = { panels: onboard.panels, step: onboard.step, segment: onboard.segment };
+    var focus = onboard.returnFocus;
+    if (onboard.modal && typeof onboard.dialog.close === "function") {
+      try { onboard.dialog.close(); } catch (error) { /* déjà fermé */ }
+    }
+    if (onboard.dialog.parentNode) { onboard.dialog.parentNode.removeChild(onboard.dialog); }
+    onboard = null;
+
+    /* Rendre le focus. À la première connexion l'élément déclencheur n'existe pas :
+     * on prend alors le premier élément interactif de l'écran réel. Jamais
+     * document.body, qui renvoie le lecteur d'écran en haut du document sans le
+     * dire. */
+    var target = (focus && focus.isConnected && focus !== document.body) ? focus : null;
+    if (!target && appRoot) { target = appRoot.querySelector("button, [href], input, select, textarea"); }
+    if (target && target.focus) { target.focus(); }
+
+    /* Sur une PAUSE — un gate a reprix la main —, le bandeau reste ajourné : le
+     * ressortir le poserait sur l'écran de verrou, puis il se retrouverait derrière
+     * le calque remonté, avec un bouton focusable hors du piège de focus. C'est
+     * exactement l'état que le report cherche à éviter. */
+    if (pendingToast && pausing !== true) {
+      var said = pendingToast;
+      pendingToast = null;
+      UI.toast(said.text, said.kind);
+    }
+
+    if (pendingUpdate && pausing !== true) {
+      var resume = pendingUpdate;
+      pendingUpdate = null;
+      UI.showUpdateBanner(resume);
+    }
+    return kept;
+  }
+
+  UI.onboardingActive = function () { return !!onboard; };
+
+  /* Message à dire APRÈS le démontage. Sous le calque supérieur, un toast est
+   * recouvert pendant toute sa durée de vie, et l'arrière-plan étant inerte il n'est
+   * probablement pas annoncé non plus : un message d'erreur qu'on ne peut ni voir ni
+   * entendre n'existe pas. */
+  var pendingToast = null;
+
+  UI.toastAfterOnboarding = function (text, kind) {
+    if (!onboard) { UI.toast(text, kind); return; }
+    pendingToast = { text: text, kind: kind };
+  };
+
+  UI.startOnboarding = function (plan) {
+    if (!plan || !plan.panels || !plan.panels.length) { return; }
+    onboardPaused = null;
+    onboardMount(plan);
+  };
+
+  /* Rejeu depuis les réglages. Il monte le calque DIRECTEMENT, sans passer par un
+   * rendu, et c'est délibéré : `restoreDrafts` ne restaure un brouillon que si le
+   * champ reconstruit est vide (voir plus haut), or le champ « Votre nom » des
+   * réglages est pré-rempli. Un rendu effacerait donc un prénom en cours de saisie.
+   * Le défaut est général et préexistant — n'importe quel rendu le produit — mais ce
+   * chantier n'a pas à l'aggraver. */
+  UI.replayOnboarding = function () {
+    if (onboardTimer) { clearTimeout(onboardTimer); onboardTimer = 0; }
+    if (onboard) { onboardUnmount(); }
+    onboardPaused = null;
+    if (App.gate()) { return; }
+    var plan = App.onboardingPlan();
+    if (!plan) { return; }
+    App.markOnboardingShown();
+    onboardMount(plan);
+  };
+
+  UI.onboardingGo = function (delta) {
+    if (!onboard) { return; }
+    var next = onboard.step + delta;
+    if (next < 0) { return; }
+    if (next >= onboard.panels.length) { UI.closeOnboarding(false); return; }
+    onboard.step = next;
+    App.noteOnboardingStep(next);
+    onboardApply();
+  };
+
+  UI.closeOnboarding = function (skipped) {
+    if (!onboard) { return; }
+    onboardUnmount();
+    onboardPaused = null;
+    App.finishOnboarding(skipped === true);
+  };
+
+  /* Un gate qui réapparaît — reverrouillage après une heure, retour sur la
+   * connexion — PRIME sur la présentation : le calque disparaît, l'étape est
+   * conservée, et la séquence reprend une fois le gate franchi. */
+  function onboardSyncWithGate(gate) {
+    if (gate) {
+      if (onboardTimer) { clearTimeout(onboardTimer); onboardTimer = 0; }
+      if (onboard) { onboardPaused = onboardUnmount(true); }
+      return;
+    }
+    if (onboardPaused && !onboard) {
+      var resume = onboardPaused;
+      onboardPaused = null;
+      onboardMount(resume);
+    }
+  }
+
+  /* Décidée à chaque rendu, mais armée une seule fois : le calque ne se pose que
+   * lorsque plus aucun gate ne réclame l'écran et que la cascade d'entrée est
+   * finie. */
+  function onboardMaybeStart(elapsed) {
+    if (onboard || onboardPaused || onboardTimer) { return; }
+    if (App.gate()) { return; }
+    if (!App.onboardingWanted || !App.onboardingWanted()) { return; }
+    var wait = Math.max(0, ONBOARD_DELAY_MS - (elapsed || 0));
+    onboardTimer = setTimeout(function () {
+      onboardTimer = 0;
+      if (onboard || App.gate() || !App.onboardingWanted()) { return; }
+      var plan = App.onboardingPlan();
+      if (!plan) { return; }
+      App.markOnboardingShown();
+      UI.startOnboarding(plan);
+    }, wait);
+  }
 
   /* -------------------------------------------------- Bandeau nouvelle version --- */
 
   UI.showUpdateBanner = function (onUpdate) {
+    /* Ajourné pendant la présentation : son bouton est focusable, il vit sur
+     * document.body — donc hors du piège de focus — et il se poserait exactement
+     * sous les commandes du calque. Il apparaît dès le démontage. */
+    if (onboard) { pendingUpdate = onUpdate; return; }
     if (document.querySelector(".update-banner")) { return; }
+    bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
       icon("sparkle", 17),
       el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",
-        onclick: function () { banner.remove(); onUpdate(); }
+        onclick: function () { bannerUpdate = null; banner.remove(); onUpdate(); }
       }),
       el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard",
-        onclick: function () { banner.remove(); } }, [icon("close", 18)])
+        onclick: function () { bannerUpdate = null; banner.remove(); } }, [icon("close", 18)])
     ]);
     document.body.appendChild(banner);
   };

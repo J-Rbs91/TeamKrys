@@ -147,6 +147,22 @@ ou à projeter (les barres et boutons disparaissent à l'impression).
 
 ---
 
+## Revoir la présentation
+
+À votre toute première entrée dans l'espace, l'application se présente en quelques
+panneaux : les sujets, la discussion, les propositions et leur vote, la conclusion,
+et la synthèse de réunion. Vous pouvez la passer à tout moment, et la reprendre plus
+tard — elle repart là où vous l'avez laissée.
+
+Pour la revoir : **Réglages → Revoir la présentation**.
+
+Si vous utilisiez déjà BrainstO. avant cette version, elle ne vous a pas été montrée
+— c'est voulu. Le bouton reste là pour la découvrir si vous le souhaitez.
+
+Le nombre de panneaux dépend de ce que vous voyez en arrivant : sur un espace
+d'équipe déjà actif, l'application n'explique que ce qui ne se devine pas ; en mode
+local, elle ne parle ni de vote ni de réunion, qui n'ont de sens qu'à plusieurs.
+
 ## Réglages
 
 - **Votre nom** — le changer mettra à jour vos messages signés.

@@ -26,6 +26,10 @@
   <noscript>BrainstO. a besoin de JavaScript pour fonctionner.</noscript>
   <div id="app" class="app"></div>
   <div id="overlay-root"></div>
+  <!-- La présentation initiale a sa propre racine : #overlay-root est
+       mono-emplacement (renderOverlay le vide à chaque rendu), et le calque doit
+       survivre aux rendus pour garder son focus et sa région d'annonce. -->
+  <div id="onboarding-root"></div>
   <div id="toast-root" class="toast-root" role="status" aria-live="polite"></div>
 
   <script src="js/config.js"></script>
