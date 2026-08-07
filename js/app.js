@@ -384,9 +384,13 @@
     onboardingWanted = true;
     onboardingStep = 0;
     onboardingShown = false;
-    UI.set({ sheet: null, modal: null });
-    App.go("#/");
-    UI.force();
+    /* ⚠️ On ne navigue PAS. C'était le cas prévu au cadrage, et c'était une erreur :
+     * quitter les réglages détruit le champ « Votre nom », donc un prénom en cours de
+     * saisie — le relais de brouillons ne franchit un changement d'écran que pour les
+     * clés `composer:`. Et la navigation n'apporte rien : les panneaux ne décrivent
+     * aucun écran précis, la séquence est valable où que l'on soit. Une exception de
+     * moins à la règle « la séquence ne navigue jamais à la place de l'utilisateur ». */
+    UI.replayOnboarding();
   };
 
   /* ------------------------------------------------------------ Routeur --- */

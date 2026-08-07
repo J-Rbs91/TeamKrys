@@ -1235,6 +1235,18 @@
 
   /* ------------------------------------------------------------ Réglages --- */
 
+  /* Ce que l'appareil sait de la présentation, dit sans horodatage : afficher une
+   * date inviterait à en tirer des conclusions que cet enregistrement ne porte pas.
+   * « migrée » est volontairement lisible — c'est ce qui explique à quelqu'un qui
+   * utilisait déjà l'application pourquoi il ne l'a jamais vue. */
+  function onboardingHint(state) {
+    if (state === "vue") { return "Vous avez vu la présentation de l'application."; }
+    if (state === "passée") { return "Vous avez passé la présentation."; }
+    if (state === "en cours") { return "Présentation commencée, pas terminée."; }
+    if (state === "migrée") { return "Vous utilisiez déjà l'application : la présentation ne vous a pas été montrée."; }
+    return "La présentation n'a pas encore été vue sur cet appareil.";
+  }
+
   function screenSettings() {
     var diagnostics = Sync.diagnostics();
 
@@ -1318,7 +1330,16 @@
             onclick: function () { App.go("#/meeting"); } },
           [icon("print", 16), el("span", { text: "Ouvrir la synthèse" })])
         ]), 2),
-        reveal(diagRows, 3)
+        /* Le rejeu vit APRÈS les fonctions utiles et AVANT le diagnostic technique :
+         * c'est une aide, pas un réglage, et encore moins une donnée de dépannage. */
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("sparkle", "Présentation"),
+          el("div", { class: "hint", text: onboardingHint(App.onboardingState()) }),
+          el("button", { class: "btn btn-outline btn-block", type: "button",
+            onclick: function () { App.replayOnboarding(); } },
+          [icon("sparkle", 16), el("span", { text: "Revoir la présentation" })])
+        ]), 3),
+        reveal(diagRows, 4)
       ])
     ]);
   }
@@ -2036,6 +2057,23 @@
   UI.startOnboarding = function (plan) {
     if (!plan || !plan.panels || !plan.panels.length) { return; }
     onboardPaused = null;
+    onboardMount(plan);
+  };
+
+  /* Rejeu depuis les réglages. Il monte le calque DIRECTEMENT, sans passer par un
+   * rendu, et c'est délibéré : `restoreDrafts` ne restaure un brouillon que si le
+   * champ reconstruit est vide (voir plus haut), or le champ « Votre nom » des
+   * réglages est pré-rempli. Un rendu effacerait donc un prénom en cours de saisie.
+   * Le défaut est général et préexistant — n'importe quel rendu le produit — mais ce
+   * chantier n'a pas à l'aggraver. */
+  UI.replayOnboarding = function () {
+    if (onboardTimer) { clearTimeout(onboardTimer); onboardTimer = 0; }
+    if (onboard) { onboardUnmount(); }
+    onboardPaused = null;
+    if (App.gate()) { return; }
+    var plan = App.onboardingPlan();
+    if (!plan) { return; }
+    App.markOnboardingShown();
     onboardMount(plan);
   };
 
