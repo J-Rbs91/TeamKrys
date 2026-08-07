@@ -10,7 +10,7 @@
     APP_NAME: "BrainstO.",
 
     /* À incrémenter EN MÊME TEMPS que CACHE_VERSION dans service-worker.js. */
-    APP_VERSION: "1.8.3",
+    APP_VERSION: "1.9.0",
 
     /* Révision de la SÉQUENCE de présentation, volontairement DISTINCTE de
      * APP_VERSION. Indexer le rejeu sur la version de l'application ferait revoir
