@@ -83,3 +83,61 @@ fuite d'identité de `App.logout()` ; `navigator.storage.persist()` jamais appel
 l'installation du service worker tolérante suivie d'une purge inconditionnelle ; et le
 pied de panneau qui passe sous le pli à 200 % de police, qui demande un pied collant
 et donc un arbitrage de conception.
+
+## Arbitrage des décisions restantes (2026-08-07, version 1.9.0)
+
+Les quatre points que la note précédente renvoyait à « des tickets à part » sont
+tranchés ici, plus un cinquième trouvé en les instruisant. La consigne était d'arbitrer
+en me renseignant sur ce qui se fait dans ce type d'application ; chaque décision porte
+donc sa raison, et deux d'entre elles vont contre le réflexe.
+
+**D1 — La déconnexion oublie l'identité et les droits.** `ownItems` n'est pas une
+préférence : c'est le porteur du droit de modifier ses propres messages anonymes. Le
+laisser survivre à une déconnexion transmet ce droit à la personne suivante sur le même
+appareil. `logout()` retire le code, le nom et `ownItems`. La confirmation nomme les
+trois oublis, dit que les messages resteront mais ne seront plus modifiables depuis cet
+appareil, et **compte les actions en attente** — perdre une file silencieusement serait
+pire que le problème d'origine.
+
+**D2 — La durabilité se demande sur le geste qui la justifie.** `navigator.storage.persist()`
+est appelée depuis `DB.enqueue`, donc au moment où une action non synchronisée vient
+d'être créée : c'est là que la demande a le plus de chances d'être accordée, et le seul
+moment où elle est légitime. Demander au démarrage, sans rien à protéger, est le
+mauvais réflexe. L'éviction est totale et silencieuse par origine ; le diagnostic dit
+désormais `durable` ou `évinçable`.
+
+**D3 — Le précache échoue plutôt que de mentir.** Deux listes aux garanties opposées.
+La coquille critique passe par un seul `addAll` dans `waitUntil` **sans catch** : une
+ressource manquante fait échouer l'installation, `activate` n'a pas lieu, la purge non
+plus, et l'ancien service worker garde son cache complet. La complétude devient
+structurelle. Le manifeste et les icônes restent tolérants, hors de `waitUntil`.
+Contrepartie assumée et écrite dans le fichier : une entrée critique en 404 bloquerait
+toutes les mises à jour, silencieusement.
+
+**D4 — Le pied sort du corps qui défile, et il n'est PAS collant.** C'est la décision
+qui va contre la note précédente, qui demandait « un pied collant ». Les critères
+d'accessibilité sur le redimensionnement du texte nomment le contenu collant comme
+*aggravant* à fort grossissement : il mange une hauteur déjà rare. Une colonne flex —
+`.onboard` bornée, `.onboard-card` seul à défiler, `.onboard-foot` non rétractable —
+donne la même garantie sans ce défaut, et le séparateur au-dessus du pied sert de marque
+d'interruption. Mesuré à 200 % sur 320×568 : corps défilant, pied de 438 à 550 dans un
+champ de 568, « Suivant » visible, aucun débordement horizontal.
+
+**D5 — Un rendu tiers n'écrase plus une saisie en cours.** Trouvé en instruisant D4.
+`restoreDrafts` réécrivait un champ dès qu'un brouillon existait, donc un rendu
+déclenché par l'arrivée d'un message pouvait remplacer ce qui était en train d'être
+tapé. Un registre `touchedDrafts`, alimenté par un écouteur `input` délégué en capture,
+inverse le critère. Le drapeau natif *dirty value* ne pouvait pas servir : il est aussi
+levé par une écriture programmatique, donc il ne distingue pas la frappe du rendu.
+
+**Point de rupture qui reste ouvert.** À 200 % de police sur 320 px, le corps ne garde
+qu'environ 155 px. C'est juste mais lisible. Le point de rupture noté au cadrage tient :
+si le corps ne garde plus rien à lire, il faut abandonner la feuille pour un plein
+écran. Ce n'est pas le cas aujourd'hui, donc ce n'est pas fait.
+
+**Toujours non traité, et volontairement.** Différer les rendus pendant qu'un champ est
+édité (P14) — le correctif structurel dont D5 n'est que la version observable ; la
+restauration du focus et de la sélection dans `restoreDrafts` ; les quatre autres
+défauts préexistants. Et la recette sur appareil réel reste le seul verrou de
+publication : WebKit, VoiceOver, TalkBack, fenêtres in-app, démarrage à froid hors
+ligne. Les protocoles sont écrits par agent dans `validation.md`.
