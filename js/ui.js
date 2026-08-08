@@ -859,8 +859,16 @@
     }
 
     var locked = owns && Core.isMessageLocked(message, App.user.id);
-    var metaBits = [Utils.formatTime(message.createdAt)];
-    if (message.updatedAt && message.updatedAt !== message.createdAt) { metaBits.push("modifié"); }
+
+    /* Un message encore en file n'existe que sur cet appareil. Afficher son
+     * heure serait deux fois trompeur : elle laisse croire qu'il est parti, et
+     * ce n'est même pas l'heure que les autres verront, puisque c'est le serveur
+     * qui l'attribue en appliquant l'action. On annonce donc l'état réel — un
+     * état, pas une alerte : il dure le temps d'un aller-retour, et ne se
+     * remarque que le jour où quelque chose coince. */
+    var sending = Store.pendingMessageIds()[message.id] === true;
+    var metaBits = [sending ? "envoi…" : Utils.formatTime(message.createdAt)];
+    if (!sending && message.updatedAt && message.updatedAt !== message.createdAt) { metaBits.push("modifié"); }
 
     /* L'auteur figure TOUJOURS dans le nom accessible : le regroupement est une
      * économie visuelle, pas une raison de priver le lecteur d'écran de
@@ -1419,6 +1427,12 @@
         connected ? diagRow("Dernier échange",
           diagnostics.lastSyncAt ? Utils.formatDateTime(diagnostics.lastSyncAt) : "aucun",
           !diagnostics.lastSyncAt) : null,
+        /* Trace des envois rattrapés au moment où la page disparaissait : c'est
+         * ce qui distingue « tout va bien » d'un appareil qui ne réussit à
+         * poster qu'in extremis, à chaque fois. */
+        connected && diagnostics.lastFlushAt
+          ? diagRow("Dernier envoi de secours", Utils.formatDateTime(diagnostics.lastFlushAt))
+          : null,
         connected ? diagRow("Rythme actuel",
           (diagnostics.intervalMs / 1000).toFixed(1).replace(".", ",") + " s" +
           (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,

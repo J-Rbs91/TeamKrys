@@ -148,7 +148,15 @@ function makeClient(name, server, options) {
     isNetworkError: (e) => !!e && e.kind === "network",
     isAuthError: (e) => !!e && e.kind === "auth",
     getRevision: () => { try { return Promise.resolve(server.revision()); } catch (e) { return Promise.reject(e); } },
-    getState: () => { try { return Promise.resolve(server.state()); } catch (e) { return Promise.reject(e); } },
+    /* La réponse est CALCULÉE à l'appel et LIVRÉE plus tard : c'est la seule
+     * façon de reproduire une lecture partie avant une écriture et revenue
+     * après elle, donc porteuse d'un état déjà périmé. */
+    getState: () => {
+      let payload;
+      try { payload = server.state(); } catch (e) { return Promise.reject(e); }
+      if (!server.readDelay) { return Promise.resolve(payload); }
+      return new Promise((resolve) => setTimeout(() => resolve(payload), server.readDelay));
+    },
     getStateSince: (url, token, since) => {
       try { return Promise.resolve(server.state(since)); } catch (e) { return Promise.reject(e); }
     },
@@ -157,6 +165,14 @@ function makeClient(name, server, options) {
     },
     postActions: (url, token, actions) => {
       try { return Promise.resolve(server.post(actions)); } catch (e) { return Promise.reject(e); }
+    },
+    /* Le beacon du navigateur : le document peut mourir juste après, la requête
+     * part quand même — et son émetteur n'apprendra JAMAIS ce qu'elle a donné.
+     * On reproduit les deux traits : appliqué côté serveur, muet côté client. */
+    beacon: (url, token, body) => {
+      if (server.refuseBeacon) { return false; }
+      try { server.post(body); } catch (e) { /* muet, par construction */ }
+      return true;
     }
   };
 
@@ -457,6 +473,178 @@ async function run() {
     assert(topic.messages.map((m) => m.text).join("|") === "message 0|message 1|message 2|message 3",
       "l'ordre des messages n'est pas tenu");
     assert(A.messages.every((m) => m.indexOf("refusée") < 0), "une action a été refusée à tort");
+  });
+
+  /* ------------------------------------------- Survie à la fermeture --- */
+
+  /* ⚠️ RÉGRESSION HISTORIQUE — le scénario du 5 août.
+   *
+   * Marine écrit un message avec du réseau, l'envoi n'aboutit pas du premier
+   * coup (Apps Script sérialise tout derrière un LockService : dépasser le
+   * délai est ordinaire, pas exceptionnel), puis elle range son téléphone. La
+   * page meurt. Or le SEUL mécanisme qui rejouait l'action était la boucle
+   * d'interrogation — qui meurt avec la page. Le message est resté deux jours
+   * dans la file, invisible de tous, et n'est parti qu'à la réouverture de
+   * l'application. Il doit maintenant partir AVANT que la page disparaisse. */
+  await check("le message part même si la page meurt juste après l'envoi", async () => {
+    const srv = makeServer();
+    const B = makeClient("B", srv, { indexedDB: false });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await B.Sync.boot(); await A.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    /* L'envoi ordinaire n'aboutit pas : requête coupée, serveur qui traîne. */
+    srv.down = true;
+    await B.Sync.dispatch(B.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "Test hihi" }, B.user));
+    await settle();
+    assert(B.Sync.pendingCount() === 1, "l'action devrait rester en file après un envoi manqué");
+
+    /* Le réseau, lui, va très bien : c'est la page qui s'en va. */
+    srv.down = false;
+    const handed = B.Sync.flush();          // ce que fait « pagehide »
+    B.Sync.stop();                          // …et la page cesse d'exister
+    await settle();
+
+    assert(handed === true, "l'envoi de secours n'a pas été pris en charge");
+    await A.Sync.now(); await settle();
+    const topic = Core.findTopic(A.Store.view, "t1");
+    assert(topic && Core.findMessage(topic, "m1"),
+      "A ne reçoit toujours pas le message écrit avant la fermeture");
+  });
+
+  /* Un beacon n'a pas de réponse : l'action reste en file, faute de preuve
+   * qu'elle est passée. Elle repart donc au démarrage suivant, et c'est la
+   * déduplication serveur qui doit empêcher le message d'apparaître en double. */
+  await check("le doublon d'un envoi de secours est absorbé, la file se vide", async () => {
+    const srv = makeServer();
+    const B = makeClient("B", srv, { indexedDB: false });
+    await B.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    srv.down = true;
+    await B.Sync.dispatch(B.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "Test hihi" }, B.user));
+    await settle();
+    srv.down = false;
+    B.Sync.flush();
+    await settle();
+
+    /* Retour de l'application : la file contient encore l'action, non confirmée. */
+    assert(B.Sync.pendingCount() === 1, "la file ne devrait pas se vider sans confirmation");
+    await B.Sync.now(); await settle();
+
+    assert(B.Sync.pendingCount() === 0, "la file reste bloquée après le retour");
+    const topic = Core.findTopic(B.Store.view, "t1");
+    assert(topic.messages.length === 1,
+      "le message apparaît en " + topic.messages.length + " exemplaires");
+    assert(B.messages.every((m) => m.indexOf("refusée") < 0),
+      "le doublon a été présenté comme un refus à l'utilisateur");
+  });
+
+  /* La fenêtre la plus étroite, et la plus vicieuse : entre l'affichage du
+   * message et son écriture en base, l'action n'est encore NULLE PART. Une page
+   * qui meurt pile là l'emporte sans laisser de trace — ni chez les autres, ni
+   * en file au redémarrage. */
+  await check("une action pas encore écrite en base part quand même à la fermeture", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: false });
+    const B = makeClient("B", srv, { indexedDB: false });
+    await A.Sync.boot(); await B.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    /* On n'attend PAS dispatch : la clé de file n'est pas encore attribuée. */
+    A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "juste avant de fermer" }, A.user));
+    assert(A.Store.queue.length === 1 && A.Store.queue[0].seq === null,
+      "le scénario ne teste rien : la clé est déjà attribuée");
+
+    assert(A.Sync.flush() === true, "l'action sans clé de file n'a pas été envoyée");
+    await settle();
+
+    await B.Sync.now(); await settle();
+    const topic = Core.findTopic(B.Store.view, "t1");
+    assert(topic && Core.findMessage(topic, "m1"), "le message écrit juste avant la fermeture est perdu");
+  });
+
+  await check("rien à envoyer : la page qui se ferme ne réveille pas le serveur", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    const posts = srv.calls.post;
+    assert(A.Sync.flush() === false, "un envoi de secours part alors que la file est vide");
+    assert(srv.calls.post === posts, "le serveur a été appelé pour rien");
+  });
+
+  /* Couper une écriture ne l'annule pas côté serveur : ça ne fait que nous en
+   * cacher l'issue, et fabriquer un doublon. Elle doit donc avoir plus de temps
+   * qu'une lecture, qui est rejouée au tour suivant sans rien risquer. */
+  await check("une écriture a plus de temps qu'une lecture", () => {
+    assert(CONFIG.WRITE_TIMEOUT_MS > CONFIG.REQUEST_TIMEOUT_MS,
+      "l'écriture est coupée aussi tôt que la lecture");
+  });
+
+  /* ⚠️ Une réponse de lecture décrit l'état du serveur au moment où elle a été
+   * CALCULÉE. Partie avant une écriture et revenue après elle, l'appliquer
+   * remet l'état d'avant : le message qu'on vient d'écrire disparaît de son
+   * propre écran. Vu de l'utilisateur, c'est « l'application a perdu mon
+   * message » — le défaut le plus inquiétant qui soit dans une messagerie. */
+  await check("un message envoyé ne disparaît pas sous une lecture plus vieille", async () => {
+    const srv = makeServer({ features: [] });
+    const A = makeClient("A", srv, { indexedDB: false });
+    const B = makeClient("B", srv, { indexedDB: false });
+    await A.Sync.boot(); await B.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    /* B écrit : A est alors en retard d'une révision, donc sa prochaine lecture
+     * téléchargera vraiment l'état. */
+    await B.Sync.now(); await settle();
+    await say(B, { topicId: "t1", messageId: "mb", text: "de B" });
+
+    srv.readDelay = 60;
+    const reading = A.Sync.now();                       // lecture EN VOL
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    /* …pendant laquelle A écrit, et son envoi aboutit. */
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "ma", text: "de A" }, A.user));
+    await settle();
+
+    await reading; await settle();
+    srv.readDelay = 0;
+
+    let topic = Core.findTopic(A.Store.view, "t1");
+    assert(Core.findMessage(topic, "ma"), "le message que A vient d'écrire a disparu de son écran");
+
+    /* La lecture périmée a été jetée, pas appliquée : le message de B arrive au
+     * tour suivant. Rien n'est perdu, c'est au plus un tour de boucle. */
+    await A.Sync.now(); await settle();
+    topic = Core.findTopic(A.Store.view, "t1");
+    assert(Core.findMessage(topic, "ma"), "le message de A n'a pas survécu au tour suivant");
+    assert(Core.findMessage(topic, "mb"), "le message de B n'est jamais arrivé");
+  });
+
+  /* Tant qu'un message n'est pas parti, il n'a pas d'heure : celle du serveur
+   * n'existe pas encore, et celle de l'appareil n'est pas celle que les autres
+   * verront. L'interface doit pouvoir le dire. */
+  await check("un message encore en file est signalé comme tel", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    srv.down = true;
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "en attente" }, A.user));
+    await settle();
+    assert(A.Store.pendingMessageIds()["m1"] === true, "le message en file n'est pas repéré");
+
+    srv.down = false;
+    await A.Sync.now(); await settle();
+    assert(A.Store.pendingMessageIds()["m1"] === undefined,
+      "le message reste marqué « en envoi » après sa remise");
   });
 
   await check("backend à jour : l'état reçu ne porte plus processedActionIds", async () => {
