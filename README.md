@@ -66,6 +66,8 @@ tests/parity.test.js       parité client / backend, action par action
 tests/sync.test.js         deux clients face à un faux backend (réception, file)
 tests/session.test.js      verrou par inactivité : quand l'ouverture exige le code
 tests/onboarding.test.js   présentation initiale : qui la voit, qui y échappe
+tests/navigation.test.js   contrat du geste retour : profondeurs déclarées, point
+                           de passage unique
 ```
 
 ---
@@ -612,6 +614,7 @@ node tests/parity.test.js
 node tests/sync.test.js
 node tests/session.test.js
 node tests/onboarding.test.js
+node tests/navigation.test.js
 node tests/qa/compat-scan.js
 ```
 
