@@ -119,8 +119,26 @@
     scrollToBottom: false
   };
 
+  /* Une feuille du bas et une modale sont des COUCHES posées sur l'écran, pas
+   * des écrans : elles comptent chacune pour un niveau de profondeur en plus.
+   * Toute ouverture empile donc une entrée d'historique et toute fermeture la
+   * consomme, quel que soit le geste — bouton « Fermer », Échap, clic sur le
+   * fond, ou bouton retour du téléphone. Sans cela, un appui sur retour
+   * pendant qu'une modale est ouverte quitte l'écran au lieu de refermer la
+   * modale, et la saisie en cours part avec.
+   *
+   * Le point d'interception est ici et nulle part ailleurs : les couches se
+   * déclarent par l'état, et il n'existe qu'un endroit où cet état change. Le
+   * contrat complet est en tête de js/app.js. */
+  function couchesDe(etat) {
+    return (etat.sheet ? 1 : 0) + (etat.modal ? 1 : 0);
+  }
+
   UI.set = function (patch) {
+    var avant = couchesDe(UI.local);
     Object.assign(UI.local, patch || {});
+    var apres = couchesDe(UI.local);
+    if (avant !== apres) { App.ajusterCouches(avant, apres); }
     UI.local.version += 1;
     UI.render();
   };
@@ -1018,7 +1036,7 @@
       topbar({
         title: topic.title,
         sub: Core.TOPIC_STATUS_LABELS[topic.status],
-        back: function () { App.go("#/"); },
+        back: App.remonter,
         backLabel: "Sujets",
         onTitle: function () { UI.set({ sheet: { type: "topicInfo", topicId: topic.id } }); },
         actions: [statusPill()]
@@ -1048,7 +1066,7 @@
 
   function screenMissing() {
     return el("div", { class: "screen" }, [
-      topbar({ title: "Introuvable", back: function () { App.go("#/"); }, backLabel: "Sujets" }),
+      topbar({ title: "Introuvable", back: App.remonter, backLabel: "Sujets" }),
       el("div", { class: "content" }, [
         emptyState("warning", "Ce contenu n'existe plus",
           "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.",
@@ -1160,7 +1178,7 @@
       topbar({
         title: "Propositions",
         sub: topic.title,
-        back: function () { App.go("#/topic/" + topic.id); },
+        back: App.remonter,
         backLabel: "Discussion",
         actions: [statusPill()]
       }),
@@ -1260,7 +1278,7 @@
       topbar({
         title: "Conclusion",
         sub: topic.title,
-        back: function () { App.go("#/topic/" + topic.id); },
+        back: App.remonter,
         backLabel: "Discussion",
         actions: [statusPill()]
       }),
@@ -1339,7 +1357,7 @@
       topbar({
         title: "Réunion",
         sub: "Synthèse imprimable",
-        back: function () { App.go("#/settings"); },
+        back: App.remonter,
         backLabel: "Réglages",
         actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button",
           onclick: function () { window.print(); } }, [icon("print", 16), el("span", { text: "Imprimer" })])]
@@ -1437,7 +1455,7 @@
     ]);
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Réglages", back: function () { App.go("#/"); }, backLabel: "Sujets", actions: [statusPill()] }),
+      topbar({ title: "Réglages", back: App.remonter, backLabel: "Sujets", actions: [statusPill()] }),
       el("div", { class: "content stack-lg" }, [
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("user", "Votre nom"),

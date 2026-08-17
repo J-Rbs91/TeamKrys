@@ -12,6 +12,9 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] `node tests/onboarding.test.js` → tous les tests passent (règle de
       présentation, reconnaissance des appareils déjà utilisés, invariant de repli
       lu dans `css/app.css`).
+- [ ] `node tests/navigation.test.js` → tous les tests passent (chaque écran a
+      une profondeur déclarée, aucune navigation n'écrit `location.hash` dans son
+      coin, les boutons retour dépilent au lieu de naviguer).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -24,6 +27,25 @@ du navigateur ouverte : **zéro erreur console** attendue.
       `package*.json`. Les seuls fichiers backend versionnés sont
       `apps-script/Code.gs` et `apps-script/appsscript.json`.
 - [ ] `CONFIG.APP_VERSION` et `CACHE_VERSION` incrémentés **ensemble**.
+
+## 0 bis. Geste retour — sur un téléphone, en comptant les appuis
+
+Ces six-là ne se vérifient pas autrement : le défaut qu'elles attrapent ne
+produit aucune erreur, ne casse aucun test, et ne se voit pas sur un ordinateur.
+Le raisonnement est dans [`NAVIGATION.md`](NAVIGATION.md).
+
+- [ ] Sujets → un sujet → ses propositions, puis retour jusqu'à sortir :
+      **deux appuis**, pas trois.
+- [ ] Ouvrir trois sujets voisins à la file : **un seul appui** ramène à la
+      liste.
+- [ ] Fermer une feuille ou une modale, puis appuyer sur retour : elle **ne
+      revient pas**.
+- [ ] Créer un sujet depuis la modale, puis appuyer sur retour : on revient à la
+      **liste**, pas au formulaire.
+- [ ] Depuis les propositions, comparer le bouton retour de l'en-tête et celui
+      du système : **même écran**.
+- [ ] Ouvrir un lien partagé vers un sujet, puis appuyer sur retour : on **monte
+      dans l'arbre**, on ne sort pas de l'application au premier appui.
 
 ## 1. Premier lancement
 

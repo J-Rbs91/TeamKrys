@@ -234,7 +234,10 @@
       Store.setQueue([]);
       /* Identité neuve : la personne suivante repasse par l'écran du nom. */
       loadUser();
-      UI.set({ sheet: null, modal: null });
+      /* Pas de fermeture séparée avant la navigation : `App.go` compte les
+       * couches ouvertes dans la profondeur courante et les dépile avec
+       * l'écran, en une seule traversée. Fermer d'abord lancerait une
+       * traversée que l'écriture suivante prendrait de vitesse. */
       App.go("#/");
       UI.force();
       UI.toast("Déconnecté de l'équipe.");
@@ -465,18 +468,208 @@
     return { raw: "#/", name: "topics", topicId: null };
   }
 
+  /* ---------------------------------------------- Contrat du geste retour ---
+   * Le bouton retour d'Android rejoue la PILE D'HISTORIQUE : la chronologie des
+   * écrans visités, à l'envers. Personne ne se représente une application comme
+   * une chronologie — on se la représente comme un arbre, et « retour » veut
+   * dire remonter d'un niveau.
+   *
+   * Les deux coïncident tant qu'on ne fait que descendre, et divergent au
+   * premier pas de côté. C'est le défaut qui coûtait le plus cher ici : ouvrir
+   * six sujets à la file depuis la liste demandait sept appuis pour sortir, et
+   * le bouton retour de l'en-tête EMPILAIT une entrée au lieu d'en consommer
+   * une — remonter à la liste rendait donc la sortie plus lointaine, pas plus
+   * proche. Installée sur l'écran d'accueil, l'application n'a aucune barre de
+   * navigateur : ce geste est le seul moyen de circuler.
+   *
+   * Un seul invariant, et tout en découle :
+   *
+   *     la pile d'historique est toujours le chemin de la racine à l'écran
+   *     courant.
+   *
+   * Sous cet invariant le geste retour remonte l'arbre de lui-même, SANS
+   * interception. Ne jamais intercepter : sur iOS le retour est un glissement
+   * continu et réversible qu'une interception transforme en saut sec, sur
+   * Android il entre en concurrence avec les gestes du système, et partout il
+   * casse le retour du navigateur.
+   *
+   * Trois gestes seulement, et l'intention se DÉDUIT de la position des deux
+   * écrans dans l'arbre — elle ne se déclare jamais à la main :
+   *
+   *     descendre  → empiler        (cible plus profonde)
+   *     frère      → remplacer      (même profondeur : un onglet, un sujet
+   *                                  voisin, un filtre ne consomment aucune
+   *                                  profondeur)
+   *     remonter   → dépiler        (cible moins profonde)
+   *
+   * Les couches — feuille du bas, modale — ne sont pas des feuilles de l'arbre
+   * mais des calques posés dessus. Elles comptent chacune pour un niveau de
+   * plus, ce qui fait qu'en sortir est TOUJOURS une remontée : une couche
+   * fermée quitte la pile et ne peut plus être ressuscitée par un appui sur
+   * retour. La séquence de présentation fait exception : c'est un <dialog>
+   * modal, servi nativement par le navigateur (CloseWatcher), et lui ajouter un
+   * second mécanisme les ferait diverger.
+   *
+   * La séquence de vérification est dans docs/NAVIGATION.md. Elle se fait sur un
+   * téléphone : un geste retour ne se lit pas dans du code. */
+
+  /* Parent déclaré de chaque écran, en UN SEUL endroit. Ajouter un écran, c'est
+   * ajouter une ligne ici ; les liens qui y mènent se comportent alors
+   * correctement sans que personne ait à y penser. `null` marque la racine. */
+  var PARENT = {
+    topics: null,
+    settings: "topics",
+    meeting: "settings",
+    topic: "topics",
+    proposals: "topic",
+    conclusion: "topic"
+  };
+
+  function profondeurEcran(name) {
+    var niveaux = 0;
+    var courant = name;
+    while (PARENT[courant]) { niveaux += 1; courant = PARENT[courant]; }
+    return niveaux;
+  }
+
+  /* Parent de REPLI, distinct du parent réellement parcouru : il sert quand la
+   * pile ne contient rien sous l'écran courant — arrivée par une adresse
+   * partagée, rechargement, reprise d'une application mise en veille. */
+  function hashParent(route) {
+    var parent = PARENT[route.name];
+    if (!parent) { return "#/"; }
+    if (parent === "topic") { return "#/topic/" + route.topicId; }
+    if (parent === "settings") { return "#/settings"; }
+    return "#/";
+  }
+
+  function couchesOuvertes() {
+    return (UI.local.sheet ? 1 : 0) + (UI.local.modal ? 1 : 0);
+  }
+
+  /* Profondeur effective : l'écran plus les calques posés dessus. */
+  function profondeurCourante() {
+    return profondeurEcran(App.route.name) + couchesOuvertes();
+  }
+
+  /* Nombre d'entrées que NOUS avons empilées sous l'entrée courante. Une
+   * traversée ne peut pas descendre plus bas sans sortir de l'application, et
+   * retenir la personne sur le premier écran serait un défaut, pas une
+   * protection. */
+  function entreesSousNous() {
+    var etat = window.history.state;
+    return (etat && typeof etat.tkIndex === "number") ? etat.tkIndex : 0;
+  }
+
+  var traverseesAIgnorer = 0;   // provoquées par nous, donc déjà appliquées
+  var cibleAttendue = null;     // adresse visée par la traversée en cours
+  var resynchronisation = false;
+
+  function empiler(hash) {
+    window.history.pushState({ tkIndex: entreesSousNous() + 1 }, "", hash);
+  }
+
+  function remplacer(hash) {
+    window.history.replaceState({ tkIndex: entreesSousNous() }, "", hash);
+  }
+
+  /* Remontée. On dépile ce que la pile contient réellement ; s'il en manque —
+   * la trace est incomplète parce qu'on est arrivé directement en profondeur —
+   * on REMPLACE l'entrée courante par la cible. La pile ne grandit pas, ce qui
+   * est le point important, et le retour suivant sort proprement. */
+  function remonter(niveaux, hash) {
+    var disponibles = Math.min(niveaux, entreesSousNous());
+    if (disponibles > 0) {
+      traverseesAIgnorer += 1;
+      cibleAttendue = hash;
+      window.history.go(-disponibles);
+      return;
+    }
+    remplacer(hash);
+  }
+
+  /* Point de passage unique. Tout ce qui change d'écran ou de couche passe par
+   * ici : c'est lui qui compare les profondeurs et choisit le geste. Un appel
+   * qui le contournerait est le seul endroit où le défaut peut réapparaître, et
+   * il se cherche en une recherche textuelle sur `location.hash =`. */
+  function poser(hash, profondeurVisee) {
+    var ecart = profondeurVisee - profondeurCourante();
+    if (ecart > 0) { empiler(hash); return; }
+    if (ecart === 0) { remplacer(hash); return; }
+    remonter(-ecart, hash);
+  }
+
+  /* Rendu sans écriture d'historique : l'entrée courante décrit déjà l'état
+   * qu'on applique. */
+  function appliquer(route) {
+    App.route = route;
+    resynchronisation = true;
+    UI.set({ sheet: null, modal: null, quote: null });
+    resynchronisation = false;
+  }
+
   App.go = function (hash) {
-    if (window.location.hash === hash) {
-      App.route = parseRoute(hash);
+    var cible = parseRoute(hash);
+    /* Même écran, aucune couche ouverte : rien à écrire, on redessine. */
+    if (cible.raw === App.route.raw && !couchesOuvertes()) {
+      App.route = cible;
       UI.force();
       return;
     }
-    window.location.hash = hash;
+    poser(cible.raw, profondeurEcran(cible.name));
+    appliquer(cible);
   };
 
+  /* Remontée d'un niveau, telle que la demande un bouton retour de l'interface.
+   * Il fait exactement ce que fait le bouton du système : c'est la seule façon
+   * que les deux aboutissent au même écran depuis le même point. */
+  App.remonter = function () {
+    if (couchesOuvertes()) { UI.set({ sheet: null, modal: null }); return; }
+    var parent = hashParent(App.route);
+    App.go(parent);
+  };
+
+  /* Appelé par UI.set quand le nombre de couches ouvertes change. Une couche
+   * ouverte empile, une couche fermée dépile — et la fermeture par le bouton
+   * « Fermer », par Échap, par le clic sur le fond ou par le geste du système
+   * suit donc exactement le même chemin. */
+  App.ajusterCouches = function (avant, apres) {
+    if (resynchronisation || avant === apres) { return; }
+    /* L'écart se calcule sur les seules couches : l'écran ne change pas ici, et
+     * `UI.local` porte déjà le nouvel état au moment de l'appel — le relire
+     * donnerait un écart nul et n'empilerait jamais rien. */
+    var ecart = apres - avant;
+    var hash = window.location.hash || "#/";
+    if (ecart > 0) { empiler(hash); return; }
+    remonter(-ecart, hash);
+  };
+
+  /* Traversée d'historique : geste retour du système, bouton du navigateur,
+   * glissement latéral d'iOS. On ne l'intercepte pas — on constate où elle nous
+   * a menés et on s'y accorde. */
+  function surTraversee() {
+    if (traverseesAIgnorer > 0) {
+      traverseesAIgnorer -= 1;
+      /* La pile a divergé de l'arbre — cela ne devrait pas arriver sous
+       * l'invariant, mais une entrée étrangère au milieu suffirait. On se
+       * recale sans ajouter d'entrée plutôt que d'afficher autre chose que ce
+       * que l'adresse annonce. */
+      if (cibleAttendue && window.location.hash !== cibleAttendue) {
+        remplacer(cibleAttendue);
+      }
+      cibleAttendue = null;
+      return;
+    }
+    appliquer(parseRoute(window.location.hash));
+  }
+
   function onHashChange() {
-    App.route = parseRoute(window.location.hash);
-    UI.set({ sheet: null, modal: null, quote: null });
+    /* Adresse modifiée hors de l'application — saisie à la main, lien externe.
+     * Les navigations internes passent par pushState et ne lèvent pas cet
+     * événement. */
+    var route = parseRoute(window.location.hash);
+    if (route.raw === App.route.raw) { return; }
+    appliquer(route);
   }
 
   /* ------------------------------------------------------------ Actions --- */
@@ -495,7 +688,10 @@
       }, actor).then(function (result) {
         if (!result || result.ok === false) { return; }
         remember(topicId);
-        UI.set({ modal: null });
+        /* La modale de création est une couche posée sur la liste, le sujet
+         * créé est au même niveau que la liste : la navigation REMPLACE donc
+         * l'entrée de la couche. Un appui sur retour ramène à la liste, pas au
+         * formulaire qu'on vient de valider. */
         App.go("#/topic/" + topicId);
       });
     },
@@ -539,7 +735,6 @@
         topicId: topicId, proposalId: proposalId, title: title, description: description
       }).then(function (result) {
         if (!result || result.ok === false) { return; }
-        UI.set({ modal: null });
         App.go("#/topic/" + topicId + "/proposals");
       });
     },
@@ -622,6 +817,10 @@
   /* --------------------------------------------------------- Démarrage --- */
 
   function bindGlobalEvents() {
+    /* `popstate` porte le geste retour du système ; `hashchange` ne reste que
+     * pour une adresse modifiée hors de l'application, les navigations internes
+     * passant désormais par pushState, qui ne la lève pas. */
+    window.addEventListener("popstate", surTraversee);
     window.addEventListener("hashchange", onHashChange);
 
     /* Ce qui compte comme manipulation : un doigt, un clic, une touche. La
@@ -680,6 +879,11 @@
     loadOnboarding();
     UI.local.showArchived = Utils.storage.get(CONFIG.KEYS.showArchived, false) === true;
     App.route = parseRoute(window.location.hash);
+    /* La trace repart de zéro : sous l'entrée courante, la pile ne contient
+     * rien qui nous appartienne — qu'on arrive par un lien partagé, par un
+     * rechargement ou par la reprise d'une application mise en veille. C'est ce
+     * marquage qui empêche une remontée de sortir de l'application. */
+    remplacer(App.route.raw);
 
     Sync.setHooks({
       onChange: function () { UI.render(); UI.refreshStatus(); },
