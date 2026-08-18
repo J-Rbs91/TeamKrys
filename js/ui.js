@@ -1169,7 +1169,7 @@
         el("button", { class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
         [icon("plus", 18), el("span", { text: "Ajouter une proposition" })]),
-        "Ensuite : chacun vote pour, contre ou abstention — un vote par personne."));
+        "Ensuite : chacun vote pour, contre ou abstention, un vote par personne."));
     } else {
       topic.proposals.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
     }
@@ -1295,7 +1295,7 @@
     var doc = el("div", { class: "print-doc stack" }, [
       el("div", { class: "stack", style: { gap: "6px", marginBottom: "10px" } }, [
         sectionTitle("doc", "Synthèse d'équipe"),
-        el("h1", { class: "print-h1", text: CONFIG.APP_NAME + " — Préparation de réunion" }),
+        el("h1", { class: "print-h1", text: CONFIG.APP_NAME + " : préparation de réunion" }),
         el("p", { class: "hint", text: "Édité le " + Utils.formatDateTime(Utils.nowISO()) + " · " + Utils.plural(topics.length, "sujet", "sujets") })
       ])
     ]);
@@ -1325,7 +1325,7 @@
           var summary = Core.voteSummary(proposal);
           pl.appendChild(el("li", {}, [
             el("strong", { text: proposal.title }),
-            el("span", { text: " — " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + summary.label +
+            el("span", { text: " : " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + summary.label +
               " (" + summary.counts.for + " pour / " + summary.counts.against + " contre / " + summary.counts.abstain + " abst.)" }),
             proposal.description ? el("div", { class: "hint pre-wrap", text: proposal.description }) : null
           ]));
@@ -1343,7 +1343,7 @@
           var count = scores.scores[conclusion.id] || 0;
           cl.appendChild(el("li", {}, [
             el("span", { class: "pre-wrap", text: conclusion.text }),
-            el("span", { class: "hint", text: " — " + Utils.plural(count, "vote", "votes") +
+            el("span", { class: "hint", text: " : " + Utils.plural(count, "vote", "votes") +
               (scores.best > 0 && count === scores.best ? " · en tête" : "") })
           ]));
         });
@@ -1433,7 +1433,7 @@
          * explication à « je ne vois pas les messages des autres ». */
         connected ? diagRow("Code d'espace", Utils.fingerprint(Sync.connection.url)) : null,
         diagRow("Révision", String(diagnostics.revision)),
-        diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "—"),
+        diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "-"),
         connected ? diagRow("Dernier échange",
           diagnostics.lastSyncAt ? Utils.formatDateTime(diagnostics.lastSyncAt) : "aucun",
           !diagnostics.lastSyncAt) : null,
@@ -1446,8 +1446,8 @@
          * pas faite : l'éviction est totale et muette. On dit donc les deux states —
          * disponible, et durable ou non. */
         diagRow("Stockage local", diagnostics.persistent
-          ? ("IndexedDB — " + diagnostics.durability)
-          : "mémoire — non persistant",
+          ? ("IndexedDB : " + diagnostics.durability)
+          : "mémoire : non persistant",
         !diagnostics.persistent || diagnostics.durability === "évinçable"),
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
         diagRow("Version", CONFIG.APP_VERSION)
@@ -1969,7 +1969,7 @@
       icon: "idea",
       eyebrow: "Propositions",
       title: "Les idées deviennent des propositions",
-      text: "Une proposition se vote pour, contre ou abstention — un vote par "
+      text: "Une proposition se vote pour, contre ou abstention, un vote par "
         + "personne, modifiable. La barre montre où en est l'équipe.",
       extra: "votebar"
     },

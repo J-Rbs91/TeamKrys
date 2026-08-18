@@ -674,3 +674,13 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion
+
+---
+
+## Conventions
+
+Le tiret cadratin (« — ») ne doit jamais apparaître dans un texte visible par
+l'utilisateur (HTML, libellés, messages, notifications, description du
+manifeste). Il reste toléré dans les commentaires de code et la documentation
+interne. Préférer selon le cas la virgule, le point, le deux-points ou le
+tiret simple entouré d'espaces (« - »).
