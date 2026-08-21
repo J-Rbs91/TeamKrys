@@ -81,8 +81,20 @@
      * laissée ouverte à l'écran sans que personne n'y touche. */
     IDLE_CHECK_MS: 60 * 1000,
 
-    /* Délai maximal d'une requête réseau. */
+    /* Délai maximal d'une LECTURE. Elle est rejouée au tour suivant sans rien
+     * risquer : couper tôt libère la boucle. */
     REQUEST_TIMEOUT_MS: 20000,
+
+    /* Délai maximal d'une ÉCRITURE — délibérément plus long.
+     *
+     * Apps Script sérialise toutes les requêtes derrière un LockService : quand
+     * deux téléphones sont dans la même conversation, un envoi attend son tour
+     * DERRIÈRE les lectures des autres. À 20 s, une écriture parfaitement
+     * valide était coupée alors que le serveur l'exécutait encore — le message
+     * restait en file, l'utilisateur ne voyait rien, et l'action repartait plus
+     * tard en doublon. Couper une écriture ne l'annule pas : ça ne fait que
+     * nous en cacher l'issue. On laisse donc au serveur le temps de répondre. */
+    WRITE_TIMEOUT_MS: 45000,
 
     /* Au-delà de ce nombre de sujets, on affiche le champ de recherche. */
     SEARCH_THRESHOLD: 6,

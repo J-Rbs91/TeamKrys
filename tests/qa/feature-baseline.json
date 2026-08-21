@@ -718,6 +718,27 @@
       "severity": "critical"
     },
     {
+      "id": "js-sendbeacon",
+      "label": "navigator.sendBeacon()",
+      "kind": "js",
+      "detect": ["sendBeacon\\s*\\("],
+      "support": { "webkit": "11.1", "chromium": "39", "firefox": "31" },
+      "failure": "throws",
+      "severity": "medium",
+      "guard": ["typeof\\s+[\\w.$]*\\.sendBeacon\\s*===", "sendBeacon\\s*(?:&&|\\?\\.)"],
+      "impact": "Seule voie qui poste la file d'envoi au moment où la page disparaît. Sans elle, un message écrit juste avant de ranger son téléphone attend la prochaine OUVERTURE de l'application — c'est le défaut du 5 août. Repli sur fetch keepalive, puis sur le renvoi ordinaire au retour."
+    },
+    {
+      "id": "js-fetch-keepalive",
+      "label": "fetch(..., { keepalive: true })",
+      "kind": "js",
+      "detect": ["keepalive:\\s*true"],
+      "support": { "webkit": "13", "chromium": "66", "firefox": "133" },
+      "failure": "silent-noop",
+      "severity": "low",
+      "impact": "Repli de sendBeacon uniquement, et seulement là où sendBeacon manque — donc presque jamais. L'option inconnue est ignorée sans erreur : la requête part quand même mais peut être tuée avec la page, et l'action repart alors au démarrage suivant, absorbée par la déduplication serveur. Aucune perte, au pire un délai."
+    },
+    {
       "id": "js-scrollintoview-options",
       "label": "scrollIntoView({ behavior })",
       "kind": "js",
