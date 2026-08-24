@@ -16,6 +16,7 @@
   var pulling = false;
   var lastError = null;      // dernier message d'erreur réseau/serveur
   var lastSyncAt = null;
+  var lastFlushAt = null;    // dernier envoi de secours au départ de la page
   var hooks = { onAuthError: null, onMessage: null, onChange: null };
 
   /* Boucle de synchronisation.
@@ -311,12 +312,10 @@
       });
   }
 
-  Sync.push = function () {
-    if (busy || !Sync.isConnected()) { return Promise.resolve(); }
-
-    /* Seules les actions dont la clé de file est attribuée sont envoyables, et
-     * l'ORDRE de la file fait foi : on ne saute jamais par-dessus une action
-     * pas encore prête, sinon un message partirait avant le sujet qui le porte. */
+  /* Seules les actions dont la clé de file est attribuée sont envoyables, et
+   * l'ORDRE de la file fait foi : on ne saute jamais par-dessus une action pas
+   * encore prête, sinon un message partirait avant le sujet qui le porte. */
+  function readyEntries() {
     var ready = [];
     for (var i = 0; i < Store.queue.length; i++) {
       var candidate = Store.queue[i];
@@ -324,6 +323,51 @@
       ready.push(candidate);
       if (!Sync.supports("batch") || ready.length >= CONFIG.MAX_BATCH) { break; }
     }
+    return ready;
+  }
+
+  /* Dernier recours, appelé quand la PAGE DISPARAÎT (voir Api.beacon).
+   *
+   * Un envoi ordinaire meurt avec l'onglet. Écrire un message puis revenir à
+   * l'écran d'accueil dans la seconde suffisait donc à ce que l'action reste en
+   * file — et le seul mécanisme qui la rejouait, la boucle d'interrogation,
+   * meurt lui aussi avec la page. Le message attendait la prochaine OUVERTURE
+   * de l'application : des heures, ou des jours.
+   *
+   * On ne retire rien de la file : un beacon n'a pas de réponse, donc aucune
+   * confirmation. L'action repartira au prochain démarrage et le serveur
+   * absorbera le doublon.
+   *
+   * Renvoie true si le navigateur a pris la requête en charge. */
+  Sync.flush = function () {
+    if (!Sync.isConnected() || !Api.beacon) { return false; }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) { return false; }
+
+    /* ⚠️ Ici, et ICI SEULEMENT, on n'exige pas que la clé de file soit
+     * attribuée. Entre l'affichage d'un message et son écriture en base, il
+     * s'écoule quelques millisecondes — et une page qui meurt pile là emporte
+     * une action qui n'était encore NULLE PART. L'ordre du tableau EST l'ordre
+     * voulu, et un beacon ne retire rien de la file : rien ne peut être
+     * réordonné. La règle stricte de Sync.push, elle, reste nécessaire — c'est
+     * elle qui garantit l'ordre APRÈS un redémarrage. */
+    var entries = Store.queue.slice(0, Sync.supports("batch") ? CONFIG.MAX_BATCH : 1);
+    if (!entries.length) { return false; }
+
+    /* Un serveur qui ne sait pas grouper attend UNE action : on lui envoie la
+     * tête de file. Les suivantes partiront normalement au retour. */
+    var body = Sync.supports("batch")
+      ? entries.map(function (e) { return e.action; })
+      : entries[0].action;
+
+    var handed = Api.beacon(Sync.connection.url, Sync.connection.token, body);
+    if (handed) { lastFlushAt = Utils.nowISO(); }
+    return handed;
+  };
+
+  Sync.push = function () {
+    if (busy || !Sync.isConnected()) { return Promise.resolve(); }
+
+    var ready = readyEntries();
     if (!ready.length) { return Promise.resolve(); }
 
     var entry = ready[0];
@@ -389,6 +433,16 @@
     var recovering = !!lastError;
     var known = Store.base.revision;
 
+    /* ⚠️ Une réponse de lecture décrit l'état du serveur AU MOMENT OÙ ELLE A ÉTÉ
+     * CALCULÉE. Si un envoi aboutit pendant qu'elle voyage, l'appliquer au
+     * retour remet l'état d'AVANT cet envoi : le message qu'on vient d'écrire
+     * disparaît de l'écran de son auteur jusqu'au tour suivant — exactement
+     * l'allure d'une application qui perd les messages. On note donc l'état
+     * courant au départ, et on jette la réponse si un plus frais s'est installé
+     * entre-temps. Rien n'est perdu : le tour suivant relit. */
+    var epoch = Store.epoch;
+    function stale() { return Store.epoch !== epoch; }
+
     /* Serveur récent : UN seul aller-retour. Il ne renvoie l'état que si la
      * révision annoncée a bougé — sinon la réponse est minuscule et le fichier
      * Drive n'est même pas lu. « since: -1 » force le téléchargement. */
@@ -400,7 +454,7 @@
           failures = 0;
           lastError = null;
           lastSyncAt = Utils.nowISO();
-          if (payload.unchanged || !payload.state) { idleRounds += 1; return null; }
+          if (payload.unchanged || !payload.state || stale()) { idleRounds += 1; return null; }
           if (Store.setBase(payload.state)) { wake(); } else { idleRounds += 1; }
           return DB.saveState(Store.base).catch(function () { return null; });
         })
@@ -438,6 +492,7 @@
         }
         /* État complet téléchargé UNIQUEMENT si la révision a changé. */
         return Api.getState(Sync.connection.url, Sync.connection.token).then(function (payload) {
+          if (stale()) { idleRounds += 1; return null; }
           if (Store.setBase(payload.state)) { wake(); } else { idleRounds += 1; }
           return DB.saveState(Store.base).catch(function () { return null; });
         });
@@ -552,6 +607,9 @@
       revision: Store.base.revision,
       updatedAt: Store.base.updatedAt,
       lastSyncAt: lastSyncAt,
+      /* Dernier envoi de secours au départ de la page : dit si un message a dû
+       * être sauvé par le beacon plutôt que par la voie normale. */
+      lastFlushAt: lastFlushAt,
       /* Rythme réel de la boucle : c'est la première chose à regarder quand la
        * synchronisation « traîne ». */
       intervalMs: interval(),

@@ -20,10 +20,10 @@
   Api.isNetworkError = function (error) { return !!error && error.kind === "network"; };
   Api.isAuthError = function (error) { return !!error && error.kind === "auth"; };
 
-  function withTimeout(promise, controller) {
+  function withTimeout(promise, controller, ms) {
     var timer = setTimeout(function () {
       try { controller.abort(); } catch (e) { /* ignoré */ }
-    }, CONFIG.REQUEST_TIMEOUT_MS);
+    }, ms || CONFIG.REQUEST_TIMEOUT_MS);
     return promise.then(
       function (value) { clearTimeout(timer); return value; },
       function (error) { clearTimeout(timer); throw error; }
@@ -59,7 +59,7 @@
     });
   }
 
-  function send(url, options) {
+  function send(url, options, timeoutMs) {
     var controller = new AbortController();
     var request;
     try {
@@ -67,7 +67,7 @@
     } catch (e) {
       return Promise.reject(apiError("network", "Requête impossible."));
     }
-    return withTimeout(request, controller).then(function (response) {
+    return withTimeout(request, controller, timeoutMs).then(function (response) {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           throw apiError("auth", "Accès refusé par le serveur.", "auth");
@@ -120,7 +120,7 @@
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(action)
-    });
+    }, CONFIG.WRITE_TIMEOUT_MS);
   };
 
   /* Envoi GROUPÉ : le serveur applique les actions dans l'ordre reçu, sur la
@@ -132,7 +132,55 @@
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(actions)
-    });
+    }, CONFIG.WRITE_TIMEOUT_MS);
+  };
+
+  /* Envoi de DERNIER RECOURS, au moment où la page disparaît.
+   *
+   * ⚠️ C'est le correctif central. Un `fetch` ordinaire est tué avec l'onglet :
+   * écrire un message puis ranger son téléphone dans la seconde suffisait à ce
+   * que l'action reste en file — et plus rien ne la rejouait avant la prochaine
+   * OUVERTURE de l'application, c'est-à-dire des heures, ou des jours.
+   * `sendBeacon` existe exactement pour ça : le navigateur prend la requête en
+   * charge et la poste même si la page n'existe plus.
+   *
+   * Le type « text/plain » est le même que celui des envois ordinaires : c'est
+   * un type sûr au sens CORS, donc pas de préflight OPTIONS auquel Apps Script
+   * ne saurait pas répondre.
+   *
+   * On ne saura JAMAIS si le serveur a appliqué l'action — un beacon n'a pas de
+   * réponse. L'action reste donc en file et repart au prochain démarrage ; le
+   * doublon est absorbé par la déduplication serveur (processedActionIds).
+   * Perdre un message coûte cher, le poster deux fois ne coûte rien. */
+  Api.beacon = function (baseUrl, token, body) {
+    var url, text;
+    try {
+      url = buildUrl(baseUrl, { auth: token || "" });
+      text = JSON.stringify(body);
+    } catch (e) { return false; }
+
+    var nav = root.navigator;
+    if (nav && typeof nav.sendBeacon === "function" && typeof root.Blob === "function") {
+      try {
+        if (nav.sendBeacon(url, new root.Blob([text], { type: "text/plain;charset=utf-8" }))) {
+          return true;
+        }
+      } catch (e) { /* file du navigateur pleine ou API refusée : on tente le repli */ }
+    }
+
+    /* Repli : « keepalive » demande au navigateur de mener la requête à son
+     * terme après la disparition du document. Moins bien supporté que
+     * sendBeacon, mais c'est la seule autre voie qui survive à la fermeture. */
+    try {
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: text,
+        keepalive: true,
+        redirect: "follow"
+      }).catch(function () { /* sans issue observable, par construction */ });
+      return true;
+    } catch (e) { return false; }
   };
 
   root.Api = Api;
