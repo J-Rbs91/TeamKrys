@@ -15,6 +15,7 @@
   var lastPlace = null;
   var lastDepth = 0;
   var transitionRunning = false;
+  var fallbackTimer = 0;
 
   function app() { return root.App || null; }
   function store() { return root.Store || null; }
@@ -157,9 +158,11 @@
     var bubbles = document.querySelectorAll(".bubble");
     for (var i = 0; i < bubbles.length; i++) {
       if (bubbles[i].querySelector(".ux-bubble-cue")) { continue; }
+      var meta = bubbles[i].querySelector(".bubble-meta");
+      if (!meta) { continue; }
       var cue = make("span", "ux-bubble-cue", "•••");
       cue.setAttribute("aria-hidden", "true");
-      bubbles[i].appendChild(cue);
+      meta.appendChild(cue);
     }
   }
 
@@ -172,7 +175,8 @@
       card.classList.add("ux-proposal-card");
 
       var voteActions = card.querySelector(".vote-actions");
-      if (voteActions && !voteActions.previousElementSibling?.classList.contains("ux-vote-label")) {
+      var previous = voteActions ? voteActions.previousElementSibling : null;
+      if (voteActions && !(previous && previous.classList && previous.classList.contains("ux-vote-label"))) {
         voteActions.parentNode.insertBefore(make("div", "ux-vote-label", "Votre vote"), voteActions);
       }
       if (voteActions && voteActions.querySelector('[aria-pressed="true"]')) {
@@ -230,23 +234,46 @@
     lastDepth = currentDepth();
   }
 
+  function clearFallback(html) {
+    if (fallbackTimer) { root.clearTimeout(fallbackTimer); fallbackTimer = 0; }
+    html.classList.remove("ux-route-fallback");
+    html.removeAttribute("data-ux-direction");
+  }
+
+  function renderFallback(args, direction) {
+    var html = document.documentElement;
+    clearFallback(html);
+    html.setAttribute("data-ux-direction", direction);
+    html.classList.add("ux-route-fallback");
+    var result = originalRender.apply(UI, args);
+    enhance();
+    commitPlace();
+    fallbackTimer = root.setTimeout(function () { clearFallback(html); }, 280);
+    return result;
+  }
+
   UI.render = function () {
     var nextPlace = currentPlace();
     var nextDepth = currentDepth();
     var changed = lastPlace !== null && nextPlace !== lastPlace;
-    var canTransition = changed && !transitionRunning && !motionReduced() &&
+    var reduced = motionReduced();
+    var direction = changed
+      ? transitionDirection(lastDepth, nextDepth, lastPlace, nextPlace)
+      : "none";
+    var canTransition = changed && !transitionRunning && !reduced &&
       document.startViewTransition && typeof document.startViewTransition === "function";
 
     if (!canTransition) {
+      if (changed && !reduced && !transitionRunning) { return renderFallback(arguments, direction); }
       var result = originalRender.apply(UI, arguments);
       enhance();
       commitPlace();
       return result;
     }
 
-    var direction = transitionDirection(lastDepth, nextDepth, lastPlace, nextPlace);
     var args = arguments;
     var html = document.documentElement;
+    clearFallback(html);
     html.setAttribute("data-ux-direction", direction);
     html.classList.add("ux-vt");
     transitionRunning = true;
@@ -270,10 +297,7 @@
       transitionRunning = false;
       html.classList.remove("ux-vt");
       html.removeAttribute("data-ux-direction");
-      var fallback = originalRender.apply(UI, args);
-      enhance();
-      commitPlace();
-      return fallback;
+      return renderFallback(args, direction);
     }
   };
 
