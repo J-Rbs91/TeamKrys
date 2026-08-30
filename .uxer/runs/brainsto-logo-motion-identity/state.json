@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "run_id": "brainsto-logo-motion-identity",
+  "status": "in_progress",
+  "execution_profile": "standard",
+  "current_phase": "clarification",
+  "current_unit": "",
+  "completed_phases": [],
+  "completed_units": [],
+  "last_safe_checkpoint": "2026-08-30T22:41:17+00:00",
+  "session_name": "uxer-brainsto-logo-motion-identity",
+  "branch": "claude/brainsto-logo-motion-7ft2v4",
+  "commit_sha": "c2750e5",
+  "files_changed": [],
+  "validations_passed": [],
+  "validations_failed": [],
+  "next_action": "Cadrer la demande, puis découper la mission en unités atomiques.",
+  "blocking_issue": null,
+  "pause_reason": null,
+  "resume_required": false
+}
