@@ -17,11 +17,7 @@
 
   function app() { return root.App || null; }
   function store() { return root.Store || null; }
-
-  function text(node, value) {
-    if (node) { node.textContent = value; }
-  }
-
+  function text(node, value) { if (node) { node.textContent = value; } }
   function exact(node, before, after) {
     if (node && node.textContent === before) { node.textContent = after; }
   }
@@ -45,9 +41,8 @@
     } catch (error) { return false; }
   }
 
-  /* La première fois que cette fonctionnalité existe sur un appareil déjà utilisé,
-   * toutes les données présentes deviennent la baseline. Rien n'apparaît artificiellement
-   * « nouveau » le jour du déploiement. */
+  /* Au déploiement de la fonctionnalité, les sujets déjà présents deviennent la
+   * baseline : personne ne reçoit une fausse avalanche de « nouveautés ». */
   function seenRecord(state) {
     var record = loadSeen();
     if (record) { return record; }
@@ -121,6 +116,7 @@
     for (var i = 0; i < visible.length; i++) { byId[visible[i].id] = cards[i]; }
 
     var seen = seenRecord(state);
+    var seenDirty = false;
     var groups = ProductView.groupTopics(visible);
     var insertionPoint = null;
     for (var j = container.children.length - 1; j >= 0; j--) {
@@ -142,11 +138,16 @@
       topics.forEach(function (topic) {
         var card = byId[topic.id];
         if (!card) { return; }
-        var activity = ProductView.topicActivity(
-          topic,
-          seen.topics[topic.id],
-          seen.initialized === true
-        );
+
+        /* Un élément créé sur cet appareil vient d'être vu au moment de sa création.
+         * ownItems couvre aussi le cas anonyme où createdBy.id est volontairement vide. */
+        if (!seen.topics[topic.id] && seen.initialized && currentApp &&
+            typeof currentApp.ownsItem === "function" && currentApp.ownsItem(topic.id, topic.createdBy && topic.createdBy.id)) {
+          seen.topics[topic.id] = ProductView.topicFingerprint(topic);
+          seenDirty = true;
+        }
+
+        var activity = ProductView.topicActivity(topic, seen.topics[topic.id], seen.initialized === true);
         if (activity.changed && !card.querySelector(".product-unread")) {
           var counts = card.querySelector(".card-foot .row-wrap");
           if (counts) { counts.insertBefore(unreadBadge(activity.label), counts.firstChild); }
@@ -157,10 +158,7 @@
       container.insertBefore(section, insertionPoint);
     });
 
-    /* Quand on revient de la recherche, l'ordre est reconstruit depuis l'état et non
-     * depuis l'ordre historique du DOM. currentApp n'est lu que pour documenter que
-     * cette transformation reste strictement locale au rendu. */
-    void currentApp;
+    if (seenDirty) { saveSeen(seen); }
   }
 
   function participationLabel(participation) {
@@ -234,22 +232,16 @@
   function renameConsensusScreen(route) {
     if (!route || route.name !== "conclusion") { return; }
     exact(document.querySelector(".topbar-title"), "Conclusion", "Consensus");
-
-    var emptyTitle = document.querySelector(".empty-title");
-    exact(emptyTitle, "Pas encore de conclusion", "Pas encore de consensus");
-    var emptyText = document.querySelector(".empty-text");
-    exact(emptyText,
+    exact(document.querySelector(".empty-title"), "Pas encore de conclusion", "Pas encore de consensus");
+    exact(document.querySelector(".empty-text"),
       "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée.",
       "Formulez le cap que l'équipe souhaite porter en réunion. Chacun choisit ensuite le consensus qu'il préfère.");
-    var emptyNext = document.querySelector(".empty-next");
-    exact(emptyNext,
+    exact(document.querySelector(".empty-next"),
       "Ensuite : la conclusion retenue part dans la synthèse de réunion.",
       "Ensuite : le consensus en tête porte le cap préparé par l'équipe.");
 
     var titles = document.querySelectorAll(".section-title span");
-    for (var i = 0; i < titles.length; i++) {
-      exact(titles[i], "Ajouter une conclusion", "Ajouter un consensus");
-    }
+    for (var i = 0; i < titles.length; i++) { exact(titles[i], "Ajouter une conclusion", "Ajouter un consensus"); }
     var textarea = document.querySelector('textarea[placeholder="Nouvelle conclusion…"]');
     if (textarea) { textarea.placeholder = "Nouveau consensus…"; }
 
@@ -258,34 +250,45 @@
       exact(notes[n],
         "Vous avez choisi une conclusion. Choisir une autre déplace votre vote.",
         "Vous avez choisi un consensus. Choisir un autre déplace votre vote.");
-      exact(notes[n],
-        "Choix unique : une seule conclusion par personne.",
-        "Choix unique : un seul consensus par personne.");
+      exact(notes[n], "Choix unique : une seule conclusion par personne.", "Choix unique : un seul consensus par personne.");
     }
   }
 
   function renameConsensusOverlay() {
-    var current = UI.local || {};
-    var modal = current.modal;
+    var modal = (UI.local || {}).modal;
     if (!modal) { return; }
     if (modal.type === "editConclusion") {
       exact(document.querySelector(".modal-title"), "Modifier la conclusion", "Modifier le consensus");
     }
     if (modal.type === "deleteConclusion") {
       exact(document.querySelector(".modal-title"), "Supprimer la conclusion", "Supprimer le consensus");
-      var hint = document.querySelector(".modal .hint");
-      exact(hint,
+      exact(document.querySelector(".modal .hint"),
         "La conclusion et les votes qui la visaient seront supprimés.",
         "Le consensus et les votes qui le visaient seront supprimés.");
-      var buttons = document.querySelectorAll(".modal-actions button");
-      for (var i = 0; i < buttons.length; i++) { exact(buttons[i], "Supprimer", "Supprimer"); }
     }
+  }
+
+  function replaceGeneratedVoteLanguage(value) {
+    return String(value || "")
+      .replace("Consensus favorable", "Avis exprimés favorables")
+      .replace("Majorité favorable", "Avis exprimés plutôt favorables")
+      .replace("Majorité défavorable", "Avis exprimés plutôt défavorables")
+      .replace("Retenue ·", "Retenue (ancien statut) ·")
+      .replace("Mise en place ·", "Mise en place (ancien statut) ·");
   }
 
   function renameMeeting(route) {
     if (!route || route.name !== "meeting") { return; }
     var headings = document.querySelectorAll("h3.print-h3");
     for (var i = 0; i < headings.length; i++) { exact(headings[i], "Conclusions", "Consensus"); }
+
+    /* Dans la synthèse, ce span est généré par l'application et ne contient pas le
+     * texte libre de la proposition, qui vit dans le <strong> voisin. */
+    var generated = document.querySelectorAll(".print-list li > span");
+    for (var j = 0; j < generated.length; j++) {
+      if (generated[j].classList.contains("pre-wrap")) { continue; }
+      generated[j].textContent = replaceGeneratedVoteLanguage(generated[j].textContent);
+    }
   }
 
   function renameOnboarding() {
@@ -340,9 +343,7 @@
     return result;
   };
 
-  /* L'onboarding vit volontairement hors UI.render et mute son propre sous-arbre.
-   * Observer uniquement cette petite racine permet d'appliquer le vocabulaire produit
-   * sans reconstruire l'écran ni toucher au focus. */
+  /* L'onboarding vit hors UI.render et mute son propre sous-arbre. */
   var onboardingRoot = document.getElementById("onboarding-root");
   if (onboardingRoot && root.MutationObserver) {
     new MutationObserver(function () { renameOnboarding(); })
