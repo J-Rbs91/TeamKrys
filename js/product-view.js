@@ -25,14 +25,6 @@
     archived: "Archivés"
   };
 
-  /*
-   * L'accueil montre la maturité avant l'activité :
-   *   ready → open → closed → archived.
-   *
-   * Le tri par activité récente reste pertinent À L'INTÉRIEUR de chaque groupe.
-   * Les statuts inattendus sont rabattus sur « open » : l'état normalisé ne doit
-   * normalement jamais en produire, mais une ancienne donnée ne doit pas disparaître.
-   */
   ProductView.groupTopics = function (topics) {
     var groups = { ready: [], open: [], closed: [], archived: [] };
 
@@ -50,8 +42,6 @@
     return groups;
   };
 
-  /* Reproduit exactement le filtre de l'écran d'accueil avant son regroupement.
-   * Cette fonction donne au post-traitement DOM le même ordre que screenTopics(). */
   ProductView.visibleTopics = function (topics, query, showArchived) {
     var normalized = String(query || "").trim().toLowerCase();
     return arr(topics)
@@ -65,11 +55,6 @@
       });
   };
 
-  /*
-   * Un résultat de vote n'est interprétable qu'avec sa participation.
-   * `participants` accepte soit le tableau de participants connus, soit directement
-   * un nombre afin de garder la fonction simple à tester et réutiliser.
-   */
   ProductView.voteParticipation = function (proposal, participants) {
     var votes = proposal && proposal.votes && typeof proposal.votes === "object"
       ? proposal.votes : {};
@@ -101,8 +86,7 @@
     return counts;
   };
 
-  /* Le mot « Consensus » est réservé à l'étape dédiée. Un vote de proposition
-   * décrit donc les avis exprimés, sans prétendre que tout le collectif converge. */
+  /* Le mot « Consensus » est réservé à l'étape dédiée. */
   ProductView.voteLabel = function (proposal) {
     var counts = ProductView.voteCounts(proposal);
     if (!counts.total) { return "Aucun vote"; }
@@ -130,8 +114,6 @@
     return ProductView.voteLabel(proposal) + ". " + bits.join(". ") + ".";
   };
 
-  /* Empreinte locale de lecture : suffisamment riche pour expliquer une nouveauté
-   * sans synchroniser un état de lecture entre appareils. */
   ProductView.topicFingerprint = function (topic) {
     var proposals = arr(topic && topic.proposals);
     var proposalVotes = 0;
@@ -149,11 +131,15 @@
     };
   };
 
-  ProductView.topicActivity = function (topic, seen) {
+  /* `baselineExists` distingue un appareil qui vient d'activer la fonctionnalité
+   * d'un appareil déjà initialisé sur lequel un collègue crée ensuite un nouveau sujet. */
+  ProductView.topicActivity = function (topic, seen, baselineExists) {
     var current = ProductView.topicFingerprint(topic);
     var previous = seen && typeof seen === "object" ? seen : null;
     if (!previous) {
-      return { changed: false, label: null, current: current };
+      return baselineExists
+        ? { changed: true, label: "Nouveau sujet", current: current }
+        : { changed: false, label: null, current: current };
     }
 
     var messageDelta = current.messages - (Number(previous.messages) || 0);
@@ -164,18 +150,10 @@
     var updated = current.updatedAt !== String(previous.updatedAt || "") || current.status !== String(previous.status || "");
 
     if (messageDelta > 0) {
-      return {
-        changed: true,
-        label: "+" + messageDelta + " message" + (messageDelta > 1 ? "s" : ""),
-        current: current
-      };
+      return { changed: true, label: "+" + messageDelta + " message" + (messageDelta > 1 ? "s" : ""), current: current };
     }
     if (proposalDelta > 0) {
-      return {
-        changed: true,
-        label: "+" + proposalDelta + " proposition" + (proposalDelta > 1 ? "s" : ""),
-        current: current
-      };
+      return { changed: true, label: "+" + proposalDelta + " proposition" + (proposalDelta > 1 ? "s" : ""), current: current };
     }
     if (consensusDelta > 0 || consensusVotesChanged) {
       return { changed: true, label: "Consensus mis à jour", current: current };
@@ -189,8 +167,6 @@
     return { changed: false, label: null, current: current };
   };
 
-  /* Les valeurs historiques restent lisibles mais ne sont plus proposées pour
-   * de nouvelles transitions : elles appartiennent à une ancienne frontière produit. */
   ProductView.PROPOSAL_STATUS_SELECTABLE = ["voting", "debate", "rejected"];
   ProductView.PROPOSAL_LEGACY_LABELS = {
     selected: "Retenue (ancien statut)",
