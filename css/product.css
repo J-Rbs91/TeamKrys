@@ -1,0 +1,54 @@
+/* BrainstO. — présentation des ajouts de doctrine produit.
+ *
+ * Cette feuille reste volontairement petite : les composants réutilisent les
+ * jetons et primitives de app.css au lieu de créer un second thème.
+ */
+
+.product-topic-group {
+  gap: 10px;
+}
+
+.product-topic-group + .product-topic-group {
+  margin-top: 24px;
+}
+
+.product-topic-group-title {
+  padding: 4px 2px 2px;
+}
+
+.product-topic-group[data-topic-status="ready"] .product-topic-group-title {
+  color: var(--success);
+}
+
+.product-topic-group[data-topic-status="closed"] {
+  opacity: 0.88;
+}
+
+.product-topic-group[data-topic-status="archived"] {
+  opacity: 0.76;
+}
+
+.product-unread {
+  flex: 0 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-participation {
+  font-weight: 700;
+}
+
+@media (max-width: 430px) {
+  .product-topic-group + .product-topic-group {
+    margin-top: 20px;
+  }
+
+  .product-unread {
+    max-width: min(58vw, 220px);
+  }
+}
+
+@media print {
+  .product-unread { display: none; }
+}
