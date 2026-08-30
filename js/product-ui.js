@@ -41,13 +41,14 @@
     } catch (error) { return false; }
   }
 
-  /* Au déploiement de la fonctionnalité, les sujets déjà présents deviennent la
-   * baseline : personne ne reçoit une fausse avalanche de « nouveautés ». */
+  /* Au déploiement de la fonctionnalité, l'état déjà visible devient la baseline,
+   * y compris quand l'espace est vide. Ainsi le premier sujet créé plus tard par
+   * un collègue est bien détecté comme nouveau, sans transformer le déploiement
+   * lui-même en avalanche de fausses nouveautés. */
   function seenRecord(state) {
     var record = loadSeen();
     if (record) { return record; }
     var topics = state && Array.isArray(state.topics) ? state.topics : [];
-    if (!topics.length) { return { v: 1, initialized: false, topics: {} }; }
     record = { v: 1, initialized: true, topics: {} };
     topics.forEach(function (topic) {
       record.topics[topic.id] = ProductView.topicFingerprint(topic);
@@ -59,12 +60,6 @@
   function markTopicSeen(topic, state) {
     if (!topic) { return; }
     var record = seenRecord(state);
-    if (!record.initialized) {
-      record.initialized = true;
-      (state.topics || []).forEach(function (candidate) {
-        record.topics[candidate.id] = ProductView.topicFingerprint(candidate);
-      });
-    }
     record.topics[topic.id] = ProductView.topicFingerprint(topic);
     saveSeen(record);
   }
@@ -110,7 +105,11 @@
       UI.local && UI.local.showArchived
     );
     var cards = directCards(container);
-    if (!visible.length || cards.length !== visible.length) { return; }
+    if (!visible.length || cards.length !== visible.length) {
+      /* Même une liste vide consultée est un état vu. */
+      seenRecord(state);
+      return;
+    }
 
     var byId = {};
     for (var i = 0; i < visible.length; i++) { byId[visible[i].id] = cards[i]; }
