@@ -363,6 +363,32 @@ complet), le point et le logotype sont à `transform: none` et `opacity: 1`, et
 les quatre points de convergence restent à opacité nulle — un décor ne doit pas
 se figer à l'écran, il doit ne pas s'y afficher.
 
+#### Trois couleurs figées, indépendantes du thème
+
+L'invariant « le dernier frame du monogramme est identique au logo statique »
+(issue #30) n'était en réalité tenu qu'en thème sombre : `--ink`, `--accent` et
+`--canvas` y valent respectivement `#e8eef3`, `#4fc3dd` et `#0c1317` — les
+trois couleurs exactes d'[`assets/icons/icon.svg`](assets/icons/icon.svg) —
+mais divergent toutes les trois en thème clair. Le monogramme ne suit donc plus
+ces jetons : trois nouveaux jetons, `--logo-canvas`, `--logo-ring` et
+`--logo-dot`, portent une bonne fois ces trois couleurs et ne sont **jamais
+redéclarés** dans le bloc `@media (prefers-color-scheme: dark)` — c'est cette
+absence de redéclaration, pas une règle dédiée, qui les fige dans les deux
+thèmes.
+
+Conséquence visuelle : le monogramme reçoit son propre médaillon circulaire
+(`.logo-mark`, cercle, bord `--glass-line`, ombre `--shadow-card`) — exactement
+le patron déjà utilisé par `.empty-art` pour poser une couleur d'icône en badge
+sur le canvas. Ce traitement de bord est justifié par le chiffre : le médaillon
+sombre posé sur le canvas clair tient un contraste de 17,44:1, plus élevé que
+le texte le plus contrasté du fichier, d'où la nécessité d'un bord et d'une
+ombre pour le lire comme un objet posé plutôt qu'un aplat qui écrase le fond.
+
+L'onboarding (40 px) hérite de ce traitement par construction, sans décision
+séparée : `Utils.logoMark` ne construit qu'un seul nœud `<svg class="logo-mark">`,
+quelle que soit la taille demandée, donc l'unique règle `.logo-mark` gouverne
+l'accueil, le verrou et l'onboarding à la fois.
+
 ### Icônes d'application et écran de démarrage
 
 Les quatre icônes sont **générées**, pas dessinées à la main :

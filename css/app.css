@@ -123,6 +123,22 @@
      invisible tant qu'on ne mesure pas. Celle-ci tient 4,69:1. */
   --on-accent-soft: #d5e8ed;
 
+  /* — Monogramme (couleurs figées) --------------------------------- */
+  /* Issue #30, demande complémentaire : le dernier frame du monogramme doit
+     être identique au logo statique (assets/icons/icon.svg) DANS LES DEUX
+     THÈMES. Ces trois couleurs SONT celles du thème sombre — rect #0c1317,
+     anneau #e8eef3, point #4fc3dd — reprises ici puis VOLONTAIREMENT NON
+     redéclarées dans le bloc @media (prefers-color-scheme: dark) plus bas :
+     c'est l'absence de redéclaration qui les fige, pas une règle dédiée.
+     Ratios WCAG (luminance relative sRGB) : anneau/médaillon 16,01:1, point/
+     médaillon 9,08:1, médaillon/canvas clair 17,44:1 — plus élevé que tout
+     texte du fichier, d'où le bord et l'ombre posés sur .logo-mark (même
+     patron que .empty-art). En sombre, médaillon/canvas = 1,00:1 (même
+     couleur) : seul `--glass-line` y dessine un liseré, volontairement. */
+  --logo-canvas: #0c1317;
+  --logo-ring: #e8eef3;
+  --logo-dot: #4fc3dd;
+
   /* — Traits ---------------------------------------------------------- */
   /* `--line` habille (séparateurs, filets : aucune information n'en dépend).
      `--line-field` délimite — bord des champs, contour des contrôles — et tient
@@ -1133,14 +1149,23 @@ p { margin: 0; }
 
 .tagline { color: var(--muted); font-size: var(--fs-lead); max-width: 30ch; }
 
-/* Le monogramme est désormais un <svg> construit par Utils.logoMark : un
-   anneau en `border` ne sait pas se tracer, un trait SVG si. Sa couleur suit
-   `currentColor` pour l'anneau et `--accent` pour le point — la seule dépense
-   d'accent de l'écran. Le geste vit dans la section « Révélation ». */
+/* Le monogramme est un <svg> construit par Utils.logoMark : un anneau en
+   `border` ne sait pas se tracer, un trait SVG si. Ses trois couleurs sont
+   FIGÉES (--logo-ring/--logo-canvas/--logo-dot) et ne suivent plus le thème :
+   l'invariant #30 (dernier frame identique à assets/icons/icon.svg) n'était
+   tenu qu'en thème sombre, où --ink/--accent/--canvas valaient déjà ces trois
+   couleurs — en thème clair, ils divergent. Le monogramme reçoit donc son
+   propre médaillon circulaire, même patron que .empty-art (bord, ombre,
+   cercle) : anneau/médaillon 16,01:1, point/médaillon 9,08:1, médaillon/
+   canvas clair 17,44:1. Le geste vit dans la section « Révélation ». */
 .logo-mark {
   display: block;
   margin-bottom: 10px;
-  color: var(--ink);
+  color: var(--logo-ring);
+  background: var(--logo-canvas);
+  border: 1px solid var(--glass-line);
+  border-radius: 50%;
+  box-shadow: var(--shadow-card);
 }
 
 /* ======================================================== Statut de sync ==== */
@@ -1980,7 +2005,9 @@ p { margin: 0; }
   padding: 0;
   border: 0;
   background: none;
-  color: var(--ink);
+  /* `color` retirée : le <svg class="logo-mark"> qu'il enveloppe fixe
+     désormais sa propre couleur, et une règle plus spécifique sur l'enfant
+     l'emporterait de toute façon. */
 }
 
 .onboard-foot {

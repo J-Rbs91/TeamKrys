@@ -288,13 +288,15 @@
     ring.style.setProperty("--logo-c", LOGO_C.toFixed(2));
     svg.appendChild(ring);
 
-    /* Le point est la SEULE dépense d'accent de l'écran d'accueil. C'est là que
-     * l'identité se loge — pas dans une couleur répandue sur toute l'interface. */
+    /* Le point porte une couleur d'identité FIGÉE (--logo-dot), volontairement
+     * indépendante du thème : sans quoi le dernier frame divergerait du logo
+     * statique en thème clair, où --accent ne vaut pas #4fc3dd. Ce n'est plus
+     * une dépense d'accent — voir .logo-mark dans app.css. */
     var dot = document.createElementNS(SVG_NS, "circle");
     dot.setAttribute("cx", String(LOGO.dx));
     dot.setAttribute("cy", String(LOGO.dy));
     dot.setAttribute("r", String(LOGO.dr));
-    dot.setAttribute("fill", "var(--accent)");
+    dot.setAttribute("fill", "var(--logo-dot)");
     dot.setAttribute("class", "logo-dot");
     /* Origine de transformation en UNITÉS UTILISATEUR, pas en pourcentage.
      * Un `transform-origin: 50% 50%` sur un élément SVG se résout contre le

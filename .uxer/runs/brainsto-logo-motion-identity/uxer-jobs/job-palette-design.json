@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "SPJ-e5f607182930",
+  "specialist": "uxer",
+  "feature_id": "brainsto-logo-motion-identity",
+  "phase": "design",
+  "objective": "DEMANDE COMPLÉMENTAIRE DU PROPRIÉTAIRE DU PRODUIT — phase design, inspect-only, AUCUNE écriture de fichier.\nCette phase DÉCIDE et SPÉCIFIE ; une phase execute distincte appliquera ta décision. Ta spécification doit donc être assez précise pour être implémentée telle quelle : sélecteurs, valeurs, fichiers, lignes.\n\nSa demande, mot pour mot : « reprends la palette de couleur du thème sombre / tu peux faire ce que tu veux ».\n\nElle porte sur le monogramme animé que tu viens d'implémenter (mission brainsto-logo-motion-identity,\njobs SPJ-b2c3d4e5f607 design et SPJ-c3d4e5f60718 execute — ton propre travail, déjà commité).\n\nFAIT ÉTABLI QUI MOTIVE LA DEMANDE, vérifie-le toi-même avant de coder :\nLe monogramme suit aujourd'hui le thème. `.logo-mark { color: var(--ink) }` (css/app.css ~1085) et le\npoint est `fill=\"var(--accent)\"` (js/utils.js). Or :\n  - en thème SOMBRE : --ink = #e8eef3, --accent = #4fc3dd, --canvas = #0c1317 (css/app.css:271-288).\n    Ce sont EXACTEMENT les trois couleurs de assets/icons/icon.svg (rect #0c1317, anneau #e8eef3,\n    point #4fc3dd).\n  - en thème CLAIR : --ink = --n-900 (quasi noir), --accent = #0e6d84 (teal profond), --canvas = --n-50\n    (clair). Le monogramme y est donc l'INVERSE visuel du logo de référence.\nL'invariant du mandat de l'issue #30 — « le dernier frame doit être identique ou strictement compatible\navec le logo statique actuel » — n'est donc tenu QU'EN THÈME SOMBRE aujourd'hui. La demande le rend vrai\ndans les deux thèmes.\n\nCE QUE TU DOIS FAIRE :\n\n1. TRANCHER LA FORME, c'est ta décision, pas la mienne. Le propriétaire a écrit « tu peux faire ce que tu\n   veux » : tu as la latitude. Options que je vois, tu peux en proposer une meilleure et l'argumenter :\n   (a) donner au monogramme son propre fond sombre — un médaillon, disque ou carré arrondi en --canvas\n       sombre figé, portant anneau clair et point cyan, identique dans les deux thèmes ;\n   (b) recolorer tout le bloc hero (monogramme + logotype + signature) en palette sombre ;\n   (c) figer seulement les couleurs du TRAIT et du POINT sans fond dédié — attention, cela donnerait un\n       anneau #e8eef3 sur canvas clair, illisible : si tu écartes cette option, dis le défaut précis.\n   Choisis, et dis sur quel critère VÉRIFIABLE tu as choisi.\n\n2. RÉPONDRE À LA QUESTION DE CONTRASTE, qui est la vraie difficulté et que je ne veux pas voir esquivée.\n   Si tu poses une surface sombre sur un canvas clair, son BORD devient une décision : sans traitement,\n   un aplat #0c1317 sur --canvas clair est un bloc très contrasté au milieu d'un écran sobre. Dis si le\n   contraste obtenu est un choix ou un accident, donne les rapports que tu peux calculer réellement\n   (anneau/fond, point/fond), et vérifie que rien ne descend sous les seuils que le dépôt s'impose déjà.\n   Le dépôt documente ses rapports en commentaire dans css/app.css : respecte cette convention.\n\n3. NE PAS CASSER CE QUI VIENT D'ÊTRE LIVRÉ. La chorégraphie (durée 1180 ms, aller-retour des fragments,\n   palier, égalité point/logotype à 1100 ms, seuil 44 px, non-rejeu screen--enter-repeat) est acquise et\n   ne se renégocie pas ici. Les fragments sont en `fill=\"currentColor\"` : si tu changes la couleur du\n   trait, ils suivent — vérifie que cela reste cohérent.\n\n4. VÉRIFIER LES DEUX THÈMES ET LE REDUCED-MOTION. L'état de repos doit rester l'état final dans les deux\n   thèmes. Aucune règle ne doit poser d'état masqué hors du bloc no-preference.\n\n5. LE MONOGRAMME APPARAÎT AUSSI AU REPOS à 40 px dans le panneau d'onboarding (js/ui.js, onboardExtra\n   kind === \"logo\"). Décide s'il prend le même traitement — et dis pourquoi. Une marque qui change\n   d'habillage selon l'endroit est une incohérence, sauf raison nommée.\n\n6. METTRE À JOUR les tests et la doctrine : tests/logo-motion.test.js doit gagner les contrôles qui\n   protègent ce que tu décides (par exemple : le monogramme ne dépend plus de --ink/--accent\n   thème-dépendants, ou le médaillon est bien figé). README.md doit dire la règle et son pourquoi.\n   Fais évoluer tests/product-integration.test.js SEULEMENT si ta modification l'exige.\n\n7. VERSIONS : CONFIG.APP_VERSION et CACHE_VERSION valent maintenant 1.12.0 tous les deux. Si tu modifies\n   la coquille (css/app.css, js/*.js), porte-les ENSEMBLE à 1.12.1. tests/product-integration.test.js\n   contient une borne de version EN DUR à mettre à jour en même temps — ne l'affaiblis pas, déplace-la.\n\n8. N'ÉCRIS AUCUN FICHIER. Livre la spécification complète dans le champ summary de ton enveloppe : c'est le livrable de cette phase, et il sera transmis mot pour mot à la phase execute.\n\nNe modifie AUCUN fichier hors de scope.files. Ne touche ni à .uxer/, ni à Git, ni à index.html, ni aux\nassets/ — assets/icons/icon.svg est la RÉFÉRENCE et ne doit pas bouger.",
+  "scope": {
+    "ticket": "https://github.com/J-Rbs91/TeamKrys/issues/30",
+    "files": [
+      "css/app.css",
+      "js/utils.js",
+      "js/ui.js",
+      "js/config.js",
+      "service-worker.js",
+      "README.md",
+      "docs",
+      "tests"
+    ]
+  },
+  "requested_capabilities": [
+    "ui-visual-direction",
+    "visual-identity-builder",
+    "responsive-accessibility"
+  ],
+  "profile": "standard",
+  "mode": "inspect",
+  "created_at": "2026-08-30T23:15:14Z"
+}

@@ -19,6 +19,7 @@ const ROOT = path.join(__dirname, "..");
 const CSS = fs.readFileSync(path.join(ROOT, "css/app.css"), "utf8");
 const UI = fs.readFileSync(path.join(ROOT, "js/ui.js"), "utf8");
 const UTILS = fs.readFileSync(path.join(ROOT, "js/utils.js"), "utf8");
+const ICON = fs.readFileSync(path.join(ROOT, "assets/icons/icon.svg"), "utf8");
 
 function sansCommentairesJS(source) {
   return source
@@ -221,6 +222,63 @@ check("aucune bibliothèque d'animation n'est introduite", () => {
   assert(!suspects.test(CSS_CODE), "css/app.css référence une bibliothèque d'animation");
   assert(!suspects.test(UI_CODE), "js/ui.js référence une bibliothèque d'animation");
   assert(!suspects.test(UTILS_CODE), "js/utils.js référence une bibliothèque d'animation");
+});
+
+/* ---------------------------------------------- Couleurs figées (#30) --- */
+
+check("les jetons figés reprennent EXACTEMENT les couleurs du logo statique", () => {
+  const rectMatch = ICON.match(/<rect[^>]*fill="(#[0-9a-fA-F]{6})"/);
+  assert(rectMatch, "fond du logo statique introuvable dans assets/icons/icon.svg");
+  assert(rectMatch[1] === "#0c1317", "fond du logo statique attendu #0c1317, trouvé " + rectMatch[1]);
+
+  const circles = ICON.match(/<circle[^>]*\/>/g) || [];
+  assert(circles.length === 2, "deux <circle> attendus dans assets/icons/icon.svg, trouvé " + circles.length);
+
+  const ringMatch = circles[0].match(/stroke="(#[0-9a-fA-F]{6})"/);
+  assert(ringMatch, "anneau du logo statique introuvable");
+  assert(ringMatch[1] === "#e8eef3", "anneau du logo statique attendu #e8eef3, trouvé " + ringMatch[1]);
+
+  const dotMatch = circles[1].match(/fill="(#[0-9a-fA-F]{6})"/);
+  assert(dotMatch, "point du logo statique introuvable");
+  assert(dotMatch[1] === "#4fc3dd", "point du logo statique attendu #4fc3dd, trouvé " + dotMatch[1]);
+
+  assert(CSS_CODE.includes("--logo-canvas: #0c1317"), "--logo-canvas doit valoir #0c1317, comme le fond du logo statique");
+  assert(CSS_CODE.includes("--logo-ring: #e8eef3"), "--logo-ring doit valoir #e8eef3, comme l'anneau du logo statique");
+  assert(CSS_CODE.includes("--logo-dot: #4fc3dd"), "--logo-dot doit valoir #4fc3dd, comme le point du logo statique");
+});
+
+check("les jetons --logo-* ne sont jamais redéclarés dans le thème sombre", () => {
+  const darkIndex = CSS_CODE.indexOf("@media (prefers-color-scheme: dark)");
+  assert(darkIndex !== -1, "bloc @media (prefers-color-scheme: dark) introuvable");
+
+  ["--logo-canvas:", "--logo-ring:", "--logo-dot:"].forEach((token) => {
+    const firstIndex = CSS_CODE.indexOf(token);
+    assert(firstIndex !== -1, "déclaration introuvable : " + token);
+    assert(firstIndex < darkIndex, token + " doit être déclaré dans le :root de base, avant le premier bloc sombre");
+    assert(
+      CSS_CODE.indexOf(token, darkIndex) === -1,
+      token + " ne doit JAMAIS être redéclaré dans ou après le bloc sombre — c'est cette absence qui le fige",
+    );
+  });
+});
+
+check("le monogramme ne référence plus aucun jeton thème-dépendant", () => {
+  const markBody = bodyAfter(CSS_CODE, ".logo-mark {").text;
+  assert(markBody.includes("var(--logo-ring)"), ".logo-mark doit poser color: var(--logo-ring)");
+  assert(markBody.includes("var(--logo-canvas)"), ".logo-mark doit poser background: var(--logo-canvas)");
+  assert(!markBody.includes("var(--ink)"), ".logo-mark ne doit plus référencer var(--ink)");
+  assert(!markBody.includes("var(--accent)"), ".logo-mark ne doit plus référencer var(--accent)");
+
+  assert(UTILS_CODE.includes('"var(--logo-dot)"'), "le point doit être peint avec var(--logo-dot)");
+  assert(!UTILS_CODE.includes('"var(--accent)"'), "le point ne doit plus être peint avec var(--accent)");
+});
+
+check("l'enveloppe de l'onboarding ne réintroduit pas de dépendance au thème", () => {
+  const wrapBody = bodyAfter(CSS_CODE, ".onboard-mark {").text;
+  assert(
+    !wrapBody.includes("color: var(--ink)"),
+    ".onboard-mark ne doit plus poser color: var(--ink) — .logo-mark fixe sa propre couleur sur l'enfant svg",
+  );
 });
 
 /* ------------------------------------------------------------ Rapport --- */
