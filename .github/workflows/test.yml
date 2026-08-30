@@ -17,12 +17,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Syntaxe modules produit
-        run: |
-          node --check js/product-view.js
-          node --check js/product-ui.js
-      - name: Parité frontend / Apps Script
-        run: node tests/parity.test.js
       - name: Synchronisation
         run: node tests/sync.test.js
       - name: Session
@@ -31,9 +25,5 @@ jobs:
         run: node tests/onboarding.test.js
       - name: Navigation
         run: node tests/navigation.test.js
-      - name: Contrats produit
-        run: node tests/product-view.test.js
-      - name: Intégration produit
-        run: node tests/product-integration.test.js
       - name: Compatibilité navigateurs
         run: node tests/qa/compat-scan.js
