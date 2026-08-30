@@ -1,0 +1,380 @@
+/* BrainstO. — UXER : affordance, orientation et mouvement.
+ *
+ * Intention : conserver le « poste de travail » neutre de BrainstO et placer
+ * l'écart sur une seule dimension, la continuité de l'action. Les transitions
+ * expliquent un changement de niveau ; elles ne décorent pas les gestes répétés.
+ */
+
+:root {
+  --ux-motion-fast: 120ms;
+  --ux-motion-base: 180ms;
+  --ux-motion-route: 240ms;
+  --ux-motion-sheet: 220ms;
+  --ux-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ux-ease-route: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* =================================================== Parcours du sujet ==== */
+
+.ux-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px max(14px, var(--safe-right)) 9px max(14px, var(--safe-left));
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.ux-flow-step {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  line-height: 1.15;
+  cursor: pointer;
+  transition:
+    transform var(--ux-motion-fast) var(--ux-ease),
+    border-color var(--ux-motion-base) var(--ux-ease),
+    background var(--ux-motion-base) var(--ux-ease),
+    color var(--ux-motion-base) var(--ux-ease),
+    box-shadow var(--ux-motion-base) var(--ux-ease);
+}
+
+.ux-flow-step:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.ux-flow-step.is-current {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.ux-flow-step .icon { flex: 0 0 auto; }
+.ux-flow-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ux-flow-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-chip);
+  background: var(--neutral-bg);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.ux-flow-step.is-current .ux-flow-count {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+/* ============================================= Signifiants persistants ==== */
+
+.ux-topic-card {
+  border-color: var(--line-strong);
+  transition:
+    transform var(--ux-motion-fast) var(--ux-ease),
+    border-color var(--ux-motion-base) var(--ux-ease),
+    box-shadow var(--ux-motion-base) var(--ux-ease),
+    background var(--ux-motion-base) var(--ux-ease);
+}
+
+.ux-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.ux-legacy-forward { display: none; }
+
+.ux-topic-title-action {
+  margin: -4px -6px !important;
+  width: calc(100% + 12px) !important;
+  padding: 4px 6px !important;
+  border-radius: var(--radius-sm) !important;
+  transition: background var(--ux-motion-fast) linear, box-shadow var(--ux-motion-fast) linear;
+}
+
+.ux-title-hint {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-left: 5px;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-chip);
+  color: var(--faint);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.ux-bubble-cue {
+  display: inline-block;
+  margin-left: 7px;
+  color: currentColor;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  opacity: 0.58;
+  vertical-align: middle;
+}
+
+.bubble {
+  transition:
+    transform var(--ux-motion-fast) var(--ux-ease),
+    box-shadow var(--ux-motion-base) var(--ux-ease),
+    filter var(--ux-motion-base) var(--ux-ease);
+}
+
+/* ======================================================= Vote / statut ==== */
+
+.ux-vote-label,
+.ux-control-label {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ux-vote-label { margin-bottom: -4px; }
+
+.ux-status-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ux-proposal-card,
+.ux-choice-selected {
+  transition:
+    border-color var(--ux-motion-base) var(--ux-ease),
+    box-shadow var(--ux-motion-base) var(--ux-ease),
+    background var(--ux-motion-base) var(--ux-ease);
+}
+
+.ux-proposal-card.ux-has-my-vote {
+  box-shadow: inset 3px 0 0 var(--accent), var(--shadow-card);
+}
+
+.ux-choice-selected {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent), var(--shadow-card);
+}
+
+.vote-bar > span {
+  transition: width 220ms var(--ux-ease);
+}
+
+.ux-pressed {
+  border-color: var(--accent) !important;
+}
+
+/* ========================================================== Micro-états ==== */
+
+.btn,
+.btn-icon,
+.btn-back,
+.fab,
+.send-btn,
+.sheet-action {
+  transition:
+    transform var(--ux-motion-fast) var(--ux-ease),
+    background var(--ux-motion-fast) linear,
+    border-color var(--ux-motion-fast) linear,
+    color var(--ux-motion-fast) linear,
+    box-shadow var(--ux-motion-base) var(--ux-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ux-flow-step:not(:disabled):hover,
+  .ux-topic-card:hover {
+    border-color: var(--accent);
+  }
+
+  .ux-flow-step:not(:disabled):hover { background: var(--accent-bg); color: var(--accent); }
+  .ux-topic-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+  .ux-topic-title-action:hover { background: var(--surface-soft) !important; }
+  .bubble:hover { box-shadow: 0 0 0 1px var(--line-strong); }
+}
+
+.ux-flow-step:not(:disabled):active,
+.ux-topic-card:active,
+.btn:active,
+.btn-icon:active,
+.btn-back:active,
+.fab:active,
+.send-btn:active,
+.sheet-action:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.ux-topic-title-action:focus-visible,
+.ux-flow-step:focus-visible,
+.ux-topic-card:focus-visible,
+.bubble:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ======================================================== Superpositions ==== */
+
+@keyframes ux-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ux-sheet-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ux-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.overlay { animation: ux-overlay-in var(--ux-motion-base) var(--ux-ease); }
+.sheet { animation: ux-sheet-in var(--ux-motion-sheet) var(--ux-ease); transform-origin: center bottom; }
+.modal { animation: ux-modal-in 200ms var(--ux-ease); transform-origin: center center; }
+
+/* ================================================ Transitions de contexte ==== */
+
+@keyframes ux-route-old-forward {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0.18; transform: translateX(-14px); }
+}
+
+@keyframes ux-route-new-forward {
+  from { opacity: 0.2; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ux-route-old-back {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0.18; transform: translateX(14px); }
+}
+
+@keyframes ux-route-new-back {
+  from { opacity: 0.2; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ux-route-old-lateral {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-5px); }
+}
+
+@keyframes ux-route-new-lateral {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@supports (view-transition-name: none) {
+  html.ux-vt::view-transition-group(root) {
+    animation-duration: var(--ux-motion-route);
+    animation-timing-function: var(--ux-ease-route);
+  }
+
+  html[data-ux-direction="forward"]::view-transition-old(root) {
+    animation: ux-route-old-forward var(--ux-motion-route) var(--ux-ease-route) both;
+  }
+
+  html[data-ux-direction="forward"]::view-transition-new(root) {
+    animation: ux-route-new-forward var(--ux-motion-route) var(--ux-ease-route) both;
+  }
+
+  html[data-ux-direction="back"]::view-transition-old(root) {
+    animation: ux-route-old-back var(--ux-motion-route) var(--ux-ease-route) both;
+  }
+
+  html[data-ux-direction="back"]::view-transition-new(root) {
+    animation: ux-route-new-back var(--ux-motion-route) var(--ux-ease-route) both;
+  }
+
+  html[data-ux-direction="lateral"]::view-transition-old(root) {
+    animation: ux-route-old-lateral var(--ux-motion-route) var(--ux-ease-route) both;
+  }
+
+  html[data-ux-direction="lateral"]::view-transition-new(root) {
+    animation: ux-route-new-lateral var(--ux-motion-route) var(--ux-ease-route) both;
+  }
+
+  /* Le rendu historique possède déjà ses entrées de cartes. Pendant un vrai
+     changement d'écran, View Transitions porte le mouvement : on ne cumule pas
+     une translation de page et une cascade de cartes. */
+  html.ux-vt .screen--enter .reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ============================================================ Responsive ==== */
+
+@media (max-width: 430px) {
+  .ux-flow { gap: 5px; padding-left: 10px; padding-right: 10px; }
+  .ux-flow-step { gap: 5px; padding-left: 6px; padding-right: 6px; }
+  .ux-flow-count { min-width: 18px; height: 18px; padding: 0 4px; }
+  .ux-status-control { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 350px) {
+  .ux-flow-step .icon { display: none; }
+  .ux-flow-count { display: none; }
+}
+
+/* ================================================= Mouvement réduit ==== */
+
+@media (prefers-reduced-motion: reduce) {
+  .ux-flow-step,
+  .ux-topic-card,
+  .ux-topic-title-action,
+  .bubble,
+  .ux-proposal-card,
+  .ux-choice-selected,
+  .vote-bar > span,
+  .btn,
+  .btn-icon,
+  .btn-back,
+  .fab,
+  .send-btn,
+  .sheet-action {
+    transition: none !important;
+  }
+
+  .overlay,
+  .sheet,
+  .modal {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
