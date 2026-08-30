@@ -20,6 +20,7 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 
 const html = read("index.html");
 const sw = read("service-worker.js");
+const config = read("js/config.js");
 const ui = read("js/product-ui.js");
 const backend = read("apps-script/Code.gs");
 
@@ -32,9 +33,21 @@ check("Chargement : product-view précède product-ui, qui précède app", () =>
     "ordre des scripts produit incorrect");
 });
 
-check("PWA : les deux modules produit font partie de la coquille critique", () => {
+check("Styles : la feuille produit est chargée après le thème principal", () => {
+  const base = html.indexOf('href="css/app.css"');
+  const product = html.indexOf('href="css/product.css"');
+  assert(base >= 0 && product > base, "css/product.css doit compléter app.css");
+});
+
+check("PWA : toute la couche produit fait partie de la coquille critique", () => {
+  assert(sw.includes('"css/product.css"'), "product.css absent du précache");
   assert(sw.includes('"js/product-view.js"'), "product-view absent du précache");
   assert(sw.includes('"js/product-ui.js"'), "product-ui absent du précache");
+});
+
+check("Version : application et cache annoncent ensemble la 1.11.0", () => {
+  assert(config.includes('APP_VERSION: "1.11.0"'), "APP_VERSION non alignée");
+  assert(sw.includes('CACHE_VERSION = "brainsto-v1.11.0"'), "CACHE_VERSION non alignée");
 });
 
 check("Consensus : aucun renommage global aveugle du contenu utilisateur", () => {
@@ -63,6 +76,11 @@ check("Backend : aucun secret ne peut être versionné dans les constantes", () 
 check("Statuts : les valeurs historiques restent internes mais ne sont plus proposées", () => {
   assert(ui.includes("isProposalStatusSelectable"), "filtre des statuts absent");
   assert(ui.includes("PROPOSAL_LEGACY_LABELS"), "compatibilité historique absente");
+});
+
+check("Nouveautés : une baseline vide est persistée", () => {
+  assert(ui.includes("record = { v: 1, initialized: true, topics: {} };"),
+    "la consultation d'un espace vide n'établit pas de baseline");
 });
 
 if (failures.length) {
