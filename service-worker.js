@@ -13,6 +13,7 @@ var SHELL_CRITICAL = [
   "./",
   "index.html",
   "css/app.css",
+  "css/product.css",
   "js/config.js",
   "js/utils.js",
   "js/state.js",
