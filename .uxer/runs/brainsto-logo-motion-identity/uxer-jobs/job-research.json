@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "SPJ-a1b2c3d4e5f6",
+  "specialist": "uxer",
+  "feature_id": "brainsto-logo-motion-identity",
+  "phase": "research",
+  "objective": "Auditer la marque animée de BrainstO. avant toute proposition, pour la mission de l'issue GitHub #30 : faire du logo une MOTION IDENTITY qui raconte DIVERGENCE -> INTERACTION -> CONVERGENCE -> CONSENSUS, cohérente avec le parcours produit (sujet -> discussion -> propositions -> votes -> consensus -> prêt pour la réunion). BrainstO. est un outil de maturation collective avant réunion : PWA vanilla, sans build, sans dépendance frontend.\n\nCE QU'IL FAUT ÉTABLIR, en faits localisés (fichier:ligne) :\n1. Où la marque apparaît réellement dans l'application, et dans quels contextes (gates de connexion/verrou/prénom, séquence d'onboarding, ailleurs ?).\n2. Ce que la GRAMMAIRE DE MOUVEMENT EXISTANTE contient déjà : css/app.css section « Révélation » (keyframes logo-ring-draw, logo-seed-in, logo-dot-pop, wordmark-rise, tagline-in), les courbes --ease-out/--ease-in/--ease-spring/--ease-in-out, les durées --dur-fast/base/slow, le mécanisme .screen--enter + --enter-elapsed dans js/ui.js, et Utils.logoMark dans js/utils.js. Une séquence d'entrée EXISTE DÉJÀ et dure ~980-1060 ms.\n3. Ce que cette séquence existante raconte aujourd'hui, et en quoi elle satisfait ou NE satisfait PAS l'intention de l'issue #30. En particulier : y a-t-il déjà une convergence ? y a-t-il une divergence ? une interaction ? une stabilisation lisible ?\n4. Le risque de DEUX INTRODUCTIONS CONCURRENTES : la séquence d'entrée de la marque et la séquence d'onboarding (js/ui.js, onboard*, panneau kind === 'logo' qui affiche volontairement le monogramme AU REPOS).\n5. Les invariants qu'aucune proposition ne peut casser : frame final identique à assets/icons/icon.svg (fond sombre, anneau clair, point cyan décentré), prefers-reduced-motion, non-replay, absence de boucle, aucune requête réseau, offline, cache PWA (service-worker.js, CACHE_VERSION couplé à CONFIG.APP_VERSION).\n\nCE QU'IL FAUT TRANCHER ET ARGUMENTER :\n- Faut-il ÉTENDRE la grammaire existante ou en écrire une seconde ? Dis-le explicitement et dis pourquoi.\n- Quel est le bon emplacement de déclenchement d'une motion identity complète, et quels emplacements doivent au contraire rester statiques ou réduits ?\n- La règle de fréquence : quelles surfaces sont vues plusieurs fois par jour et interdisent donc une séquence expressive ?\n- Le storyboard de l'issue #30 (5 phases, 4-6 fragments, 1,2-1,5 s) doit être CHALLENGÉ, pas exécuté littéralement. Dis ce qui tient, ce qui ne tient pas, et pourquoi, avec les critères de ta méthode.\n\nTravaille hors ligne si aucune plateforme externe n'est réellement accessible, et déclare-le. N'attribue aucune consultation qui n'a pas eu lieu. N'écris AUCUN fichier : cette phase est inspect-only, le rapport passe entièrement par l'enveloppe de résultat.",
+  "scope": {
+    "ticket": "https://github.com/J-Rbs91/TeamKrys/issues/30",
+    "files": [
+      "index.html",
+      "css/app.css",
+      "css/product.css",
+      "js/ui.js",
+      "js/utils.js",
+      "js/app.js",
+      "js/config.js",
+      "service-worker.js",
+      "manifest.webmanifest",
+      "assets/icons/icon.svg",
+      "README.md",
+      "docs",
+      "tests"
+    ]
+  },
+  "requested_capabilities": [
+    "uxer-orchestrator",
+    "ux-navigation-audit",
+    "product-pattern-research",
+    "visual-reference-research",
+    "ux-resource-researcher"
+  ],
+  "profile": "standard",
+  "mode": "inspect",
+  "created_at": "2026-08-30T22:45:00Z"
+}
