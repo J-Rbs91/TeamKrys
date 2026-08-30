@@ -27,6 +27,8 @@ assert(js.indexOf("Discussion") >= 0 && js.indexOf("Propositions") >= 0 && js.in
   "le parcours du sujet doit exposer ses trois étapes");
 assert(js.indexOf("document.startViewTransition") >= 0,
   "les transitions de contexte doivent utiliser View Transitions en amélioration progressive");
+assert(js.indexOf("renderFallback") >= 0 && css.indexOf("ux-route-fallback-forward") >= 0,
+  "un mouvement de route doit subsister sans View Transitions");
 assert(js.indexOf("prefers-reduced-motion: reduce") >= 0,
   "le JS doit éviter View Transitions quand le mouvement est réduit");
 assert(css.indexOf("prefers-reduced-motion: reduce") >= 0,
@@ -35,6 +37,8 @@ assert(css.indexOf(".ux-card-action") >= 0 && js.indexOf("Ouvrir") >= 0,
   "les cartes de sujet doivent porter un signifiant persistant");
 assert(css.indexOf(".ux-bubble-cue") >= 0 && js.indexOf("ux-bubble-cue") >= 0,
   "les bulles actionnables doivent porter un signifiant persistant");
+assert(js.indexOf('meta.appendChild(cue)') >= 0,
+  "le signifiant d'actions du message doit rester dans la ligne de métadonnées");
 
 assert(!/https?:\/\//.test(css), "la couche UXER ne doit pas charger de ressource distante");
 assert(!/https?:\/\//.test(js), "la couche UXER ne doit pas charger de ressource distante");
