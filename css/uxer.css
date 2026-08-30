@@ -44,10 +44,9 @@
   line-height: 1.15;
   cursor: pointer;
   transition:
-    transform var(--ux-motion-fast) var(--ux-ease),
-    border-color var(--ux-motion-base) var(--ux-ease),
-    background var(--ux-motion-base) var(--ux-ease),
-    color var(--ux-motion-base) var(--ux-ease),
+    border-color var(--ux-motion-fast) linear,
+    background var(--ux-motion-fast) linear,
+    color var(--ux-motion-fast) linear,
     box-shadow var(--ux-motion-base) var(--ux-ease);
 }
 
@@ -90,10 +89,9 @@
 .ux-topic-card {
   border-color: var(--line-strong);
   transition:
-    transform var(--ux-motion-fast) var(--ux-ease),
-    border-color var(--ux-motion-base) var(--ux-ease),
+    border-color var(--ux-motion-fast) linear,
     box-shadow var(--ux-motion-base) var(--ux-ease),
-    background var(--ux-motion-base) var(--ux-ease);
+    background var(--ux-motion-fast) linear;
 }
 
 .ux-card-action {
@@ -105,6 +103,10 @@
   font-size: var(--fs-xs);
   font-weight: 750;
   white-space: nowrap;
+}
+
+.ux-card-action .icon {
+  transition: transform var(--ux-motion-base) var(--ux-ease);
 }
 
 .ux-legacy-forward { display: none; }
@@ -133,20 +135,21 @@
 
 .ux-bubble-cue {
   display: inline-block;
-  margin-left: 7px;
+  min-width: 18px;
+  margin-left: 2px;
   color: currentColor;
   font-size: 0.6875rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  opacity: 0.58;
-  vertical-align: middle;
+  letter-spacing: 0.06em;
+  opacity: 0.78;
+  line-height: 1;
+  text-align: center;
 }
 
 .bubble {
   transition:
-    transform var(--ux-motion-fast) var(--ux-ease),
-    box-shadow var(--ux-motion-base) var(--ux-ease),
-    filter var(--ux-motion-base) var(--ux-ease);
+    background var(--ux-motion-fast) linear,
+    box-shadow var(--ux-motion-base) var(--ux-ease);
 }
 
 /* ======================================================= Vote / statut ==== */
@@ -202,7 +205,6 @@
 .send-btn,
 .sheet-action {
   transition:
-    transform var(--ux-motion-fast) var(--ux-ease),
     background var(--ux-motion-fast) linear,
     border-color var(--ux-motion-fast) linear,
     color var(--ux-motion-fast) linear,
@@ -216,20 +218,10 @@
   }
 
   .ux-flow-step:not(:disabled):hover { background: var(--accent-bg); color: var(--accent); }
-  .ux-topic-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+  .ux-topic-card:hover { box-shadow: var(--shadow-1); }
+  .ux-topic-card:hover .ux-card-action .icon { transform: translateX(2px); }
   .ux-topic-title-action:hover { background: var(--surface-soft) !important; }
   .bubble:hover { box-shadow: 0 0 0 1px var(--line-strong); }
-}
-
-.ux-flow-step:not(:disabled):active,
-.ux-topic-card:active,
-.btn:active,
-.btn-icon:active,
-.btn-back:active,
-.fab:active,
-.send-btn:active,
-.sheet-action:active {
-  transform: translateY(1px) scale(0.99);
 }
 
 .ux-topic-title-action:focus-visible,
@@ -293,6 +285,42 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Repli des moteurs sans View Transitions : l'ancien écran disparaît comme
+   avant, mais le nouvel écran garde le sens du déplacement. Ce repli est
+   important sur les navigateurs encore supportés par BrainstO. */
+@keyframes ux-route-fallback-forward {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ux-route-fallback-back {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ux-route-fallback-lateral {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+html.ux-route-fallback[data-ux-direction="forward"] .screen--enter {
+  animation: ux-route-fallback-forward 210ms var(--ux-ease-route) both;
+}
+
+html.ux-route-fallback[data-ux-direction="back"] .screen--enter {
+  animation: ux-route-fallback-back 210ms var(--ux-ease-route) both;
+}
+
+html.ux-route-fallback[data-ux-direction="lateral"] .screen--enter {
+  animation: ux-route-fallback-lateral 180ms var(--ux-ease-route) both;
+}
+
+html.ux-route-fallback .screen--enter .reveal {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 @supports (view-transition-name: none) {
   html.ux-vt::view-transition-group(root) {
     animation-duration: var(--ux-motion-route);
@@ -352,6 +380,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ux-flow-step,
   .ux-topic-card,
+  .ux-card-action .icon,
   .ux-topic-title-action,
   .bubble,
   .ux-proposal-card,
@@ -368,9 +397,11 @@
 
   .overlay,
   .sheet,
-  .modal {
+  .modal,
+  html.ux-route-fallback .screen--enter {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
+    transform: none !important;
   }
 
   ::view-transition-old(root),
