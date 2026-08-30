@@ -1,219 +1,230 @@
-# BrainstO. — guide de l'équipe
+# BrainstO. - guide de l'équipe
 
-BrainstO. sert à préparer les réunions **avant** la réunion : on discute chaque
-sujet comme dans une conversation de groupe, on en tire des propositions, on
-vote, et on arrive avec une conclusion claire.
+BrainstO. sert à préparer les réunions **avant** la réunion. L'équipe fait remonter
+les sujets au fil du travail, en discute à son rythme, transforme les idées en
+propositions, se positionne par le vote puis formule un **Consensus** : le cap que
+l'équipe souhaite porter sur le sujet lorsqu'il sera abordé.
+
+BrainstO. ne gère ni l'ordre du jour, ni le compte rendu, ni le suivi des actions
+après la réunion.
 
 ---
 
 ## Démarrer
 
-1. Ouvrir l'adresse que l'équipe vous a communiquée.
-2. Coller l'**adresse du script**, saisir le **code d'accès** s'il y en a un.
-3. Choisir votre **nom** : il apparaîtra à côté de vos messages.
-4. *(recommandé)* Ajouter l'application à l'écran d'accueil :
-   - iPhone : *Partager* → **Sur l'écran d'accueil**
-   - Android : menu ⋮ → **Installer l'application**
+1. Ouvrir l'adresse communiquée par l'équipe.
+2. Coller l'**adresse du script** et saisir le **code d'accès** s'il y en a un.
+3. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
+4. Il est recommandé d'ajouter BrainstO. à l'écran d'accueil du téléphone.
 
-Le code **n'est pas redemandé à chaque ouverture** : tant que vous vous servez
-de l'application, elle se rouvre directement. Il redevient obligatoire après
-**une heure sans y toucher** — téléphone posé, application fermée ou laissée
-ouverte, cela revient au même. Le code lui-même n'est jamais enregistré sur le
-téléphone.
+Le code n'est pas redemandé à chaque ouverture. Il redevient nécessaire après une
+heure sans activité. Le code lui-même n'est jamais enregistré sur le téléphone.
 
-Vous pouvez aussi choisir « Continuer sans connexion (mode local) » pour
-essayer l'outil seul : les données resteront sur votre appareil.
+Le bouton **Continuer sans connexion (mode local)** permet d'essayer BrainstO. seul.
+Ce mode est un bac à sable : les données restent sur l'appareil et les fonctions
+collectives prennent naturellement leur sens une fois connecté à l'équipe.
 
 ---
 
 ## Les sujets
 
-La page d'accueil liste les sujets, du plus récemment actif au plus ancien.
+Un sujet correspond à un point que l'équipe souhaite faire mûrir.
 
-- **Ajouter un sujet** : le bouton rond **+** en bas à droite (ou le bouton au
-  centre quand la liste est vide).
-- Un sujet a un **titre obligatoire** et une description facultative.
-- Le champ « Votre nom » est pré-rempli. **Laissez-le vide pour proposer le
-  sujet anonymement** : aucune identité n'est alors enregistrée.
-- Au-delà de six sujets, un champ de recherche apparaît.
-- Les sujets **archivés** sont masqués ; un bouton en bas de liste les affiche.
+L'accueil les regroupe par état :
 
-Statuts d'un sujet : *En discussion*, *Prêt pour la réunion*, *Clôturé*,
-*Archivé*. On les change depuis les infos du sujet (voir plus bas).
+1. **Prêts pour la réunion**
+2. **En discussion**
+3. **Clôturés**
+4. **Archivés**, seulement lorsqu'on demande à les afficher
+
+Dans chaque groupe, les sujets les plus récemment actifs apparaissent en premier.
+
+Un sujet possède un titre obligatoire et une description facultative. Il peut être
+proposé sans signature : aucune identité n'est alors enregistrée dans les données
+partagées pour son auteur.
+
+Les statuts sont :
+
+- **En discussion** : le sujet mûrit encore ;
+- **Prêt pour la réunion** : l'équipe a suffisamment travaillé le sujet pour le porter ;
+- **Clôturé** : le travail préparatoire est terminé ;
+- **Archivé** : le sujet quitte la vue courante sans être supprimé.
+
+Au-delà de six sujets, la recherche apparaît. Les archives restent masquées par
+défaut.
+
+### Nouveautés
+
+BrainstO. mémorise localement ce que cet appareil a déjà consulté. À votre retour,
+l'accueil peut donc signaler :
+
+- un nouveau sujet ;
+- de nouveaux messages ;
+- de nouvelles propositions ;
+- des votes mis à jour ;
+- un Consensus mis à jour.
+
+Ces marqueurs restent sur l'appareil. Ils ne créent aucun compte et ne sont pas
+synchronisés entre téléphones. Lors de la première activation de cette fonction,
+les sujets déjà présents servent de point de départ afin de ne pas produire de
+fausses nouveautés.
 
 ---
 
 ## La discussion
 
-C'est le cœur de l'outil : une conversation de groupe.
+Chaque sujet contient une conversation de groupe.
 
-- Vos messages **signés** sont à **droite**, sur fond coloré. Ceux des autres
-  sont à **gauche**, sur fond neutre, avec leur nom et leurs initiales.
-- Un message que vous avez publié **en anonyme** s'affiche comme celui d'un
-  autre : à gauche, en neutre, pastille « ? ». Il reste bien le vôtre — le menu
-  de la bulle vous propose toujours « Modifier » et « Signer avec mon nom ».
-- La barre de saisie est collée en bas ; le bouton rond **↑** envoie.
-- Appuyez sur une bulle pour ouvrir le menu :
+Vos messages signés sont affichés à droite. Les contenus des autres personnes sont
+à gauche. Un message publié anonymement est lui aussi présenté à gauche, y compris
+sur votre propre téléphone.
+
+Appuyer sur un message donne accès aux actions suivantes :
 
 | Action | Effet |
 |---|---|
-| Les cinq réactions | Réagir : **D'accord**, **Je m'engage**, **Mitigé**, **Pas d'accord**, **À écarter** |
-| **Citer** | Répondre en citant le message |
-| **Créer une proposition** | Transformer l'idée en proposition à voter |
-| **Modifier** | Corriger votre message |
-| **Rendre anonyme / Signer** | Changer la signature de votre message |
+| 👌 | D'accord |
+| 💪 | Je m'engage |
+| 🤏 | Mitigé |
+| 👎 | Pas d'accord |
+| 💩 | À écarter |
+| **Citer** | Répondre en conservant le contexte |
+| **Créer une proposition** | Transformer l'idée en option structurée |
+| **Modifier** | Corriger votre message tant qu'il n'est pas verrouillé |
+| **Rendre anonyme / Signer** | Modifier la signature du message |
 
-### Réactions
-
-Une réaction par personne et par message. Appuyer de nouveau sur la même
-retire votre réaction. Les réactions s'affichent en pastilles accrochées au
-**bas de la bulle**, sur son bord gauche ; la vôtre est en couleur pleine.
-
-### Citer
-
-« Citer » affiche un aperçu « en réponse à … » au-dessus de la saisie
-(annulable avec ✕). Une fois publié, le message affiche le passage cité :
-appuyez dessus pour remonter à l'original, qui clignote brièvement.
+Une personne ne peut avoir qu'une réaction par message. Appuyer à nouveau sur la
+même réaction la retire.
 
 ### Anonymat
 
-Par défaut vos messages sont signés. Vous pouvez basculer un message en
-anonyme **même après l'avoir envoyé**, et le re-signer ensuite. En anonyme,
-votre identité est **effacée** des données partagées : les autres voient
-seulement « Anonyme ». Votre téléphone se souvient localement des messages que
-vous avez écrits, pour que vous puissiez toujours les modifier.
+L'anonymat fait partie du fonctionnement de BrainstO., pas seulement de son
+apparence. Lorsqu'un message devient anonyme, son identité est effacée des données
+partagées. Le téléphone conserve seulement une preuve locale lui permettant de
+reconnaître ce contenu comme le vôtre et de vous laisser le modifier ou le signer
+plus tard.
 
-L'anonymat vaut aussi **sur votre propre écran** : le message se pose à gauche
-comme celui d'un autre, sans rien qui le désigne comme vôtre. Un regard
-par-dessus votre épaule ne suffit donc pas à vous attribuer un message anonyme.
+La déconnexion efface cette preuve locale. Le message reste anonyme dans l'espace
+de l'équipe, mais ce téléphone ne pourra plus prouver qu'il vous appartenait.
 
-Le bouton « Anonyme / Signer » au-dessus de la barre de saisie règle la
-signature des **prochains** messages.
+### Verrou de modification
 
-### Verrou de modification 🔒
-
-Dès qu'une **autre** personne a réagi à votre message, celui-ci n'est plus
-modifiable : le débat resterait incompréhensible si le texte changeait sous
-une réaction. Un cadenas 🔒 s'affiche alors. La **signature**, elle, reste
-toujours modifiable.
-
-### Infos du sujet
-
-Appuyez sur le **titre en haut** (marqué ⓘ) : description, statut, et bouton
-« Modifier le sujet ».
+Dès qu'une **autre personne** a réagi à votre message, son texte n'est plus
+modifiable. Cela évite qu'un avis ou un désaccord reste attaché à un texte qui a
+changé après coup. La signature peut toujours être modifiée.
 
 ---
 
 ## Propositions
 
-Depuis la barre « 💡 Propositions » du fil.
+Une idée suffisamment mûre peut devenir une proposition.
 
-- Créer une proposition : titre + description facultative.
-- Cinq statuts : *En vote*, *Retenue*, *À débattre*, *Mise en place*, *Écartée*.
-- Voter **Pour**, **Contre** ou **Abstention** — un vote par personne,
-  modifiable, retirable (appuyer de nouveau sur son vote le retire).
-- Une barre montre la répartition, avec un indicateur :
+Chaque proposition possède un titre, une description facultative et peut recevoir
+un vote :
 
-| Indicateur | Signification |
-|---|---|
-| Aucun vote | personne ne s'est prononcé |
-| Avis partagés | uniquement des abstentions, ou autant de pour que de contre |
-| Consensus favorable | aucun vote contre |
-| Majorité favorable | plus de pour que de contre |
-| Majorité défavorable | plus de contre que de pour |
+- **Pour**
+- **Contre**
+- **Abstention**
 
-Le pourcentage favorable est calculé **hors abstentions**.
+Un seul vote est conservé par personne et par proposition. Il peut être déplacé ou
+retiré.
 
----
+BrainstO. affiche à la fois la répartition des avis et la participation. Par
+exemple :
 
-## Conclusion
+`3 pour · 1 contre · 2 abstentions · 6 / 8 participants ont voté`
 
-Depuis la barre « ✓ Conclusion » du fil.
+Le pourcentage favorable est calculé uniquement parmi les avis exprimés, donc hors
+abstentions. La participation reste affichée séparément pour éviter qu'un résultat
+obtenu avec peu de votants ressemble à une position forte de toute l'équipe.
 
-- Ajoutez une conclusion : la synthèse à présenter en réunion.
-- Chacun **choisit une seule** conclusion : voter pour une autre déplace votre
-  vote. Appuyer de nouveau sur son choix le retire.
-- La conclusion la mieux votée porte le badge **★ En tête**.
-- Vous pouvez modifier et supprimer les vôtres. Supprimer une conclusion
-  supprime aussi les votes qui la visaient.
+Le mot **Consensus** n'est pas utilisé pour qualifier automatiquement un vote de
+proposition. Il est réservé à l'étape collective suivante.
 
----
+### Statuts des propositions
 
-## Réunion
+Pour les nouvelles évolutions, les statuts utiles sont :
 
-Réglages → **Ouvrir la synthèse** : tous les sujets, leurs propositions avec
-les résultats de vote et leurs conclusions, sur une page prête à **imprimer**
-ou à projeter (les barres et boutons disparaissent à l'impression).
+- **En vote**
+- **À débattre**
+- **Écartée**
+
+Les anciennes valeurs **Retenue** et **Mise en place** peuvent encore apparaître
+sur des données historiques. Elles sont signalées comme anciens statuts mais ne
+sont plus proposées pour faire évoluer une proposition. BrainstO. ne suit pas la
+mise en oeuvre après la réunion.
 
 ---
 
-## Revoir la présentation
+## Consensus
 
-À votre toute première entrée dans l'espace, l'application se présente en quelques
-panneaux : les sujets, la discussion, les propositions et leur vote, la conclusion,
-et la synthèse de réunion. Vous pouvez la passer à tout moment, et la reprendre plus
-tard : elle repart là où vous l'avez laissée, **si votre navigateur autorise
-l'enregistrement local**. Ouvert depuis la fenêtre d'une messagerie, ou en navigation
-privée, il ne le fait pas toujours — la présentation réapparaît alors à chaque
-ouverture, et les Réglages vous le disent.
+Le **Consensus** est le cap que l'équipe souhaite porter sur un sujet après la
+discussion, les propositions et les votes.
 
-Pour la revoir : **Réglages → Revoir la présentation**.
+Plusieurs formulations peuvent être proposées. Chacun choisit une seule
+formulation ; choisir une autre déplace le vote. Celle qui reçoit le plus de choix
+porte la mention **En tête**.
 
-Si vous utilisiez déjà BrainstO. avant cette version, elle ne vous a pas été montrée
-— c'est voulu. Le bouton reste là pour la découvrir si vous le souhaitez.
+Le Consensus n'est pas un compte rendu et n'enregistre pas une décision prise après
+la réunion. Il sert uniquement à arriver avec un cap collectif déjà préparé.
 
-Le nombre de panneaux dépend de ce que vous voyez en arrivant : sur un espace
-d'équipe déjà actif, l'application n'explique que ce qui ne se devine pas ; en mode
-local, elle ne parle ni de vote ni de réunion, qui n'ont de sens qu'à plusieurs.
+Vous pouvez modifier ou supprimer les Consensus que vous avez créés. Supprimer une
+formulation supprime aussi les votes qui la visaient.
 
-## Réglages
+---
 
-- **Votre nom** — le changer mettra à jour vos messages signés.
-- **Connexion** — modifier l'adresse ou le code ; « Se déconnecter de l'équipe »
-  oublie l'adresse et le déverrouillage sur cet appareil (les données de
-  l'équipe restent intactes sur Google Drive).
-- **Diagnostic de synchronisation** — révision, dernière mise à jour, actions
-  en attente, version de l'application, bouton « Synchroniser ».
+## Synthèse à projeter ou imprimer
+
+Dans **Réglages → Ouvrir la synthèse**, BrainstO. rassemble les sujets non archivés,
+leurs propositions, les résultats de vote et les Consensus.
+
+Cette page sert de support de préparation à projeter ou imprimer. Elle ne constitue
+pas un ordre du jour formel, un compte rendu ou un historique de réunions.
 
 ---
 
 ## Hors connexion
 
-L'application fonctionne sans réseau : elle s'ouvre, affiche les dernières
-données connues, et **enregistre vos actions dans l'ordre**. Elles partent
-automatiquement au retour du réseau.
+BrainstO. reste utilisable lorsque le réseau disparaît :
 
-L'indicateur en haut à droite dit toujours où l'on en est :
+- la dernière version connue des données reste disponible ;
+- les nouvelles actions sont conservées dans l'ordre sur l'appareil ;
+- elles sont envoyées automatiquement lorsque la connexion revient.
 
-| Indicateur | Signification |
-|---|---|
-| **À jour** | tout est enregistré sur le serveur |
-| **Sync…** | échange en cours |
-| **En attente (n)** | *n* actions attendent d'être envoyées |
-| **Hors ligne** | pas de réseau ; rien n'est perdu |
-| **Erreur** | le serveur a refusé ; voir Réglages → Diagnostic |
-| **Local** | mode local, aucune synchronisation |
+L'indicateur de synchronisation distingue notamment : **À jour**, **Sync…**,
+**En attente**, **Hors ligne**, **Erreur** et **Local**.
+
+Tant qu'une action est en attente, BrainstO. ne prétend jamais qu'elle est déjà
+synchronisée.
 
 ---
 
-## Se déconnecter
+## Réglages et déconnexion
 
-**Réglages → Se déconnecter de l'équipe** oublie, sur cet appareil, l'adresse du
-script, le déverrouillage et votre nom. Les données de l'équipe restent sur Google
-Drive : personne d'autre ne perd quoi que ce soit.
+Les réglages permettent de modifier votre nom, la connexion, de revoir la
+présentation initiale, d'ouvrir la synthèse et de consulter le diagnostic de
+synchronisation.
 
-Une conséquence est à connaître, et l'application vous la rappelle avant de confirmer :
-**vous ne pourrez plus modifier vos messages anonymes depuis ce téléphone.** Un message
-anonyme n'a pas d'auteur enregistré — c'est une trace gardée sur l'appareil qui vous
-permettait d'y revenir. L'effacer est précisément ce qui rend l'anonymat vrai, y compris
-pour la personne qui utilisera ce téléphone après vous.
+**Se déconnecter de l'équipe** oublie sur cet appareil l'adresse du script, le
+verrouillage, votre identité locale et la preuve de propriété de vos contenus
+anonymes. Les données partagées de l'équipe restent intactes.
 
-Si des actions attendent d'être envoyées, la confirmation vous le dit et les compte :
-elles seront perdues. Attendez « À jour » avant de vous déconnecter.
+Si des actions sont encore en attente, elles seraient perdues lors de la
+déconnexion. Attendez **À jour** avant de vous déconnecter.
+
+---
 
 ## Bonnes pratiques
 
-- Un sujet = un problème. Les discussions restent lisibles.
-- Citez plutôt que de recopier : le fil garde son fil.
-- Passez un sujet en *Prêt pour la réunion* quand la conclusion est votée.
-- Archivez après la réunion : le sujet disparaît de la liste sans être perdu.
+- Un sujet correspond à un point à faire mûrir.
+- Citez un message lorsque votre réponse dépend de son contexte.
+- Utilisez les réactions pour exprimer rapidement une position ; développez par un
+  message lorsque l'argument compte.
+- Transformez une idée suffisamment claire en proposition plutôt que de la laisser
+  se perdre dans le fil.
+- Regardez la participation en plus du rapport Pour / Contre.
+- Utilisez le Consensus pour formuler le cap collectif, pas pour rédiger un compte
+  rendu.
+- Passez un sujet en **Prêt pour la réunion** lorsque l'équipe considère que son cap
+  est suffisamment mûr.
+- Archivez les sujets qui n'ont plus besoin d'occuper l'espace courant.
