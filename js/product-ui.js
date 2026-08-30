@@ -95,6 +95,10 @@
 
   function enhanceTopics(state, route) {
     if (!route || route.name !== "topics") { return; }
+
+    /* La consultation de l'accueil établit la baseline AVANT de regarder le DOM.
+     * Quand l'espace est vide, screenTopics ne crée pas `.topics-grid` du tout. */
+    var seen = seenRecord(state);
     var container = document.querySelector(".topics-grid");
     if (!container || container.querySelector(".product-topic-group")) { return; }
 
@@ -105,16 +109,11 @@
       UI.local && UI.local.showArchived
     );
     var cards = directCards(container);
-    if (!visible.length || cards.length !== visible.length) {
-      /* Même une liste vide consultée est un état vu. */
-      seenRecord(state);
-      return;
-    }
+    if (!visible.length || cards.length !== visible.length) { return; }
 
     var byId = {};
     for (var i = 0; i < visible.length; i++) { byId[visible[i].id] = cards[i]; }
 
-    var seen = seenRecord(state);
     var seenDirty = false;
     var groups = ProductView.groupTopics(visible);
     var insertionPoint = null;
