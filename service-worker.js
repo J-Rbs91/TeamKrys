@@ -7,17 +7,8 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.11.0";
+var CACHE_VERSION = "brainsto-v1.10.0";
 
-/* Deux listes, et la différence n'est pas cosmétique.
- *
- * CRITIQUE : ce sans quoi un démarrage à froid hors ligne échoue. Précaché par un seul
- * `addAll` passé à `waitUntil`, SANS `catch` — donc une ressource manquante fait
- * échouer l'installation. L'ancien service worker reste alors actif avec son cache
- * COMPLET, et l'utilisateur garde une version qui fonctionne.
- *
- * OPTIONNEL : le manifeste et les icônes. Utiles à l'installation sur l'écran
- * d'accueil, jamais nécessaires au démarrage. */
 var SHELL_CRITICAL = [
   "./",
   "index.html",
