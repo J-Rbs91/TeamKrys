@@ -14,6 +14,7 @@ var SHELL_CRITICAL = [
   "index.html",
   "css/app.css",
   "css/product.css",
+  "css/uxer.css",
   "js/config.js",
   "js/utils.js",
   "js/state.js",
@@ -23,6 +24,7 @@ var SHELL_CRITICAL = [
   "js/product-view.js",
   "js/ui.js",
   "js/product-ui.js",
+  "js/uxer-ui.js",
   "js/app.js"
 ];
 
