@@ -1,0 +1,57 @@
+{
+  "capabilities_used": [
+    "effects-implementation",
+    "component-implementation",
+    "responsive-accessibility"
+  ],
+  "changes_made": [
+    "css/app.css",
+    "js/utils.js",
+    "js/ui.js",
+    "js/config.js",
+    "service-worker.js",
+    "README.md",
+    "tests/logo-motion.test.js"
+  ],
+  "evidence": [
+    "git diff --stat shows only scoped files modified: README.md, css/app.css, js/config.js, js/ui.js, js/utils.js, service-worker.js, plus new tests/logo-motion.test.js",
+    "Read js/app.js:282-287 (App.gate) confirming gate values are exactly 'connection'/'lock'/'name'/null, matching isHeroGate() in js/ui.js",
+    "Read js/ui.js:529,576,608 confirming the two hero screens are screenConnection and screenLock (not 'screenHome' as the design phase mis-cited) — used correctly in the U4 implementation",
+    "Hand-traced css/app.css delay/duration arithmetic: seeds 0/60/110/160ms delay + 640ms duration (last ends 800ms); ring 300+520=820ms; dot 780+320=1100ms; wordmark 820+280=1100ms (matches dot); tagline 940+240=1180ms (matches declared total)",
+    "Hand-traced the logo-seed-in keyframes: animation-timing-function present at 0% and 55%, absent at 38%, with 38% and 55% carrying identical opacity/transform values",
+    "Hand-traced js/ui.js UI.render: heroRepeatActive is computed only inside the `if (entering)` block gated on the pre-continuation value of `entering` (place !== lastPlace), so a same-window second render (Sync.boot -> UI.force) does not re-evaluate or flip it, preserving the narrative class across that known second-render case",
+    "grep across tests/onboarding.test.js, session.test.js, sync.test.js, parity.test.js, product-integration.test.js, product-view.test.js found zero references to logo-seed/logo-ring/logo-dot/wordmark/tagline/screen--enter, so those suites' assertions are structurally unaffected by this change",
+    "grep of tests/qa/feature-baseline.json found no tracked entries for :nth-of-type or per-keyframe animation-timing-function, both long-baseline CSS features, so compat-scan.js is not expected to flag this change",
+    "Found and fixed a real bug in my own tests/logo-motion.test.js (double-counted offset: `fn.slice(guardStart + guardBody.end)` used an already-absolute index a second time) via manual tracing before finalizing, since I could not execute the file to catch it",
+    "Confirmed via repeated Bash attempts (node --version and git commands succeed; node -e, node --check, node <file>, and python3 -c all return 'This command requires approval') that this job's sandbox categorically blocks code execution, not just this specific test file"
+  ],
+  "feature_id": "brainsto-logo-motion-identity",
+  "files_examined": [
+    "css/app.css",
+    "js/ui.js",
+    "js/utils.js",
+    "js/app.js",
+    "js/config.js",
+    "service-worker.js",
+    "README.md",
+    "docs/ONBOARDING.md",
+    "tests/navigation.test.js",
+    "tests/onboarding.test.js",
+    "tests/product-integration.test.js",
+    "tests/qa/compat-scan.js",
+    "tests/qa/feature-baseline.json"
+  ],
+  "findings": [],
+  "job_id": "SPJ-c3d4e5f60718",
+  "limitations": [
+    "Could not execute node or any interpreter in this job's sandbox (only metadata commands like --version, git, grep are permitted), so none of the required test files — existing suite (navigation/onboarding/session/sync/parity/product-integration/product-view/compat-scan) or the new tests/logo-motion.test.js — were actually run; pass/fail status of the automated suite is unverified, only hand-traced against source text",
+    "No browser access: the motion identity is inherently visual and was not seen rendered; only code-level reasoning about keyframe values, selectors, and timing arithmetic was possible",
+    "docs/ONBOARDING.md line 669 ('--ease-in est réservé aux points de convergence') was checked and remains accurate but was not modified, since its wording already generalizes correctly to the new choreography"
+  ],
+  "phase": "execute",
+  "reported_at": "2026-08-30T23:45:00Z",
+  "schema_version": 1,
+  "specialist": "uxer",
+  "status": "partial",
+  "summary": "All six implementation units (U1-U6) were coded per the design-phase specification and version-bumped to 1.12.0, but the sandbox for this job blocks all code execution (node/python), so the mandated test run (existing suite + new tests/logo-motion.test.js) could not actually be performed — only static/textual verification was possible."
+}

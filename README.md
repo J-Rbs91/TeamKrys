@@ -205,7 +205,7 @@ quand l'utilisateur vit la centième.
 | Retour à l'appui, survol | 100 ms | plusieurs fois par minute |
 | Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
 | Feuille, fenêtre | 240 ms | quotidien |
-| **Séquence d'accueil** | 1060 ms, en quatre temps | une fois par ouverture |
+| **Séquence d'accueil** | 1180 ms, en quatre mouvements chevauchés | accueil : une fois par ouverture · verrou : une fois par ouverture d'**application**, pas par déverrouillage |
 | Arrivée de la présentation initiale | 240 ms le voile, 220 ms la carte, chevauchés | une fois par appareil |
 | Changement de panneau de la présentation | 100 ms, **opacité seule** | quatre fois en trente secondes |
 
@@ -216,40 +216,64 @@ attendait 1,4 s pendant que l'utilisateur, lui, avait déjà commencé à défil
 #### La séquence d'accueil
 
 C'est le seul geste expressif de l'application, cantonné aux deux écrans vides —
-accueil et verrou. Il n'est vu **qu'à l'ouverture**, ce qui est la condition pour
-qu'une séquence de cette longueur reste supportable : la même animation sur un
-bouton serait interdite par la règle ci-dessus. Il ne retarde rien — sur l'écran
-de verrou, le champ de code est saisissable dès le premier rendu.
+accueil et verrou. Il n'est vu qu'**au premier passage de la session**, ce qui
+est la condition pour qu'une séquence de cette longueur reste supportable : la
+même animation sur un bouton serait interdite par la règle ci-dessus. Il ne
+retarde rien — sur l'écran de verrou, le champ de code est saisissable dès le
+premier rendu.
 
-Ce qu'il raconte, en quatre temps qui **se chevauchent** :
+Ce qu'elle raconte, en quatre mouvements qui **se chevauchent** — volontairement
+sans étiquette produit : une image extraite de la séquence doit se légender avec
+un nom de forme (un point, un écart, un anneau), jamais avec un nom d'étape (un
+vote, une discussion, une réunion) :
 
-| | Quand | Ce qui se passe | Ce que ça dit |
-|---|---|---|---|
-| 1 | 0 → 520 ms | quatre points convergent vers le centre et s'y fondent | les idées qui arrivent |
-| 2 | 220 → 740 ms | le cercle se referme pendant qu'ils disparaissent | la discussion les absorbe |
-| 3 | 660 → 980 ms | un point unique apparaît à côté | la décision qui en sort |
-| 4 | 700 → 980 ms · 820 → 1060 ms | le logotype monte d'un bloc, puis la signature se révèle | — |
+| | Quand | Ce qui se passe |
+|---|---|---|
+| 1 | 0 → 800 ms | quatre fragments partent d'une origine commune, s'écartent en éventail inégal, marquent un temps d'arrêt, puis reviennent se fondre au centre |
+| 2 | 300 → 820 ms | le cercle se referme pendant que les fragments rentrent |
+| 3 | 780 → 1100 ms | un point unique apparaît, dépasse sa taille et y revient |
+| 4 | 820 → 1100 ms · 940 → 1180 ms | le logotype monte d'un bloc, puis la signature se révèle |
 
 Le point (3) et le logotype (4) se terminent **sur le même instant**. C'est
 délibéré : joués l'un après l'autre, le monogramme et le logotype se lisaient
 comme deux séquences successives ; résolus ensemble, ils n'en font qu'une. Et
-c'est le chevauchement qui tient le total à 1060 ms alors que la somme des temps
-dépasse 1,8 s — enchaînés bout à bout, ce serait un diaporama.
+c'est le chevauchement qui tient le total à 1180 ms alors que la somme des cinq
+temps dépasse 2,3 s — enchaînés bout à bout, ce serait un diaporama.
 
-Trois décisions moins évidentes :
+Quatre décisions moins évidentes :
 
-- **Les quatre points n'appartiennent pas à la marque.** Ils n'existent que
+- **Quatre fragments, pas cinq ou six.** C'est le nombre déjà éprouvé pour ne
+  pas se lire comme une croix géométrique. À 52 px de canevas, chacun est déjà
+  proche du plancher de lisibilité — un cinquième réduirait le poids individuel
+  ou le budget de décalage, au risque qu'une dispersion se lise comme du bruit
+  plutôt que comme un mouvement d'ensemble lisible.
+- **Les quatre fragments n'appartiennent pas à la marque.** Ils n'existent que
   pendant l'animation : au repos leur opacité est nulle, et leur animation s'y
   termine aussi. Sans mouvement ils ne s'affichent jamais, et le monogramme
-  reste l'anneau et son point.
-- **Ils accélèrent au lieu de freiner** (`--ease-in`, la seule occurrence du
-  fichier). Avec la courbe amortie du reste du thème, ils parcouraient 80 % du
-  trajet dans les 150 premières millisecondes puis stagnaient : on ne voyait
-  plus une convergence mais quatre pastilles clignoter au centre.
+  reste l'anneau et son point. Sous 44 px de canevas (le monogramme
+  d'onboarding, à 40 px), ils ne sont même pas créés : à cette taille un
+  fragment se rend sous le plancher de résolution perceptive fiable.
+- **Ils accélèrent au lieu de freiner sur le retour** (`--ease-in`, la seule
+  occurrence du fichier). Avec la courbe amortie du reste du thème, ils
+  parcouraient 80 % du trajet dans les 150 premières millisecondes puis
+  stagnaient : on ne voyait plus une convergence mais quatre pastilles
+  clignoter au centre.
 - **La signature est animée**, alors qu'elle ne l'était pas. Immobile, elle
   s'affichait dès la première image et restait seule sous un logo en train de se
   dessiner, à annoncer un nom pas encore arrivé. Un élément non animé au milieu
   d'une séquence n'est pas neutre : il la contredit.
+
+**La narration ne rejoue pas à chaque reverrouillage.** `place !== lastPlace`
+(`js/ui.js`) répond à « sommes-nous arrivés à un nouvel endroit », pas à
+« cette narration a-t-elle déjà été racontée cette ouverture » — et un
+reverrouillage après une heure d'inactivité change d'écran sans recharger la
+page. `heroSequencePlayed` (variable de module, non persistée) mémorise si la
+séquence a déjà été jouée cette ouverture ; au premier passage sur un écran
+hero elle bascule à `true` et la classe narrative se pose normalement, à tout
+passage suivant l'écran porte `screen--enter-repeat` à la place — une classe
+qui ne sélectionne aucune règle CSS, donc le monogramme retombe directement sur
+son état de repos, déjà l'état final. Un rechargement complet de page
+réinitialise le drapeau : c'est une vraie nouvelle ouverture.
 
 Et trois points d'implémentation :
 

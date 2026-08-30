@@ -491,16 +491,18 @@ p { margin: 0; }
    Il ne retarde rien : sur l'écran de verrou, le champ de code est saisissable
    dès le premier rendu, l'animation se joue derrière.
 
-   CE QU'IL RACONTE, en trois temps qui se chevauchent :
+   CE QU'IL RACONTE, en quatre mouvements qui se chevauchent — volontairement
+   sans étiquette produit : un spectateur qui n'a pas lu le ticket doit pouvoir
+   légender chaque image avec un nom de forme (un point, un écart, un anneau),
+   jamais avec un nom d'étape (un vote, une discussion, une réunion) :
 
-     0 → 520 ms   quatre points convergent vers le centre et s'y fondent
-                  — les idées qui arrivent ;
-   220 → 740 ms   le cercle se referme pendant qu'ils disparaissent
-                  — la discussion les absorbe ;
-   660 → 980 ms   un point unique apparaît à côté
-                  — la décision qui en sort.
-   700 → 980 ms   le logotype monte d'un bloc.
-   820 → 1060 ms  la signature se révèle, en fondu seul.
+     0 → 800 ms   quatre fragments partent d'une origine commune, s'écartent
+                  en éventail inégal, marquent un temps d'arrêt, puis
+                  reviennent se fondre au centre ;
+   300 → 820 ms   le cercle se referme pendant que les fragments rentrent ;
+   780 → 1100 ms  un point unique apparaît, dépasse sa taille et y revient ;
+   820 → 1100 ms  le logotype monte d'un bloc ;
+   940 → 1180 ms  la signature se révèle, en fondu seul.
 
    Le point et le logotype se terminent SUR LE MÊME INSTANT. C'est délibéré :
    joués l'un après l'autre, le monogramme et le logotype se lisaient comme
@@ -512,9 +514,14 @@ p { margin: 0; }
    pas encore arrivé. Un élément non animé au milieu d'une séquence n'est pas
    neutre : il la contredit.
 
-   Le chevauchement est ce qui tient la durée totale à 980 ms alors que la
-   somme des trois temps dépasse 1,3 s. Enchaînés bout à bout, ce serait un
+   Le chevauchement est ce qui tient la durée totale à 1180 ms alors que la
+   somme des cinq temps dépasse 2,3 s. Enchaînés bout à bout, ce serait un
    diaporama.
+
+   La séquence entière ne rejoue PAS à chaque passage sur un écran vide : voir
+   plus bas `heroSequencePlayed` / `screen--enter-repeat` dans js/ui.js — un
+   reverrouillage après inactivité change d'écran sans recharger la page, et
+   sans ce garde-fou la narration se répéterait à chaque code ressaisi.
 
    Coût de rendu : `stroke-dashoffset`, `transform` et `opacity` uniquement.
    Aucun filtre, aucune ombre animée, aucune bibliothèque. */
@@ -526,6 +533,17 @@ p { margin: 0; }
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
 }
+
+/* GARDE DE NON-REJEU — `screen--enter-repeat` (posée par js/ui.js à la place
+   de `screen--enter` quand la séquence hero a déjà été jouée cette session,
+   par exemple après un reverrouillage) NE DOIT JAMAIS être ajoutée aux
+   sélecteurs `.screen--enter …` ci-dessous, narratifs ou non. C'est par
+   construction, pas par filtrage, que la narration ne rejoue pas : la classe
+   `screen--enter` est absente, donc aucune règle scopée à `.screen--enter` ne
+   matche, et le monogramme retombe sur son état de repos — déjà l'état final
+   — exactement le chemin que `prefers-reduced-motion: reduce` emprunte déjà.
+   N'écrivez pas de règle `.screen--enter-repeat { animation: none }` : ce
+   serait une deuxième façon d'obtenir ce que l'absence de classe donne déjà. */
 
 /* ÉTAT AU REPOS = ÉTAT FINAL. Rien n'est masqué ni décalé ici : sans
    animation — mouvement réduit activé, ou moteur qui ignore la requête — le
@@ -539,33 +557,70 @@ p { margin: 0; }
   to { stroke-dashoffset: 0; }
 }
 
-/* Les idées convergent. Elles ARRIVENT invisibles, se montrent en chemin, puis
-   s'éteignent au centre : le point d'arrivée n'est pas une accumulation de
-   quatre pastilles au milieu de l'anneau, c'est leur disparition dedans. */
+/* Un aller-retour, pas un aller simple : les fragments PARTENT du centre,
+   atteignent leur écart, marquent un temps d'arrêt (le palier 38%→55%, à
+   valeurs identiques — c'est le seul endroit du fichier où un cran de
+   keyframe ne change rien : voir le repère plus bas sur le choix de courbe),
+   puis reviennent s'y fondre. Le point d'arrivée n'est pas une accumulation de
+   quatre pastilles au milieu de l'anneau, c'est leur disparition dedans.
+   `animation-timing-function` posé À 0% ET À 55% (jamais à 38%, qui hérite de
+   0% sans effet visible tant que les deux bornes du palier sont égales) donne
+   à l'aller et au retour deux courbes distinctes sans deuxième keyframe. */
 @keyframes logo-seed-in {
-  from { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.4); }
-  25% { opacity: 0.85; }
-  80% { opacity: 0.85; }
-  to { opacity: 0; transform: none; }
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3);
+    animation-timing-function: var(--ease-out);
+  }
+  38% {
+    opacity: 0.85;
+    transform: translate(var(--sx), var(--sy)) scale(1);
+  }
+  55% {
+    opacity: 0.85;
+    transform: translate(var(--sx), var(--sy)) scale(1);
+    animation-timing-function: var(--ease-in);
+  }
+  100% { opacity: 0; transform: translate(0, 0) scale(0.4); }
 }
 
 /* La décision. Elle n'arrive de nulle part — elle apparaît, et c'est le sens :
-   ce qui sort de la discussion n'était dans aucune des idées de départ. */
+   ce qui sort de la discussion n'était dans aucune des idées de départ. Elle
+   démarre une fois l'anneau tracé et les quatre fragments absorbés — plus rien
+   d'autre ne bouge sur le tracé — et son dépassement-puis-retour EST la
+   dernière hésitation/stabilisation de la séquence, sans mécanisme distinct. */
 @keyframes logo-dot-pop {
   from { opacity: 0; transform: scale(0); }
   to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Durée locale 640 ms par fragment ; délais non uniformes (0/60/110/160 ms,
+     ci-dessous par :nth-of-type) pour que les quatre trajectoires ne se lisent
+     pas comme un même mouvement cloné quatre fois. Le dernier fragment parti
+     termine à 800 ms, largement avant que l'anneau ait fini son propre tracé
+     (820 ms) : chevauchement voulu, pas quatre événements séquentiels. */
   .screen--enter .logo-seed {
-    animation: logo-seed-in 0.52s var(--ease-in) backwards;
+    animation: logo-seed-in 0.64s var(--ease-out) backwards;
     animation-delay: calc(0s - var(--enter-elapsed, 0ms));
+  }
+
+  .screen--enter .logo-seed:nth-of-type(2) {
+    animation-delay: calc(0.06s - var(--enter-elapsed, 0ms));
+  }
+
+  .screen--enter .logo-seed:nth-of-type(3) {
+    animation-delay: calc(0.11s - var(--enter-elapsed, 0ms));
+  }
+
+  .screen--enter .logo-seed:nth-of-type(4) {
+    animation-delay: calc(0.16s - var(--enter-elapsed, 0ms));
   }
 
   .screen--enter .logo-ring {
     stroke-dasharray: var(--logo-c);
     animation: logo-ring-draw 0.52s var(--ease-out) backwards;
-    animation-delay: calc(0.22s - var(--enter-elapsed, 0ms));
+    animation-delay: calc(0.3s - var(--enter-elapsed, 0ms));
   }
 
   /* L'origine de transformation est posée en unités utilisateur par
@@ -575,7 +630,7 @@ p { margin: 0; }
     /* La courbe dépasse puis revient : le point « atterrit ». C'est le seul
        usage de --ease-spring du fichier. */
     animation: logo-dot-pop 0.32s var(--ease-spring) backwards;
-    animation-delay: calc(0.66s - var(--enter-elapsed, 0ms));
+    animation-delay: calc(0.78s - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -599,12 +654,12 @@ p { margin: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .wordmark {
     animation: wordmark-rise 0.28s var(--ease-out) backwards;
-    animation-delay: calc(0.7s - var(--enter-elapsed, 0ms));
+    animation-delay: calc(0.82s - var(--enter-elapsed, 0ms));
   }
 
   .screen--enter .tagline {
     animation: tagline-in 0.24s linear backwards;
-    animation-delay: calc(0.82s - var(--enter-elapsed, 0ms));
+    animation-delay: calc(0.94s - var(--enter-elapsed, 0ms));
   }
 }
 

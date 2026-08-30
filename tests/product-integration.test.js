@@ -45,9 +45,9 @@ check("PWA : toute la couche produit fait partie de la coquille critique", () =>
   assert(sw.includes('"js/product-ui.js"'), "product-ui absent du précache");
 });
 
-check("Version : application et cache annoncent ensemble la 1.11.0", () => {
-  assert(config.includes('APP_VERSION: "1.11.0"'), "APP_VERSION non alignée");
-  assert(sw.includes('CACHE_VERSION = "brainsto-v1.11.0"'), "CACHE_VERSION non alignée");
+check("Version : application et cache annoncent ensemble la 1.12.0", () => {
+  assert(config.includes('APP_VERSION: "1.12.0"'), "APP_VERSION non alignée");
+  assert(sw.includes('CACHE_VERSION = "brainsto-v1.12.0"'), "CACHE_VERSION non alignée");
 });
 
 check("Consensus : aucun renommage global aveugle du contenu utilisateur", () => {

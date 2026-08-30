@@ -245,23 +245,31 @@
      * inégales : quatre points équidistants forment une croix, et une croix se
      * lit comme un motif décoratif, pas comme des idées qui arrivent. */
     var SEMENCES = [[-26, -20], [24, -26], [-30, 14], [10, 26]];
-    for (var i = 0; i < SEMENCES.length; i++) {
-      var semence = document.createElementNS(SVG_NS, "circle");
-      semence.setAttribute("cx", String(LOGO.cx));
-      semence.setAttribute("cy", String(LOGO.cy));
-      semence.setAttribute("r", "4.2");
-      semence.setAttribute("fill", "currentColor");
-      semence.setAttribute("class", "logo-seed");
-      semence.style.setProperty("--sx", SEMENCES[i][0] + "px");
-      semence.style.setProperty("--sy", SEMENCES[i][1] + "px");
-      /* Même raison que pour le point : une origine en pourcentage exigerait
-       * `transform-box: fill-box`. En unités utilisateur, elle est juste
-       * partout, sans propriété supplémentaire. */
-      semence.style.transformOrigin = LOGO.cx + "px " + LOGO.cy + "px";
-      /* L'état AU REPOS est l'invisibilité : c'est ce qui rend le repli en
-       * mouvement réduit correct sans règle dédiée. */
-      semence.style.opacity = "0";
-      svg.appendChild(semence);
+    /* Sous 44 px de canevas (le monogramme d'onboarding, à 40 px), un fragment
+     * de r=4.2 en unités viewBox se rend à environ 1,7 px de diamètre : sous
+     * le plancher de résolution perceptive fiable, tout mouvement s'y lirait
+     * comme du bruit, pas comme une histoire. Les fragments ne sont donc même
+     * pas créés en dessous de ce seuil — l'anneau et le point, l'identité
+     * permanente, survivent eux à toute taille sans simplification. */
+    if (px >= 44) {
+      for (var i = 0; i < SEMENCES.length; i++) {
+        var semence = document.createElementNS(SVG_NS, "circle");
+        semence.setAttribute("cx", String(LOGO.cx));
+        semence.setAttribute("cy", String(LOGO.cy));
+        semence.setAttribute("r", "4.2");
+        semence.setAttribute("fill", "currentColor");
+        semence.setAttribute("class", "logo-seed");
+        semence.style.setProperty("--sx", SEMENCES[i][0] + "px");
+        semence.style.setProperty("--sy", SEMENCES[i][1] + "px");
+        /* Même raison que pour le point : une origine en pourcentage exigerait
+         * `transform-box: fill-box`. En unités utilisateur, elle est juste
+         * partout, sans propriété supplémentaire. */
+        semence.style.transformOrigin = LOGO.cx + "px " + LOGO.cy + "px";
+        /* L'état AU REPOS est l'invisibilité : c'est ce qui rend le repli en
+         * mouvement réduit correct sans règle dédiée. */
+        semence.style.opacity = "0";
+        svg.appendChild(semence);
+      }
     }
 
     var ring = document.createElementNS(SVG_NS, "circle");

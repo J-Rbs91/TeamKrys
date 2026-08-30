@@ -101,10 +101,31 @@
   /* Instant de la dernière entrée sur un écran, et durée pendant laquelle un
    * rendu qui retombe au même endroit doit REPRENDRE l'animation au lieu de la
    * perdre. 1400 ms couvre la séquence la plus longue du thème — l'accueil,
-   * dont la signature se pose à 1060 ms — avec de la marge. Au-delà, l'entrée est finie : un rendu tardif
+   * dont la signature se pose à 1180 ms — avec de la marge. Au-delà, l'entrée est finie : un rendu tardif
    * ne doit surtout rien rejouer. */
   var enterAt = 0;
   var ENTER_WINDOW_MS = 1400;
+
+  /* Non-rejeu de la narration du monogramme à travers plusieurs
+   * reverrouillages dans la même ouverture d'application. `place !== lastPlace`
+   * répond à « sommes-nous arrivés à un nouvel endroit », pas à « cette
+   * narration a-t-elle déjà été racontée cette ouverture » : un reverrouillage
+   * après CONFIG.LOCK_IDLE_MS change `App.gate()` et redéclenche donc une
+   * arrivée SANS aucun rechargement de page. `heroSequencePlayed` n'est donc
+   * PAS persisté (une variable de module suffit, réinitialisée par un vrai
+   * rechargement = une vraie nouvelle ouverture) ; `heroRepeatActive` mémorise,
+   * pour la fenêtre d'entrée EN COURS, si cette arrivée précise doit porter la
+   * classe narrative ou son repli — décidé une seule fois à l'arrivée
+   * "nouveau lieu", jamais recalculé pendant les rendus de reprise qui suivent
+   * (sans quoi un second rendu de la MÊME entrée, une milliseconde après le
+   * premier, se verrait basculé à tort en répétition puisque
+   * `heroSequencePlayed` serait déjà passé à `true` par le premier rendu). */
+  var heroSequencePlayed = false;
+  var heroRepeatActive = false;
+
+  function isHeroGate(gate) {
+    return gate === "connection" || gate === "lock";
+  }
 
   /* État d'interface local (jamais partagé). */
   UI.local = {
@@ -1859,6 +1880,21 @@
     if (entering) { touchedDrafts = {}; }
     lastPlace = place;
 
+    /* Décidé UNE SEULE FOIS, ici, à l'arrivée sur un nouveau lieu — jamais
+     * recalculé par les rendus de reprise ci-dessous, qui retombent sur le
+     * même `entering` sans repasser par cette branche. Un écran hero déjà vu
+     * cette session porte le repli ; le premier de la session, ou tout écran
+     * non-hero, porte la classe narrative habituelle. */
+    if (entering) {
+      var gateNow = App.gate();
+      if (isHeroGate(gateNow)) {
+        heroRepeatActive = heroSequencePlayed;
+        heroSequencePlayed = true;
+      } else {
+        heroRepeatActive = false;
+      }
+    }
+
     var elapsed = 0;
     if (entering) {
       enterAt = Utils.now();
@@ -1878,7 +1914,11 @@
     Utils.clear(appRoot);
     var screen = currentScreen();
     if (entering) {
-      screen.classList.add("screen--enter");
+      /* `screen--enter-repeat` ne sélectionne AUCUNE règle CSS (voir le
+       * garde-fou dans app.css) : sur un écran hero déjà vu cette session, le
+       * monogramme et le reste de l'entrée retombent donc directement sur leur
+       * état de repos, sans qu'aucune animation ne soit annulée après coup. */
+      screen.classList.add(heroRepeatActive ? "screen--enter-repeat" : "screen--enter");
       screen.style.setProperty("--enter-elapsed", elapsed + "ms");
     }
     appRoot.appendChild(screen);
