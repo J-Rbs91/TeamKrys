@@ -122,6 +122,7 @@ chaud, sans aucune couleur.
 | Le point du monogramme est le seul froid de la marque au repos | Secondaire | Icône, écran de verrouillage, en-tête | Un monogramme dont l'anneau serait coloré |
 | Les cartes ne se détachent que par le rapport surface / fond, jamais par une ombre portée décorative | Secondaire | Toutes les listes, toutes les cartes | Une carte qui « lévite » sans être empilée sur quoi que ce soit |
 | Les valeurs numériques sont à chasse fixe partout | Secondaire | Compteurs de votes, participation, horodatages | Un compteur dont les chiffres dansent quand la valeur change |
+| Chaque icône nomme un objet ou une action, jamais un affect | Secondaire | Le jeu d'icônes entier, dessiné à la main en trait de 1,7 px | Une étincelle, une étoile ou une ampoule — trois figures qui ne désignent rien |
 | Le trait qui délimite tient seul le seuil des composants ; le trait qui habille ne porte aucune information | Secondaire | Champs, contrôles, séparateurs | Un champ dont le bord ne se distingue plus du séparateur d'à côté |
 
 ---
@@ -158,6 +159,15 @@ Propres à ce produit :
 - **Aucun blanc pur, et aucun noir pur**, hors feuille d'impression — le papier
   d'imprimante, lui, est réellement blanc. Une encre posée sur un aplat coloré est
   du papier, pas du blanc.
+- **Aucune icône qui qualifie au lieu de nommer.** Une icône désigne un objet ou une
+  action du produit ; elle ne récompense rien, ne s'enthousiasme de rien et ne promet
+  rien. Les trois figures proscrites nommément, parce qu'elles étaient toutes les
+  trois présentes : l'**étincelle** (« c'est magique »), l'**étoile** (« c'est
+  bien ») et l'**ampoule** (« quelle idée »). Elles ne décrivent aucun objet — on les
+  pose quand on n'a pas décidé ce que la chose est, et c'est ce qui les rend
+  reconnaissables entre toutes. Quand aucun objet n'est nommable, on met le mot seul.
+- **Aucun détail qui ne survit pas à sa taille d'usage.** Une icône se juge à 13 px,
+  pas à 24.
 - **Aucune seconde famille typographique, aucune police distante.** La contrainte
   « zéro requête réseau » est antérieure à cette identité et lui est supérieure.
 - **Aucune signature de mouvement au-delà du monogramme.** La règle de fréquence du

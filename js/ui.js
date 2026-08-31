@@ -657,7 +657,7 @@
      * un sujet encore vide le dit avec des mots. */
     var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
       topic.messages.length ? countChip("message", topic.messages.length, "message") : null,
-      topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
+      topic.proposals.length ? countChip("options", topic.proposals.length, "proposition") : null,
       topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "conclusion") : null
     ]);
     if (!counts.childNodes.length) {
@@ -699,7 +699,7 @@
 
     var body;
     if (!all.length) {
-      body = emptyState("sparkle", "Aucun sujet pour l'instant",
+      body = emptyState("message", "Aucun sujet pour l'instant",
         "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet.",
         el("button", {
           class: "btn btn-primary", type: "button",
@@ -1061,7 +1061,7 @@
           class: "btn", type: "button",
           onclick: function () { App.go("#/topic/" + topic.id + "/proposals"); }
         }, [
-          icon("idea", 17),
+          icon("options", 17),
           el("span", { text: "Propositions" }),
           topic.proposals.length ? el("span", { class: "badge tone-neutral", text: String(topic.proposals.length) }) : null
         ]),
@@ -1183,7 +1183,7 @@
 
     var list = el("div", { class: "stack" });
     if (!topic.proposals.length) {
-      list.appendChild(emptyState("idea", "Aucune proposition",
+      list.appendChild(emptyState("options", "Aucune proposition",
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
@@ -1232,7 +1232,7 @@
       list.appendChild(reveal(el("article", { class: "card card-static stack" + (isLead ? " is-lead" : "") }, [
         el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
           el("div", { class: "pre-wrap", style: { flex: "1" }, text: conclusion.text }),
-          isLead ? el("span", { class: "badge badge-ink lead" }, [icon("star", 13), el("span", { text: "En tête" })]) : null
+          isLead ? el("span", { class: "badge badge-ink lead" }, [icon("lead", 13), el("span", { text: "En tête" })]) : null
         ]),
         el("div", { class: "card-meta" }, [
           icon("user", 13),
@@ -1499,7 +1499,7 @@
         /* Le rejeu vit APRÈS les fonctions utiles et AVANT le diagnostic technique :
          * c'est une aide, pas un réglage, et encore moins une donnée de dépannage. */
         reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("sparkle", "Présentation"),
+          sectionTitle("presentation", "Présentation"),
           /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces
            * fonctions n'existent pas, et l'écran des Réglages — donc le diagnostic
            * et la synchronisation manuelle — ne se rendrait plus du tout. */
@@ -1509,7 +1509,7 @@
             onclick: function () {
               if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
             } },
-          [icon("sparkle", 16), el("span", { text: "Revoir la présentation" })])
+          [icon("presentation", 16), el("span", { text: "Revoir la présentation" })])
         ]), 3),
         reveal(diagRows, 4)
       ])
@@ -1560,7 +1560,7 @@
         var node = findDraftNode("composer:" + topic.id);
         if (node) { node.focus(); }
       }),
-      sheetAction("idea", "Créer une proposition", function () {
+      sheetAction("options", "Créer une proposition", function () {
         UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
       }),
       mine ? sheetAction(locked ? "lock" : "edit", locked ? "Modifier (verrouillé)" : "Modifier", function () {
@@ -1991,7 +1991,7 @@
         + "proposition."
     },
     proposals: {
-      icon: "idea",
+      icon: "options",
       eyebrow: "Propositions",
       title: "Les idées deviennent des propositions",
       text: "Une proposition se vote pour, contre ou abstention, un vote par "
@@ -2417,7 +2417,7 @@
     if (document.querySelector(".update-banner")) { return; }
     bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
-      icon("sparkle", 17),
+      icon("update", 17),
       el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",

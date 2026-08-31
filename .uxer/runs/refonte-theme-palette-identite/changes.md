@@ -37,6 +37,15 @@ Suivent : `index.html` (fond anti-flash et `theme-color` du mode clair), le
 tableau de neutres du README, et l'interdit « aucun blanc pur hors impression »
 au noyau d'identité. Les 80 couples tiennent toujours. Voir décision D9.
 
+## Après-livraison — le jeu d'icônes
+
+`js/utils.js` : `star`, `sparkle` et `thumb` retirées, `idea` renommée `options`
+et redessinée, ajout de `lead`, `presentation` et `update`. Onze points d'appel
+re-pointés dans `js/ui.js` et `js/uxer-ui.js`. La règle du jeu — une icône nomme
+un objet ou une action, jamais un affect — est écrite en tête du jeu et au noyau
+d'identité, avec l'interdit sur les trois figures nommées. `docs/ONBOARDING.md`
+suit. Voir décision D10.
+
 ## Non touché, et c'est délibéré
 
 La structure des écrans, la navigation, le modèle de données, le backend, la

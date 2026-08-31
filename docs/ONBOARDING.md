@@ -492,7 +492,7 @@ l'accroche déjà affichée à l'entrée, « Préparer les réunions de l'équip
 |---|---|---|---|---|
 | 1 / 5 | Les sujets | `message` | un sujet = un point à traiter ; où l'on en ajoute | Passer |
 | 2 / 5 | Le débat | `users` | **le geste non devinable** : appuyer sur une bulle | Passer |
-| 3 / 5 | Propositions et votes | `idea` | trois voix, un vote par personne, la barre de répartition | Passer |
+| 3 / 5 | Propositions et votes | `options` | trois voix, un vote par personne, la barre de répartition | Passer |
 | 4 / 5 | La conclusion | `checkCircle` | choix unique, mention « En tête » | Passer |
 | 5 / 5 | La réunion | `print` | la synthèse projetable ; où revoir la présentation | Commencer |
 
@@ -595,7 +595,7 @@ réseau (R8).
 
 Nouvelle carte dans `screenSettings`, insérée **entre** la carte « Réunion » et
 le bloc de diagnostic (`js/ui.js:1319`) — après les fonctions utiles, avant la
-technique : surtitre `sparkle` « Présentation », une ligne d'état (« Vue le … » /
+technique : surtitre `presentation` « Présentation », une ligne d'état (« Vue le … » /
 « Passée » / « Non vue »), un bouton `btn-outline btn-block` « Revoir la
 présentation ».
 

@@ -104,7 +104,7 @@
     var nav = make("nav", "ux-flow");
     nav.setAttribute("aria-label", "Parcours du sujet");
     nav.appendChild(flowStep("Discussion", "message", "#/topic/" + topic.id, route.name === "topic", topic.messages.length));
-    nav.appendChild(flowStep("Propositions", "idea", "#/topic/" + topic.id + "/proposals", route.name === "proposals", topic.proposals.length));
+    nav.appendChild(flowStep("Propositions", "options", "#/topic/" + topic.id + "/proposals", route.name === "proposals", topic.proposals.length));
     nav.appendChild(flowStep("Consensus", "checkCircle", "#/topic/" + topic.id + "/conclusion", route.name === "conclusion", topic.conclusions.length));
     topbar.parentNode.insertBefore(nav, topbar.nextSibling);
 

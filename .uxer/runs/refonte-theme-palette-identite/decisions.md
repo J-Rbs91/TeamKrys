@@ -120,6 +120,33 @@ tiennent, et c'est le script qui le dit, pas la prudence. L'interdit « aucun
 blanc pur hors impression » entre au noyau d'identité, sans quoi il reviendrait
 au premier composant ajouté.
 
+## D10 — Le jeu d'icônes cesse de qualifier
+
+Second retour du demandeur : « les icônes font encore trop IA, notamment
+l'étoile ». Le constat porte, et il désigne quelque chose de plus précis qu'un
+goût — trois figures du jeu ne nommaient aucun objet du produit :
+
+| Figure | Ce qu'elle disait | Où | Ce qu'elle remplace désormais |
+|---|---|---|---|
+| Étoile | « c'est bien » — une note, un favori, une récompense, dont aucun n'existe ici | Badge « En tête » d'un consensus | `lead` : trois barres décroissantes, miniature exacte de la barre de vote |
+| Étincelle | « c'est magique » — la signature la plus reconnaissable d'une interface produite par défaut | État vide des sujets, section « Présentation », bandeau de mise à jour | `message`, `presentation` (pile d'écrans), `update` (flèche dans le bac) |
+| Ampoule | « quelle idée » — et le mauvais objet : une proposition n'est pas une inspiration, c'est une option formulée pour être votée | Toute la couche « propositions » | `options` : deux options alignées, à la manière d'un bulletin |
+
+`thumb`, jamais employée, est retirée — une icône ne se justifie que par son
+usage.
+
+La règle qui empêche le retour est écrite dans le jeu lui-même et au noyau
+d'identité : **une icône nomme un objet ou une action ; elle ne qualifie rien.**
+Quand aucun objet n'est nommable, on met le mot seul.
+
+**Deux dessins ont été refaits après les avoir regardés**, ce qui est le seul
+moyen de le savoir. `options` divergeait d'abord en deux branches — plus juste
+conceptuellement, mais illisible à 13 px, où il se lisait comme une flèche.
+`presentation` portait un indicateur de progression en pastilles sous l'écran :
+à 13 et 16 px, les pastilles disparaissaient purement et simplement. D'où le
+second interdit : un détail qui ne survit pas à sa taille d'usage n'est pas un
+détail.
+
 ## Attribution
 
 Proposition construite à partir du corpus local UXER et de la matière extraite

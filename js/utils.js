@@ -58,7 +58,16 @@
    * en SVG dans le document : aucune police d'icônes, aucune requête réseau,
    * et un rendu identique sur iPhone, Android et poste fixe — contrairement
    * aux emoji, dont le dessin change d'un système à l'autre.
-   * Le trait hérite de `currentColor` : une icône suit toujours son texte. */
+   * Le trait hérite de `currentColor` : une icône suit toujours son texte.
+   *
+   * RÈGLE DU JEU : une icône nomme un objet ou une action du produit. Elle ne
+   * qualifie rien, elle ne récompense rien, elle ne promet rien.
+   * Sont donc proscrites les trois figures qui ne décrivent aucun objet et se
+   * contentent d'un affect — l'étincelle (« c'est magique »), l'étoile (« c'est
+   * bien »), l'ampoule (« quelle idée »). Elles étaient ici toutes les trois, et
+   * elles sont la signature la plus reconnaissable d'une interface produite par
+   * défaut : on les pose quand on n'a pas décidé ce que la chose EST.
+   * Une icône sans objet nommable ne s'ajoute pas ; on met le mot seul. */
   var SVG_NS = "http://www.w3.org/2000/svg";
 
   var ICON_PATHS = {
@@ -72,7 +81,13 @@
     send: ["M12 20V5", "M5.5 11.5 12 5l6.5 6.5"],
     settings: ["M4 7h10", "M18 7h2", "M4 12h4", "M12 12h8", "M4 17h9", "M17 17h3",
       "M16 7a2 2 0 1 0 0-.01z", "M10 12a2 2 0 1 0 0-.01z", "M15 17a2 2 0 1 0 0-.01z"],
-    idea: ["M9.5 17h5", "M10 20h4", "M12 3a6 6 0 0 0-3.6 10.8c.5.4.8 1 .9 1.6h5.4c.1-.6.4-1.2.9-1.6A6 6 0 0 0 12 3z"],
+    /* Une proposition n'est pas une étincelle d'inspiration : c'est une option
+     * formulée pour être votée, et le produit s'arrête volontairement là. D'où
+     * deux options alignées, à la manière d'un bulletin, et non l'ampoule du
+     * brainstorm — qui décrivait le mauvais objet en plus d'être un cliché.
+     * Un premier dessin faisait diverger un trait en deux branches : plus juste
+     * conceptuellement, illisible à 13 px, où il se lisait comme une flèche. */
+    options: ["M4.5 7h3.5v3.5h-3.5z", "M11.5 8.75h8", "M4.5 13.5h3.5V17h-3.5z", "M11.5 15.25h8"],
     check: ["M4.5 12.5 9.5 17.5 19.5 6.5"],
     checkCircle: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M8 12.2l2.8 2.8L16 9.5"],
     message: ["M5.7 4.5h12.6A1.7 1.7 0 0 1 20 6.2v7.6a1.7 1.7 0 0 1-1.7 1.7H10l-3.5 3.3v-3.3h-.8A1.7 1.7 0 0 1 4 13.8V6.2a1.7 1.7 0 0 1 1.7-1.7z"],
@@ -91,9 +106,21 @@
     sync: ["M20 12a8 8 0 0 1-13.7 5.6", "M4 12a8 8 0 0 1 13.7-5.6", "M17.7 3.4v3.2h-3.2", "M6.3 20.6v-3.2h3.2"],
     print: ["M7 9V4h10v5", "M7 17H4.5v-6a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v6H17", "M7 14h10v6H7z"],
     archive: ["M3.5 5.5h17V9h-17z", "M5.5 9v10.5h13V9", "M10 12.5h4"],
-    star: ["M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.7l5.4-.8z"],
-    thumb: ["M7 10.5V20H4.5v-9.5z", "M7 10.5 11 4c1.4 0 2.2 1 2 2.4L12.6 9h4.9c1.3 0 2.2 1.1 1.9 2.3l-1.5 6.3c-.2 1-1 1.4-2 1.4H7"],
-    sparkle: ["M12 3.5l1.7 4.4 4.4 1.7-4.4 1.7L12 15.7l-1.7-4.4L5.9 9.6l4.4-1.7z", "M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"],
+    /* « En tête » ne se dit pas avec une étoile : une étoile note, met en favori
+     * ou récompense, et aucune des trois n'a lieu ici. Ce qui est en tête est
+     * ce qui rassemble le plus — donc trois barres décroissantes, qui sont la
+     * miniature exacte de la barre de vote du produit. */
+    lead: ["M4.5 7h15", "M4.5 12h9", "M4.5 17h4.5"],
+    /* Une pile d'écrans qu'on parcourt : c'est exactement ce que la présentation
+     * EST, et l'icône décrit donc l'objet au lieu de promettre de la magie.
+     * Le premier dessin portait l'indicateur de progression en pastilles sous
+     * l'écran ; à 13 et 16 px elles disparaissaient purement et simplement. Un
+     * détail qui ne survit pas à la taille d'usage n'est pas un détail. */
+    presentation: ["M8 4.5h11.5V16", "M4.5 8h11v11.5h-11z"],
+    /* Une mise à jour se télécharge et s'installe. La flèche dans le bac est la
+     * forme conventionnelle, et la convention est le bon choix ici : c'est du
+     * chrome, et six des sept dimensions du produit restent conventionnelles. */
+    update: ["M12 4v9.5", "M8.3 10 12 13.7 15.7 10", "M5 16.5v3h14v-3"],
     doc: ["M6 3.5h8l4 4V20.5H6z", "M14 3.5V8h4", "M9 12.5h6", "M9 16h4"],
     info: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 11v5.5", "M12 7.6v.8"],
     warning: ["M12 4.5 21 19.5H3z", "M12 10v4", "M12 16.6v.8"],
