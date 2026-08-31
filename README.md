@@ -59,7 +59,10 @@ js/app.js                  démarrage, navigation, verrou, actions utilisateur
 service-worker.js          hors ligne : précache de la coquille, critique et optionnel
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
+docs/IDENTITE_VISUELLE.md  le noyau d'identité : pourquoi le produit est ainsi
 docs/                      installation, guide utilisateur, checklist de test
+tools/check-contrast.py    relit les jetons du thème et échoue sous le seuil
+tools/build-icons.py       régénère les icônes depuis une source unique
 apps-script/Code.gs        backend : stockage Drive, verrou, dédup, protocole
 apps-script/appsscript.json manifeste du projet Apps Script
 tests/parity.test.js       parité client / backend, action par action
@@ -74,39 +77,92 @@ tests/navigation.test.js   contrat du geste retour : profondeurs déclarées, po
 
 ## Direction artistique
 
-Le registre visé est celui des outils collaboratifs où l'on discute, propose et
-décide : **chrome neutre, contenu au premier plan, une seule couleur d'accent**.
-Les jetons sont en tête de [`css/app.css`](css/app.css).
+Le parti pris tient en une phrase, et tout le fichier de style en découle :
 
-> Ce registre a remplacé le précédent — « atelier chaud », transposition de
-> [HorizonX](https://horizonx.so/) — en version 1.5.0. Les deux ne répondaient
-> pas à la même question. L'ancien cherchait à ne ressembler à aucun autre outil
-> interne : fond crème, surfaces en verre, rayons de 30 px, ombres de 70 px,
-> grain imprimé. Celui-ci cherche à se faire oublier pendant qu'on travaille
-> dedans, plusieurs fois par jour, debout, en magasin. Ce qui a été retiré
-> l'a été parce que c'était **du décor sans empilement réel derrière**, pas
-> parce que c'était laid.
+> **La couleur ne dit qu'une chose : où en est l'accord.**
+> Froid = ce sur quoi l'équipe converge. Chaud = ce qui diverge encore.
+> Tout le reste — cartes, bulles, texte, séparateurs — est en neutre.
+
+Les jetons sont en tête de [`css/app.css`](css/app.css) ; le raisonnement, la
+matière dont il est tiré et les territoires écartés sont dans
+[`docs/IDENTITE_VISUELLE.md`](docs/IDENTITE_VISUELLE.md). Les deux ne se
+recopient pas : l'un porte les valeurs, l'autre les raisons.
+
+> Ce registre — « deux voix qui convergent » — a remplacé le précédent, un
+> chrome neutre à accent teal unique, en version 1.12.0. Le précédent n'avait
+> aucun défaut : il était accessible, cohérent, et il se faisait oublier pendant
+> qu'on travaillait dedans. C'était exactement le problème. Il était aussi
+> transposable tel quel à n'importe quel outil d'équipe — **sans faute ne veut
+> pas dire reconnaissable**, et une interface qui pourrait habiller quatre
+> produits sans rapport n'appartient à aucun des quatre.
+
+### Ce que la couleur signifie
+
+BrainstO. sert à faire converger des positions divergentes. C'est la seule chose
+que le produit fait, donc c'est la seule chose que la couleur dit. Deux teintes,
+un sens chacune, et rien d'autre :
+
+| Teinte | Ce qu'elle signifie | Où elle apparaît |
+|---|---|---|
+| **L'accord** — bleu d'encre | ce sur quoi l'équipe converge | vote « pour » · proposition retenue · sujet prêt pour la réunion · Consensus · point du monogramme · et le chrome, parce que le chrome sert à produire cet accord |
+| **La voix** — terre cuite | ce qui diverge encore | vote « contre » · proposition en débat. **Jamais ailleurs** |
+
+La conséquence se lit sans lire un mot : sur un sujet qui a convergé, **le chaud
+a disparu de l'écran**. La convergence n'est pas décrite par un libellé, elle est
+visible par soustraction. C'est la signature principale du produit.
+
+Deux règles la protègent, et ce sont elles qui font le travail :
+
+- **Un seul aplat coloré par surface.** Hors barre de vote, une seule des deux
+  teintes est dépensée en aplat sur une même surface ; l'autre ne peut y
+  apparaître qu'en trait ou en encre. Sans cette règle, la bi-teinte se lit comme
+  une décoration dès que l'écran devient dense. La barre de vote est la **seule**
+  exception, et c'en est la raison d'être : c'est le seul endroit où la divergence
+  est une quantité, donc le seul où les deux teintes doivent se comparer côte à
+  côte.
+- **Deux couches chromatiques disjointes.** La couche de délibération n'emploie
+  que les deux voix et le neutre. La couche technique — synchronisation, erreur,
+  action destructive — n'emploie que le vert, le carmin et l'ocre, et n'emploie
+  jamais les deux voix. Pas de vert « pour », pas de rouge « contre », pas d'ocre
+  « en débat ». C'est ce qui fait que cinq teintes ne sont pas une dispersion ;
+  si la séparation se relâche, elles en redeviennent une.
+
+Un corollaire qui surprend et qui se défend : **une proposition écartée n'est pas
+une erreur**. Elle est neutre, pas rouge — le rouge appartient à la couche
+technique, et une équipe qui tranche contre une option n'a rien fait de mal.
 
 ### L'échelle de neutres
 
-C'est le changement structurant, et il précède celui de la palette : cinq
-couleurs ne donnaient pas de quoi hiérarchiser. Le fichier porte désormais
-**douze paliers d'ardoise froide** (teinte ~205°, chroma volontairement basse),
-assez teintés pour ne pas être un gris d'usine, assez neutres pour que l'accent
-reste la seule couleur qu'on remarque.
+Douze paliers de **grège chaude** (teinte ~40°, chroma volontairement basse), et
+la température est une décision : le produit est fait de texte écrit par l'équipe
+et il a remplacé un tableur partagé. C'est le registre du document, pas celui du
+verre. C'est aussi ce qui fait que le bleu se lit comme le **seul élément froid**
+de l'écran — un accent froid sur une assiette froide ne crée aucune tension, et
+c'est ce qui arrivait avant.
 
-Ils ne sont pas choisis à l'œil : chaque palier est **construit puis vérifié par
-ratio de contraste**, dans les deux modes, et sur les trois fonds où il peut
-apparaître — surface, canvas, surface creuse. Le contrôle qui ne trouve jamais
-rien est celui qu'on ne fait que sur le fond principal.
+Les paliers ne sont pas choisis à l'œil : chacun est **construit puis vérifié par
+ratio de contraste**, dans les deux modes, et sur les quatre fonds où il peut
+apparaître — surface, canvas, surface creuse, feuille. Le contrôle qui ne trouve
+jamais rien est celui qu'on ne fait que sur le fond principal.
 
 | Rôle | Clair | Sombre | Ratio le plus défavorable |
 |---|---|---|---|
-| Texte | `#17202A` | `#E8EEF3` | 14,1:1 · 13,2:1 |
-| Texte secondaire (`--muted`) | `#55646F` | `#A3B1BC` | 5,2:1 · 7,0:1 |
-| Texte tertiaire (`--faint`) | `#5B6874` | `#8E9DA8` | 4,9:1 · 5,5:1 |
-| Bord de champ (`--line-field`) | `#7C8A95` | `#6B7A85` | 3,0:1 · 3,5:1 |
-| Filet décoratif (`--line`) | `#DDE4EA` | `#24313A` | — |
+| Surface (`--n-0`) | `#FDFAF4` | `#1C1915` | — |
+| Fond (`--canvas`) | `#F2EDE4` | `#0F0D0B` | — |
+| Texte | `#201C17` | `#EEEAE3` | 13,1:1 · 13,6:1 |
+| Texte secondaire (`--muted`) | `#534B40` | `#B3AA9C` | 6,7:1 · 7,3:1 |
+| Texte tertiaire (`--faint`) | `#695F52` | `#9A9082` | 4,9:1 · 5,4:1 |
+| Bord de champ (`--line-field`) | `#827969` | `#78705F` | 3,3:1 · 3,4:1 |
+| Filet décoratif (`--line`) | `#DCD5C7` | `#2B2721` | — |
+
+**Le palier 0 n'est pas blanc**, et c'est la seule chose de cette échelle qui se
+remarque avant d'être expliquée. Un blanc pur posé sur une assiette chaude ne se
+lit pas comme du papier : il se lit comme un trou froid découpé dedans, et il
+ramène le registre clinique que l'échelle existe pour quitter. Toute la plaque
+claire descend donc d'un cran — c'est le **rapport** entre `--surface` et
+`--canvas` qui détache une carte, pas la clarté absolue de la carte. L'encre
+posée sur un aplat (`--on-accord`, `--on-voix`, `--on-danger`) est ce même papier
+et non du blanc pur, pour la même raison.
 
 Deux jetons portent la conformité et ne doivent pas être confondus :
 `--line` **habille** (filets, séparateurs — aucune information n'en dépend)
@@ -116,83 +172,93 @@ contrôles, et tient seul le seuil de 3:1 exigé par le critère WCAG 2.2
 — seuil dont la spécification précise qu'il **ne s'arrondit pas** : 2,999:1 ne
 passe pas.
 
-### Un seul accent
+### Les deux voix, en valeurs
 
-Le Dark Teal d'origine (`#124559`) ne pouvait servir ni de fond ni d'encre : il
-échouait au contraste des deux côtés. Il n'a pas été abandonné, il a été
-**remonté en luminosité et en saturation** jusqu'à pouvoir faire les deux.
-
-C'est la **seule couleur non sémantique du fichier**, et elle se dépense en cinq
-endroits, jamais ailleurs : action principale, sélection (réaction choisie, vote
-émis), focus, « mes » messages, et le point du monogramme. Partout ailleurs, du
-neutre. L'identité ne passe pas par une couleur répandue — elle passe par la
-typographie, le rythme d'espacement et ce point d'accent unique.
-
-**Deux jetons, pas un.** `--accent` est l'accent **en trait** — contour de
-focus, bord de champ actif, liseré, point du monogramme. `--accent-surface` est
-l'accent **en aplat** — bouton principal, FAB, bulle, réaction choisie.
+**Deux jetons par teinte, pas un.** `--accord` est l'accord **en trait** —
+contour de focus, bord de champ actif, liseré, point du monogramme.
+`--accord-surface` est l'accord **en aplat** — bouton principal, FAB, pastille.
 
 | | Clair | Sombre |
 |---|---|---|
-| `--accent` (trait) | `#0E6D84` | `#4FC3DD` |
-| — sur la surface | 5,93:1 | 7,48:1 |
-| `--accent-surface` (aplat) | `#0E6D84` | `#0D4F61` |
-| — encre posée dessus (`--on-accent`) | `#FFFFFF` — 5,93:1 | `#E8EEF3` — 7,78:1 |
-| — encre secondaire (`--on-accent-soft`) | `#D5E8ED` — 4,69:1 | `#9FC4D1` — 4,89:1 |
+| `--accord` (trait) | `#23479C` | `#8FB2F2` |
+| — sur la surface | 8,56:1 | 7,60:1 |
+| `--accord-surface` (aplat) | `#23479C` | `#2A4D9E` |
+| — encre posée dessus (`--on-accord`) | `#FFFFFF` — 8,56:1 | `#EEEAE3` — 6,60:1 |
+| — encre secondaire (`--on-accord-soft`) | `#CCD7F0` — 5,93:1 | `#B8C9EE` — 4,76:1 |
+| `--voix` (trait et encre) | `#9A3F22` | `#E0906A` |
+| `--voix-strong` (le seul aplat qu'elle se permet) | `#B4522C` | `#E0906A` |
 
-En mode clair les deux coïncident ; en mode sombre non, et c'est tout l'intérêt
-de les avoir séparés. Un teal assez lumineux pour se lire **en trait** sur du
-noir devient une lampe une fois **étalé** sur la largeur d'une bulle. Le
-constat est aussi chiffré : sur le teal clair, l'encre posée dessus plafonnait à
-4,77:1 et une encre secondaire lisible était impossible — il n'y avait plus de
-place entre le blanc et le fond. L'aplat descend donc là où le trait monte.
+En mode clair les deux jetons d'accord coïncident ; en mode sombre non, et c'est
+tout l'intérêt de les avoir séparés. Un bleu assez lumineux pour se lire **en
+trait** sur du noir devient une lampe une fois **étalé** sur la largeur d'un
+bouton. L'aplat descend donc là où le trait monte. La terre cuite, elle, ne porte
+jamais de texte : elle n'a qu'une valeur claire en mode sombre.
 
-> `--on-accent-soft` n'existait pas avant cette refonte, et c'est le jeton qui
-> a corrigé le défaut le plus discret du fichier : l'horodatage d'une bulle
-> était rendu par `opacity: .55`. Sur un aplat teinté, cela donne **2,93:1** —
-> sous le seuil, et parfaitement invisible tant qu'on ne mesure pas. Une encre
-> secondaire est désormais une **couleur**, jamais une opacité.
+> Les segments de la barre de vote ont leurs jetons propres (`--vote-accord`,
+> `--vote-voix`, `--vote-abstention`) plutôt que de réemployer l'aplat d'accord.
+> En mode sombre, un segment doit être **clair** pour tenir 3:1 sur le fond de la
+> barre, alors que le bouton principal doit rester **sombre** pour porter du
+> texte clair. Les deux besoins divergent, donc les deux jetons se séparent.
+
+**« Mes » messages sont la seule bulle pleine du fil, et elle est pleine
+d'encre — pas d'accord.** C'est le point où le parti pris se paie : « c'est moi
+qui ai écrit ça » n'est pas une information d'accord, et un bleu ici dirait la
+même chose qu'un bleu sur le Consensus. L'information reste portée deux fois —
+remplissage **et** alignement à droite — donc elle ne dépend ni de la couleur ni
+d'une seule dimension.
+
+### La vérification n'est plus une relecture
+
+```bash
+python3 tools/check-contrast.py
+```
+
+Le script lit les jetons de `css/app.css` — il ne les recopie pas, sans quoi il y
+aurait deux vérités —, résout les `var(--…)` et les `rgba()` posés sur leur fond
+réel, et **échoue sous le seuil**. Trente-huit couples par mode, soixante-seize
+au total : texte courant, texte secondaire, horodatages, encres posées sur un
+aplat, pastilles sur leur fond pâle, bords de champ, contours de focus, segments
+de vote, pastilles de synchronisation. Bibliothèque standard uniquement, et la CI
+l'exécute à chaque poussée.
+
+C'est ce qui manquait : la phrase « tous les couples ont été vérifiés au ratio »
+vieillissait à chaque modification de jeton, parce qu'elle reposait sur une
+relecture à l'œil.
 
 ### Surfaces, élévation, rayons
 
 | Élément | Valeur | Pourquoi ici |
 |---|---|---|
-| Fond | `#F5F7F9` le jour, `#0C1317` la nuit | fond légèrement teinté, surfaces blanches par-dessus : c'est ce rapport qui détache une carte, pas une ombre |
+| Fond | `#F2EDE4` le jour, `#0F0D0B` la nuit | fond teinté, surfaces de papier par-dessus : c'est ce rapport qui détache une carte, pas une ombre |
 | Élévations | **deux**, `--shadow-1` et `--shadow-2` | une par empilement réel. Le niveau 2 est réservé à ce qui flotte : feuilles, fenêtres, FAB, bandeau |
 | Rayons | 12 px cartes · 10 px · 8 px champs · 6 px · pastilles | trois valeurs cohérentes par niveau. Un rayon généreux adoucit tout, y compris les défauts d'alignement |
-| Flou | trois surfaces, pas une de plus | barre du haut, barre d'actions, composeur — les seules qui passent réellement au-dessus d'un contenu qui défile |
+| Flou | deux surfaces, pas une de plus | barre collante et feuilles — les seules qui passent réellement au-dessus d'un contenu qui défile |
 | Espacements | rapport **6 / 14 / 26** | intra-champ, inter-blocs, inter-sections. C'est le rapport qui fait lire les groupes, pas la valeur absolue |
 | Typographie | système, échelle fluide (`clamp`), cinq tailles | la hiérarchie passe d'abord par la **graisse**, ce qui préserve la densité |
 
-Le flou mérite sa ligne. Il était généralisé — cartes, bulles, feuilles,
-fenêtres, bandeau, séparateurs de jour. Un texte posé sur une surface floutée a
-un contraste qui **dépend de ce qui passe derrière**, donc qui change au
-défilement ; et deux couches fixes plein écran, dont une en mode de fusion, se
-recomposent en continu sur un téléphone d'entrée de gamme. Ce qui restait
-justifié est resté ; le reste est devenu opaque par construction — ce qui a
-aussi vidé de moitié le repli `@supports` de fin de fichier.
-
-L'**aura** (trois dégradés radiaux plein écran) et le **grain** (bruit SVG en
-`mix-blend-mode`) ont disparu pour la même raison : ils cassaient la platitude
-d'un fond crème qui n'existe plus.
+La typographie mérite sa ligne, parce que c'est la dimension qu'on aurait
+normalement fait porter l'écart : elle est le meilleur rapport qualité-prix des
+sept dimensions possibles. Elle est ici **hors jeu**, et pour une raison
+antérieure à toute considération esthétique — la règle « zéro requête réseau »
+interdit toute police distante, et une famille système varie trop d'un appareil à
+l'autre pour porter une identité. C'est aussi pourquoi l'écart est dépensé sur la
+couleur : la contrainte a décidé avant nous.
 
 Le thème sombre n'est pas l'inverse du clair : les valeurs y sont
 **recalculées**. Le rapport s'y inverse — le fond est le palier le plus sombre
 et les surfaces remontent, là où le clair a un fond teinté et des surfaces
-blanches. L'élévation passe par la luminosité de la surface, parce que sur du
-`#0C1317` une ombre diffuse ne fait flotter personne quel que soit son alpha :
-l'ombre n'y élève plus, elle ancre. Les couleurs de statut se désaturent pour ne
-pas vibrer. **Le clair reste le mode de conception** : c'est lui qui est lu en
-magasin, en plein jour, et c'est là que les défauts de hiérarchie se voient.
+de papier. L'élévation passe par la luminosité de la surface, parce que sur du
+`#0F0D0B` une ombre diffuse ne fait flotter personne quel que soit son alpha :
+l'ombre n'y élève plus, elle ancre. Un sombre chaud est le réglage le plus
+délicat du fichier — trop teinté il vire au sépia, pas assez il redevient
+l'ardoise qu'on vient de quitter —, donc la chroma des neutres y est plus basse
+qu'en clair, à teinte égale. **Le clair reste le mode de conception** : c'est lui
+qui est lu en magasin, en plein jour, et c'est là que les défauts de hiérarchie
+se voient.
 
-Enfin, la palette ne contient **aucune teinte chaude hors signal**. Le rouge de
-danger (`#BF2F2F` le jour, `#FF8B7C` la nuit) et l'ambre d'avertissement sont
-les seuls emprunts du fichier : un danger teinté teal serait un contresens
-sémantique, pas un choix esthétique. Ils restent cantonnés au signal — jamais
-une surface, jamais un texte courant — et chaque statut porte **une couleur et
-une forme** (pastille, icône, libellé), de sorte qu'aucune information ne repose
-sur la teinte seule.
-
+Enfin, chaque statut porte **une couleur et une forme** (pastille, icône,
+libellé), de sorte qu'aucune information ne repose sur la teinte seule — y
+compris la barre de vote, doublée par sa légende et par ses compteurs.
 ### Mouvement
 
 La règle est la **fréquence** : plus une action est répétée, plus son animation

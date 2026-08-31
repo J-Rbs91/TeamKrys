@@ -1,39 +1,52 @@
 /* BrainstO. — feuille de style unique.
  *
- * Direction artistique : « poste de travail ». Le registre visé est celui des
- * outils collaboratifs où l'on discute, propose et décide — chrome neutre,
- * contenu au premier plan, une seule couleur d'accent. Il a remplacé le
- * registre « atelier chaud » (transposition de HorizonX) parce que les deux
- * ne répondaient pas à la même question : l'un cherchait à ne ressembler à
- * aucun outil interne, celui-ci cherche à se faire oublier pendant qu'on
- * travaille dedans, plusieurs fois par jour, debout, en magasin.
+ * Direction artistique : « deux voix qui convergent ». Le registre visé n'est
+ * plus celui d'un chrome neutre à accent unique — il était correct, accessible
+ * et transposable tel quel à n'importe quel outil d'équipe, ce qui est
+ * exactement le défaut qu'on lui reprochait. Le parti pris se dit en une
+ * phrase, et le fichier entier en découle :
  *
- * Les cinq décisions qui font ce registre, et ce qu'elles ont remplacé :
+ *   LA COULEUR NE DIT QU'UNE CHOSE : OÙ EN EST L'ACCORD.
+ *   Froid = ce sur quoi l'équipe converge. Chaud = ce qui diverge encore.
+ *   Tout le reste — cartes, bulles, texte, séparateurs — est en neutre.
  *
- *   ÉCHELLE DE NEUTRES     — 12 paliers d'ardoise froide, construits par ratio
- *     au lieu de 5 couleurs   de contraste et non à l'œil. C'est là que se joue
- *                             la qualité perçue : cinq couleurs ne donnaient pas
- *                             de quoi hiérarchiser sans emprunter au bleu.
+ * Le raisonnement, la matière dont il est tiré et les territoires écartés sont
+ * dans docs/IDENTITE_VISUELLE.md. Ce fichier porte les valeurs ; ce fichier-là
+ * porte les raisons. Ne pas dupliquer l'un dans l'autre.
  *
- *   UN SEUL ACCENT         — le teal de marque cesse d'être un fond pour
- *     au lieu d'un teal        devenir la seule dépense de couleur : action
- *     répandu partout         principale, sélection, focus, point du logo.
- *                             Partout ailleurs, du neutre.
+ * Les quatre décisions qui font ce registre, et ce qu'elles ont remplacé :
  *
- *   SURFACES FRANCHES      — le flou ne subsiste que là où une surface flotte
- *     au lieu du verre        RÉELLEMENT au-dessus d'un contenu qui doit rester
- *     généralisé              perceptible : barre collante et feuilles. Ailleurs,
- *                             un aplat opaque — le contraste d'un texte ne doit
- *                             pas dépendre de ce qui passe derrière.
+ *   DEUX TEINTES QUI SE     — `--accord` (bleu d'encre) et `--voix` (terre
+ *     RÉSOLVENT               cuite). Elles coexistent tant qu'un sujet est en
+ *     au lieu d'un accent     discussion ; sur un sujet prêt et sur le
+ *     unique et constant      Consensus, le chaud a DISPARU. La convergence
+ *                             n'est pas décrite, elle se lit par soustraction.
  *
- *   DEUX ÉLÉVATIONS        — une ombre par empilement réel, pas par décoration.
- *     au lieu de sept          Le reste se délimite par l'espacement, puis par un
- *     ombres diffuses         filet. Les rayons descendent de 30 px à 12/8/6.
+ *   DEUX COUCHES             — la couche de délibération n'emploie que les deux
+ *     CHROMATIQUES             voix et le neutre ; la couche technique (synchro,
+ *     DISJOINTES               erreur, action destructive) n'emploie que le
+ *     au lieu d'une palette    vert, le carmin et l'ocre. Elles ne se croisent
+ *     sémantique unique        jamais. C'est ce qui fait que cinq teintes ne
+ *                             sont pas une dispersion — si la séparation se
+ *                             relâche, elles en redeviennent une.
  *
- *   MOUVEMENT FONCTIONNEL  — la cascade de révélation passe de 550 ms à 220 ms
- *     au lieu de la cascade   et de 36 px à 8 px. Ce qui est vu cent fois par
- *                             jour doit être court ; ce qui est vu une fois par
- *                             ouverture — le monogramme — peut être un geste.
+ *   NEUTRE CHAUD             — grège d'encre et de papier, teinte ~40°, chroma
+ *     au lieu de l'ardoise     très basse. Le produit est fait de texte écrit
+ *     froide à ~205°           par l'équipe et il a remplacé un tableur ; c'est
+ *                             le registre du document, pas celui du verre. Et
+ *                             c'est ce qui fait que le bleu est le SEUL froid
+ *                             de l'écran.
+ *
+ *   UN SEUL APLAT COLORÉ     — hors barre de vote, une seule des deux teintes
+ *     PAR SURFACE              est dépensée en aplat sur une même surface ;
+ *                             l'autre ne peut y apparaître qu'en trait ou en
+ *                             encre. C'est le garde-fou qui empêche la
+ *                             bi-teinte de se lire comme une décoration sur un
+ *                             écran dense. La barre de vote est la SEULE
+ *                             exception, et c'en est la raison d'être : c'est
+ *                             le seul endroit où la divergence est une
+ *                             quantité, donc le seul où les deux teintes
+ *                             doivent se comparer côte à côte.
  *
  * Trois règles n'ont PAS bougé, elles priment sur l'esthétique :
  *  - zéro requête réseau : typographie système, icônes en SVG inline. Aucune
@@ -43,42 +56,51 @@
  *  - `--line-field` tient seul le seuil de 3:1 des composants d'interface
  *    (WCAG 2.2, SC 1.4.11) : il délimite, quand `--line` ne fait qu'habiller.
  *
- * Tous les couples de ce fichier ont été vérifiés au ratio, dans les deux
- * modes, y compris sur les surfaces creuses et élevées — pas seulement sur le
- * fond principal, qui est le contrôle qui ne trouve jamais rien.
+ * Tous les couples de ce fichier sont vérifiés au ratio, dans les deux modes,
+ * y compris sur les surfaces creuses et élevées — pas seulement sur le fond
+ * principal, qui est le contrôle qui ne trouve jamais rien. La vérification
+ * n'est plus une relecture à l'œil : `python3 tools/check-contrast.py` relit
+ * les jetons de CE fichier et échoue sous le seuil. La CI l'exécute.
  */
 
 /* ============================================================== Jetons ==== */
 
 :root {
   /* — Échelle de neutres ---------------------------------------------- */
-  /* Ardoise froide, teinte ~205°, chroma volontairement basse : assez teintée
-     pour ne pas être un gris d'usine, assez neutre pour que l'accent reste la
-     seule couleur qu'on remarque. Douze paliers, parce qu'une hiérarchie à
-     trois niveaux de gris s'écrase dès qu'un écran devient dense. */
-  --n-0: #ffffff;
-  --n-25: #fbfcfd;
-  --n-50: #f5f7f9;
-  --n-100: #eaeef2;
-  --n-200: #dde4ea;
-  --n-300: #cbd5dd;
-  --n-400: #a9b6c0;
-  --n-500: #7c8a95;
-  --n-600: #5b6874;
-  --n-700: #55646f;
-  --n-800: #37444f;
-  --n-900: #17202a;
-  --n-950: #0c1317;
+  /* Grège chaude, teinte ~40°, chroma volontairement basse : assez teintée
+     pour lire comme du papier plutôt que comme un gris d'usine, assez neutre
+     pour que les deux voix restent les seules couleurs qu'on remarque. Douze
+     paliers, parce qu'une hiérarchie à trois niveaux de gris s'écrase dès
+     qu'un écran devient dense.
+     LE PALIER 0 N'EST PAS BLANC, et c'est la correction la plus visible du
+     fichier. Un blanc pur posé sur une assiette chaude ne se lit pas comme du
+     papier : il se lit comme un trou froid découpé dedans, et il ramène le
+     registre clinique que cette échelle existe pour quitter. Le papier a une
+     teinte, sinon ce n'est pas du papier. Toute la plaque claire descend d'un
+     cran pour que la carte se détache autant qu'avant — c'est le RAPPORT entre
+     `--surface` et `--canvas` qui détache, pas la clarté absolue de la carte. */
+  --n-0: #fdfaf4;
+  --n-25: #f9f5ee;
+  --n-50: #f2ede4;
+  --n-100: #e8e2d6;
+  --n-200: #dcd5c7;
+  --n-300: #cac2b1;
+  --n-400: #aca391;
+  --n-500: #827969;
+  --n-600: #695f52;
+  --n-700: #534b40;
+  --n-800: #39322a;
+  --n-900: #201c17;
+  --n-950: #12100d;
   /* --n-400, --n-800 et --n-950 ne sont pas référencés aujourd'hui. Ils
      restent : une échelle trouée oblige à improviser un palier intermédiaire
-     le jour où il manque, et c'est ainsi qu'une échelle se met à diverger.
-     Les ALIAS morts, eux, ont été retirés — un alias ne se justifie que par
-     son usage. */
+     le jour où il manque, et c'est ainsi qu'une échelle se met à diverger. */
 
   /* — Fond et surfaces ------------------------------------------------ */
-  /* Le fond est légèrement teinté et les surfaces sont blanches : c'est ce
-     rapport — et non une ombre — qui fait qu'une carte se détache. Le blanc
-     clinique reste donc du côté du contenu, jamais du côté du décor. */
+  /* Le fond est teinté et les surfaces sont du papier — pas du blanc : c'est
+     le RAPPORT entre les deux, et non une ombre, qui fait qu'une carte se
+     détache. Aucun blanc pur n'entre dans ce fichier hors impression : posé
+     sur une assiette chaude, il se lit comme un trou froid découpé dedans. */
   --canvas: var(--n-50);
   --surface: var(--n-0);
   --surface-soft: var(--n-25);
@@ -95,61 +117,92 @@
      horodatages et qui est le niveau qu'on affaiblit sans y penser. */
   --ink: var(--n-900);
   --on-ink: var(--n-0);
+  /* Encre secondaire POSÉE SUR l'encre — horodatage d'une bulle à soi. Une
+     couleur explicite, pas une opacité : un texte à 55 % sur un aplat sombre
+     tombe sous le seuil, et c'est invisible tant qu'on ne mesure pas. 7,11:1. */
+  --on-ink-soft: var(--n-400);
   --text: var(--n-900);
   --muted: var(--n-700);
   --faint: var(--n-600);
 
-  /* — Accent ---------------------------------------------------------- */
-  /* Descendant direct du Dark Teal d'origine (#124559), remonté en luminosité
-     et en saturation jusqu'à ce qu'il porte du texte blanc ET tienne comme
-     texte sur fond clair — ce que #124559 ne faisait ni l'un ni l'autre.
-     5,93:1 sur blanc, 5,52:1 sur le canvas, 5,06:1 sur son propre fond pâle.
-     C'est la SEULE couleur non sémantique du fichier. */
-  /* --accent est l'accent en TRAIT : contour de focus, bord de champ actif,
-     liseré, point du monogramme. Petites surfaces, jamais un aplat.
-     --accent-surface est l'accent en APLAT : bouton principal, FAB, bulle,
-     réaction choisie. En mode clair les deux coïncident ; en mode sombre non,
-     et c'est tout l'intérêt de les avoir séparés — un teal clair suffisamment
-     lumineux pour se lire en trait sur du noir devient une lampe une fois
-     étalé sur la largeur d'une bulle. */
-  --accent: #0e6d84;
-  --accent-surface: #0e6d84;
-  --accent-surface-hover: #0b5a6d;
-  --accent-bg: #e3eff3;
-  --on-accent: #ffffff;
-  /* Encre SECONDAIRE sur l'accent (horodatage d'une bulle, compteur d'une
-     réaction choisie). Une couleur explicite, pas une opacité : un texte à
-     55 % sur un aplat teinté tombe à 2,93:1, sous le seuil, et c'est
-     invisible tant qu'on ne mesure pas. Celle-ci tient 4,69:1. */
-  --on-accent-soft: #d5e8ed;
+  /* — Voix 1 : l'accord ----------------------------------------------- */
+  /* Bleu d'encre. C'est la couleur du produit : ce que l'équipe fabrique, un
+     accord. Elle porte donc AUSSI le chrome — action principale, focus, champ
+     actif — parce que le chrome sert à produire cet accord.
+     `--accord` est l'accord en TRAIT (contour de focus, bord de champ actif,
+     liseré, point du monogramme) ; `--accord-surface` est l'accord en APLAT
+     (bouton principal, FAB, pastille). En mode clair les deux coïncident ; en
+     mode sombre non, et c'est tout l'intérêt de les avoir séparés — un bleu
+     assez lumineux pour se lire en trait sur du noir devient une lampe une
+     fois étalé sur la largeur d'un bouton.
+     8,56:1 sur blanc, 7,79:1 sur le canvas, 5,93:1 pour l'encre secondaire
+     posée dessus. */
+  --accord: #23479c;
+  --accord-surface: #23479c;
+  --accord-surface-hover: #1b3878;
+  --accord-bg: #e7ebf7;
+  /* L'encre posée sur un aplat est le papier, pas du blanc pur : un blanc pur
+     y rouvrirait exactement le trou froid que le palier 0 vient de fermer. */
+  --on-accord: #fdfaf4;
+  /* Encre SECONDAIRE sur l'accord (horodatage, compteur d'une réaction
+     choisie). Une couleur explicite, pas une opacité : un texte à 55 % sur un
+     aplat teinté tombe sous le seuil, et c'est invisible tant qu'on ne mesure
+     pas. Celle-ci tient 5,93:1. */
+  --on-accord-soft: #ccd7f0;
+
+  /* — Voix 2 : la divergence ------------------------------------------ */
+  /* Terre cuite. Elle ne signifie qu'une chose : il reste du désaccord. Elle
+     n'entre JAMAIS dans le chrome — ni bouton, ni barre, ni focus, ni lien.
+     Sa présence est une information, son absence en est une aussi.
+     `--voix` est l'encre et le trait (6,76:1 sur blanc, 6,15:1 sur canvas) ;
+     `--voix-strong` est le seul aplat qu'elle se permet, celui du segment de
+     vote, et il tient le seuil de 3:1 des composants sur son fond (4,14:1). */
+  --voix: #9a3f22;
+  --voix-strong: #b4522c;
+  --voix-bg: #f7e8e0;
+  --on-voix: #fdfaf4;
+
+  /* — Couche technique ------------------------------------------------ */
+  /* Synchronisation, erreur, action destructive. Ces trois teintes ne disent
+     jamais rien de l'accord et n'apparaissent jamais dans la délibération :
+     pas de vert « pour », pas de rouge « contre », pas d'ocre « en débat ».
+     Le carmin est tenu à distance de la terre cuite en teinte comme en
+     saturation — ils ne se rencontrent sur aucun écran, mais deux rouges
+     voisins finiraient par se rencontrer un jour.
+     Chaque statut porte une couleur ET une forme (pastille, icône, libellé) :
+     aucune information ne repose sur la teinte seule. */
+  --success: #1f6b45;
+  --success-bg: #e2efe7;
+  --danger: #a4162c;
+  --danger-bg: #fbe9ea;
+  --on-danger: #fdfaf4;
+  --warning: #7a5209;
+  --warning-bg: #f7edda;
+  --info: var(--accord);
+  --info-bg: var(--accord-bg);
+  --neutral-bg: var(--n-100);
+
+  /* — Segments de vote ------------------------------------------------ */
+  /* La barre de vote est la surface où la divergence est une DONNÉE, et c'est
+     l'intensité maximale de l'application. Ses trois segments ont leurs jetons
+     propres plutôt que de réemployer `--accord-surface` : en mode sombre, un
+     aplat doit être CLAIR pour tenir 3:1 sur le fond de la barre, alors que le
+     bouton principal doit rester sombre pour porter du texte clair. Les deux
+     besoins divergent, donc les deux jetons se séparent. */
+  --vote-accord: #23479c;
+  --vote-voix: #b4522c;
+  --vote-abstention: #7b7262;
 
   /* — Traits ---------------------------------------------------------- */
   /* `--line` habille (séparateurs, filets : aucune information n'en dépend).
      `--line-field` délimite — bord des champs, contour des contrôles — et tient
      seul le seuil de 3:1 des composants d'interface. Vérifié sur les trois
-     fonds : 3,54:1 sur surface, 3,30:1 sur canvas, 3,04:1 sur creux. */
+     fonds : 4,12:1 sur surface, 3,75:1 sur canvas, 3,40:1 sur creux. */
   --line: var(--n-200);
   --line-strong: var(--n-300);
   --line-field: var(--n-500);
   --glass-line: var(--n-200);
   --abstain: var(--n-500);
-
-  /* — Sémantique ------------------------------------------------------ */
-  /* Chaque statut porte une couleur ET une forme (pastille, icône, libellé) :
-     aucune information ne repose sur la teinte seule. Les trois signaux sont
-     les seules teintes chaudes ou vertes du fichier, et restent cantonnés au
-     signal — jamais une surface, jamais un texte courant. */
-  --success: #0f7a52;
-  --success-bg: #e2f3ea;
-  --danger: #bf2f2f;
-  --danger-bg: #fdeded;
-  --on-danger: #ffffff;
-  --warning: #8a5300;
-  --warning-bg: #fbf0dd;
-  --info: var(--accent);
-  --info-bg: var(--accent-bg);
-  --neutral-bg: var(--n-100);
-
   /* — Rayons ---------------------------------------------------------- */
   /* Trois valeurs, cohérentes par niveau, plus la pastille. Les 30 px des
      cartes sont tombés à 12 : un rayon généreux adoucit tout, y compris les
@@ -166,12 +219,12 @@
        niveau 1 — ce qui est posé sur le fond et se manipule (cartes, champs) ;
        niveau 2 — ce qui flotte au-dessus du contenu (feuilles, FAB, menus).
      La carte ne « lévite » plus : elle se détache par le rapport entre sa
-     surface blanche et le fond teinté, ce qui coûte zéro pixel de flou. */
-  --shadow-1: 0 1px 2px rgba(23, 32, 42, 0.06), 0 1px 1px rgba(23, 32, 42, 0.04);
-  --shadow-2: 0 8px 24px rgba(23, 32, 42, 0.12), 0 2px 6px rgba(23, 32, 42, 0.06);
+     surface de papier et le fond teinté, ce qui coûte zéro pixel de flou. */
+  --shadow-1: 0 1px 2px rgba(33, 29, 24, 0.06), 0 1px 1px rgba(33, 29, 24, 0.04);
+  --shadow-2: 0 8px 24px rgba(33, 29, 24, 0.12), 0 2px 6px rgba(33, 29, 24, 0.06);
   --shadow-card: var(--shadow-1);
-  --shadow-cta: 0 1px 2px rgba(23, 32, 42, 0.12);
-  --scrim: rgba(12, 19, 23, 0.44);
+  --shadow-cta: 0 1px 2px rgba(33, 29, 24, 0.12);
+  --scrim: rgba(18, 16, 13, 0.44);
 
   /* — Flou ------------------------------------------------------------ */
   /* Ne subsiste que sur les deux surfaces qui passent réellement au-dessus du
@@ -246,81 +299,97 @@
 /* Le sombre n'est pas l'inverse du clair : les valeurs sont RECALCULÉES, pas
    retournées. L'élévation y passe par la luminosité de la surface — sur un fond
    sombre une ombre diffuse ne fait flotter personne, quel que soit son alpha —
-   et les couleurs de statut se désaturent pour ne pas vibrer sur du sombre.
+   et les deux voix s'y inversent en rôle : c'est le TRAIT qui s'éclaircit et
+   l'APLAT qui reste sombre, sans quoi un bouton devient une lampe.
+   Le sombre chaud est le réglage le plus délicat du fichier : trop teinté il
+   vire au sépia, pas assez il redevient l'ardoise qu'on vient de quitter. La
+   chroma des neutres y est donc plus basse qu'en clair, à teinte égale.
    Le clair reste le mode de conception : c'est lui qui est lu en magasin, en
    plein jour, et c'est là que les défauts de hiérarchie se voient. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --n-0: #1b262d;
-    --n-25: #18232a;
-    --n-50: #141d23;
-    --n-100: #111a20;
-    --n-200: #24313a;
-    --n-300: #33434e;
-    --n-400: #4d5d68;
-    --n-500: #6b7a85;
-    --n-600: #8e9da8;
-    --n-700: #a3b1bc;
-    --n-800: #c6d1d9;
-    --n-900: #e8eef3;
-    --n-950: #0c1317;
+    --n-0: #1c1915;
+    --n-25: #171410;
+    --n-50: #14110e;
+    --n-100: #100e0b;
+    --n-200: #2b2721;
+    --n-300: #3b352d;
+    --n-400: #574f43;
+    --n-500: #78705f;
+    --n-600: #9a9082;
+    --n-700: #b3aa9c;
+    --n-800: #d3cbbf;
+    --n-900: #eeeae3;
+    --n-950: #0c0a08;
 
     /* Ici le fond est le palier le PLUS sombre et les surfaces remontent :
-       exactement l'inverse du clair, où le fond est teinté et la surface
-       blanche. C'est ce qui fait que le sombre n'est pas une inversion. */
-    --canvas: #0c1317;
-    --surface: #141d23;
-    --surface-soft: #111a20;
-    --surface-strong: #1b262d;
-    --surface-opaque: #1b262d;
-    --surface-sunken: #0f171c;
-    --surface-sheet: #17222a;
+       exactement l'inverse du clair, où le fond est teinté et la surface est
+       du papier. C'est ce qui fait que le sombre n'est pas une inversion. */
+    --canvas: #0f0d0b;
+    --surface: #1c1915;
+    --surface-soft: #171410;
+    --surface-strong: #232019;
+    --surface-opaque: #232019;
+    --surface-sunken: #131110;
+    --surface-sheet: #201d17;
 
-    --ink: #e8eef3;
-    --on-ink: #0c1317;
-    --text: #e8eef3;
-    --muted: #a3b1bc;
-    --faint: #8e9da8;
+    --ink: #eeeae3;
+    --on-ink: #0f0d0b;
+    --on-ink-soft: #574f43;
+    --text: #eeeae3;
+    --muted: #b3aa9c;
+    --faint: #9a9082;
 
-    /* Le teal clair vire au criard sur fond sombre s'il garde sa saturation :
-       il est éclairci et légèrement désaturé. 7,48:1 sur la surface la plus
-       claire, et il porte du texte très sombre (7,94:1). */
-    --accent: #4fc3dd;
-    /* L'aplat descend là où le trait monte : 7,78:1 pour l'encre posée dessus,
-       4,89:1 pour l'encre secondaire — deux valeurs inatteignables sur le teal
-       clair, qui plafonnait la première à 4,77:1 et interdisait la seconde. */
-    --accent-surface: #0d4f61;
-    --accent-surface-hover: #115f75;
-    --accent-bg: rgba(79, 195, 221, 0.14);
-    --on-accent: #e8eef3;
-    --on-accent-soft: #9fc4d1;
+    /* L'accord en trait s'éclaircit (7,60:1 sur la surface la plus claire) ;
+       l'accord en aplat reste sombre et porte de l'encre claire (6,60:1), ce
+       que le bleu clair ne permettrait pas — il plafonnerait bien en dessous
+       et interdirait l'encre secondaire, qui tient ici 4,76:1. */
+    --accord: #8fb2f2;
+    --accord-surface: #2a4d9e;
+    --accord-surface-hover: #355cb4;
+    --accord-bg: rgba(143, 178, 242, 0.14);
+    --on-accord: #eeeae3;
+    --on-accord-soft: #b8c9ee;
 
-    --line: #24313a;
-    --line-strong: #33434e;
-    --line-field: #6b7a85;
-    --glass-line: rgba(232, 238, 243, 0.08);
-    --abstain: #6b7a85;
+    /* La terre cuite ne porte jamais de texte : elle n'a donc qu'une valeur
+       claire ici, et le segment de vote l'emploie telle quelle — un aplat
+       sombre ne tiendrait pas 3:1 sur le fond de la barre. */
+    --voix: #e0906a;
+    --voix-strong: #e0906a;
+    --voix-bg: rgba(224, 144, 106, 0.14);
+    --on-voix: #0f0d0b;
 
-    --success: #5fd39b;
-    --success-bg: rgba(95, 211, 155, 0.14);
-    --danger: #ff8b7c;
-    --danger-bg: rgba(255, 139, 124, 0.14);
-    --on-danger: #0c1317;
-    --warning: #e6b169;
-    --warning-bg: rgba(230, 177, 105, 0.14);
-    --info: var(--accent);
-    --info-bg: var(--accent-bg);
-    --neutral-bg: rgba(232, 238, 243, 0.07);
+    /* Couche technique : désaturée pour ne pas vibrer sur du sombre, et le
+       carmin reste tenu à distance de la terre cuite. */
+    --success: #4fbf88;
+    --success-bg: rgba(79, 191, 136, 0.14);
+    --danger: #f4899a;
+    --danger-bg: rgba(244, 137, 154, 0.14);
+    --on-danger: #0f0d0b;
+    --warning: #dcae63;
+    --warning-bg: rgba(220, 174, 99, 0.14);
+    --info: var(--accord);
+    --info-bg: var(--accord-bg);
+    --neutral-bg: rgba(238, 234, 227, 0.07);
+
+    --vote-accord: #8fb2f2;
+    --vote-voix: #e0906a;
+    --vote-abstention: #8a8071;
+
+    --line: #2b2721;
+    --line-strong: #3b352d;
+    --line-field: #78705f;
+    --glass-line: rgba(238, 234, 227, 0.08);
+    --abstain: #78705f;
 
     /* L'ombre n'élève plus, elle ancre. Ce qui élève, c'est l'écart de
        luminance entre `--surface` et `--canvas`, doublé du liseré clair. */
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
     --shadow-cta: 0 1px 2px rgba(0, 0, 0, 0.45);
-    --scrim: rgba(4, 8, 10, 0.66);
+    --scrim: rgba(6, 5, 4, 0.66);
   }
 }
-
 * { box-sizing: border-box; }
 
 html, body {
@@ -347,10 +416,9 @@ body {
 /* L'aura (trois dégradés radiaux plein écran) et le grain (bruit SVG posé en
    `mix-blend-mode` sur toute la page) ont été RETIRÉS ici, et c'est une
    décision, pas un oubli.
-   Ils servaient à casser la platitude d'un fond crème. Le fond n'est plus
-   crème : c'est un neutre légèrement teinté sur lequel des surfaces blanches
-   se détachent d'elles-mêmes — la profondeur vient du rapport entre les deux,
-   pas d'une texture posée par-dessus. Ce qui restait était donc décoratif, et
+   Ils servaient à casser la platitude d'un fond crème. La profondeur vient
+   désormais du rapport entre un fond teinté et des surfaces de papier qui s'en
+   détachent d'elles-mêmes, pas d'une texture posée par-dessus. Ce qui restait était donc décoratif, et
    ce décor coûtait deux couches fixes plein écran, dont une en mode de fusion,
    recomposées à chaque défilement sur un téléphone d'entrée de gamme.
    Le fond uni est déclaré sur `html, body` ci-dessus. */
@@ -645,14 +713,14 @@ p { margin: 0; }
 
 /* L'action principale est la première dépense d'accent. Une seule par écran. */
 .btn-primary {
-  background: var(--accent-surface);
-  color: var(--on-accent);
+  background: var(--accord-surface);
+  color: var(--on-accord);
   border-color: transparent;
   box-shadow: var(--shadow-cta);
 }
 
-.btn-primary:not(:disabled):hover { background: var(--accent-surface-hover); }
-.btn-primary:not(:disabled):active { background: var(--accent-surface-hover); }
+.btn-primary:not(:disabled):hover { background: var(--accord-surface-hover); }
+.btn-primary:not(:disabled):active { background: var(--accord-surface-hover); }
 .btn-primary:disabled { background: var(--surface-sunken); color: var(--faint); }
 
 .btn-outline {
@@ -739,8 +807,8 @@ p { margin: 0; }
   padding: 0 20px 0 16px;
   border: 0;
   border-radius: var(--radius-chip);
-  background: var(--accent-surface);
-  color: var(--on-accent);
+  background: var(--accord-surface);
+  color: var(--on-accord);
   font-size: var(--fs-sm);
   font-weight: 650;
   letter-spacing: -0.015em;
@@ -753,7 +821,7 @@ p { margin: 0; }
   transition: background var(--dur-fast) linear;
 }
 
-.fab:active { background: var(--accent-surface-hover); }
+.fab:active { background: var(--accord-surface-hover); }
 
 @media (prefers-reduced-motion: no-preference) {
   .screen--enter .fab {
@@ -841,9 +909,9 @@ p { margin: 0; }
 .textarea { resize: vertical; min-height: 108px; line-height: 1.55; }
 
 .input:focus, .textarea:focus, .select:focus {
-  border-color: var(--accent);
+  border-color: var(--accord);
   background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  box-shadow: 0 0 0 3px var(--accord-bg);
 }
 
 .input::placeholder, .textarea::placeholder { color: var(--faint); }
@@ -995,6 +1063,13 @@ p { margin: 0; }
 .badge-outline { background: transparent; border: 1px solid var(--line-strong); }
 
 /* Teintes sémantiques : fond pâle + texte saturé, un couple par état. */
+/* Les deux premières pastilles appartiennent à la couche de DÉLIBÉRATION :
+   elles disent où en est l'accord, et elles seules ont le droit de porter les
+   deux voix. Les quatre suivantes appartiennent à la couche TECHNIQUE et n'en
+   portent jamais aucune. La séparation est ce qui empêche cinq teintes de
+   redevenir une dispersion — voir l'en-tête du fichier. */
+.tone-accord { background: var(--accord-bg); color: var(--accord); }
+.tone-voix { background: var(--voix-bg); color: var(--voix); }
 .tone-success { background: var(--success-bg); color: var(--success); }
 .tone-danger { background: var(--danger-bg); color: var(--danger); }
 .tone-warning { background: var(--warning-bg); color: var(--warning); }
@@ -1080,7 +1155,7 @@ p { margin: 0; }
 
 /* Le monogramme est désormais un <svg> construit par Utils.logoMark : un
    anneau en `border` ne sait pas se tracer, un trait SVG si. Sa couleur suit
-   `currentColor` pour l'anneau et `--accent` pour le point — la seule dépense
+   `currentColor` pour l'anneau et `--accord` pour le point — la seule dépense
    d'accent de l'écran. Le geste vit dans la section « Révélation ». */
 .logo-mark {
   display: block;
@@ -1118,7 +1193,7 @@ p { margin: 0; }
 .status-pending .status-dot { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
 .status-offline .status-dot { background: var(--faint); }
 .status-error .status-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-bg); }
-.status-local .status-dot { background: var(--info); box-shadow: 0 0 0 3px var(--info-bg); }
+.status-local .status-dot { background: var(--faint); box-shadow: 0 0 0 3px var(--neutral-bg); }
 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
@@ -1262,20 +1337,25 @@ p { margin: 0; }
   transition: background var(--dur-fast) linear;
 }
 
-/* « Mes » messages portent l'accent. C'est la seule information du fil qui a
-   besoin d'être distinguée d'un coup d'œil, et elle l'est aussi par
-   l'alignement à droite — la couleur ne la porte pas seule. */
+/* « Mes » messages sont la SEULE bulle pleine du fil, et elle est pleine
+   d'encre — pas d'accord. C'est le point où le parti pris se paie : la couleur
+   ne dit qu'où en est l'accord, et « c'est moi qui ai écrit ça » n'est pas une
+   information d'accord. Un bleu ici dirait la même chose qu'un bleu sur le
+   Consensus, et le système ne voudrait plus rien dire sur l'écran le plus vu
+   du produit.
+   L'information reste portée deux fois — remplissage ET alignement à droite —
+   donc elle ne dépend ni de la couleur ni d'une seule dimension. */
 .msg-row.mine .bubble {
-  background: var(--accent-surface);
+  background: var(--ink);
   border-color: transparent;
-  color: var(--on-accent);
+  color: var(--on-ink);
   border-bottom-right-radius: 4px;
 }
 
 .msg-row:not(.mine) .bubble { border-bottom-left-radius: 4px; }
 .msg-row.grouped .bubble { border-radius: 14px; }
 .bubble:active { background: var(--surface-sunken); }
-.msg-row.mine .bubble:active { background: var(--accent-surface-hover); }
+.msg-row.mine .bubble:active { background: var(--n-800); }
 
 .bubble-text { white-space: pre-wrap; font-size: 15.5px; line-height: 1.45; }
 
@@ -1291,9 +1371,9 @@ p { margin: 0; }
   color: var(--faint);
 }
 
-/* Sur une bulle d'accent, l'encre secondaire est un jeton dédié : `--faint`
-   est calibré pour les fonds neutres et deviendrait illisible ici. */
-.msg-row.mine .bubble-meta { color: var(--on-accent-soft); }
+/* Sur une bulle d'encre, l'encre secondaire est un jeton dédié : `--faint`
+   est calibré pour les fonds clairs et deviendrait illisible ici. */
+.msg-row.mine .bubble-meta { color: var(--on-ink-soft); }
 
 .quote {
   position: relative;
@@ -1402,13 +1482,13 @@ p { margin: 0; }
    repérer « ce que j'ai voté » sans relire les six marques. */
 .reaction.mine {
   border-color: transparent;
-  background: var(--accent-surface);
-  color: var(--on-accent);
+  background: var(--accord-surface);
+  color: var(--on-accord);
   border-color: transparent;
 }
 
-.reaction.mine .mark { color: var(--on-accent); }
-.reaction.mine .reaction-count { color: var(--on-accent); }
+.reaction.mine .mark { color: var(--on-accord); }
+.reaction.mine .reaction-count { color: var(--on-accord); }
 .reaction-count { font-size: 11px; font-weight: 700; color: var(--muted); }
 
 /* ============================================================ Composeur ==== */
@@ -1452,14 +1532,14 @@ p { margin: 0; }
   height: var(--tap);
   border: 0;
   border-radius: 50%;
-  background: var(--accent-surface);
-  color: var(--on-accent);
+  background: var(--accord-surface);
+  color: var(--on-accord);
   cursor: pointer;
   box-shadow: var(--shadow-cta);
   transition: background var(--dur-fast) linear;
 }
 
-.send-btn:active { background: var(--accent-surface-hover); }
+.send-btn:active { background: var(--accord-surface-hover); }
 .send-btn:disabled { background: var(--surface-sunken); color: var(--faint); box-shadow: none; }
 
 .quote-preview {
@@ -1626,13 +1706,13 @@ p { margin: 0; }
 
 .emoji-btn.mine {
   border-color: transparent;
-  background: var(--accent-surface);
-  color: var(--on-accent);
+  background: var(--accord-surface);
+  color: var(--on-accord);
   border-color: transparent;
 }
 
-.emoji-btn.mine .mark { color: var(--on-accent); }
-.emoji-btn.mine .emoji-label { color: var(--on-accent); }
+.emoji-btn.mine .mark { color: var(--on-accord); }
+.emoji-btn.mine .emoji-label { color: var(--on-accord); }
 
 .modal {
   width: 100%;
@@ -1967,7 +2047,14 @@ p { margin: 0; }
 /* ========================================================== Propositions ==== */
 
 /* Barre de vote : trois segments détachés et arrondis plutôt qu'un dégradé
-   continu — on compare des blocs, pas une jauge. */
+   continu — on compare des blocs, pas une jauge.
+   C'est l'intensité maximale du parti pris dans l'application, et c'est
+   justifié : ici la divergence n'est pas une métaphore, c'est la donnée
+   affichée. Le froid est ce qui rassemble, le chaud est ce qui s'y oppose, le
+   neutre s'abstient. Sur un sujet qui a convergé, la barre est bleue et le
+   chaud a disparu — c'est la signature principale du produit, lisible sans
+   lire un mot. Elle reste doublée par la légende et par les compteurs :
+   aucune information ne repose sur la teinte seule. */
 .vote-bar {
   display: flex;
   gap: 3px;
@@ -1979,9 +2066,9 @@ p { margin: 0; }
 }
 
 .vote-bar span { display: block; height: 100%; border-radius: var(--radius-chip); transition: width var(--dur-slow) var(--ease-out); }
-.vote-for { background: var(--success); }
-.vote-against { background: var(--danger); }
-.vote-abstain { background: var(--abstain); }
+.vote-for { background: var(--vote-accord); }
+.vote-against { background: var(--vote-voix); }
+.vote-abstain { background: var(--vote-abstention); }
 
 .vote-legend { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -1998,13 +2085,22 @@ p { margin: 0; }
 }
 
 .legend-chip .swatch { width: 7px; height: 7px; border-radius: 50%; }
-.legend-for .swatch { background: var(--success); }
-.legend-against .swatch { background: var(--danger); }
-.legend-abstain .swatch { background: var(--abstain); }
+.legend-for .swatch { background: var(--vote-accord); }
+.legend-against .swatch { background: var(--vote-voix); }
+.legend-abstain .swatch { background: var(--vote-abstention); }
 
 .vote-actions { display: flex; gap: 7px; }
 .vote-actions .btn { flex: 1; }
-.vote-actions .btn.active { background: var(--accent-surface); color: var(--on-accent); border-color: transparent; }
+/* Le bouton de vote choisi prend la couleur de CE QU'IL EXPRIME, pas une
+   couleur de sélection. Un « contre » qui s'allumerait en bleu dirait la même
+   chose qu'un Consensus, et le système cesserait de vouloir dire quelque chose
+   à l'endroit exact où l'on vote. L'abstention se remplit en neutre : elle
+   n'est ni un accord ni une divergence. Le remplissage double `aria-pressed`,
+   il ne le remplace pas. */
+.vote-actions .btn.active { border-color: transparent; font-weight: 700; }
+.vote-actions .btn.active[data-vote="for"] { background: var(--accord-surface); color: var(--on-accord); }
+.vote-actions .btn.active[data-vote="against"] { background: var(--voix-strong); color: var(--on-voix); }
+.vote-actions .btn.active[data-vote="abstain"] { background: var(--n-200); color: var(--text); border-color: var(--line-field); }
 
 .pre-wrap { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
 
@@ -2014,7 +2110,7 @@ p { margin: 0; }
    crier. Liseré INTERNE plutôt qu'un `border-left` : sur un coin arrondi, une
    bordure latérale déborde en croissant et ressemble à un défaut de rendu. */
 .card.is-lead {
-  box-shadow: inset 3px 0 0 var(--accent), var(--shadow-1);
+  box-shadow: inset 3px 0 0 var(--accord), var(--shadow-1);
 }
 
 /* ============================================================== Réunion ==== */
@@ -2079,7 +2175,7 @@ p { margin: 0; }
    La seconde règle rétablit le comportement moderne — pas d'anneau au pointeur — et
    elle est elle-même rejetée sur le vieux moteur, où l'anneau apparaît alors aussi au
    doigt. Dégradation acceptable, et dans le bon sens. */
-:focus, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+:focus, :focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
 :focus:not(:focus-visible) { outline: none; }
 
 .visually-hidden {

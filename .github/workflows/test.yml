@@ -40,3 +40,9 @@ jobs:
         run: node tests/uxer-integration.test.js
       - name: Compatibilité navigateurs
         run: node tests/qa/compat-scan.js
+      - name: Contrastes du thème
+        run: python3 tools/check-contrast.py
+      - name: Icônes synchronisées avec le manifeste
+        run: |
+          python3 tools/build-icons.py
+          git diff --exit-code -- assets/icons
