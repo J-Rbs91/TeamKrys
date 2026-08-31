@@ -280,13 +280,14 @@
     ring.style.setProperty("--logo-c", LOGO_C.toFixed(2));
     svg.appendChild(ring);
 
-    /* Le point est la SEULE dépense d'accent de l'écran d'accueil. C'est là que
-     * l'identité se loge — pas dans une couleur répandue sur toute l'interface. */
+    /* Le point est le seul froid de la marque au repos : l'anneau diverge, le
+     * point est ce sur quoi tout converge. C'est là que l'identité se loge —
+     * pas dans une couleur répandue sur toute l'interface. */
     var dot = document.createElementNS(SVG_NS, "circle");
     dot.setAttribute("cx", String(LOGO.dx));
     dot.setAttribute("cy", String(LOGO.dy));
     dot.setAttribute("r", String(LOGO.dr));
-    dot.setAttribute("fill", "var(--accent)");
+    dot.setAttribute("fill", "var(--accord)");
     dot.setAttribute("class", "logo-dot");
     /* Origine de transformation en UNITÉS UTILISATEUR, pas en pourcentage.
      * Un `transform-origin: 50% 50%` sur un élément SVG se résout contre le

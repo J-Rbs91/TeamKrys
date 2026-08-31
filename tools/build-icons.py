@@ -33,9 +33,9 @@ RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ----------------------------------------------------------------- Palette ---
 
-FOND = (0x0C, 0x13, 0x17)      # = manifest background_color, vérifié plus bas
-ANNEAU = (0xE8, 0xEE, 0xF3)    # --n-900 du thème sombre
-POINT = (0x4F, 0xC3, 0xDD)     # --accent du thème sombre
+FOND = (0x0F, 0x0D, 0x0B)      # = manifest background_color, vérifié plus bas
+ANNEAU = (0xEE, 0xEA, 0xE3)    # --n-900 du thème sombre
+POINT = (0x8F, 0xB2, 0xF2)     # --accord du thème sombre
 
 # ---------------------------------------------------------------- Géométrie --
 # Exprimée dans le repère 0–100 de assets/icons/icon.svg, dont ce script est la

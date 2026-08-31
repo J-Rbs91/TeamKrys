@@ -16,8 +16,11 @@
   padding: 4px 2px 2px;
 }
 
+/* « Prêt pour la réunion » est le seul statut de groupe qui porte une couleur,
+   et c'est l'accord : c'est là que l'équipe a convergé. Voir l'en-tête de
+   app.css — la couleur ne dit qu'une chose, où en est l'accord. */
 .product-topic-group[data-topic-status="ready"] .product-topic-group-title {
-  color: var(--success);
+  color: var(--accord);
 }
 
 .product-topic-group[data-topic-status="closed"] {

@@ -17,23 +17,30 @@
   /* Teinte associée à chaque statut : le fond pâle + la couleur saturée
    * donnent l'état avant même la lecture du mot (cf. app.css, .tone-*).
    *
-   * Règle : l'état PAR DÉFAUT reste neutre. « En discussion » et « En vote »
-   * concernent la quasi-totalité des éléments ; les teinter saturerait toute
-   * la liste et plus rien ne ressortirait. La couleur est réservée à ce qui
-   * demande une action ou signale une issue. */
+   * Ces deux tables sont la couche de DÉLIBÉRATION, et elles n'emploient donc
+   * que les deux voix : `tone-accord` pour ce sur quoi l'équipe a convergé,
+   * `tone-voix` pour ce qui diverge encore. Le vert, le carmin et l'ocre
+   * appartiennent à la couche technique — synchronisation, erreur, action
+   * destructive — et n'ont rien à faire ici. Une proposition écartée n'est pas
+   * une erreur : elle est neutre, pas rouge. Voir docs/IDENTITE_VISUELLE.md.
+   *
+   * Règle inchangée : l'état PAR DÉFAUT reste neutre. « En discussion » et
+   * « En vote » concernent la quasi-totalité des éléments ; les teinter
+   * saturerait toute la liste et plus rien ne ressortirait — et la divergence
+   * y est déjà portée, une fois, par la barre de vote. */
   var TOPIC_TONES = {
     open: "tone-neutral",
-    ready: "tone-success",
-    closed: "tone-info",
+    ready: "tone-accord",
+    closed: "tone-neutral",
     archived: "tone-neutral"
   };
 
   var PROPOSAL_TONES = {
     voting: "tone-neutral",
-    selected: "tone-success",
-    debate: "tone-warning",
-    implemented: "tone-success",
-    rejected: "tone-danger"
+    selected: "tone-accord",
+    debate: "tone-voix",
+    implemented: "tone-accord",
+    rejected: "tone-neutral"
   };
 
   function toneBadge(label, tone, extra) {
@@ -1113,13 +1120,17 @@
     Core.VOTE_VALUES.forEach(function (value) {
       voteButtons.appendChild(el("button", {
         class: "btn btn-sm btn-outline" + (myVote === value ? " active" : ""), type: "button",
+        /* Le bouton porte la valeur qu'il exprime : c'est elle qui décide de sa
+         * couleur une fois choisi (cf. app.css, .vote-actions .btn.active). */
+        "data-vote": value,
         "aria-pressed": myVote === value ? "true" : "false",
         onclick: function () { App.actions.setVote(topic.id, proposal.id, value); }
       }, [icon(VOTE_ICONS[value], 15), el("span", { text: Core.VOTE_LABELS[value] })]));
     });
 
     /* Légende sous la barre : chaque couleur est nommée et chiffrée. Une barre
-     * seule oblige à deviner ce que veut dire le rouge. */
+     * seule oblige à deviner ce que veut dire le chaud, et la teinte ne doit
+     * jamais porter l'information toute seule. */
     var legend = el("div", { class: "vote-legend" }, [
       el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.for + " pour" })]),
       el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.against + " contre" })]),
@@ -1406,7 +1417,7 @@
       el("div", { class: "row" }, [
         sectionTitle("link", "Connexion"),
         el("div", { class: "spacer" }),
-        toneBadge(connected ? "Équipe" : "Local", connected ? "tone-success" : "tone-info")
+        toneBadge(connected ? "Équipe" : "Local", connected ? "tone-success" : "tone-neutral")
       ]),
       el("div", { class: "hint", text: connected
         ? "Connecté à l'espace de l'équipe."
