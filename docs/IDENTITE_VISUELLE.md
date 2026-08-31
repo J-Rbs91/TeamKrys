@@ -100,11 +100,17 @@ chaud, sans aucune couleur.
    *Coût accepté :* on perd la saillance immédiate du rouge sur « rejetée » ; le
    libellé et la position la portent.
 
-5. **Le neutre est chaud, et il l'est partout.** L'assiette du produit est une grège
-   d'encre et de papier, pas une ardoise froide. C'est ce qui fait que le bleu se lit
-   comme l'unique élément froid de l'écran.
-   *Coût accepté :* le mode sombre est plus difficile à régler — un sombre chaud vire
-   au sépia s'il est trop teinté, et à l'ardoise s'il ne l'est pas assez.
+5. **Le neutre est chaud, et il l'est partout — y compris là où on met du blanc.**
+   L'assiette du produit est une grège d'encre et de papier, pas une ardoise froide,
+   et la surface la plus claire est du papier, pas du blanc pur. Un blanc pur posé sur
+   une assiette chaude se lit comme un trou froid découpé dedans : il rouvre à lui
+   seul le registre clinique que le reste de l'échelle existe pour quitter. C'est ce
+   qui fait que le bleu se lit comme l'unique élément froid de l'écran.
+   *Coût accepté :* on perd le contraste maximal qu'offrait le blanc pur, donc la
+   marge sur les seuils est plus étroite en mode clair — c'est le script de contrôle
+   qui la tient, pas la prudence. Et le mode sombre est plus difficile à régler : un
+   sombre chaud vire au sépia s'il est trop teinté, et à l'ardoise s'il ne l'est pas
+   assez.
 
 ---
 
@@ -149,6 +155,9 @@ Propres à ce produit :
   vert « pour », pas de rouge « contre », pas d'ocre « en débat ».
 - **Aucune surface décorative colorée.** Un aplat coloré signifie toujours un état
   d'accord, jamais un ornement.
+- **Aucun blanc pur, et aucun noir pur**, hors feuille d'impression — le papier
+  d'imprimante, lui, est réellement blanc. Une encre posée sur un aplat coloré est
+  du papier, pas du blanc.
 - **Aucune seconde famille typographique, aucune police distante.** La contrainte
   « zéro requête réseau » est antérieure à cette identité et lui est supérieure.
 - **Aucune signature de mouvement au-delà du monogramme.** La règle de fréquence du

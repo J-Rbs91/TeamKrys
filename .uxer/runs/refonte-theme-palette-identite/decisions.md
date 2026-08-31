@@ -102,6 +102,24 @@ rester identique à `background_color`.
 Motif : la phrase « tous les couples ont été vérifiés au ratio » vieillissait à
 chaque modification de jeton, parce qu'elle reposait sur une relecture à l'œil.
 
+## D9 — Le palier le plus clair n'est pas blanc
+
+Retour du demandeur après livraison : « le blanc que tu as choisi est trop
+blanc ». Le constat est juste et il était vérifiable sur les captures — les
+surfaces étaient à `#ffffff` sur une assiette chaude, ce qui les fait lire comme
+un trou froid découpé dans le papier plutôt que comme du papier. Le registre
+clinique revenait par la seule surface la plus grande de l'écran.
+
+Toute la plaque claire descend d'un cran, teinte conservée : c'est le **rapport**
+entre la surface et le fond qui détache une carte, pas la clarté absolue de la
+carte. Les encres posées sur un aplat coloré suivent — un blanc pur y rouvrirait
+le même trou.
+
+Coût accepté : la marge sur les seuils se resserre en mode clair. Les 80 couples
+tiennent, et c'est le script qui le dit, pas la prudence. L'interdit « aucun
+blanc pur hors impression » entre au noyau d'identité, sans quoi il reviendrait
+au premier composant ajouté.
+
 ## Attribution
 
 Proposition construite à partir du corpus local UXER et de la matière extraite

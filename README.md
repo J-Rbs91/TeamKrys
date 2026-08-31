@@ -147,11 +147,22 @@ jamais rien est celui qu'on ne fait que sur le fond principal.
 
 | Rôle | Clair | Sombre | Ratio le plus défavorable |
 |---|---|---|---|
-| Texte | `#211D18` | `#EEEAE3` | 13,8:1 · 13,6:1 |
-| Texte secondaire (`--muted`) | `#554D42` | `#B3AA9C` | 6,9:1 · 7,3:1 |
-| Texte tertiaire (`--faint`) | `#6B6255` | `#9A9082` | 4,9:1 · 5,4:1 |
-| Bord de champ (`--line-field`) | `#857C6D` | `#78705F` | 3,4:1 · 3,4:1 |
-| Filet décoratif (`--line`) | `#E0DCD4` | `#2B2721` | — |
+| Surface (`--n-0`) | `#FDFAF4` | `#1C1915` | — |
+| Fond (`--canvas`) | `#F2EDE4` | `#0F0D0B` | — |
+| Texte | `#201C17` | `#EEEAE3` | 13,1:1 · 13,6:1 |
+| Texte secondaire (`--muted`) | `#534B40` | `#B3AA9C` | 6,7:1 · 7,3:1 |
+| Texte tertiaire (`--faint`) | `#695F52` | `#9A9082` | 4,9:1 · 5,4:1 |
+| Bord de champ (`--line-field`) | `#827969` | `#78705F` | 3,3:1 · 3,4:1 |
+| Filet décoratif (`--line`) | `#DCD5C7` | `#2B2721` | — |
+
+**Le palier 0 n'est pas blanc**, et c'est la seule chose de cette échelle qui se
+remarque avant d'être expliquée. Un blanc pur posé sur une assiette chaude ne se
+lit pas comme du papier : il se lit comme un trou froid découpé dedans, et il
+ramène le registre clinique que l'échelle existe pour quitter. Toute la plaque
+claire descend donc d'un cran — c'est le **rapport** entre `--surface` et
+`--canvas` qui détache une carte, pas la clarté absolue de la carte. L'encre
+posée sur un aplat (`--on-accord`, `--on-voix`, `--on-danger`) est ce même papier
+et non du blanc pur, pour la même raison.
 
 Deux jetons portent la conformité et ne doivent pas être confondus :
 `--line` **habille** (filets, séparateurs — aucune information n'en dépend)
@@ -218,7 +229,7 @@ relecture à l'œil.
 
 | Élément | Valeur | Pourquoi ici |
 |---|---|---|
-| Fond | `#F6F4F0` le jour, `#0F0D0B` la nuit | fond légèrement teinté, surfaces blanches par-dessus : c'est ce rapport qui détache une carte, pas une ombre |
+| Fond | `#F2EDE4` le jour, `#0F0D0B` la nuit | fond teinté, surfaces de papier par-dessus : c'est ce rapport qui détache une carte, pas une ombre |
 | Élévations | **deux**, `--shadow-1` et `--shadow-2` | une par empilement réel. Le niveau 2 est réservé à ce qui flotte : feuilles, fenêtres, FAB, bandeau |
 | Rayons | 12 px cartes · 10 px · 8 px champs · 6 px · pastilles | trois valeurs cohérentes par niveau. Un rayon généreux adoucit tout, y compris les défauts d'alignement |
 | Flou | deux surfaces, pas une de plus | barre collante et feuilles — les seules qui passent réellement au-dessus d'un contenu qui défile |
@@ -236,7 +247,7 @@ couleur : la contrainte a décidé avant nous.
 Le thème sombre n'est pas l'inverse du clair : les valeurs y sont
 **recalculées**. Le rapport s'y inverse — le fond est le palier le plus sombre
 et les surfaces remontent, là où le clair a un fond teinté et des surfaces
-blanches. L'élévation passe par la luminosité de la surface, parce que sur du
+de papier. L'élévation passe par la luminosité de la surface, parce que sur du
 `#0F0D0B` une ombre diffuse ne fait flotter personne quel que soit son alpha :
 l'ombre n'y élève plus, elle ancre. Un sombre chaud est le réglage le plus
 délicat du fichier — trop teinté il vire au sépia, pas assez il redevient

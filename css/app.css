@@ -71,28 +71,36 @@
      pour lire comme du papier plutôt que comme un gris d'usine, assez neutre
      pour que les deux voix restent les seules couleurs qu'on remarque. Douze
      paliers, parce qu'une hiérarchie à trois niveaux de gris s'écrase dès
-     qu'un écran devient dense. */
-  --n-0: #ffffff;
-  --n-25: #fbfaf8;
-  --n-50: #f6f4f0;
-  --n-100: #ece9e3;
-  --n-200: #e0dcd4;
-  --n-300: #cfc9be;
-  --n-400: #b0a89a;
-  --n-500: #857c6d;
-  --n-600: #6b6255;
-  --n-700: #554d42;
-  --n-800: #3a342c;
-  --n-900: #211d18;
+     qu'un écran devient dense.
+     LE PALIER 0 N'EST PAS BLANC, et c'est la correction la plus visible du
+     fichier. Un blanc pur posé sur une assiette chaude ne se lit pas comme du
+     papier : il se lit comme un trou froid découpé dedans, et il ramène le
+     registre clinique que cette échelle existe pour quitter. Le papier a une
+     teinte, sinon ce n'est pas du papier. Toute la plaque claire descend d'un
+     cran pour que la carte se détache autant qu'avant — c'est le RAPPORT entre
+     `--surface` et `--canvas` qui détache, pas la clarté absolue de la carte. */
+  --n-0: #fdfaf4;
+  --n-25: #f9f5ee;
+  --n-50: #f2ede4;
+  --n-100: #e8e2d6;
+  --n-200: #dcd5c7;
+  --n-300: #cac2b1;
+  --n-400: #aca391;
+  --n-500: #827969;
+  --n-600: #695f52;
+  --n-700: #534b40;
+  --n-800: #39322a;
+  --n-900: #201c17;
   --n-950: #12100d;
   /* --n-400, --n-800 et --n-950 ne sont pas référencés aujourd'hui. Ils
      restent : une échelle trouée oblige à improviser un palier intermédiaire
      le jour où il manque, et c'est ainsi qu'une échelle se met à diverger. */
 
   /* — Fond et surfaces ------------------------------------------------ */
-  /* Le fond est légèrement teinté et les surfaces sont blanches : c'est ce
-     rapport — et non une ombre — qui fait qu'une carte se détache. Le blanc
-     reste donc du côté du contenu, jamais du côté du décor. */
+  /* Le fond est teinté et les surfaces sont du papier — pas du blanc : c'est
+     le RAPPORT entre les deux, et non une ombre, qui fait qu'une carte se
+     détache. Aucun blanc pur n'entre dans ce fichier hors impression : posé
+     sur une assiette chaude, il se lit comme un trou froid découpé dedans. */
   --canvas: var(--n-50);
   --surface: var(--n-0);
   --surface-soft: var(--n-25);
@@ -133,7 +141,9 @@
   --accord-surface: #23479c;
   --accord-surface-hover: #1b3878;
   --accord-bg: #e7ebf7;
-  --on-accord: #ffffff;
+  /* L'encre posée sur un aplat est le papier, pas du blanc pur : un blanc pur
+     y rouvrirait exactement le trou froid que le palier 0 vient de fermer. */
+  --on-accord: #fdfaf4;
   /* Encre SECONDAIRE sur l'accord (horodatage, compteur d'une réaction
      choisie). Une couleur explicite, pas une opacité : un texte à 55 % sur un
      aplat teinté tombe sous le seuil, et c'est invisible tant qu'on ne mesure
@@ -150,7 +160,7 @@
   --voix: #9a3f22;
   --voix-strong: #b4522c;
   --voix-bg: #f7e8e0;
-  --on-voix: #ffffff;
+  --on-voix: #fdfaf4;
 
   /* — Couche technique ------------------------------------------------ */
   /* Synchronisation, erreur, action destructive. Ces trois teintes ne disent
@@ -165,7 +175,7 @@
   --success-bg: #e2efe7;
   --danger: #a4162c;
   --danger-bg: #fbe9ea;
-  --on-danger: #ffffff;
+  --on-danger: #fdfaf4;
   --warning: #7a5209;
   --warning-bg: #f7edda;
   --info: var(--accord);
@@ -181,7 +191,7 @@
      besoins divergent, donc les deux jetons se séparent. */
   --vote-accord: #23479c;
   --vote-voix: #b4522c;
-  --vote-abstention: #857c6d;
+  --vote-abstention: #7b7262;
 
   /* — Traits ---------------------------------------------------------- */
   /* `--line` habille (séparateurs, filets : aucune information n'en dépend).
@@ -209,7 +219,7 @@
        niveau 1 — ce qui est posé sur le fond et se manipule (cartes, champs) ;
        niveau 2 — ce qui flotte au-dessus du contenu (feuilles, FAB, menus).
      La carte ne « lévite » plus : elle se détache par le rapport entre sa
-     surface blanche et le fond teinté, ce qui coûte zéro pixel de flou. */
+     surface de papier et le fond teinté, ce qui coûte zéro pixel de flou. */
   --shadow-1: 0 1px 2px rgba(33, 29, 24, 0.06), 0 1px 1px rgba(33, 29, 24, 0.04);
   --shadow-2: 0 8px 24px rgba(33, 29, 24, 0.12), 0 2px 6px rgba(33, 29, 24, 0.06);
   --shadow-card: var(--shadow-1);
@@ -313,8 +323,8 @@
     --n-950: #0c0a08;
 
     /* Ici le fond est le palier le PLUS sombre et les surfaces remontent :
-       exactement l'inverse du clair, où le fond est teinté et la surface
-       blanche. C'est ce qui fait que le sombre n'est pas une inversion. */
+       exactement l'inverse du clair, où le fond est teinté et la surface est
+       du papier. C'est ce qui fait que le sombre n'est pas une inversion. */
     --canvas: #0f0d0b;
     --surface: #1c1915;
     --surface-soft: #171410;
@@ -406,10 +416,9 @@ body {
 /* L'aura (trois dégradés radiaux plein écran) et le grain (bruit SVG posé en
    `mix-blend-mode` sur toute la page) ont été RETIRÉS ici, et c'est une
    décision, pas un oubli.
-   Ils servaient à casser la platitude d'un fond crème. Le fond n'est plus
-   crème : c'est un neutre légèrement teinté sur lequel des surfaces blanches
-   se détachent d'elles-mêmes — la profondeur vient du rapport entre les deux,
-   pas d'une texture posée par-dessus. Ce qui restait était donc décoratif, et
+   Ils servaient à casser la platitude d'un fond crème. La profondeur vient
+   désormais du rapport entre un fond teinté et des surfaces de papier qui s'en
+   détachent d'elles-mêmes, pas d'une texture posée par-dessus. Ce qui restait était donc décoratif, et
    ce décor coûtait deux couches fixes plein écran, dont une en mode de fusion,
    recomposées à chaque défilement sur un téléphone d'entrée de gamme.
    Le fond uni est déclaré sur `html, body` ci-dessus. */

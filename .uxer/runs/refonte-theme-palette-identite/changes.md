@@ -24,6 +24,19 @@
 | `README.md` | « Direction artistique » réécrite : ce que la couleur signifie, les deux règles qui la protègent, les valeurs des deux voix, la vérification exécutable |
 | `.claude/agents/qa-mobile-a11y.md` | Le rappel de palette suit, et renvoie au script plutôt qu'à une estimation |
 
+## Après-livraison — correction du palier le plus clair
+
+Le demandeur a signalé que le blanc des surfaces était trop blanc. Toute la
+plaque claire descend d'un cran, teinte conservée : `--n-0` passe du blanc pur
+au papier, et les paliers 25 à 900 suivent pour préserver le rapport qui détache
+une carte. Les encres posées sur un aplat coloré (`--on-accord`, `--on-voix`,
+`--on-danger`) cessent elles aussi d'être du blanc pur. `--vote-abstention` est
+assombri pour regagner la marge que le fond plus sombre lui avait prise.
+
+Suivent : `index.html` (fond anti-flash et `theme-color` du mode clair), le
+tableau de neutres du README, et l'interdit « aucun blanc pur hors impression »
+au noyau d'identité. Les 80 couples tiennent toujours. Voir décision D9.
+
 ## Non touché, et c'est délibéré
 
 La structure des écrans, la navigation, le modèle de données, le backend, la
