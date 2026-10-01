@@ -23,12 +23,13 @@
   color: var(--accord);
 }
 
-.product-topic-group[data-topic-status="closed"] {
-  opacity: 0.88;
-}
-
-.product-topic-group[data-topic-status="archived"] {
-  opacity: 0.76;
+/* « Clôturés » et « Archivés » s'effacent par l'ENCRE, jamais par une opacité de groupe : à
+   0,88 puis 0,76, les petits textes de ces groupes tombaient à 4,17:1 puis 3,29:1 (seuil
+   4,5:1). Le titre de chaque carte passe au jeton secondaire `--muted`, que
+   tools/check-contrast.py mesure sur tous ses fonds. */
+.product-topic-group[data-topic-status="closed"] .card-title,
+.product-topic-group[data-topic-status="archived"] .card-title {
+  color: var(--muted);
 }
 
 .product-unread {
