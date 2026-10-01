@@ -515,6 +515,167 @@ check("restoreFromBackup : refus explicite sans rien écrire", () => {
   equal(be.drive.snapshot(), before, "rien n'est écrit sans le verrou");
 });
 
+/* ------------------- Durcissement de la restauration et de la version (WP-21) --- */
+
+check("restoreFromBackup : un fichier qui n'est pas une copie BrainstO est refusé, sans écriture ni sauvegarde (REC-REV-002)", () => {
+  const be = fresh();
+  be.post([topic("a1", 1), topic("a2", 2),
+    act("a3", "CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Un message important" })]);
+  const contentBefore = be.dataRec().content;
+  const revisionBefore = be.data().revision;
+  const contents = {
+    "objet vide": "{}",
+    "JSON d'une autre application": JSON.stringify({ name: "x" }),
+    "autre application avec des listes": JSON.stringify({ items: [1, 2, 3], participants: [] }),
+    "tableau": "[]",
+    "texte": JSON.stringify("texte"),
+    "nombre": "42",
+    "null": "null",
+    "sujets null": JSON.stringify({ topics: null }),
+    "sujets en objet": JSON.stringify({ topics: {} }),
+    "sujets en texte": JSON.stringify({ topics: "t1" })
+  };
+  Object.keys(contents).forEach((label) => {
+    const copy = be.drive.add("copie.json", contents[label], "BrainstO.");
+    const snapshot = be.drive.snapshot();
+    const writes = [be.drive.calls.setContent, be.drive.calls.createFile];
+    const error = thrown(() => be.ctx.restoreFromBackup(copy.id));
+    assert(error !== null && error.indexOf("n'est pas un fichier de données lisible") >= 0 &&
+      error.indexOf("rien n'a été modifié") >= 0, "refus attendu avec le message d'origine (" + label + ") : " + error);
+    equal(be.drive.snapshot(), snapshot, "aucun fichier créé, modifié ni mis à la corbeille (" + label + ")");
+    equal([be.drive.calls.setContent, be.drive.calls.createFile], writes, "aucune écriture Drive (" + label + ")");
+    assert(!be.lock.held, "le verrou est relâché (" + label + ")");
+  });
+  equal(be.dataRec().content, contentBefore, "fichier de données inchangé octet pour octet");
+  equal([be.data().revision, be.data().topics.length], [revisionBefore, 2], "révision et sujets inchangés");
+  equal(be.drive.matching(/avant-restauration/).length, 0, "aucune sauvegarde de sécurité créée avant le refus");
+  const later = be.post(act("z1", "CREATE_MESSAGE", { topicId: "t1", messageId: "m2", text: "Action restée en file" }));
+  equal([later.ok, later.code, later.revision], [true, undefined, revisionBefore + 1],
+    "une action en file sur un sujet existant s'applique toujours (jamais invalid)");
+});
+
+check("restoreFromBackup : une copie BrainstO valide est restaurée, même vide ou d'une ancienne version (REC-REV-002)", () => {
+  const v2 = { revision: 3, topics: [{ id: "t9", title: "Ancien sujet", conclusion: "Cap : le jeudi" }] };
+  [
+    ["liste de sujets vide", { topics: [] }, 0, 3],
+    ["copie d'un espace neuf", { revision: 2, topics: [], participants: [], processedActionIds: [] }, 0, 3],
+    ["sujet d'une version 2", v2, 1, 4]
+  ].forEach(([label, content, topics, revision]) => {
+    const be = fresh();
+    be.post([topic("a1", 1), topic("a2", 2)]);
+    const copy = be.drive.add("copie.json", content, "BrainstO.");
+    const out = String(be.ctx.restoreFromBackup(copy.id));
+    equal([be.data().topics.length, be.data().revision], [topics, revision], "copie restaurée : " + label);
+    equal(be.drive.matching(/^brainsto-data\.json\.avant-restauration\./).length, 1, "sauvegarde de sécurité créée : " + label);
+    assert(out.indexOf(copy.id) >= 0, "journal lisible : " + out);
+    if (topics) { equal(be.data().topics[0].conclusions.map((c) => c.id), ["legacy-t9"], "l'ancien texte de consensus est repris"); }
+  });
+});
+
+check("restoreFromBackup : une copie antérieure à « Rendre anonyme » ne republie pas l'auteur (REC-REV-003, §5)", () => {
+  const be = fresh();
+  const emoji = be.ctx.REACTIONS[0];
+  be.post([topic("b1", 1),
+    act("b2", "CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Avis sensible" }),
+    act("b3", "SET_REACTION", { topicId: "t1", messageId: "m1", emoji, set: true }),
+    { id: "b4", type: "SET_REACTION", actorId: "u2", actorName: "Bob", payload: { topicId: "t1", messageId: "m1", emoji, set: true } }]);
+  be.ctx.backupNow();
+  const backup = be.drive.matching(/\.manuel\./)[0];
+  const inCopy = JSON.parse(backup.content).topics[0].messages[0];
+  equal([inCopy.authorId, inCopy.authorName, inCopy.anon, Object.keys(inCopy.reactions)], ["u1", "Alice", false, ["u1", "u2"]],
+    "la copie porte l'auteur et sa clé de réaction");
+  be.post(act("b5", "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: true }));
+  const live = be.data().topics[0].messages[0];
+  equal([live.authorId, live.authorName, live.anon, Object.keys(live.reactions)], ["", "Anonyme", true, ["u2"]],
+    "avant la restauration : anonyme, clé de l'auteur retirée");
+  be.ctx.restoreFromBackup(backup.id);
+  const m = be.data().topics[0].messages[0];
+  equal([m.authorId, m.authorName, m.anon], ["", "Anonyme", true], "après la restauration : toujours anonyme");
+  equal(Object.keys(m.reactions), ["u2"], "aucune clé de réaction ne porte l'ancien identifiant, celle d'une autre personne reste");
+  assert(JSON.stringify(m).indexOf("Alice") < 0 && JSON.stringify(m).indexOf('"u1"') < 0,
+    "aucune trace de l'auteur dans le message restauré : " + JSON.stringify(m));
+  const served = be.get({ mode: "state" }).state.topics[0].messages[0];
+  equal([served.authorId, served.authorName, served.anon, Object.keys(served.reactions)], ["", "Anonyme", true, ["u2"]],
+    "état SERVI aux appareils (doGet) identique");
+  equal(be.data().revision, 6, "révision = max(5, 4) + 1 comme avant");
+  const safety = be.drive.matching(/^brainsto-data\.json\.avant-restauration\./);
+  assert(safety.length === 1 && JSON.parse(safety[0].content).topics[0].messages[0].anon === true,
+    "la sauvegarde de sécurité garde l'état anonymisé remplacé");
+});
+
+check("restoreFromBackup : signé aux deux dates reste signé, anonyme reste anonyme, rien ne plante sans correspondance (REC-REV-003)", () => {
+  const be = fresh();
+  be.post([topic("c1", 1),
+    act("c2", "CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Signé aux deux dates" }),
+    act("c3", "CREATE_MESSAGE", { topicId: "t1", messageId: "m2", text: "Sera rendu anonyme" }),
+    act("c4", "CREATE_MESSAGE", { topicId: "t1", messageId: "m5", text: "Anonyme puis resigné", anon: true })]);
+  be.ctx.backupNow();
+  const backup = be.drive.matching(/\.manuel\./)[0];
+  be.post([act("c5", "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m2", anon: true }),
+    act("c6", "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m5", anon: false }),
+    /* postérieurs à la copie : message absent de la copie, puis sujet absent de la copie */
+    act("c7", "CREATE_MESSAGE", { topicId: "t1", messageId: "m4", text: "Message récent", anon: true }),
+    topic("c8", 2),
+    act("c9", "CREATE_MESSAGE", { topicId: "t2", messageId: "m3", text: "Sujet récent", anon: true })]);
+  equal(be.data().topics[0].messages.map((m) => [m.id, m.anon]), [["m1", false], ["m2", true], ["m5", false], ["m4", true]],
+    "état avant la restauration");
+  be.ctx.restoreFromBackup(backup.id);
+  const data = be.data();
+  equal(data.topics.map((t) => t.id), ["t1"], "ce qui est postérieur à la copie n'est pas ramené");
+  equal(data.topics[0].messages.map((m) => [m.id, m.authorId, m.authorName, m.anon]),
+    [["m1", "u1", "Alice", false], ["m2", "", "Anonyme", true], ["m5", "", "Anonyme", true]],
+    "signé aux deux dates : signé ; anonymisé après la copie : anonyme ; anonyme dans la copie : anonyme");
+});
+
+check("restoreFromBackup : fichier courant abîmé, rien à reporter, aucun plantage, copie restaurée (REC-REV-003)", () => {
+  const be = fresh();
+  be.post([topic("d1", 1), act("d2", "CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Avis" })]);
+  be.ctx.backupNow();
+  const backup = be.drive.matching(/\.manuel\./)[0];
+  be.post(act("d3", "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: true }));
+  const damaged = '{"revision": 9, "topics": [{"id": "t1", "messages": [{"id": "m1", "anon": tr';
+  be.dataRec().content = damaged;
+  const error = thrown(() => be.ctx.restoreFromBackup(backup.id));
+  equal(error, null, "la restauration ne plante pas sur un fichier courant illisible");
+  equal([be.data().revision, be.data().topics.map((t) => t.id)], [10, ["t1"]], "révision = max(9 lue dans le texte, 2) + 1, copie restaurée");
+  const safety = be.drive.matching(/^brainsto-data\.json\.avant-restauration\./);
+  assert(safety.length === 1 && safety[0].content === damaged, "le texte abîmé est gardé dans la sauvegarde de sécurité");
+  assert(!be.lock.held, "le verrou est relâché");
+});
+
+check("BACKEND_VERSION montée : une équipe restée sur la 1.0.0 reçoit UNE copie avant la première écriture (REC-REV-004, §23)", () => {
+  const drive = makeDrive();
+  const props = makeProps();
+  /* Fichier d'une équipe en production : déjà migré par le backend 1.0.0 (propriété posée),
+   * sujet v2 portant encore « conclusion » : la première écriture du noyau actuel le réécrit. */
+  const v2 = { revision: 41, updatedAt: "2026-05-01T08:00:00.000Z", participants: [{ id: "u1", name: "Alice" }],
+    topics: [{ id: "t1", title: "Commandes", status: "open", createdBy: { id: "u1", name: "Alice" },
+      createdAt: "2026-04-01T08:00:00.000Z", updatedAt: "2026-05-01T08:00:00.000Z", messages: [], proposals: [],
+      conclusions: [], conclusionVotes: {}, conclusion: "Cap : on commande le jeudi",
+      conclusionUpdatedAt: "2026-04-20T08:00:00.000Z", conclusionUpdatedBy: "u1" }], processedActionIds: [] };
+  const rec = drive.add(FILE_NAME, v2, "BrainstO.");
+  props.store.BRAINSTO_FILE_ID = rec.id;
+  props.store.BRAINSTO_BACKUP_VERSION = "brainsto-backend-1.0.0";
+  const be = loadBackend(drive, props);
+  const version = be.ctx.BACKEND_VERSION;
+  assert(/^brainsto-backend-\d+\.\d+\.\d+$/.test(version) && version !== "brainsto-backend-1.0.0",
+    "la version du backend a changé depuis la 1.0.0 déployée : " + version);
+  const contentBefore = rec.content;
+  const pattern = new RegExp("^" + FILE_NAME.replace(/\./g, "\\.") + "\\.avant-" + version.replace(/\./g, "\\.") + "\\.\\d{4}-");
+  be.get({ mode: "state" });
+  equal(drive.matching(pattern).length, 0, "aucune copie sur une lecture");
+  const first = be.post(act("e1", "CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "bonjour" }));
+  equal(first.ok, true, "la première écriture réussit");
+  const copies = drive.matching(pattern);
+  assert(copies.length === 1 && copies[0].content === contentBefore, "UNE copie « avant-" + version + " », contenu d'avant la mise à niveau");
+  const written = JSON.parse(rec.content).topics[0];
+  assert(!Object.prototype.hasOwnProperty.call(written, "conclusion") && written.conclusions.map((c) => c.id).join() === "legacy-t1",
+    "le fichier réécrit a bien changé (reprise de « conclusion »), la copie est le seul exemplaire d'origine");
+  equal(be.post(act("e2", "CREATE_MESSAGE", { topicId: "t1", messageId: "m2", text: "encore" })).ok, true);
+  equal(drive.matching(pattern).length, 1, "une seconde écriture n'en crée pas d'autre");
+  equal(props.store.BRAINSTO_BACKUP_VERSION, version, "version mémorisée après la copie");
+});
+
 /* ------------------------------------------------------------ Exécution --- */
 
 const total = passed + failures.length;

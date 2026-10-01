@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.0.0";
+var BACKEND_VERSION = "brainsto-backend-1.1.0";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -685,7 +685,9 @@ function restoreFromBackup(backupFileId) {
     }
     var copy = null;
     try { copy = JSON.parse(backup.getBlob().getDataAsString("UTF-8")); } catch (unreadable) { copy = null; }
-    if (!isObject(copy)) {
+    /* Une copie BrainstO porte au moins une liste de sujets (v1, v2 et 1.x compris, même vide) :
+     * « {} » ou le JSON d'une autre application viderait les données de l'équipe. */
+    if (!isObject(copy) || !Array.isArray(copy.topics)) {
       throw new Error("La copie " + backup.getName() + " n'est pas un fichier de données lisible : rien n'a été modifié.");
     }
     var restored = ensureShape(copy);
@@ -697,6 +699,20 @@ function restoreFromBackup(backupFileId) {
       var found = /"revision"\s*:\s*(\d+)/.exec(raw);
       current = { revision: found ? Number(found[1]) : 0, processedActionIds: [] };
     }
+    /* §5 : un message rendu anonyme APRÈS la copie reste anonyme une fois la copie restaurée. Le travail
+     * est celui du noyau (SET_MESSAGE_SIGNATURE) : mêmes champs vidés, mêmes clés de réaction retirées,
+     * même libellé. Fichier courant abîmé : current.topics est absent, rien à reporter. */
+    arr(current.topics).forEach(function (ct) {
+      var rt = findTopic(restored, ct.id);
+      arr(ct.messages).forEach(function (cm) {
+        var rm = cm.anon === true && rt ? findMessage(rt, cm.id) : null;
+        if (!rm || rm.anon === true) { return; }
+        applyAction(restored, {
+          type: "SET_MESSAGE_SIGNATURE", actorId: rm.authorId,
+          payload: { topicId: rt.id, messageId: rm.id, anon: true }
+        }, new Date().toISOString());
+      });
+    });
     var safety = createBackup(file, "avant-restauration");
     restored.revision = Math.max(current.revision, restored.revision) + 1;
     restored.updatedAt = new Date().toISOString();
