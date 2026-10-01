@@ -257,6 +257,150 @@
     }
   }
 
+  /* ------------------------------------------------------------- Focus --- */
+
+  /* ⚠️ Le rendu DÉTRUIT et reconstruit #app et le calque : l'élément qui avait le
+   * focus disparaissait avec eux, et le focus retombait sur <body> après chaque
+   * vote, réaction ou message reçu. Le clavier repartait du haut de la page et
+   * le lecteur d'écran perdait sa place. Les commandes portent donc une clé
+   * stable (`data-key` ; la bulle garde son `data-message-id`), relevée avant le
+   * rendu et retrouvée après. Les champs de saisie restent l'affaire des
+   * brouillons : une saisie en cours n'est jamais dérangée. */
+  var KEYED = "[data-key], [data-message-id]";
+
+  function keyOf(node) {
+    if (!node || !node.getAttribute) { return null; }
+    var key = node.getAttribute("data-key");
+    if (key) { return key; }
+    var messageId = node.getAttribute("data-message-id");
+    if (messageId) { return "msg-" + messageId; }
+    return node.id ? "#" + node.id : null;
+  }
+
+  /* Relevé AVANT le rendu. Une clé peut se répéter (« reaction-… » existe sous
+   * chaque bulle) : `anchor` et `limit`, les plus proches clés UNIQUES avant et
+   * après l'élément, la situent. `anchor` sert aussi de repli quand l'élément
+   * disparaît : une réaction retirée rend le focus à sa bulle, « Retirer mon
+   * vote » au dernier bouton de vote. */
+  function captureFocus() {
+    var node = document.activeElement;
+    var inLayer = !!node && overlayRoot.contains(node);
+    if (!node || !(inLayer || appRoot.contains(node)) || node.hasAttribute("data-draft")) { return null; }
+    var key = keyOf(node);
+    var saved = { key: key, unique: true, anchor: null, limit: null, inLayer: inLayer };
+    if (!key || key.charAt(0) === "#") { return saved; }
+    var nodes = (inLayer ? overlayRoot : appRoot).querySelectorAll(KEYED);
+    var count = {};
+    var i;
+    for (i = 0; i < nodes.length; i++) { count["k" + keyOf(nodes[i])] = (count["k" + keyOf(nodes[i])] || 0) + 1; }
+    saved.unique = count["k" + key] === 1;
+    var after = false;
+    for (i = 0; i < nodes.length; i++) {
+      if (nodes[i] === node) { after = true; continue; }
+      if (count["k" + keyOf(nodes[i])] !== 1) { continue; }
+      if (!after) { saved.anchor = keyOf(nodes[i]); } else { saved.limit = keyOf(nodes[i]); break; }
+    }
+    return saved;
+  }
+
+  function findFocus(saved) {
+    if (!saved || !saved.key) { return null; }
+    if (saved.key.charAt(0) === "#") { return document.getElementById(saved.key.slice(1)); }
+    var nodes = (saved.inLayer ? overlayRoot : appRoot).querySelectorAll(KEYED);
+    var anchor = null;
+    for (var i = 0; i < nodes.length; i++) {
+      var key = keyOf(nodes[i]);
+      if (saved.unique ? key === saved.key : (anchor && key === saved.key)) { return nodes[i]; }
+      if (anchor && !saved.unique && key === saved.limit) { break; }
+      if (!anchor && key === saved.anchor) { anchor = nodes[i]; }
+    }
+    return anchor;
+  }
+
+  function focusNode(node, scroll) {
+    try { node.focus(scroll ? undefined : { preventScroll: true }); } catch (e) { /* non focalisable */ }
+  }
+
+  /* Feuilles et fenêtres. Le calque est rendu comme le reste, son focus se règle
+   * donc ici, APRÈS le rendu : à l'ouverture on retient le déclencheur et on
+   * entre dans le calque (le dialogue lui-même, nommé par son titre) ; tant
+   * qu'il est ouvert, le fond est inerte (`inert`, à défaut `aria-hidden`) et le
+   * document ne défile plus (classe `has-layer`, cf. app.css) ; à la fermeture,
+   * quel que soit le geste (Fermer, Échap, fond, retour du système : tous passent
+   * par UI.set), le focus revient au déclencheur. Pas de <dialog> : sa fermeture
+   * native divergerait du contrat du geste retour (tête de js/app.js). */
+  var INERT = typeof HTMLElement !== "undefined" && "inert" in HTMLElement.prototype;
+  var inertNodes = [];      // nœuds rendus inertes ICI, et seulement eux
+  var layerSpec = null;     // calque à l'écran au rendu précédent
+  var layerReturn = null;   // relevé du déclencheur, rendu à la fermeture
+
+  function setBackground(open) {
+    var html = document.documentElement;
+    if (!open) {
+      html.classList.remove("has-layer");
+      inertNodes.forEach(function (node) {
+        if (INERT) { node.inert = false; } else { node.removeAttribute("aria-hidden"); }
+      });
+      inertNodes = [];
+      return;
+    }
+    html.classList.add("has-layer");
+    /* Les frères du calque, sauf les toasts (leur région doit encore annoncer) et
+     * la présentation, qui tient elle-même son calque. */
+    var siblings = document.body.children;
+    for (var i = 0; i < siblings.length; i++) {
+      var node = siblings[i];
+      if (node === overlayRoot || node === toastRoot || node === onboardRoot || inertNodes.indexOf(node) >= 0 ||
+          /^(SCRIPT|NOSCRIPT|STYLE|TEMPLATE)$/.test(node.tagName)) { continue; }
+      if (INERT ? node.inert : node.getAttribute("aria-hidden") === "true") { continue; }
+      if (INERT) { node.inert = true; } else { node.setAttribute("aria-hidden", "true"); }
+      inertNodes.push(node);
+    }
+  }
+
+  function settleFocus(saved, samePlace) {
+    var dialog = overlayRoot.querySelector("[role=dialog]");
+    var spec = dialog ? (UI.local.sheet || UI.local.modal) : null;
+    var opened = !!spec && spec !== layerSpec;
+    if (spec && !layerSpec) { layerReturn = saved; }
+    if (!spec && layerSpec) { saved = layerReturn; layerReturn = null; samePlace = true; }
+    layerSpec = spec;
+    setBackground(!!spec);
+    var active = document.activeElement;
+    if (opened) {
+      if (!dialog.contains(active)) { focusNode(dialog); }
+      return;
+    }
+    /* Un focus resté en place (saisie restaurée par les brouillons, focus posé
+     * ailleurs) ne se déplace jamais ; un changement d'écran non plus. */
+    if (active && active !== document.body && active !== document.documentElement) { return; }
+    if (!spec && !samePlace) { return; }
+    var target = findFocus(saved);
+    if (spec && (!target || !dialog.contains(target))) { target = dialog; }
+    if (target) { focusNode(target); }
+  }
+
+  /* Tab ne sort pas du calque : après sa dernière commande il revient à la
+   * première, et l'inverse. Le fond inerte ne suffit pas : au-delà de la
+   * dernière commande, le navigateur sortirait de la page. */
+  function keepTabInside(event) {
+    if (event.key !== "Tab") { return; }
+    var dialog = overlayRoot.querySelector("[role=dialog]");
+    if (!dialog) { return; }
+    var all = dialog.querySelectorAll("button, input, select, textarea, a[href], [tabindex]");
+    var items = [];
+    for (var i = 0; i < all.length; i++) {
+      if (!all[i].disabled && all[i].getAttribute("tabindex") !== "-1") { items.push(all[i]); }
+    }
+    var active = document.activeElement;
+    if (!items.length) { event.preventDefault(); return; }
+    if (event.shiftKey && (active === items[0] || active === dialog)) {
+      event.preventDefault(); focusNode(items[items.length - 1], true);
+    } else if (!event.shiftKey && active === items[items.length - 1]) {
+      event.preventDefault(); focusNode(items[0], true);
+    }
+  }
+
   function autoGrow(node) {
     if (!node || node.tagName !== "TEXTAREA" || !node.classList.contains("grow")) { return; }
     var before = node.style.height;
@@ -431,14 +575,15 @@
     /* Libellés visibles (court et long, l'un ou l'autre selon la largeur) en
      * aria-hidden : le lecteur d'écran n'entend que `.status-announce`.
      * `secondary` : seconde pastille d'un même écran (Réglages). Une seule région
-     * role=status par écran : celle-ci n'a ni rôle ni annonce, et son libellé long
-     * se lit comme un texte ordinaire. */
+     * role=status par écran : celle-ci n'a ni rôle ni annonce, et ses libellés se
+     * lisent comme un texte ordinaire (aucun n'y est aria-hidden : à 430 px et
+     * moins le long est masqué par app.css, le court est alors son seul texte). */
     var pill = el("div", {
       class: "status-pill status-" + status.code, title: status.error || "",
       role: secondary ? null : "status"
     }, [
       el("span", { class: "status-dot", "aria-hidden": "true" }),
-      el("span", { class: "status-short", "aria-hidden": "true", text: status.label }),
+      el("span", { class: "status-short", "aria-hidden": secondary ? null : "true", text: status.label }),
       el("span", { class: "status-label status-long", "aria-hidden": secondary ? null : "true", text: statusLongLabel(status) }),
       secondary ? null : el("span", { class: "visually-hidden status-announce", text: statusAnnouncement(status) })
     ]);
@@ -465,7 +610,7 @@
       /* Bouton retour visible sur CHAQUE écran secondaire (iPhone sans retour matériel). */
       var backLabel = options.backLabel || "Retour";
       left.push(el("button", {
-        class: "btn-back", type: "button",
+        class: "btn-back", type: "button", "data-key": "back",
         "aria-label": backLabel === "Retour" ? "Retour" : "Retour vers " + backLabel,
         onclick: options.back
       }, [icon("back", 20), el("span", { text: backLabel })]));
@@ -475,7 +620,7 @@
       var titleBtn = el("button", {
         class: "btn-ghost", type: "button",
         style: { padding: "0", textAlign: "left", width: "100%", minHeight: "auto", background: "transparent", border: "0", cursor: "pointer" },
-        onclick: options.onTitle
+        "data-key": "topic-info", onclick: options.onTitle
       }, [
         el("div", { class: "topbar-title", text: options.title }),
         el("div", { class: "topbar-sub" }, [el("span", { text: options.sub || "" }), icon("info", 13)])
@@ -531,7 +676,7 @@
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
       el("div", {
-        class: "sheet", role: "dialog", "aria-modal": "true",
+        class: "sheet", role: "dialog", "aria-modal": "true", tabindex: "-1",
         /* Pointer un nœud absent vaut moins que ne rien pointer. */
         "aria-labelledby": titleNode ? OVERLAY_TITLE_ID : null
       }, [
@@ -549,7 +694,7 @@
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
       el("div", {
-        class: "modal", role: "dialog", "aria-modal": "true",
+        class: "modal", role: "dialog", "aria-modal": "true", tabindex: "-1",
         "aria-labelledby": title ? OVERLAY_TITLE_ID : null
       }, [
         overlayTitle(title, "modal-title"),
@@ -562,7 +707,7 @@
   function sheetAction(iconName, label, onclick, options) {
     options = options || {};
     return el("button", {
-      class: "sheet-action" + (options.danger ? " danger" : ""),
+      class: "sheet-action" + (options.danger ? " danger" : ""), "data-key": "action-" + iconName,
       type: "button",
       disabled: options.disabled,
       onclick: onclick
@@ -688,7 +833,7 @@
           }, [icon("unlock", 18), el("span", { text: "Déverrouiller" })])
         ]), 1),
         reveal(el("button", {
-          class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe",
+          class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe", "data-key": "logout",
           onclick: function () { UI.set({ modal: { type: "logout" } }); }
         }), 2)
       ])
@@ -719,7 +864,7 @@
     }
 
     return el("button", {
-      class: "card", type: "button",
+      class: "card", type: "button", "data-key": "topic-" + topic.id,
       onclick: function () { App.go("#/topic/" + topic.id); }
     }, [
       el("div", { class: "row", style: { gap: "10px", alignItems: "flex-start" } }, [
@@ -764,7 +909,7 @@
       body = emptyState("sparkle", "Aucun sujet pour l'instant",
         "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet.",
         el("button", {
-          class: "btn btn-primary", type: "button",
+          class: "btn btn-primary", type: "button", "data-key": "create-topic-first",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
         }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]),
         "Ensuite : on en discute, on en tire des propositions, on vote, et on dégage un consensus.");
@@ -820,7 +965,7 @@
       visible.forEach(function (topic) { list.appendChild(reveal(topicCard(topic), index++)); });
       if (archivedCount > 0) {
         list.appendChild(el("button", {
-          class: "btn btn-ghost btn-block", type: "button",
+          class: "btn btn-ghost btn-block", type: "button", "data-key": "show-archived",
           onclick: function () {
             Utils.storage.set(CONFIG.KEYS.showArchived, !UI.local.showArchived);
             UI.set({ showArchived: !UI.local.showArchived });
@@ -852,7 +997,7 @@
 
     if (all.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter un sujet",
+        class: "fab", type: "button", "aria-label": "Ajouter un sujet", "data-key": "create-topic",
         onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
       }, [icon("plus", 20), el("span", { text: "Nouveau sujet" })]));
     }
@@ -904,7 +1049,7 @@
       if (!info) { return; }
       var label = Utils.reactionLabel(emoji);
       row.appendChild(el("button", {
-        class: "reaction" + (info.mine ? " mine" : ""), type: "button",
+        class: "reaction" + (info.mine ? " mine" : ""), type: "button", "data-key": "reaction-" + emoji,
         title: label + " · " + Utils.plural(info.count, "personne", "personnes"),
         "aria-label": label + " (" + Utils.plural(info.count, "personne", "personnes") + ")",
         "aria-pressed": info.mine ? "true" : "false",
@@ -1049,7 +1194,7 @@
     }
 
     var sendBtn = el("button", {
-      class: "send-btn", type: "button", "aria-label": "Envoyer", onclick: send
+      class: "send-btn", type: "button", "aria-label": "Envoyer", "data-key": "send", onclick: send
     }, [icon("send", 20)]);
 
     var parts = [];
@@ -1070,10 +1215,14 @@
     parts.push(el("div", { class: "signature-toggle" }, [
       el("span", { class: "who" }, [
         icon(UI.local.composerAnon ? "mask" : "user", 15),
-        el("span", { text: UI.local.composerAnon ? "Publié en anonyme" : "Signé : " + (App.user.name || "moi") })
+        el("span", { id: "composer-who", text: UI.local.composerAnon ? "Publié en anonyme" : "Signé : " + (App.user.name || "moi") })
       ]),
+      /* Le libellé dit l'action (« Signer »), la description dit ce que sera le
+       * prochain message (« Publié en anonyme ») : après la bascule, le focus
+       * revient sur elle (même clé) et le lecteur d'écran annonce le nouvel état. */
       el("button", {
         class: "btn btn-sm btn-outline", type: "button",
+        "data-key": "composer-anon", "aria-describedby": "composer-who",
         onclick: function () { UI.set({ composerAnon: !UI.local.composerAnon }); }
       }, [
         icon(UI.local.composerAnon ? "user" : "mask", 15),
@@ -1171,7 +1320,7 @@
      * toute l'équipe sans confirmation : il doit au moins être annoncé — le
      * libellé est lu AVANT l'envoi, qui provoque un rendu détruisant ce nœud. */
     var statusSelect = el("select", {
-      class: "select", "aria-label": "Statut de la proposition : " + proposal.title,
+      class: "select", "aria-label": "Statut de la proposition : " + proposal.title, "data-key": "proposal-" + proposal.id + "-status",
       onchange: function (e) {
         var label = Core.PROPOSAL_STATUS_LABELS[e.target.value];
         App.actions.changeProposalStatus(topic.id, proposal.id, e.target.value);
@@ -1189,7 +1338,7 @@
         class: "btn btn-sm btn-outline" + (myVote === value ? " active" : ""), type: "button",
         /* Le bouton porte la valeur qu'il exprime : c'est elle qui décide de sa
          * couleur une fois choisi (cf. app.css, .vote-actions .btn.active). */
-        "data-vote": value,
+        "data-vote": value, "data-key": "vote-" + proposal.id + "-" + value,
         "aria-pressed": myVote === value ? "true" : "false",
         onclick: function () { App.actions.setVote(topic.id, proposal.id, value); }
       }, [icon(VOTE_ICONS[value], 15), el("span", { text: Core.VOTE_LABELS[value] })]));
@@ -1228,12 +1377,12 @@
       ]),
       voteButtons,
       el("div", { class: "card-foot row-wrap" }, [
-        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button",
+        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "vote-" + proposal.id + "-remove",
           onclick: function () { App.actions.removeVote(topic.id, proposal.id); } },
         [icon("close", 15), el("span", { text: "Retirer mon vote" })]) : null,
         App.ownsItem(proposal.id, proposal.authorId)
           ? el("button", { class: "btn btn-sm btn-ghost", type: "button",
-            onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } },
+            "data-key": "proposal-" + proposal.id + "-edit", onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } },
           [icon("edit", 15), el("span", { text: "Modifier" })])
           : null,
         el("div", { class: "spacer" }),
@@ -1251,7 +1400,7 @@
       list.appendChild(emptyState("idea", "Aucune proposition",
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
-          onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
+          "data-key": "create-proposal-first", onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
         [icon("plus", 18), el("span", { text: "Ajouter une proposition" })]),
         "Ensuite : chacun vote pour, contre ou abstention, un vote par personne."));
     } else {
@@ -1271,7 +1420,7 @@
 
     if (topic.proposals.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter une proposition",
+        class: "fab", type: "button", "aria-label": "Ajouter une proposition", "data-key": "create-proposal",
         onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); }
       }, [icon("plus", 20), el("span", { text: "Proposition" })]));
     }
@@ -1311,14 +1460,14 @@
           el("button", {
             class: "btn btn-sm " + (chosen ? "btn-primary" : "btn-outline"), type: "button",
             "aria-pressed": chosen ? "true" : "false",
-            onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
+            "data-key": "conclusion-" + conclusion.id + "-choose", onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
           }, [icon("check", 15), el("span", { text: chosen ? "Mon choix" : "Choisir" })]),
           el("div", { class: "spacer" }),
           mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la formulation du consensus",
-            onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
+            "data-key": "conclusion-" + conclusion.id + "-edit", onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
           [icon("edit", 15), el("span", { text: "Modifier" })]) : null,
           mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la formulation du consensus",
-            onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
+            "data-key": "conclusion-" + conclusion.id + "-delete", onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
           [icon("trash", 15)]) : null
         ])
       ]), i));
@@ -1341,7 +1490,7 @@
       textarea,
       counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
       el("button", {
-        class: "btn btn-primary btn-block", type: "button", text: "Ajouter",
+        class: "btn btn-primary btn-block", type: "button", text: "Ajouter", "data-key": "conclusion-add",
         onclick: function () {
           var text = Utils.trim(textarea.value);
           if (!text) { UI.toast("La formulation du consensus est vide.", "error"); return; }
@@ -1492,7 +1641,7 @@
         onclick: function () { App.editConnection(); } },
       [icon("edit", 16), el("span", { text: "Modifier l'adresse ou le code" })]),
       el("button", { class: "btn btn-danger btn-block", type: "button",
-        onclick: function () { UI.set({ modal: { type: "logout" } }); } },
+        "data-key": "logout", onclick: function () { UI.set({ modal: { type: "logout" } }); } },
       [icon("logout", 16), el("span", { text: "Se déconnecter de l'équipe" })])
     ]);
 
@@ -1510,7 +1659,7 @@
         statusPill(true)
       ]),
       el("button", { class: "btn btn-outline btn-block", type: "button",
-        onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
+        "data-key": "sync-now", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
       [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
       el("div", { class: "diag" }, [
         /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux
@@ -1552,7 +1701,7 @@
           sectionTitle("user", "Votre nom"),
           nameInput,
           el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
-            onclick: function () { App.saveName(nameInput.value, true); } })
+            "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
         ]), 0),
         reveal(connectionRows, 1),
         reveal(el("div", { class: "card card-static stack" }, [
@@ -1603,7 +1752,7 @@
       var isMine = message.reactions[App.user.id] === emoji;
       var label = Utils.reactionLabel(emoji);
       emojiRow.appendChild(el("button", {
-        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button",
+        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button", "data-key": "emoji-" + emoji,
         "aria-label": label, "aria-pressed": isMine ? "true" : "false",
         onclick: function () {
           App.actions.setReaction(topic.id, message.id, emoji);
@@ -1663,7 +1812,7 @@
     var topic = Core.findTopic(Store.view, spec.topicId);
     if (!topic) { return null; }
 
-    var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet",
+    var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet", "data-key": "topic-status",
       onchange: function (e) {
         var label = Core.TOPIC_STATUS_LABELS[e.target.value];
         App.actions.changeTopicStatus(topic.id, e.target.value);
@@ -1875,7 +2024,10 @@
       }
     }
 
-    if (node) { overlayRoot.appendChild(node); }
+    if (node) {
+      node.addEventListener("keydown", keepTabInside);
+      overlayRoot.appendChild(node);
+    }
   }
 
   /* ============================================================ RENDU ==== */
@@ -1936,6 +2088,7 @@
      * disparaître — ce qui était le défaut. */
     var place = (App.gate() || "") + "|" + App.route.raw;
     var entering = place !== lastPlace;
+    var samePlace = !entering;
     /* Changer d'écran clôt le contexte d'édition : sans cette remise à zéro, un
      * brouillon abandonné battrait indéfiniment une valeur légitimement mise à jour. */
     if (entering) { touchedDrafts = {}; }
@@ -1950,6 +2103,7 @@
     }
 
     var drafts = captureDrafts();
+    var focus = captureFocus();
 
     /* Position de défilement du fil de discussion. */
     var thread = document.querySelector(".thread");
@@ -1983,6 +2137,7 @@
       lastThreadHeight = 0;
     }
 
+    settleFocus(focus, samePlace);
     UI.refreshStatus();
 
     /* La présentation est décidée APRÈS le rendu, et depuis l'extérieur de son
