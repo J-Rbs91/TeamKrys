@@ -12,7 +12,7 @@
 
   function apiError(kind, message, code) {
     var error = new Error(message);
-    error.kind = kind;     // "network" | "auth" | "server"
+    error.kind = kind;     // "network" | "auth" | "server" | "unknown"
     error.code = code || null;
     return error;
   }
@@ -20,14 +20,22 @@
   Api.isNetworkError = function (error) { return !!error && error.kind === "network"; };
   Api.isAuthError = function (error) { return !!error && error.kind === "auth"; };
 
+  /* ⚠️ Le délai couvre l'échange ENTIER, lecture du corps comprise : des en-têtes
+   * reçus suivis d'un corps qui n'arrive jamais figeaient la boucle (lecture ou
+   * envoi en cours pour toujours) jusqu'au rechargement. À l'échéance on abandonne
+   * la requête ET on rejette nous-mêmes : un corps sourd à abort() ne retient plus
+   * rien. Comme toute coupure, le résultat est inconnu : l'action reste en file. */
   function withTimeout(promise, controller, ms) {
-    var timer = setTimeout(function () {
-      try { controller.abort(); } catch (e) { /* ignoré */ }
-    }, ms || CONFIG.REQUEST_TIMEOUT_MS);
-    return promise.then(
-      function (value) { clearTimeout(timer); return value; },
-      function (error) { clearTimeout(timer); throw error; }
-    );
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        try { controller.abort(); } catch (e) { /* ignoré */ }
+        reject(apiError("network", "Connexion impossible. Vérifiez votre réseau."));
+      }, ms || CONFIG.REQUEST_TIMEOUT_MS);
+      promise.then(
+        function (value) { clearTimeout(timer); resolve(value); },
+        function (error) { clearTimeout(timer); reject(error); }
+      );
+    });
   }
 
   function buildUrl(baseUrl, params) {
@@ -41,22 +49,29 @@
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + parts.join("&");
   }
 
-  function parse(response) {
-    return response.text().then(function (text) {
-      var data;
-      try { data = JSON.parse(text); }
-      catch (e) {
-        throw apiError("server",
-          "Réponse illisible du serveur. Vérifiez que l'URL se termine par /exec " +
-          "et que le déploiement est accessible à « Tout le monde ».");
-      }
-      if (!data || data.ok !== true) {
-        var message = (data && data.error) || "Le serveur a refusé la demande.";
-        var code = data && data.code ? data.code : null;
-        throw apiError(code === "auth" ? "auth" : "server", message, code);
-      }
-      return data;
-    });
+  /* ⚠️ Classement des réponses : seul un REFUS (kind « server ») peut faire retirer
+   * une action de la file. Contrat de Code.gs : code « invalid » = rejet de
+   * validation, définitif ; « retry » = panne passagère (verrou, Drive). Une page
+   * HTML, un JSON illisible, « retry » ou un code inconnu ne disent RIEN de
+   * l'action (appliquée ou non) : kind « unknown », elle reste en file (§22). Un
+   * refus SANS code vient d'un backend d'avant, qui répondait ainsi à une panne
+   * comme à un refus : Sync ne le croit qu'après plusieurs essais. */
+  function parse(text) {
+    var data;
+    try { data = JSON.parse(text); } catch (e) { data = null; }
+    if (!data || typeof data !== "object") {
+      throw apiError("unknown",
+        "Réponse illisible du serveur. Vérifiez que l'URL se termine par /exec " +
+        "et que le déploiement est accessible à « Tout le monde ».");
+    }
+    if (data.ok !== true) {
+      var message = data.error ? String(data.error) : "Le serveur a refusé la demande.";
+      var code = data.code ? String(data.code) : null;
+      if (code === "auth") { throw apiError("auth", message, code); }
+      var refusal = code === "invalid" || (code === null && data.ok === false);
+      throw apiError(refusal ? "server" : "unknown", message, code);
+    }
+    return data;
   }
 
   function send(url, options, timeoutMs) {
@@ -67,18 +82,22 @@
     } catch (e) {
       return Promise.reject(apiError("network", "Requête impossible."));
     }
-    return withTimeout(request, controller, timeoutMs).then(function (response) {
+    var exchange = Promise.resolve(request).then(function (response) {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           throw apiError("auth", "Accès refusé par le serveur.", "auth");
         }
         throw apiError("network", "Le serveur a répondu " + response.status + ".");
       }
-      return parse(response);
+      /* Corps coupé en route : aucune réponse lisible, comme une coupure. */
+      return response.text().then(null, function () {
+        throw apiError("network", "Connexion impossible. Vérifiez votre réseau.");
+      });
     }, function (error) {
       if (error && error.kind) { throw error; }
       throw apiError("network", "Connexion impossible. Vérifiez votre réseau.");
     });
+    return withTimeout(exchange, controller, timeoutMs).then(parse);
   }
 
   /* ⚠️ DEUXIÈME PIÈGE APPS SCRIPT : /exec répond par une redirection 302 vers
@@ -160,9 +179,16 @@
     } catch (e) { return false; }
 
     var nav = root.navigator;
-    if (nav && typeof nav.sendBeacon === "function" && typeof root.Blob === "function") {
+    var blob = null;
+    try {
+      if (typeof root.Blob === "function") { blob = new root.Blob([text], { type: "text/plain;charset=utf-8" }); }
+    } catch (e) { blob = null; }
+    /* Au-delà de 64 Kio, sendBeacon comme keepalive refusent : le second en
+     * silence. Mieux vaut répondre « rien n'est parti » (Sync.flush borne le corps). */
+    if (blob && blob.size > 65536) { return false; }
+    if (blob && nav && typeof nav.sendBeacon === "function") {
       try {
-        if (nav.sendBeacon(url, new root.Blob([text], { type: "text/plain;charset=utf-8" }))) {
+        if (nav.sendBeacon(url, blob)) {
           return true;
         }
       } catch (e) { /* file du navigateur pleine ou API refusée : on tente le repli */ }

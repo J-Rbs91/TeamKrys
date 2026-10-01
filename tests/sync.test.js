@@ -995,6 +995,195 @@ async function run() {
     assert(idb.rows("queue").length === 0, "l'entrée acquittée reste en base");
   });
 
+  /* BL-001 (WP-08) : une action ne quitte la file que sur un verdict CERTAIN
+   * (appliquée, doublon reconnu, refus « invalid »). Ces tests passent par le
+   * VRAI js/api.js (client « realApi ») : c'est son classement des réponses qui
+   * jetait l'action (page HTML, JSON tronqué, exception de Code.gs). */
+  const copies = (srv, id) => {
+    const topic = Core.findTopic(srv.data, "t1");
+    return topic ? topic.messages.filter((m) => m.id === id).length : 0;
+  };
+  const refusedMsg = (client) => client.messages.filter((m) => /refus/i.test(m));
+  async function connected(srv) {
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    return A;
+  }
+  const write = (A, id, text) => A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+    { topicId: "t1", messageId: id, text: text || "Bonjour l'équipe" }, A.user));
+
+  await check("api.js : page HTML, JSON illisible, retry ou code inconnu ne sont jamais un refus", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true });
+    const got = {};
+    for (const kind of ["html200", "garbage", "lock", "oddCode", "legacyFail", "status500"]) {
+      srv.faults.push({ method: "POST", kind, times: 1 });
+      got[kind] = await A.Api.postAction("https://exemple/exec", "", { id: "x" })
+        .then(() => "ok", (e) => e.kind + "/" + e.code);
+    }
+    srv.rejectWhen = () => true;
+    got.invalid = await A.Api.postAction("https://exemple/exec", "", A.Sync.makeAction("CREATE_TOPIC",
+      { topicId: "t9", title: "Refusé" }, A.user)).then(() => "ok", (e) => e.kind + "/" + e.code);
+    const want = { html200: "unknown/null", garbage: "unknown/null", lock: "unknown/retry", oddCode: "unknown/quota",
+      legacyFail: "server/null", status500: "network/null", invalid: "server/invalid" };
+    const wrong = Object.keys(want).filter((k) => got[k] !== want[k]).map((k) => k + "=" + got[k] + " (voulu " + want[k] + ")");
+    assert(!wrong.length, "classement : " + wrong.join(", "));
+  });
+
+  await check("réponse sans verdict (HTML, JSON tronqué, verrou, Drive, code inconnu, 500) : action gardée, puis appliquée une fois", async () => {
+    const problems = [];
+    for (const kind of ["html200", "garbage", "lock", "drive", "oddCode", "status500", "lateGarbage"]) {
+      const srv = makeServer();
+      const A = await connected(srv);
+      srv.faults.push({ method: "POST", kind, times: 1 });
+      await write(A, "m1"); await settle();
+      const kept = A.Sync.pendingCount() === 1;
+      await A.Sync.now(); await settle();
+      const n = copies(srv, "m1");
+      if (!kept) { problems.push(kind + " : retirée de la file après la 1re réponse"); }
+      if (n !== 1) { problems.push(kind + " : appliquée " + n + " fois"); }
+      if (A.Sync.pendingCount() !== 0) { problems.push(kind + " : file non vidée après la reprise"); }
+      if (refusedMsg(A).length) { problems.push(kind + " : annoncée refusée (" + refusedMsg(A)[0] + ")"); }
+    }
+    assert(!problems.length, problems.join(" ; "));
+  });
+
+  await check("panne serveur répétée : « Erreur (n) » dès le 2e échec, message unique, recul, jamais « À jour » avant l'application", async () => {
+    const srv = makeServer();
+    const A = await connected(srv);
+    const seen = [];
+    A.Sync.subscribe((s) => seen.push({ code: s.code, label: s.label, applied: copies(srv, "m1") > 0 }));
+    srv.faults.push({ method: "POST", kind: "lock", times: 2 }, { method: "POST", kind: "drive", times: 2 });
+    await write(A, "m1"); await settle();
+    let st = A.Sync.status();
+    assert(st.pending === 1 && st.label === "En attente (1)", "1er échec : « " + st.label + " », file " + st.pending);
+    await A.Sync.now(); await settle();
+    st = A.Sync.status();
+    assert(st.code === "error" && st.label === "Erreur (1)" && st.pending === 1,
+      "2e échec : indicateur « " + st.label + " » (" + st.code + "), file " + st.pending);
+    assert(A.Sync.diagnostics().intervalMs > CONFIG.POLL_ACTIVE_MS, "aucun recul après des échecs serveur");
+    await A.Sync.now(); await settle();
+    await A.Sync.now(); await settle();
+    assert(A.Sync.status().label === "Erreur (1)", "4e échec : « " + A.Sync.status().label + " »");
+    const warn = A.messages.filter((m) => m.indexOf("Le serveur ne répond pas correctement : vos actions sont gardées et repartiront") >= 0);
+    assert(warn.length === 1, "message de panne affiché " + warn.length + " fois (voulu : 1)");
+    assert(!refusedMsg(A).length, "une panne annoncée comme un refus : " + refusedMsg(A)[0]);
+    await A.Sync.now(); await settle();
+    assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0 && A.Sync.status().label === "À jour",
+      "après la panne : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount() + ", « " + A.Sync.status().label + " »");
+    assert(!seen.some((s) => s.code === "idle" && !s.applied), "« À jour » affiché avant l'application serveur");
+  });
+
+  await check("backend d'avant (refus sans code) : 3 tentatives espacées, puis retrait avec le texte saisi", async () => {
+    const srv = makeServer({ legacy: true });
+    const A = await connected(srv);
+    srv.rejectWhen = (action) => action.payload && action.payload.text === "perdu à moitié";
+    const posts0 = srv.http.POST;
+    await write(A, "m1", "perdu à moitié"); await settle();
+    assert(A.Sync.pendingCount() === 1, "retirée dès le 1er refus sans code");
+    assert(A.Sync.diagnostics().intervalMs > CONFIG.POLL_ACTIVE_MS, "tentatives non espacées : aucun recul");
+    await A.Sync.now(); await settle();
+    assert(A.Sync.pendingCount() === 1, "retirée au 2e refus sans code");
+    await A.Sync.now(); await settle();
+    assert(A.Sync.pendingCount() === 0, "toujours en file après 3 refus sans code");
+    assert(srv.http.POST - posts0 === 3, (srv.http.POST - posts0) + " envois (voulu : 3)");
+    const said = refusedMsg(A);
+    assert(said.length === 1 && said[0].indexOf("Action refusée : Refus simulé côté serveur. Texte : « perdu à moitié »") >= 0,
+      "message de retrait : " + JSON.stringify(said));
+    assert(A.Sync.status().label === "À jour", "indicateur après retrait : « " + A.Sync.status().label + " »");
+  });
+
+  await check("refus définitif (invalid) : retrait au 1er envoi, le message reprend le texte saisi", async () => {
+    const srv = makeServer();
+    const A = await connected(srv);
+    srv.rejectWhen = (action) => action.payload && action.payload.text === "Texte refusé";
+    const posts0 = srv.http.POST;
+    await write(A, "m1", "Texte refusé"); await settle();
+    const said = refusedMsg(A);
+    assert(A.Sync.pendingCount() === 0 && srv.http.POST - posts0 === 1, "refus définitif gardé en file");
+    assert(said.length === 1 && said[0] === "error: Action refusée : Refus simulé côté serveur. Texte : « Texte refusé »",
+      "message : " + JSON.stringify(said));
+  });
+
+  await check("lot sans results, lot à trous, lot refusé en bloc : rien n'est retiré sans verdict, chaque action appliquée une fois", async () => {
+    const problems = [];
+    for (const [kind, times] of [["noResults", 1], ["holes", 1], ["html200", 4]]) {
+      const srv = makeServer({ features: MODERN });
+      const A = await connected(srv);
+      srv.faults.push({ method: "POST", kind, times });
+      ["m1", "m2", "m3"].forEach((id) => { write(A, id, "texte " + id); });
+      await settle(); await A.Sync.now(); await settle();
+      const left = A.Store.queue.map((e) => e.action.payload.messageId).join(",");
+      if (kind === "holes" && left !== "m2,m3") { problems.push("lot à trous : file après réponse = [" + left + "] (voulu m2,m3)"); }
+      for (let i = 0; i < 5 && A.Sync.pendingCount(); i++) { await A.Sync.now(); await settle(); }
+      const n = ["m1", "m2", "m3"].map((id) => copies(srv, id));
+      if (n.join() !== "1,1,1") { problems.push(kind + " : applications " + n.join("/")); }
+      if (A.Sync.pendingCount()) { problems.push(kind + " : file " + A.Sync.pendingCount()); }
+      if (refusedMsg(A).length) { problems.push(kind + " : « " + refusedMsg(A)[0] + " »"); }
+      A.Sync.stop();
+    }
+    assert(!problems.length, problems.join(" ; "));
+  });
+
+  /* BL-022 : le délai couvrait fetch mais pas la lecture du corps. */
+  await check("corps de réponse qui ne finit jamais : cycle libéré après le délai, envoi et sondage suivants partent", async () => {
+    const srv = makeServer();
+    const timers = [];
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true, timers });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    const within = (p, ms) => Promise.race([p.then(() => "libéré"), new Promise((r) => setTimeout(() => r("bloqué"), ms))]);
+
+    srv.faults.push({ method: "GET", kind: "hang", times: 1 });
+    const gets = srv.http.GET;
+    assert(await within(A.Sync.now(), 3000) === "libéré", "lecture : le cycle reste bloqué (« " + A.Sync.status().label + " »)");
+    await A.Sync.now(); await settle();
+    assert(srv.http.GET >= gets + 2 && A.Sync.status().code === "idle",
+      "lecture : sondages " + (srv.http.GET - gets) + ", indicateur « " + A.Sync.status().label + " »");
+
+    srv.faults.push({ method: "POST", kind: "hang", times: 1 });
+    await write(A, "m1"); await settle();
+    await new Promise((r) => setTimeout(r, 900));      // 45 s d'écriture, à l'horloge accélérée
+    await within(A.Sync.now(), 3000); await settle();
+    assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0,
+      "écriture : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount() + ", « " + A.Sync.status().label + " »");
+  });
+
+  /* BL-023 : au-delà de 64 Kio, le navigateur refuse l'envoi de secours en bloc. */
+  await check("envoi de secours : plus long début de file sous 60 000 octets, rien de trop gros, rien retiré", async () => {
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    const text = "é".repeat(1000) + "a".repeat(1250);            // 3 250 octets en UTF-8
+    for (let i = 0; i < 20; i++) { write(A, "g" + i, text); }
+    await settle();
+    srv.beacons.length = 0;
+    const handed = A.Sync.flush();
+    const sent = srv.beacons[0] || [];
+    const all = A.Store.queue.map((e) => e.action);
+    const size = (list) => Buffer.byteLength(JSON.stringify(list), "utf8");
+    assert(A.Sync.pendingCount() === 20, "l'envoi de secours a retiré des actions de la file");
+    A.Sync.stop();
+    assert(handed === true && srv.beacons.length === 1 && Array.isArray(sent), "aucun envoi de secours parti");
+    assert(sent.length >= 15 && sent.length < 20 && size(sent) <= 60000 && size(all.slice(0, sent.length + 1)) > 60000,
+      sent.length + " actions, " + size(sent) + " octets : pas le plus long début de file sous 60 000 octets");
+    assert(sent.every((a, i) => a.id === all[i].id), "ordre de la file non respecté");
+
+    const srv2 = makeServer({ features: MODERN });
+    const B = makeClient("B", srv2, { indexedDB: false });
+    await B.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    srv2.down = true;
+    write(B, "big", "é".repeat(36000)); await settle();         // 72 000 octets
+    srv2.beacons.length = 0;
+    const big = B.Sync.flush();
+    B.Sync.stop();
+    assert(big === false && srv2.beacons.length === 0 && B.Sync.pendingCount() === 1,
+      "action de 72 000 octets : flush=" + big + ", envois=" + srv2.beacons.length + ", file=" + B.Sync.pendingCount());
+  });
+
   console.log(failures.length
     ? "✗ " + failures.length + " échec(s) :\n  - " + failures.join("\n  - ")
     : "✓ " + passed + " tests réussis sur " + passed + ".");
