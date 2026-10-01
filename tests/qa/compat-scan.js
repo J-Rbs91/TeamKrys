@@ -36,13 +36,18 @@ const BASELINE = JSON.parse(fs.readFileSync(path.join(HERE, "feature-baseline.js
 const SOURCES = [
   "index.html",
   "css/app.css",
+  "css/product.css",
+  "css/uxer.css",
   "js/config.js",
   "js/utils.js",
   "js/state.js",
   "js/database.js",
   "js/api.js",
   "js/sync.js",
+  "js/product-view.js",
   "js/ui.js",
+  "js/product-ui.js",
+  "js/uxer-ui.js",
   "js/app.js",
   "service-worker.js"
 ];
