@@ -494,6 +494,15 @@ check("BL-050 accueil de bureau : les groupes s'empilent, seules leurs cartes se
   }), "le titre d'un groupe doit occuper toute la ligne");
 });
 
+check("BL-009 message d'erreur d'un champ : texte en couleur d'erreur, champ invalide encadré", function () {
+  expect(ruleExists(function (r) {
+    return r.selectors.indexOf(".hint.field-error") >= 0 && r.decls["color"] === "var(--danger)";
+  }), "le message d'erreur relié à son champ doit prendre la couleur d'erreur");
+  expect(ruleExists(function (r) {
+    return r.selectors.indexOf('input[aria-invalid="true"]') >= 0 && r.decls["border-color"] === "var(--danger)";
+  }), "un champ invalide doit être encadré par la couleur d'erreur");
+});
+
 if (failures.length) {
   console.error("css-contract : " + failures.length + " échec(s) sur " + total + " contrôles");
   failures.forEach(function (f) { console.error(" - " + f); });

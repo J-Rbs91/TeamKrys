@@ -80,14 +80,19 @@
 
   /* Logotype. Il monte d'un seul tenant (cf. app.css) : c'est du texte, pas une
    * suite de <span> — inutile d'en fabriquer neuf pour animer un bloc. */
-  function wordmark(text) {
-    return el("div", { class: "wordmark", text: text });
+  function wordmark(text, asTitle) {
+    return el("div", {
+      class: "wordmark", text: text,
+      role: asTitle ? "heading" : null, "aria-level": asTitle ? "1" : null
+    });
   }
 
-  function heroBlock(tagline) {
+  /* `asTitle` : l'écran n'a pas de barre du haut (première connexion, verrou) ; le nom de
+   * l'application y tient lieu de titre de niveau 1 (A11-015). */
+  function heroBlock(tagline, asTitle) {
     return el("div", { class: "hero" }, [
       Utils.logoMark(52),
-      wordmark(CONFIG.APP_NAME),
+      wordmark(CONFIG.APP_NAME, asTitle),
       el("div", { class: "tagline", text: tagline })
     ]);
   }
@@ -157,6 +162,9 @@
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
     onboardRoot = document.getElementById("onboarding-root");
+    /* Zone principale : index.html (coquille précachée) n'a pas de <main> ; le rôle donne le même
+     * repère au lecteur d'écran, sans toucher à la mise en page (A11-015). */
+    if (appRoot && appRoot.setAttribute) { appRoot.setAttribute("role", "main"); }
 
     /* En capture, sur le document : les champs sont détruits et recréés à chaque rendu,
      * un écouteur par champ ne survivrait pas. `input` seulement — `change` arrive trop
@@ -615,12 +623,19 @@
         onclick: options.back
       }, [icon("back", 20), el("span", { text: backLabel })]));
     }
-    var titles = el("div", { class: "topbar-titles" });
+    /* Titre d'écran, niveau 1. Le rôle est posé sur le conteneur et non sur un <h1> : sur l'écran
+     * de discussion le titre vit dans un bouton (un titre ne peut pas s'y loger), et la mise en
+     * forme existante reste intacte. `heading: false` quand l'écran porte déjà son propre h1. */
+    var titles = el("div", {
+      class: "topbar-titles",
+      role: options.heading === false ? null : "heading",
+      "aria-level": options.heading === false ? null : "1"
+    });
     if (options.onTitle) {
       var titleBtn = el("button", {
         class: "btn-ghost", type: "button",
         style: { padding: "0", textAlign: "left", width: "100%", minHeight: "auto", background: "transparent", border: "0", cursor: "pointer" },
-        "data-key": "topic-info", onclick: options.onTitle
+        "data-key": "topic-info", "aria-describedby": "topic-info-description", onclick: options.onTitle
       }, [
         el("div", { class: "topbar-title", text: options.title }),
         el("div", { class: "topbar-sub" }, [el("span", { text: options.sub || "" }), icon("info", 13)])
@@ -632,14 +647,47 @@
         titles.appendChild(el("div", { class: "topbar-sub" }, [el("span", { text: options.sub })]));
       }
     }
-    return el("header", { class: "topbar" }, [left, titles, el("div", { class: "topbar-actions" }, options.actions || [])]);
+    /* La consigne du bouton-titre est sa description, pas son nom : le nom reste le texte visible
+     * (le titre du sujet), et la description est posée HORS du titre pour ne pas s'y ajouter. */
+    return el("header", { class: "topbar" }, [
+      left, titles, el("div", { class: "topbar-actions" }, options.actions || []),
+      options.onTitle ? el("span", { class: "visually-hidden", id: "topic-info-description", text: "Voir les détails du sujet" }) : null
+    ]);
+  }
+
+  /* ⚠️ Un libellé qui n'est pas RELIÉ à son champ ne le nomme pas : le champ restait sans nom,
+   * ou nommé par son seul placeholder, qui disparaît dès la première frappe. Chaque champ reçoit
+   * donc un identifiant et son libellé un `for`. L'indication devient la description du champ :
+   * « Votre nom » annonce ainsi son effet (publier en anonyme, §5) à qui ne voit pas l'écran.
+   * L'identifiant dérive de la clé de brouillon : stable d'un rendu à l'autre et unique par
+   * écran ; à défaut de clé, un compteur. */
+  var fieldSeq = 0;
+
+  function controlIn(node) {
+    if (!node) { return null; }
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(node.tagName)) { return node; }
+    return node.querySelector ? node.querySelector("input, select, textarea") : null;
+  }
+
+  function fieldId(control) {
+    var id = control.getAttribute("id");
+    if (id) { return id; }
+    var key = control.getAttribute("data-draft") || control.getAttribute("data-key");
+    if (key) { return "f-" + String(key).replace(/[^A-Za-z0-9_-]/g, "-"); }
+    fieldSeq += 1;
+    return "f-" + fieldSeq;
   }
 
   function field(label, control, hint) {
+    var target = controlIn(control);
+    var id = target ? fieldId(target) : null;
+    if (target) { target.setAttribute("id", id); }
+    var hintNode = hint ? el("div", { class: "hint", text: hint, id: id ? id + "-hint" : null }) : null;
+    if (target && hintNode) { target.setAttribute("aria-describedby", id + "-hint"); }
     return el("div", { class: "field" }, [
-      label ? el("label", { class: "label", text: label }) : null,
+      label ? el("label", { class: "label", text: label, "for": id }) : null,
       control,
-      hint ? el("div", { class: "hint", text: hint }) : null
+      hintNode
     ]);
   }
 
@@ -649,6 +697,40 @@
   }
 
   UI.draftValue = draftValue;
+
+  /* Erreur de saisie reliée au champ (A11-017). Un toast seul disparaît en quelques secondes et
+   * ne dit pas QUEL champ est en cause : le champ reçoit aria-invalid et une description (message
+   * visible sous lui, lu avec son nom) jusqu'à la frappe suivante, et le focus l'y conduit. Le
+   * message n'existe que dans le DOM : un rendu l'efface avec l'état du champ. */
+  function clearInvalid(node) {
+    var errorId = (node.getAttribute("id") || "") + "-error";
+    var message = document.getElementById(errorId);
+    if (message && message.parentNode) { message.parentNode.removeChild(message); }
+    node.removeAttribute("aria-invalid");
+    var rest = (node.getAttribute("aria-describedby") || "").split(" ").filter(function (part) {
+      return part && part !== errorId;
+    }).join(" ");
+    if (rest) { node.setAttribute("aria-describedby", rest); } else { node.removeAttribute("aria-describedby"); }
+  }
+
+  function markInvalid(node, text) {
+    if (!node || !node.parentNode) { return; }
+    var id = node.getAttribute("id");
+    if (!id) { id = fieldId(node); node.setAttribute("id", id); }
+    clearInvalid(node);
+    node.parentNode.insertBefore(el("div", { class: "hint field-error", id: id + "-error", text: text }), node.nextSibling);
+    node.setAttribute("aria-invalid", "true");
+    node.setAttribute("aria-describedby", ((node.getAttribute("aria-describedby") || "") + " " + id + "-error").trim());
+    var onInput = function () { clearInvalid(node); node.removeEventListener("input", onInput); };
+    node.addEventListener("input", onInput);
+    try { node.focus(); } catch (e) { /* champ non focalisable */ }
+  }
+
+  /* Refus de saisie dans ce fichier : message relié au champ ET toast (annonce immédiate). */
+  function invalid(node, text) { markInvalid(node, text); UI.toast(text, "error"); }
+
+  /* Pour js/app.js, qui valide l'adresse, le code et le nom : la clé est celle du brouillon. */
+  UI.fieldError = function (key, text) { markInvalid(findDraftNode(key), text); };
 
   function closeOverlay() { UI.set({ sheet: null, modal: null }); }
 
@@ -732,11 +814,20 @@
 
   /* ---------------------------------------------------- Accueil : connexion --- */
 
+  /* Stockage refusé par le navigateur (js/app.js, STORAGE_REFUSED) : le toast du démarrage
+   * disparaît, cette ligne reste tant que l'écran de connexion est là. Le texte vient d'App et
+   * n'est jamais recopié ici ; un js/app.js plus ancien en cache n'exporte rien : aucune ligne. */
+  function storageNote() {
+    var text = typeof App.storageMessage === "function" ? App.storageMessage() : "";
+    if (typeof text !== "string" || !text) { return null; }
+    return el("div", { class: "note" }, [icon("info", 14), el("span", { text: text })]);
+  }
+
   function screenConnection() {
     var urlInput = el("input", {
       class: "input", type: "url", inputmode: "url", autocomplete: "off",
       autocapitalize: "off", spellcheck: "false",
-      placeholder: "Collez ici l'URL du script (…/exec)",
+      placeholder: "Collez ici l'URL du script (…/exec)", "aria-required": "true",
       "data-draft": "setup:url",
       value: Sync.connection.url || ""
     });
@@ -758,9 +849,10 @@
         backLabel: "Retour"
       }) : null,
       el("div", { class: "content stack-lg" }, [
-        heroBlock("Préparer les réunions de l'équipe, ensemble."),
+        heroBlock("Préparer les réunions de l'équipe, ensemble.", !App.connectionConfigured()),
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("link", "Rejoindre l'espace de l'équipe"),
+          storageNote(),
           field("Adresse du script de l'équipe", urlInput,
             "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
           field("Code d'accès", codeInput,
@@ -782,7 +874,8 @@
   function screenName() {
     var nameInput = bindCounter(el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.name,
-      autocomplete: "name", placeholder: "Votre prénom",
+      autocomplete: "name", placeholder: "Votre prénom", "aria-required": "true",
+      "aria-labelledby": "setup-name-question", "aria-describedby": "setup-name-hint",
       "data-draft": "setup:name",
       value: App.user.name || ""
     }), "setup:name", Core.LIMITS.name);
@@ -796,8 +889,8 @@
       el("div", { class: "content stack-lg" }, [
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("user", "Votre identité"),
-          el("h2", { text: "Comment vous appelez-vous ?" }),
-          el("p", { class: "hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
+          el("h2", { id: "setup-name-question", text: "Comment vous appelez-vous ?" }),
+          el("p", { class: "hint", id: "setup-name-hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
           nameInput,
           counterFor("setup:name", Core.LIMITS.name),
           el("button", {
@@ -814,13 +907,13 @@
   function screenLock() {
     var codeInput = el("input", {
       class: "input", type: "password", inputmode: "text", autocomplete: "off",
-      placeholder: "Code d'accès", "data-draft": "lock:code",
+      placeholder: "Code d'accès", "aria-required": "true", "data-draft": "lock:code",
       onkeydown: function (e) { if (e.key === "Enter") { App.unlock(codeInput.value); } }
     });
 
     return el("div", { class: "screen" }, [
       el("div", { class: "content stack-lg" }, [
-        heroBlock("Espace de l'équipe verrouillé"),
+        heroBlock("Espace de l'équipe verrouillé", true),
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("lock", "Verrou de l'équipe"),
           field("Code d'accès", codeInput,
@@ -851,6 +944,29 @@
     ]);
   }
 
+  /* Dernière activité du sujet (§3), en relatif court : « Actif il y a 2 h ». La date exacte est
+   * dans la feuille d'informations (« Dernière activité le … »). Une date illisible ne dit rien ;
+   * une date dans le futur (horloges décalées) se lit « à l'instant ». */
+  function activityText(iso) {
+    if (!iso) { return ""; }
+    var time = new Date(iso).getTime();
+    if (isNaN(time)) { return ""; }
+    var elapsed = Date.now() - time;
+    if (elapsed < 60000) { return "Actif à l'instant"; }
+    if (elapsed < 3600000) { return "Actif il y a " + Math.floor(elapsed / 60000) + " min"; }
+    if (elapsed < 86400000) { return "Actif il y a " + Math.floor(elapsed / 3600000) + " h"; }
+    var days = Math.floor(elapsed / 86400000);
+    if (days < 7) { return "Actif il y a " + (days === 1 ? "1 jour" : days + " jours"); }
+    var date = new Date(time);
+    return "Actif le " + ("0" + date.getDate()).slice(-2) + "/" + ("0" + (date.getMonth() + 1)).slice(-2) +
+      "/" + date.getFullYear();
+  }
+
+  function activityNote(topic) {
+    var text = activityText(topic.updatedAt);
+    return text ? el("div", { class: "card-meta card-activity", text: text }) : null;
+  }
+
   function topicCard(topic) {
     /* Un compteur à zéro n'apprend rien : on ne montre que ce qui existe, et
      * un sujet encore vide le dit avec des mots. */
@@ -872,6 +988,7 @@
         toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status])
       ]),
       topic.description ? el("div", { class: "card-desc", text: topic.description }) : null,
+      activityNote(topic),
       el("div", { class: "card-foot" }, [
         counts,
         el("div", { class: "spacer" }),
@@ -918,7 +1035,7 @@
       var index = 0;
       if (all.length > CONFIG.SEARCH_THRESHOLD) {
         var search = el("input", {
-          class: "input", type: "search", placeholder: "Rechercher un sujet",
+          class: "input", type: "search", placeholder: "Rechercher un sujet", "aria-label": "Rechercher un sujet",
           "data-draft": "topics:search", value: UI.local.search,
           oninput: Utils.debounce(function (e) { UI.set({ search: e.target.value }); }, 180)
         });
@@ -1146,11 +1263,18 @@
     return el("div", { class: classes }, children);
   }
 
+  /* Mouvement réduit : `behavior: "smooth"` passé à scrollIntoView l'emporte sur `scroll-behavior`
+   * du CSS (A11-014). "auto" rend la main à la feuille de style, qui défile sans animation. */
+  function motionReduced() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    catch (e) { return false; }
+  }
+
   UI.scrollToMessage = function (messageId) {
     var nodes = document.querySelectorAll("[data-message-id]");
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i].getAttribute("data-message-id") === messageId) {
-        nodes[i].scrollIntoView({ block: "center", behavior: "smooth" });
+        nodes[i].scrollIntoView({ block: "center", behavior: motionReduced() ? "auto" : "smooth" });
         /* Le clignotement ne dit rien à qui ne voit pas l'écran : sans
          * déplacement du focus, le lecteur d'écran reste là où la feuille s'est
          * fermée et rien n'indique qu'on a été emmené ailleurs dans le fil. */
@@ -1167,7 +1291,7 @@
   function composer(topic) {
     var draftKey = "composer:" + topic.id;
     var textarea = el("textarea", {
-      class: "textarea grow", rows: "1", placeholder: "Votre message…",
+      class: "textarea grow", rows: "1", placeholder: "Votre message…", "aria-label": "Votre message",
       maxlength: Core.LIMITS.message, "data-draft": draftKey,
       oninput: function (e) { autoGrow(e.target); },
       onkeydown: function (e) {
@@ -1482,6 +1606,7 @@
 
     var textarea = bindCounter(el("textarea", {
       class: "textarea", placeholder: "Nouvelle conclusion…", maxlength: Core.LIMITS.conclusion,
+      "aria-label": "Nouvelle formulation du consensus", "aria-required": "true",
       "data-draft": "conclusion:" + topic.id
     }), "conclusion:" + topic.id, Core.LIMITS.conclusion);
 
@@ -1493,7 +1618,7 @@
         class: "btn btn-primary btn-block", type: "button", text: "Ajouter", "data-key": "conclusion-add",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("La formulation du consensus est vide.", "error"); return; }
+          if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
           textarea.value = "";
           App.actions.addConclusion(topic.id, text);
         }
@@ -1590,6 +1715,7 @@
     return el("div", { class: "screen" }, [
       topbar({
         title: "Réunion",
+        heading: false,   // le h1 de la synthèse est celui du document imprimable
         sub: "Synthèse imprimable",
         back: App.remonter,
         backLabel: "Réglages",
@@ -1623,6 +1749,7 @@
 
     var nameInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.name,
+      "aria-label": "Votre nom", "aria-required": "true",
       value: App.user.name || "", "data-draft": "settings:name"
     });
 
@@ -1652,6 +1779,44 @@
       ]);
     }
 
+    /* Actions de plus de 30 jours en file (BL-004) : sync.js les retient au lieu de les renvoyer en
+     * silence (un rejeu tardif pourrait défaire un choix plus récent) et le message de démarrage
+     * renvoie ici. Bloc absent à zéro ; jamais de contenu d'action ni d'auteur, seulement le
+     * compte. Gardé pour un ancien sync.js en cache, qui n'a pas staleCount. */
+    var staleCount = typeof Sync.staleCount === "function" ? Number(Sync.staleCount()) || 0 : 0;
+    var staleBlock = null;
+
+    function releaseStale() {
+      var say = function (text, kind) { UI.toast(text, kind); UI.force(); };
+      var refused = "L'envoi n'a pas pu être lancé : vos actions restent sur cet appareil.";
+      var pending;
+      try { pending = Sync.releaseStale(); } catch (error) { pending = null; }
+      if (!pending || typeof pending.then !== "function") { say(refused, "error"); return; }
+      pending.then(function (count) {
+        count = Number(count) || 0;
+        say(count === 0 ? "Plus aucune action n'attend."
+          : count === 1 ? "1 action va partir." : count + " actions vont partir.");
+      }, function () { say(refused, "error"); });
+    }
+
+    if (staleCount > 0 && typeof Sync.releaseStale === "function") {
+      var oneStale = staleCount === 1;
+      staleBlock = el("div", { class: "stack" }, [
+        el("div", { class: "note" }, [
+          icon("info", 14),
+          el("span", { text: oneStale
+            ? "1 action de plus de 30 jours attend sur cet appareil."
+            : staleCount + " actions de plus de 30 jours attendent sur cet appareil." })
+        ]),
+        el("button", {
+          class: "btn btn-outline btn-block", type: "button", "data-key": "release-stale",
+          "aria-label": oneStale ? "Envoyer quand même l'action de plus de 30 jours"
+            : "Envoyer quand même les actions de plus de 30 jours",
+          onclick: releaseStale
+        }, [icon("send", 16), el("span", { text: "Envoyer quand même" })])
+      ]);
+    }
+
     var diagRows = el("div", { class: "card card-static stack" }, [
       el("div", { class: "row" }, [
         sectionTitle("sync", "Synchronisation"),
@@ -1661,6 +1826,7 @@
       el("button", { class: "btn btn-outline btn-block", type: "button",
         "data-key": "sync-now", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
       [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
+      staleBlock,
       el("div", { class: "diag" }, [
         /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux
          * codes différents = deux scripts différents, et c'est la première
@@ -1827,9 +1993,11 @@
       el("div", { class: "card-meta" }, [
         toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status]),
         icon("user", 13),
-        el("span", { text: topic.createdBy.name }),
-        el("span", { class: "meta-dot" }),
-        el("span", { text: Utils.formatDateTime(topic.createdAt) })
+        el("span", { text: topic.createdBy.name })
+      ]),
+      el("div", { class: "hint" }, [
+        topic.createdAt && Utils.formatDateTime(topic.createdAt) ? el("div", { text: "Créé le " + Utils.formatDateTime(topic.createdAt) }) : null,
+        topic.updatedAt && Utils.formatDateTime(topic.updatedAt) ? el("div", { text: "Dernière activité le " + Utils.formatDateTime(topic.updatedAt) }) : null
       ]),
       topic.description
         ? el("div", { class: "pre-wrap", style: { fontSize: "var(--fs-sm)" }, text: topic.description })
@@ -1844,7 +2012,7 @@
   function createTopicModal() {
     var titleInput = bindCounter(el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
-      placeholder: "Titre du sujet", "data-draft": "newTopic:title"
+      placeholder: "Titre du sujet", "aria-required": "true", "data-draft": "newTopic:title"
     }), "newTopic:title", Core.LIMITS.topicTitle);
 
     var descInput = el("textarea", {
@@ -1868,7 +2036,7 @@
         class: "btn btn-primary", type: "button", text: "Créer",
         onclick: function () {
           var title = Utils.trim(titleInput.value);
-          if (!title) { UI.toast("Le titre du sujet est obligatoire.", "error"); return; }
+          if (!title) { invalid(titleInput, "Le titre du sujet est obligatoire."); return; }
           App.actions.createTopic(title, descInput.value, Utils.trim(nameInput.value));
         }
       })
@@ -1880,7 +2048,7 @@
     if (!topic) { return null; }
     var titleInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
-      value: topic.title, "data-draft": "editTopic:title:" + topic.id
+      "aria-required": "true", value: topic.title, "data-draft": "editTopic:title:" + topic.id
     });
     var descInput = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.topicDescription,
@@ -1895,7 +2063,7 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var title = Utils.trim(titleInput.value);
-          if (!title) { UI.toast("Le titre du sujet est obligatoire.", "error"); return; }
+          if (!title) { invalid(titleInput, "Le titre du sujet est obligatoire."); return; }
           App.actions.updateTopic(topic.id, title, descInput.value);
         }
       })
@@ -1908,6 +2076,7 @@
     if (!message) { return null; }
     var textarea = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.message,
+      "aria-label": "Texte du message", "aria-required": "true",
       value: message.text, "data-draft": "editMessage:" + message.id
     });
     return modal("Modifier le message", el("div", { class: "stack" }, [textarea]), [
@@ -1916,7 +2085,7 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("Le message est vide.", "error"); return; }
+          if (!text) { invalid(textarea, "Le message est vide."); return; }
           App.actions.updateMessage(topic.id, message.id, text);
         }
       })
@@ -1934,7 +2103,7 @@
 
     var titleInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.proposalTitle,
-      placeholder: "Titre de la proposition", value: initialTitle, "data-draft": keyBase + ":title"
+      placeholder: "Titre de la proposition", "aria-required": "true", value: initialTitle, "data-draft": keyBase + ":title"
     });
     var descInput = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.proposalDescription,
@@ -1950,7 +2119,7 @@
         class: "btn btn-primary", type: "button", text: existing ? "Enregistrer" : "Créer",
         onclick: function () {
           var title = Utils.trim(titleInput.value);
-          if (!title) { UI.toast("Le titre de la proposition est obligatoire.", "error"); return; }
+          if (!title) { invalid(titleInput, "Le titre de la proposition est obligatoire."); return; }
           if (existing) { App.actions.updateProposal(topic.id, existing.id, title, descInput.value); }
           else { App.actions.createProposal(topic.id, title, descInput.value); }
         }
@@ -1964,6 +2133,7 @@
     if (!conclusion) { return null; }
     var textarea = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.conclusion,
+      "aria-label": "Texte de la formulation du consensus", "aria-required": "true",
       value: conclusion.text, "data-draft": "editConclusion:" + conclusion.id
     });
     return modal("Modifier la conclusion", el("div", { class: "stack" }, [textarea]), [
@@ -1972,7 +2142,7 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("La formulation du consensus est vide.", "error"); return; }
+          if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
           App.actions.updateConclusion(topic.id, conclusion.id, text);
         }
       })
@@ -2060,6 +2230,30 @@
     ].join("|");
   }
 
+  /* Titre du document, un par écran : « Titre du sujet - BrainstO. ». Il est annoncé à chaque
+   * changement de page et tient lieu d'intitulé d'onglet et d'historique (A11-015). Le focus, lui,
+   * ne bouge pas à la navigation (ORCH A11-008). */
+  function pageTitle() {
+    var tail = " - " + CONFIG.APP_NAME;
+    var gate = App.gate();
+    if (gate === "connection") { return "Connexion" + tail; }
+    if (gate === "name") { return "Votre nom" + tail; }
+    if (gate === "lock") { return "Espace verrouillé" + tail; }
+    var route = App.route;
+    var topic = route.topicId ? Core.findTopic(Store.view, route.topicId) : null;
+    if (route.name === "topic") { return (topic ? topic.title : "Introuvable") + tail; }
+    if (route.name === "proposals") { return "Propositions" + (topic ? " : " + topic.title : "") + tail; }
+    if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
+    if (route.name === "settings") { return "Réglages" + tail; }
+    if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
+    return "Sujets" + tail;
+  }
+
+  function setPageTitle() {
+    var title = pageTitle();
+    if (document.title !== title) { document.title = title; }
+  }
+
   UI.render = function () {
     if (!appRoot) { return; }
     var sig = signature();
@@ -2120,6 +2314,7 @@
     appRoot.appendChild(screen);
     renderOverlay();
     restoreDrafts(drafts);
+    setPageTitle();
 
     var newThread = document.querySelector(".thread");
     if (newThread) {

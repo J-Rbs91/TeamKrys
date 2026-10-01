@@ -868,6 +868,13 @@ p { margin: 0; }
 
 .hint { font-size: var(--fs-xs); color: var(--muted); line-height: 1.55; }
 
+/* Message d'erreur relié à son champ (aria-describedby, BL-009) : le texte dit l'erreur,
+   la couleur la souligne sans jamais la porter seule. Contrastes couverts par tools/check-contrast.py
+   (--danger sur --surface, texte et composant). */
+.hint.field-error { color: var(--danger); font-weight: 600; }
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] { border-color: var(--danger); }
+
 /* Note contextuelle : une consigne qui doit être lue une fois, pas un statut.
    Pastille souple qui peut passer à la ligne, contrairement à .status-pill. */
 /* Un élément flexible garde `min-width: auto`, donc la largeur de son mot le plus

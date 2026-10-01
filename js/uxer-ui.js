@@ -144,13 +144,13 @@
     var button = document.querySelector(".topbar-titles > button");
     if (!button || button.classList.contains("ux-topic-title-action")) { return; }
     button.classList.add("ux-topic-title-action");
-    button.setAttribute("aria-label", "Voir les détails du sujet");
+    /* Pas d'aria-label : il remplaçait le titre visible par « Voir les détails du sujet » et le
+     * titre n'était lu nulle part (A11-008). Le nom est le texte visible, « Détails » compris ;
+     * la consigne est la description (aria-describedby posé par js/ui.js, hors du titre). */
 
     var sub = button.querySelector(".topbar-sub");
     if (sub) {
-      var hint = make("span", "ux-title-hint", "Détails");
-      hint.setAttribute("aria-hidden", "true");
-      sub.appendChild(hint);
+      sub.appendChild(make("span", "ux-title-hint", "Détails"));
     }
   }
 

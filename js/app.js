@@ -135,14 +135,25 @@
   var STORAGE_REFUSED = "Ce navigateur refuse d'enregistrer des données sur l'appareil : ouvrez BrainstO. dans votre navigateur habituel.";
   var storageRefused = false;
 
+  /* Texte du refus de stockage pour l'écran de connexion (js/ui.js) : une ligne fixe, là où le
+   * toast du démarrage disparaît. Vide quand le stockage fonctionne. Le texte n'est écrit qu'ici. */
+  App.storageMessage = function () { return storageRefused ? STORAGE_REFUSED : ""; };
+
+  /* Saisie refusée : le message est aussi relié au champ (aria-invalid, aria-describedby : A11-017),
+   * pas seulement annoncé par un toast qui disparaît. Gardé pour un js/ui.js plus ancien en cache. */
+  function refuse(key, message) {
+    if (typeof UI.fieldError === "function") { UI.fieldError(key, message); }
+    UI.toast(message, "error");
+  }
+
   App.saveConnection = function (url, code) {
     if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); return; }
     var clean = Utils.trim(url);
-    if (!clean) { UI.toast("Collez l'adresse du script de l'équipe.", "error"); return; }
+    if (!clean) { refuse("setup:url", "Collez l'adresse du script de l'équipe."); return; }
     /* https obligatoire, sauf pour un serveur local de test. */
     var isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(clean);
     if (clean.indexOf("https://") !== 0 && !isLocal) {
-      UI.toast("L'adresse doit commencer par https://", "error");
+      refuse("setup:url", "L'adresse doit commencer par https://");
       return;
     }
 
@@ -185,7 +196,7 @@
       UI.force();
     }).catch(function (error) {
       if (Api.isAuthError(error)) {
-        UI.toast("Code d'accès refusé par le serveur.", "error");
+        refuse("setup:code", "Code d'accès refusé par le serveur.");
       } else {
         UI.toast(error && error.message ? error.message : "Connexion impossible.", "error");
       }
@@ -288,7 +299,7 @@
   function unlockWithNewCode(value, verifier) {
     var url = Sync.connection.url;
     if (!url || Sync.connection.localMode) {
-      UI.toast("Code d'accès incorrect.", "error");
+      refuse("lock:code", "Code d'accès incorrect.");
       return null;
     }
     return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
@@ -303,8 +314,8 @@
         /* Réponse tardive : déconnexion, autre adresse ou déjà déverrouillé entre-temps. */
         if (!App.needsUnlock() || Sync.connection.url !== url) { return; }
         if (accepted !== true) {
-          UI.toast(accepted === false ? "Code d'accès incorrect."
-            : "Code d'accès incorrect, ou nouveau code impossible à vérifier sans connexion.", "error");
+          refuse("lock:code", accepted === false ? "Code d'accès incorrect."
+            : "Code d'accès incorrect, ou nouveau code impossible à vérifier sans connexion.");
           return;
         }
         Utils.storage.set(CONFIG.KEYS.lockVerifier, verifier);
@@ -322,7 +333,7 @@
 
   App.unlock = function (code) {
     var value = String(code == null ? "" : code);
-    if (!value) { UI.toast("Saisissez le code d'accès.", "error"); return; }
+    if (!value) { refuse("lock:code", "Saisissez le code d'accès."); return; }
     Utils.sha256Hex(CONFIG.verifierInput(value)).then(function (verifier) {
       if (verifier !== lockVerifier) { return unlockWithNewCode(value, verifier); }
       return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
@@ -367,7 +378,7 @@
 
   App.saveName = function (name, silent) {
     var clean = Utils.limit(name, Core.LIMITS.name);
-    if (!clean) { UI.toast("Le nom est obligatoire.", "error"); return; }
+    if (!clean) { refuse(silent ? "settings:name" : "setup:name", "Le nom est obligatoire."); return; }
     App.user.name = clean;
     Utils.storage.set(CONFIG.KEYS.user, App.user);
     Sync.dispatch(Sync.makeAction("REGISTER_PARTICIPANT", {
