@@ -287,6 +287,109 @@ check("Propositions : seuls les statuts de maturation restent proposés", () => 
   assert(ProductView.PROPOSAL_LEGACY_LABELS.implemented.indexOf("ancien statut") >= 0);
 });
 
+/* ---------------------------------------------------------------------------
+ * WP-19 : recherche tolérante (BL-060) et tri par instants (BL-061).
+ * ------------------------------------------------------------------------- */
+
+const SEARCH_TOPICS = [
+  topic("a", "open", "2026-09-20T08:00:00Z", { title: "Préparer la réunion de rentrée", description: "Ordre du jour" }),
+  topic("b", "open", "2026-09-19T08:00:00Z", { title: "Commande   du samedi (urgent) [x]" }),
+  topic("c", "ready", "2026-09-18T08:00:00Z", { title: "Café du matin", description: "À l'étage" }),
+  topic("d", "open", "2026-09-17T08:00:00Z", { title: "Cœur de l'équipe" }),
+  topic("e", "archived", "2026-09-16T08:00:00Z", { title: "Vieille réunion annulée" })
+];
+
+const idsOf = (list) => list.map((item) => item.id);
+const found = (query, showArchived) => idsOf(ProductView.visibleTopics(SEARCH_TOPICS, query, !!showArchived));
+
+check("Recherche : la casse, les accents et les espaces multiples sont ignorés (BL-060)", () => {
+  equal(found("reunion"), ["a"], "sans accent");
+  equal(found("REUNION"), ["a"], "majuscules sans accent");
+  equal(found("RÉUNION"), ["a"], "majuscules accentuées");
+  equal(found("réunion"), ["a"], "avec accent (comportement d'avant)");
+  equal(found("commande du samedi"), ["b"], "espaces multiples du titre");
+  equal(found("  commande    du   samedi  "), ["b"], "espaces multiples de la saisie");
+  equal(found("cafe"), ["c"], "cafe");
+  equal(found("CAFÉ"), ["c"], "CAFÉ");
+  equal(found("etage"), ["c"], "la description compte aussi");
+  equal(found("rentree ordre"), ["a"], "titre et description sont joints par une espace");
+  equal(found("coeur"), ["d"], "ligature œ");
+  equal(found("CŒUR"), ["d"], "ligature Œ");
+});
+
+check("Recherche : caractères spéciaux littéraux, saisie vide sans filtre, archivés à la demande", () => {
+  equal(found("(urgent)"), ["b"]);
+  equal(found("[x]"), ["b"]);
+  equal(found(".*"), []);
+  equal(found("\\"), []);
+  equal(found("+?"), []);
+  equal(found("reunions"), []);
+  equal(found(""), ["a", "b", "c", "d"]);
+  equal(found("   "), ["a", "b", "c", "d"]);
+  equal(found(null), ["a", "b", "c", "d"]);
+  equal(found("reunion", true), ["a", "e"], "archivés affichables");
+});
+
+check("Recherche : normalizeSearch plie la casse, les accents, les ligatures et les espaces", () => {
+  equal(ProductView.normalizeSearch("  É  l  È ve "), "e l e ve");
+  equal(ProductView.normalizeSearch("Œuvre, Æther"), "oeuvre, aether");
+  equal(ProductView.normalizeSearch("ÇA va"), "ca va");
+  equal(ProductView.normalizeSearch("a\n\tb"), "a b");
+  equal(ProductView.normalizeSearch(null), "");
+  equal(ProductView.normalizeSearch(undefined), "");
+});
+
+check("Tri : par instants, date illisible en dernier, égalité = ordre d'entrée (BL-061)", () => {
+  const list = [
+    topic("invalide", "open", "pas une date"),
+    topic("valide", "open", "2026-09-30T09:00:00Z"),
+    topic("absent", "open", undefined),
+    topic("vide", "open", ""),
+    topic("nombre", "open", 1790000000000),
+    topic("objet", "open", {})
+  ];
+  const order = idsOf(ProductView.groupTopics(list).open);
+  equal(order, ["valide", "invalide", "absent", "vide", "nombre", "objet"]);
+  equal(idsOf(ProductView.visibleTopics(list, "", false)), order, "même ordre pour l'accueil");
+  equal(idsOf(ProductView.meetingTopics(list)), order, "même ordre pour la synthèse");
+});
+
+check("Tri : décalages horaires, millisecondes et date seule comparés comme des instants", () => {
+  equal(idsOf(ProductView.groupTopics([
+    topic("plus2h-0800Z", "open", "2026-09-30T10:00:00+02:00"),
+    topic("z-0900Z", "open", "2026-09-30T09:00:00Z"),
+    topic("moins5h-1000Z", "open", "2026-09-30T05:00:00-05:00")
+  ]).open), ["moins5h-1000Z", "z-0900Z", "plus2h-0800Z"]);
+  const same = [
+    topic("p", "open", "2026-09-30T09:00:00Z"),
+    topic("q", "open", "2026-09-30T11:00:00+02:00"),
+    topic("r", "open", "2026-09-30T09:00:00.000Z")
+  ];
+  equal(idsOf(ProductView.groupTopics(same).open), ["p", "q", "r"], "instants égaux : ordre d'entrée");
+  equal(idsOf(ProductView.groupTopics(same.slice().reverse()).open), ["r", "q", "p"], "idem à l'envers");
+  equal(idsOf(ProductView.groupTopics([
+    topic("s", "open", "2026-09-30T09:00:00Z"),
+    topic("t", "open", "2026-09-30T09:00:00.500Z"),
+    topic("u", "open", "2026-09-29T23:00:00Z"),
+    topic("v", "open", "2026-09-30")
+  ]).open), ["t", "s", "v", "u"], "millisecondes et date seule (minuit UTC)");
+});
+
+check("Une seule règle de recherche et de tri pour l'accueil, le regroupement et js/product-ui.js (BL-060, BL-061)", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+  const ui = read("js/ui.js");
+  const from = ui.indexOf("function screenTopics()");
+  assert(from > 0, "screenTopics introuvable dans js/ui.js");
+  const to = ui.indexOf("\n  function ", from + 10);
+  const body = ui.slice(from, to > 0 ? to : undefined);
+  assert(body.indexOf("ProductView.visibleTopics(") >= 0, "l'accueil doit appeler ProductView.visibleTopics");
+  assert(!/toLowerCase|localeCompare|\.sort\(/.test(body), "l'accueil ne doit plus filtrer ni trier lui-même");
+  assert(read("js/product-ui.js").indexOf("ProductView.visibleTopics(") >= 0, "js/product-ui.js doit appeler ProductView.visibleTopics");
+  assert(read("js/product-view.js").indexOf("localeCompare") < 0, "js/product-view.js : plus de tri par chaînes");
+});
+
 if (failures.length) {
   console.error("\nÉCHECS product-view :");
   failures.forEach((failure) => console.error("- " + failure));
