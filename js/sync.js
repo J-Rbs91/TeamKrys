@@ -30,6 +30,13 @@
   var inFlight = null;       // cycle en cours, partagé au lieu d'être ignoré
   var idleRounds = 0;        // tours consécutifs sans rien de neuf
   var failures = 0;          // échecs réseau consécutifs
+  /* Envois consécutifs restés SANS verdict alors que le serveur a répondu (panne
+   * de Code.gs, page illisible, refus sans code pas encore cru) : dès 2, « Erreur ». */
+  var serverFailures = 0;
+  var serverWarned = false;
+  var refusals = {};         // id → refus SANS code déjà reçus (backend d'avant)
+  var LEGACY_TRIES = 3;      // un refus sans code n'est cru qu'au 3e envoi
+  var BEACON_BUDGET = 60000; // octets UTF-8 d'un envoi de secours (refusé au-delà de 64 Kio)
   var activeUntil = 0;       // régime nerveux jusqu'à cet instant
   var storageWarned = false;
   /* File de la base lue au moins une fois ? Tant que non (ouverture ratée au
@@ -88,6 +95,10 @@
       code = "local"; label = "Local";
     } else if (typeof navigator !== "undefined" && navigator.onLine === false) {
       code = "offline"; label = pending ? "Hors ligne (" + pending + ")" : "Hors ligne";
+    } else if (serverFailures >= 2 && pending > 0) {
+      /* Le serveur répond, mais mal, et de façon répétée : ce n'est plus une simple
+       * attente. Les actions restent en file et repartiront (§12, §22). */
+      code = "error"; label = "Erreur (" + pending + ")";
     } else if (busy || pulling) {
       code = "syncing"; label = "Sync…";
     } else if (pending > 0) {
@@ -149,6 +160,7 @@
   Sync.setConnection = function (options) {
     Object.assign(Sync.connection, options || {});
     lastError = null;
+    recovered();
     changed();
   };
 
