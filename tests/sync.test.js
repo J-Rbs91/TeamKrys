@@ -149,7 +149,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
  *   status500  statut 500
  *   hang       en-têtes reçus, corps qui n'arrive jamais
  *   noResults  lot : seule la 1re action exécutée, réponse ok SANS results
- *   holes      lot : 2e action en retry (non exécutée), verdict de la 3e absent */
+ *   holes      lot : 2e action en retry (non exécutée), verdict de la 3e absent
+ *   auth       refus d'authentification : { ok:false, code:"auth" }, rien d'exécuté */
 function makeFetch(srv) {
   return function (url, init) {
     const method = (init && init.method) || "GET";
@@ -170,6 +171,7 @@ function makeFetch(srv) {
     if (failure[kind]) { return reply(200, JSON.stringify({ ok: false, code: "retry", error: failure[kind] })); }
     if (kind === "legacyFail") { return reply(200, JSON.stringify({ ok: false, error: "Service error: Drive" })); }
     if (kind === "oddCode") { return reply(200, JSON.stringify({ ok: false, code: "quota", error: "Quota dépassé." })); }
+    if (kind === "auth") { return reply(200, JSON.stringify({ ok: false, code: "auth", error: "Code d'accès refusé." })); }
 
     const query = new URL(url).searchParams;
     let body = init && init.body ? JSON.parse(init.body) : null;
@@ -199,6 +201,36 @@ function makeFetch(srv) {
   };
 }
 
+/* Horloge VIRTUELLE : les délais ne s'écoulent que lorsqu'on les fait avancer, dans
+ * l'ordre, les promesses se déroulant entre deux échéances. Cinq minutes de boucle
+ * se jouent ainsi en une fraction de seconde, et de façon déterministe. */
+function makeClock() {
+  let now = 0;
+  let seq = 0;
+  const waiting = new Map();
+  const turn = () => new Promise((resolve) => setTimeout(resolve, 1));
+  return {
+    now: () => now,
+    setTimeout(fn, ms) { seq += 1; waiting.set(seq, { at: now + (ms || 0), fn }); return seq; },
+    clearTimeout(handle) { waiting.delete(handle); },
+    async advance(ms) {
+      const end = now + ms;
+      for (let guard = 0; guard < 20000; guard++) {
+        await turn();
+        let next = null;
+        waiting.forEach((timer, handle) => {
+          if (timer.at <= end && (!next || timer.at < next.timer.at)) { next = { handle, timer }; }
+        });
+        if (!next) { now = end; await turn(); return; }
+        waiting.delete(next.handle);
+        now = Math.max(now, next.timer.at);
+        next.timer.fn();
+      }
+      throw new Error("horloge virtuelle : trop d'échéances");
+    }
+  };
+}
+
 /* ------------------------------------------- Un client complet, isolé --- */
 
 /* options.indexedDB === false : le module database.js ne trouve aucun
@@ -220,6 +252,8 @@ function makeClient(name, server, options) {
   if (options.timers) {
     sandbox.setTimeout = (fn, ms) => { options.timers.push(ms || 0); return setTimeout(fn, (ms || 0) / 100); };
   }
+  /* options.clock : horloge virtuelle (makeClock), pour jouer des minutes sans les attendre. */
+  if (options.clock) { sandbox.setTimeout = options.clock.setTimeout; sandbox.clearTimeout = options.clock.clearTimeout; }
 
   const messages = [];
   sandbox.Api = {
@@ -1145,7 +1179,7 @@ async function run() {
 
     srv.faults.push({ method: "POST", kind: "hang", times: 1 });
     await write(A, "m1"); await settle();
-    await new Promise((r) => setTimeout(r, 900));      // 45 s d'écriture, à l'horloge accélérée
+    await new Promise((r) => setTimeout(r, 900));      // 55 s d'écriture, à l'horloge accélérée
     await within(A.Sync.now(), 3000); await settle();
     assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0,
       "écriture : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount() + ", « " + A.Sync.status().label + " »");
@@ -1183,6 +1217,165 @@ async function run() {
     B.Sync.stop();
     assert(big === false && srv2.beacons.length === 0 && B.Sync.pendingCount() === 1,
       "action de 72 000 octets : flush=" + big + ", envois=" + srv2.beacons.length + ", file=" + B.Sync.pendingCount());
+  });
+
+  /* ------------------------ Refus d'authentification, actions anciennes (WP-13) --- */
+
+  const MINUTE = 60 * 1000;
+  const DAY = 24 * 60 * MINUTE;
+  const refuseAuth = (srv) => srv.faults.push(
+    { method: "GET", kind: "auth", times: Infinity }, { method: "POST", kind: "auth", times: Infinity });
+  const requests = (srv) => srv.http.GET + srv.http.POST;
+
+  /* BL-024 : le serveur se met à exiger un code que cet appareil n'a pas. Rien n'est
+   * reverrouillé, mais la boucle martelait le serveur (1 140 requêtes refusées par
+   * heure) et prévenait l'utilisateur à chaque tour (un message toutes les 3 s). */
+  await check("refus d'authentification pendant 5 min : au plus 10 requêtes, une seule notification, reprise au succès", async () => {
+    const srv = makeServer({ features: MODERN });
+    const clock = makeClock();
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true, clock });
+    let alerts = 0;
+    A.Sync.setHooks({ onAuthError: () => { alerts += 1; } });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    refuseAuth(srv);
+    const before = requests(srv);
+    A.Sync.start();
+    await clock.advance(5 * MINUTE);
+    const sent = requests(srv) - before;
+    assert(sent <= 10, sent + " requêtes refusées en 5 min (" + sent * 12 + " par heure) : voulu 10 au plus");
+    assert(alerts === 1, alerts + " notifications d'accès refusé (voulu : 1 pour toute la série)");
+    const wait = A.Sync.diagnostics().intervalMs;
+    assert(wait >= 30000 && wait <= CONFIG.POLL_BACKOFF_MAX_MS, "recul de " + wait + " ms après 5 min de refus (voulu : jusqu'à 60 s)");
+
+    /* Le serveur accepte de nouveau : la boucle reprend d'elle-même, au rythme normal. */
+    srv.faults.length = 0;
+    await clock.advance(CONFIG.POLL_BACKOFF_MAX_MS + 1000);
+    assert(A.Sync.status().code === "idle", "pas de reprise au succès : « " + A.Sync.status().label + " »");
+    assert(A.Sync.diagnostics().intervalMs <= CONFIG.POLL_IDLE_MS, "rythme encore reculé après le succès : " + A.Sync.diagnostics().intervalMs + " ms");
+
+    /* Un NOUVEAU refus est une nouvelle transition : une nouvelle notification, et une seule. */
+    refuseAuth(srv);
+    await clock.advance(10000);
+    assert(alerts === 2, alerts + " notifications après un second refus (voulu : 2 en tout)");
+    await clock.advance(2 * MINUTE);
+    assert(alerts === 2, "notification répétée pendant la même série (" + alerts + ")");
+
+    /* Un nouveau jeton (Sync.setConnection) remet la série à zéro, rythme compris. */
+    A.Sync.setConnection({ token: "autre-jeton" });
+    assert(A.Sync.diagnostics().intervalMs <= CONFIG.POLL_IDLE_MS, "le recul survit à un nouveau jeton");
+    await A.Sync.now();
+    assert(alerts === 3, alerts + " notifications après un nouveau jeton refusé (voulu : 3 en tout)");
+    A.Sync.stop();
+  });
+
+  await check("refus d'authentification avec une action en file : elle reste, au plus 10 requêtes, partie une fois l'accès rétabli", async () => {
+    const srv = makeServer({ features: MODERN });
+    const clock = makeClock();
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true, clock });
+    let alerts = 0;
+    A.Sync.setHooks({ onAuthError: () => { alerts += 1; } });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    refuseAuth(srv);
+    const before = requests(srv);
+    await write(A, "m1");
+    A.Sync.start();
+    await clock.advance(5 * MINUTE);
+    const sent = requests(srv) - before;
+    assert(sent <= 10, sent + " requêtes refusées en 5 min avec une action en file (voulu : 10 au plus)");
+    assert(alerts === 1, alerts + " notifications (voulu : 1)");
+    assert(A.Sync.pendingCount() === 1 && copies(srv, "m1") === 0, "l'action refusée pour l'authentification a quitté la file");
+
+    srv.faults.length = 0;
+    await clock.advance(CONFIG.POLL_BACKOFF_MAX_MS + 1000);
+    assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0,
+      "après le retour de l'accès : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount());
+    A.Sync.stop();
+  });
+
+  /* BL-004, complément (D7) : le serveur ne garde que 5 000 identifiants d'actions
+   * traitées. Une action restée en file plus de 30 jours ne repart donc jamais en
+   * silence : elle reste en file (rien n'est perdu), compte dans l'indicateur, et ne
+   * part que sur « Envoyer quand même ». */
+  const aged = (A, id, days) => {
+    const action = A.Sync.makeAction("CREATE_MESSAGE", { topicId: "t1", messageId: id, text: "texte " + id }, A.user);
+    if (days === null) { delete action.ts; } else { action.ts = new Date(Date.now() - days * DAY).toISOString(); }
+    return A.Sync.dispatch(action);
+  };
+  const order = (srv) => Core.findTopic(srv.data, "t1").messages.map((m) => m.id).join(",");
+  const staleNotes = (client) => client.messages.filter((m) => m.indexOf("de plus de 30 jours") >= 0);
+
+  await check("action en file depuis plus de 30 jours : retenue, comptée, envoyée après releaseStale ; récente ou non datée : envoyée normalement", async () => {
+    assert(CONFIG.STALE_ACTION_MS === 30 * DAY, "seuil des actions retenues : " + CONFIG.STALE_ACTION_MS + " ms (voulu : 30 jours)");
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    /* 29 jours, ou sans date : rien d'ancien, tout part. */
+    await aged(A, "r29", 29); await aged(A, "n0", null); await settle();
+    await A.Sync.now(); await settle();
+    assert(order(srv) === "r29,n0" && A.Sync.pendingCount() === 0,
+      "actions récentes ou non datées : serveur [" + order(srv) + "], file " + A.Sync.pendingCount());
+    assert(A.Sync.staleCount() === 0 && !staleNotes(A).length, "une action récente est tenue pour ancienne");
+
+    /* 31 jours, et une récente derrière : l'ordre de la file fait foi, les deux attendent. */
+    const posted = srv.calls.actionsPosted;
+    await aged(A, "v31", 31); await aged(A, "r0", 0); await settle();
+    await A.Sync.now(); await settle(); await A.Sync.now(); await settle();
+    assert(srv.calls.actionsPosted === posted, "une action de 31 jours est partie toute seule");
+    assert(A.Sync.pendingCount() === 2 && A.Sync.staleCount() === 1,
+      "file " + A.Sync.pendingCount() + ", retenues " + A.Sync.staleCount() + " (voulu 2 et 1)");
+    const status = A.Sync.status();
+    assert(status.code === "pending" && status.label === "En attente (2)", "indicateur : « " + status.label + " » (" + status.code + ")");
+    assert(A.Sync.flush() === false && srv.beacons.length === 0, "l'envoi de secours emporte une action retenue");
+    assert(Core.findMessage(Core.findTopic(A.Store.view, "t1"), "v31"), "l'action retenue a disparu de l'écran de son auteur");
+    const told = staleNotes(A);
+    assert(told.length === 1 && told[0] === "error: 1 action de plus de 30 jours attend : ouvrez Réglages pour l'envoyer.",
+      "message : " + JSON.stringify(told));
+
+    /* « Envoyer quand même » : libérées, envoyées dans l'ordre, une seule fois. */
+    const freed = await A.Sync.releaseStale(); await settle();
+    assert(freed === 1, "releaseStale a libéré " + freed + " action(s) (voulu 1)");
+    assert(order(srv) === "r29,n0,v31,r0" && A.Sync.pendingCount() === 0 && A.Sync.staleCount() === 0,
+      "après libération : serveur [" + order(srv) + "], file " + A.Sync.pendingCount());
+    assert(await A.Sync.releaseStale() === 0, "releaseStale libère encore quelque chose sur une file vide");
+  });
+
+  await check("redémarrage : une action ancienne relue en base reste retenue, le message n'est dit qu'une fois, la base la garde", async () => {
+    const srv = makeServer({ features: MODERN });
+    const idb = makeIDB();
+    const A1 = makeClient("A", srv, { indexedDB: idb });
+    await A1.Sync.boot(); await settle();
+    await say(A1, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    srv.down = true;
+    await aged(A1, "v40", 40); await settle();
+    A1.Sync.stop();
+    assert(idb.rows("queue").length === 1, "le scénario ne teste rien : l'action ancienne n'est pas en base");
+
+    srv.down = false;
+    const A2 = makeClient("A", srv, { indexedDB: idb });
+    await A2.Sync.boot(); await settle();
+    await A2.Sync.now(); await settle(); await A2.Sync.now(); await settle();
+    assert(A2.Sync.pendingCount() === 1 && A2.Sync.staleCount() === 1 && copies(srv, "v40") === 0,
+      "après redémarrage : file " + A2.Sync.pendingCount() + ", retenues " + A2.Sync.staleCount() + ", serveur " + copies(srv, "v40"));
+    assert(A2.Sync.status().label === "En attente (1)", "indicateur : « " + A2.Sync.status().label + " »");
+    assert(staleNotes(A2).length === 1, "message dit " + staleNotes(A2).length + " fois (voulu : 1)");
+    assert(idb.rows("queue").length === 1, "l'entrée retenue a quitté la base");
+
+    await A2.Sync.releaseStale(); await settle();
+    assert(copies(srv, "v40") === 1 && A2.Sync.pendingCount() === 0 && idb.rows("queue").length === 0,
+      "après libération : serveur " + copies(srv, "v40") + ", file " + A2.Sync.pendingCount() + ", base " + idb.rows("queue").length);
+    A2.Sync.stop();
+  });
+
+  /* Le serveur attend le verrou 45 s (waitLock de Code.gs) : s'il est dépassé, sa réponse
+   * « retry » doit arriver AVANT que le client ne coupe, sinon la panne se lit comme une coupure. */
+  await check("le délai d'écriture dépasse l'attente du verrou serveur (45 s)", () => {
+    assert(CONFIG.WRITE_TIMEOUT_MS > 45000, "délai d'écriture " + CONFIG.WRITE_TIMEOUT_MS + " ms : la réponse d'un verrou dépassé arrive après la coupure");
   });
 
   console.log(failures.length

@@ -31,10 +31,10 @@
     /* Rythme d'interrogation du serveur — ADAPTATIF.
      *
      * Un rythme fixe de 3 s était le pire des deux mondes : 1 200 requêtes par
-     * heure et par personne sur un backend Apps Script qui sérialise tout
-     * derrière un LockService (donc file d'attente, latence, réponses en
-     * erreur quand plusieurs téléphones interrogent en même temps), et malgré
-     * ce coût une réception toujours en retard d'un tour de boucle.
+     * heure et par personne sur un backend Apps Script dont chaque lecture
+     * relit le fichier Drive (latence, quota d'exécution partagé par toute
+     * l'équipe), et malgré ce coût une réception toujours en retard d'un tour
+     * de boucle.
      *
      * On règle donc la cadence sur l'activité réelle : nerveux pendant une
      * conversation, calme quand personne n'écrit.
@@ -48,7 +48,7 @@
     POLL_IDLE_MS: 6000,            // conversation au repos
     POLL_HIDDEN_MS: 60000,         // onglet masqué
     POLL_ACTIVE_WINDOW_MS: 90000,  // durée du régime nerveux après une activité
-    POLL_BACKOFF_MAX_MS: 60000,    // plafond du recul après échecs réseau
+    POLL_BACKOFF_MAX_MS: 60000,    // plafond du recul après échecs (réseau, serveur, accès refusé)
 
     /* Actions envoyées en un seul POST, quand le serveur annonce « batch ».
      * Doit rester ≤ MAX_BATCH du script Apps Script, sinon le lot est refusé
@@ -87,14 +87,24 @@
 
     /* Délai maximal d'une ÉCRITURE — délibérément plus long.
      *
-     * Apps Script sérialise toutes les requêtes derrière un LockService : quand
-     * deux téléphones sont dans la même conversation, un envoi attend son tour
-     * DERRIÈRE les lectures des autres. À 20 s, une écriture parfaitement
+     * Apps Script sérialise les ÉCRITURES derrière un LockService (les lectures
+     * n'y touchent pas) : quand deux téléphones écrivent en même temps, un envoi
+     * attend son tour DERRIÈRE celle de l'autre. À 20 s, une écriture parfaitement
      * valide était coupée alors que le serveur l'exécutait encore — le message
      * restait en file, l'utilisateur ne voyait rien, et l'action repartait plus
      * tard en doublon. Couper une écriture ne l'annule pas : ça ne fait que
-     * nous en cacher l'issue. On laisse donc au serveur le temps de répondre. */
-    WRITE_TIMEOUT_MS: 45000,
+     * nous en cacher l'issue. On laisse donc au serveur le temps de répondre.
+     *
+     * ⚠️ 55 s, volontairement AU-DELÀ des 45 s que le serveur attend le verrou
+     * (waitLock) : un verrou dépassé répond « retry » AVANT la coupure du client,
+     * donc avec un verdict lisible (« Erreur (n) ») plutôt qu'un silence. */
+    WRITE_TIMEOUT_MS: 55000,
+
+    /* Une action restée en file plus longtemps que cela n'est plus rejouée en
+     * silence : le fil a pu changer, et le journal de déduplication du serveur
+     * (5 000 identifiants) a pu l'oublier. Elle reste en file, sans rien perdre,
+     * mais ne part que sur « Envoyer quand même » (Réglages). */
+    STALE_ACTION_MS: 30 * 24 * 60 * 60 * 1000,
 
     /* Au-delà de ce nombre de sujets, on affiche le champ de recherche. */
     SEARCH_THRESHOLD: 6,

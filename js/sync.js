@@ -37,6 +37,16 @@
   var refusals = {};         // id → refus SANS code déjà reçus (backend d'avant)
   var LEGACY_TRIES = 3;      // un refus sans code n'est cru qu'au 3e envoi
   var BEACON_BUDGET = 60000; // octets UTF-8 d'un envoi de secours (refusé au-delà de 64 Kio)
+  /* Refus d'AUTHENTIFICATION consécutifs (le serveur exige un code que l'appareil n'a
+   * pas, ou n'a plus) : ils font reculer la boucle comme une panne (voir interval), et
+   * onAuthError n'est appelé qu'UNE fois par série de refus (BL-024). */
+  var authFailures = 0;
+  var authNotified = false;
+  /* Actions RETENUES (BL-004, D7) : en file depuis plus de CONFIG.STALE_ACTION_MS, elles
+   * ne partent plus toutes seules (voir isStale). « released » : celles que l'utilisateur
+   * a libérées par Sync.releaseStale(). */
+  var released = {};
+  var staleWarned = false;
   var activeUntil = 0;       // régime nerveux jusqu'à cet instant
   var storageWarned = false;
   /* File de la base lue au moins une fois ? Tant que non (ouverture ratée au
@@ -350,8 +360,7 @@
    * réponse : un échec du stockage local n'est pas un refus du serveur. */
   function classify(error) {
     if (Api.isAuthError(error)) {
-      lastError = error.message;
-      if (hooks.onAuthError) { hooks.onAuthError(); }
+      refusedAuth(error);
       return { done: false, halt: true };
     }
     if (Api.isNetworkError(error)) {
@@ -375,7 +384,23 @@
     }
   }
 
-  function recovered() { serverFailures = 0; serverWarned = false; }
+  function recovered() { serverFailures = 0; serverWarned = false; authRecovered(); }
+
+  /* ⚠️ Refus d'AUTHENTIFICATION : le serveur exige un code que cet appareil n'a pas, ou
+   * n'a plus (BL-024). Réessayer toutes les 1,8 s n'y change rien : on mesurait 1 140
+   * requêtes refusées par heure et un message toutes les 3 s, sans que rien soit
+   * reverrouillé. La boucle recule donc (voir interval, plafond de 60 s) et onAuthError
+   * n'est appelé qu'UNE fois par série de refus. La série prend fin au premier succès
+   * (lecture ou écriture), à Sync.setConnection (nouveau jeton) ou à Sync.start. */
+  function refusedAuth(error) {
+    authFailures += 1;
+    lastError = error.message;
+    if (authNotified) { return; }
+    authNotified = true;
+    if (hooks.onAuthError) { hooks.onAuthError(); }
+  }
+
+  function authRecovered() { authFailures = 0; authNotified = false; }
 
   /* Refus certain ? « invalid » : oui. Sans code (backend d'avant, qui répondait
    * ainsi à une panne comme à un refus) : au LEGACY_TRIES-ième envoi seulement,
@@ -415,7 +440,7 @@
 
   /* Retire une liste d'entrées de la file, en mémoire quoi qu'il arrive. */
   function dropEntries(entries) {
-    entries.forEach(function (item) { forgotten[item.action.id] = true; delete refusals[item.action.id]; });
+    entries.forEach(function (item) { forgotten[item.action.id] = true; delete refusals[item.action.id]; delete released[item.action.id]; });
     return entries.reduce(function (chain, item) {
       return chain
         .then(function () { return DB.dequeue(item.seq).catch(function () { return null; }); })
@@ -502,6 +527,47 @@
       });
   }
 
+  /* ⚠️ Action RETENUE : en file depuis plus de CONFIG.STALE_ACTION_MS (30 jours). Un
+   * appareil resté éteint ou hors ligne ne la rejoue pas en silence : le fil a pu changer,
+   * et le serveur a pu oublier son identifiant (journal de déduplication borné à 5 000).
+   * Elle RESTE en file (rien n'est perdu ni supprimé), ne part plus toute seule, pas même
+   * à la fermeture, et compte dans l'indicateur ; l'utilisateur la libère par
+   * Sync.releaseStale(). La date est celle de création de l'action (« ts », posée par
+   * makeAction à l'enfilement) : une entrée sans date lisible, ou datée du futur
+   * (horloge déréglée), n'est JAMAIS tenue pour ancienne. */
+  function isStale(entry) {
+    var action = entry && entry.action;
+    if (!action || typeof action.ts !== "string" || released[action.id]) { return false; }
+    var created = Date.parse(action.ts);
+    return isFinite(created) && Date.now() - created > CONFIG.STALE_ACTION_MS;
+  }
+
+  Sync.staleCount = function () { return Store.queue.filter(isStale).length; };
+
+  /* « Envoyer quand même » : libère les actions retenues, qui repartent comme les autres,
+   * dans l'ordre. Rend le nombre d'actions libérées. */
+  Sync.releaseStale = function () {
+    var count = 0;
+    Store.queue.forEach(function (entry) {
+      if (isStale(entry)) { released[entry.action.id] = true; count += 1; }
+    });
+    if (!count) { return Promise.resolve(0); }
+    changed();
+    return Sync.now().then(function () { return count; });
+  };
+
+  /* Une seule fois par session, au premier tour de la boucle : l'utilisateur apprend
+   * que des actions anciennes attendent, et où les envoyer. */
+  function announceStale() {
+    var count = Sync.staleCount();
+    if (!count || staleWarned) { return; }
+    staleWarned = true;
+    var many = count > 1;
+    message(count + " action" + (many ? "s" : "") + " de plus de "
+      + Math.round(CONFIG.STALE_ACTION_MS / 86400000) + " jours " + (many ? "attendent" : "attend")
+      + " : ouvrez Réglages pour " + (many ? "les envoyer." : "l'envoyer."), "error");
+  }
+
   /* Seules les actions dont la clé de file est attribuée sont envoyables, et
    * l'ORDRE de la file fait foi : on ne saute jamais par-dessus une action pas
    * encore prête, sinon un message partirait avant le sujet qui le porte. */
@@ -510,6 +576,9 @@
     for (var i = 0; i < Store.queue.length; i++) {
       var candidate = Store.queue[i];
       if (candidate.seq === null || candidate.seq === undefined) { break; }
+      /* ⚠️ Même règle d'ordre pour une action RETENUE : celles qui la suivent attendent
+       * aussi, sinon elles partiraient avant ce dont elles peuvent dépendre. */
+      if (isStale(candidate)) { break; }
       ready.push(candidate);
       if (!Sync.supports("batch") || ready.length >= CONFIG.MAX_BATCH) { break; }
     }
@@ -548,6 +617,7 @@
     var actions = [];
     var bytes = batch ? 2 : 0;
     for (var i = 0; i < Store.queue.length && actions.length < (batch ? CONFIG.MAX_BATCH : 1); i++) {
+      if (isStale(Store.queue[i])) { break; }   // retenue : jamais envoyée toute seule, pas même ici
       var size = utf8Length(JSON.stringify(Store.queue[i].action)) + (actions.length ? 1 : 0);
       if (bytes + size > BEACON_BUDGET) { break; }
       bytes += size;
@@ -652,14 +722,16 @@
     function stale() { return Store.epoch !== epoch; }
 
     /* Serveur récent : UN seul aller-retour. Il ne renvoie l'état que si la
-     * révision annoncée a bougé — sinon la réponse est minuscule et le fichier
-     * Drive n'est même pas lu. « since: -1 » force le téléchargement. */
+     * révision annoncée a bougé : sinon la RÉPONSE est minuscule (une centaine
+     * d'octets). ⚠️ Le serveur, lui, relit le fichier Drive à chaque lecture : seul
+     * le trafic est allégé, pas son travail. « since: -1 » force le téléchargement. */
     if (Sync.supports("since")) {
       var suspectNow = force && (known === 0 || recovering);
       return Api.getStateSince(Sync.connection.url, Sync.connection.token, suspectNow ? -1 : known)
         .then(function (payload) {
           learn(payload);
           failures = 0;
+          authRecovered();
           lastError = null;
           lastSyncAt = Utils.nowISO();
           if (payload.unchanged || !payload.state || stale()) { idleRounds += 1; return null; }
@@ -668,8 +740,7 @@
         })
         .catch(function (error) {
           if (Api.isAuthError(error)) {
-            lastError = error.message;
-            if (hooks.onAuthError) { hooks.onAuthError(); }
+            refusedAuth(error);
             return;
           }
           failures += 1;
@@ -686,6 +757,7 @@
       .then(function (info) {
         learn(info);
         failures = 0;
+        authRecovered();
         lastError = null;
         lastSyncAt = Utils.nowISO();
         /* « force » signifie « n'attends pas le prochain tour », PAS « retélécharge
@@ -707,8 +779,7 @@
       })
       .catch(function (error) {
         if (Api.isAuthError(error)) {
-          lastError = error.message;
-          if (hooks.onAuthError) { hooks.onAuthError(); }
+          refusedAuth(error);
           return;
         }
         failures += 1;
@@ -732,9 +803,10 @@
   function interval() {
     if (typeof document !== "undefined" && document.hidden) { return CONFIG.POLL_HIDDEN_MS; }
 
-    /* Le réseau ou le serveur ne répond pas (ou mal) : marteler toutes les deux
-     * secondes n'y change rien et aggrave la contention côté Apps Script. On recule. */
-    var level = Math.max(failures, serverFailures);
+    /* Le réseau ou le serveur ne répond pas (ou mal), ou refuse l'accès : marteler
+     * toutes les deux secondes n'y change rien et aggrave la contention côté Apps
+     * Script. On recule (jusqu'à POLL_BACKOFF_MAX_MS). */
+    var level = Math.max(failures, serverFailures, authFailures);
     if (level > 0) {
       var backoff = CONFIG.POLL_ACTIVE_MS * Math.pow(2, Math.min(level, 6));
       return Math.min(backoff, CONFIG.POLL_BACKOFF_MAX_MS);
@@ -743,8 +815,11 @@
     /* Conversation en cours : on colle au fil. */
     if (Date.now() < activeUntil) { return CONFIG.POLL_ACTIVE_MS; }
 
-    /* Puis relâchement progressif jusqu'au rythme de repos, au lieu d'un saut
-     * brutal qui ferait rater le rebond d'une discussion qui repart. */
+    /* Fenêtre nerveuse close : rythme de repos. ⚠️ Le « relâchement progressif » n'a PAS
+     * lieu à la fin d'une conversation : idleRounds compte aussi les sondages inchangés
+     * PENDANT la fenêtre (une trentaine en 90 s), donc il vaut déjà 8 quand elle se ferme,
+     * et l'écart passe directement de 1,8 s à 6 s, comme le demande §21. La rampe ne joue
+     * qu'après une interruption (sondages ratés, non comptés) : elle repart alors de 1,8 s. */
     var span = CONFIG.POLL_IDLE_MS - CONFIG.POLL_ACTIVE_MS;
     var ramp = Math.min(idleRounds, 8) / 8;
     return Math.round(CONFIG.POLL_ACTIVE_MS + span * ramp);
@@ -759,10 +834,15 @@
     if (!Sync.isConnected()) { return Promise.resolve(); }
     /* La file de la base est relue à chaque tour (BL-006) : une action laissée
      * par un autre onglet part, et compte « en attente » au lieu de « À jour ». */
+    var refusedBefore = authFailures;
     inFlight = refresh()
-      .then(function () { return Sync.push(); })
+      .then(function () { announceStale(); return Sync.push(); })
       .catch(function () { /* déjà traité */ })
-      .then(function () { return Sync.pull(force); })
+      .then(function () {
+        /* Refusé pour l'authentification à l'instant : la lecture le serait aussi. */
+        if (authFailures > refusedBefore) { return null; }
+        return Sync.pull(force);
+      })
       .catch(function () { /* déjà traité */ })
       .then(function () { inFlight = null; });
     return inFlight;
@@ -786,6 +866,7 @@
   Sync.start = function () {
     cycleToken += 1;
     looping = true;
+    authRecovered();      // nouvelle série de refus, nouvelle notification
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     tick(cycleToken);
   };
@@ -826,6 +907,7 @@
        * synchronisation « traîne ». */
       intervalMs: interval(),
       failures: failures,
+      stale: Sync.staleCount(),
       /* Capacités du serveur en face : dit tout de suite si le backend déployé
        * est celui qu'on croit. */
       features: features.slice(),
