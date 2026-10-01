@@ -1000,26 +1000,25 @@
 
   function screenTopics() {
     var state = Store.view;
-    var all = state.topics.slice().sort(function (a, b) {
-      return String(b.updatedAt).localeCompare(String(a.updatedAt));
-    });
-    var visible = all.filter(function (t) { return UI.local.showArchived || t.status !== "archived"; });
+    /* ⚠️ Ordre et recherche viennent de ProductView.visibleTopics : js/product-ui.js appelle la
+     * MÊME fonction pour ranger les cartes par groupe (une carte par sujet, dans cet ordre). Deux
+     * règles copiées finiraient par diverger, et le regroupement serait alors abandonné. Les
+     * comptes ci-dessous ne dépendent pas de l'ordre (BL-060, BL-061). Sans ProductView (contexte
+     * isolé, jamais en production : index.html le charge avant ce fichier), ni tri ni recherche. */
+    var all = state.topics;
+    var visible = typeof ProductView !== "undefined"
+      ? ProductView.visibleTopics(state.topics, UI.local.search, UI.local.showArchived)
+      : state.topics.filter(function (t) { return UI.local.showArchived || t.status !== "archived"; });
     var archivedCount = all.length - all.filter(function (t) { return t.status !== "archived"; }).length;
 
-    var query = Utils.trim(UI.local.search).toLowerCase();
-    if (query) {
-      visible = visible.filter(function (t) {
-        return (t.title + " " + t.description).toLowerCase().indexOf(query) >= 0;
-      });
-    }
+    var query = Utils.trim(UI.local.search);
 
     var body;
     /* Rien reçu encore en mode connecté (révision 0, aucun échange réussi depuis
      * l'ouverture) : l'équipe a peut-être cinquante sujets, inviter à créer « un
      * premier sujet » serait faux. Une équipe vide confirmée par le serveur
      * (échange réussi) et le mode local gardent l'invitation. */
-    var syncStatus = Sync.status();
-    if (!all.length && syncStatus.code !== "local" && !syncStatus.revision && !syncStatus.lastSyncAt) {
+    if (!all.length && awaitingFirstData()) {
       body = emptyState("sparkle", "Pas encore de données sur cet appareil",
         "Elles s'afficheront à la prochaine connexion.");
     } else if (!all.length) {
@@ -1417,14 +1416,26 @@
     ]);
   }
 
+  /* ⚠️ Appareil connecté qui n'a encore rien reçu (révision 0, aucun échange réussi depuis
+   * l'ouverture) : après un rechargement sans copie locale, le contenu n'est pas « supprimé », il
+   * n'est simplement pas encore là. Même règle pour l'accueil, l'écran manquant et le titre. */
+  function awaitingFirstData() {
+    var status = Sync.status();
+    return !!status && status.code !== "local" && !status.revision && !status.lastSyncAt;
+  }
+
   function screenMissing() {
+    var waiting = awaitingFirstData();
+    var back = el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets",
+      onclick: function () { App.go("#/"); } });
     return el("div", { class: "screen" }, [
-      topbar({ title: "Introuvable", back: App.remonter, backLabel: "Sujets" }),
+      topbar({ title: waiting ? "Pas encore disponible" : "Introuvable", back: App.remonter, backLabel: "Sujets" }),
       el("div", { class: "content" }, [
-        emptyState("warning", "Ce contenu n'existe plus",
-          "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.",
-          el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets",
-            onclick: function () { App.go("#/"); } }))
+        waiting
+          ? emptyState("sparkle", "Contenu pas encore disponible sur cet appareil",
+            "Il s'affichera à la prochaine connexion.", back)
+          : emptyState("warning", "Ce contenu n'existe plus",
+            "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.", back)
       ])
     ]);
   }
@@ -1646,6 +1657,20 @@
 
   /* ------------------------------------------------------------ Réunion --- */
 
+  var PRINT_UNAVAILABLE = "Impression indisponible ici : affichez la synthèse à l'écran ou ouvrez-la dans votre navigateur.";
+
+  /* ⚠️ Une WebView peut ne pas fournir window.print, ou le refuser : sans garde, l'appui ne faisait
+   * rien, ou levait une erreur que personne ne voyait (BL-064). Une impression lancée mais sans
+   * effet, sans erreur ni événement, ne se distingue pas d'une impression réussie : elle n'est pas
+   * annoncée (un faux message sur un navigateur qui imprime serait pire). */
+  function printMeeting() {
+    var printed = false;
+    try {
+      if (typeof window.print === "function") { window.print(); printed = true; }
+    } catch (error) { printed = false; }
+    if (!printed) { UI.toast(PRINT_UNAVAILABLE, "error"); }
+  }
+
   function screenMeeting() {
     var state = Store.view;
     /* Même ordre de maturité que l'accueil (prêts, en discussion, clôturés), archivés exclus. */
@@ -1720,9 +1745,15 @@
         back: App.remonter,
         backLabel: "Réglages",
         actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button",
-          onclick: function () { window.print(); } }, [icon("print", 16), el("span", { text: "Imprimer" })])]
+          onclick: printMeeting }, [icon("print", 16), el("span", { text: "Imprimer" })])]
       }),
-      el("div", { class: "content" }, [doc])
+      el("div", { class: "content" }, [
+        /* ⚠️ La pastille d'état (BL-066) est dans le contenu et non dans la barre : celle-ci porte déjà
+         * « Imprimer », et mesurée à 390 px une pastille de plus réduisait le titre à « Ré… ».
+         * `no-print` la retire de la page imprimée, comme la barre. */
+        el("div", { class: "no-print", style: { display: "flex", justifyContent: "flex-end", marginBottom: "6px" } }, [statusPill()]),
+        doc
+      ])
     ]);
   }
 
@@ -2092,14 +2123,32 @@
     ]);
   }
 
+  /* Titre d'une proposition tirée d'un message (BL-062). Le titre tient sur une ligne : sauts de
+   * ligne et espaces multiples deviennent une espace. Trop long, il est coupé à la dernière
+   * frontière de mot qui laisse la place de « … » (200 caractères au plus, « … » compris) ; un
+   * seul mot géant est coupé net. Quand le titre ne reprend pas tout le message, la description
+   * garde le texte COMPLET : rien n'est perdu. */
+  function titleFromText(text, max) {
+    var full = Utils.trim(text);
+    var flat = full.replace(/\s+/g, " ");
+    var title = flat;
+    if (flat.length > max) {
+      var room = max - 1;
+      var space = flat.charAt(room) === " " ? room : flat.lastIndexOf(" ", room - 1);
+      title = Utils.limit(space > 0 ? flat.slice(0, space) : flat, room).replace(/[\s,;:]+$/, "") + "…";
+    }
+    return { title: title, description: title === full ? "" : Utils.limit(full, Core.LIMITS.proposalDescription) };
+  }
+
   function proposalModal(spec) {
     var topic = Core.findTopic(Store.view, spec.topicId);
     if (!topic) { return null; }
     var existing = spec.proposalId ? Core.findProposal(topic, spec.proposalId) : null;
     var keyBase = existing ? "editProposal:" + existing.id : "newProposal:" + topic.id;
 
-    var initialTitle = existing ? existing.title : Utils.limit(spec.fromText || "", Core.LIMITS.proposalTitle);
-    var initialDesc = existing ? existing.description : "";
+    var fromMessage = existing ? null : titleFromText(spec.fromText || "", Core.LIMITS.proposalTitle);
+    var initialTitle = existing ? existing.title : fromMessage.title;
+    var initialDesc = existing ? existing.description : fromMessage.description;
 
     var titleInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.proposalTitle,
@@ -2107,8 +2156,11 @@
     });
     var descInput = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.proposalDescription,
-      placeholder: "Description (facultative)", value: initialDesc, "data-draft": keyBase + ":desc"
+      placeholder: "Description (facultative)", "data-draft": keyBase + ":desc"
     });
+    /* ⚠️ Un textarea n'a pas d'attribut `value` : poser `value:` à la création laissait le champ vide
+     * dans un vrai navigateur (la description complète d'un message citée ci-dessus s'y perdait). */
+    descInput.value = initialDesc;
 
     return modal(existing ? "Modifier la proposition" : "Nouvelle proposition", el("div", { class: "stack" }, [
       field("Titre", titleInput),
@@ -2241,7 +2293,9 @@
     if (gate === "lock") { return "Espace verrouillé" + tail; }
     var route = App.route;
     var topic = route.topicId ? Core.findTopic(Store.view, route.topicId) : null;
-    if (route.name === "topic") { return (topic ? topic.title : "Introuvable") + tail; }
+    if (route.name === "topic") {
+      return (topic ? topic.title : (awaitingFirstData() ? "Pas encore disponible" : "Introuvable")) + tail;
+    }
     if (route.name === "proposals") { return "Propositions" + (topic ? " : " + topic.title : "") + tail; }
     if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
     if (route.name === "settings") { return "Réglages" + tail; }

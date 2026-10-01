@@ -309,6 +309,16 @@ FakeDocument.prototype.createTreeWalker = function (rootNode) {
   return { nextNode() { return texts[i++] || null; } };
 };
 
+/* Comme un vrai navigateur : un textarea n'a pas d'attribut `value`, son texte par défaut est son contenu. */
+Object.defineProperty(FakeElement.prototype, "value", {
+  configurable: true,
+  get() {
+    if (this._value !== undefined) { return this._value; }
+    return this.localName === "textarea" ? this.textContent : (this.getAttribute("value") || "");
+  },
+  set(v) { this._value = String(v); },
+});
+
 /* ----------------------------------------------------------- Démarrage --- */
 
 const ME = "p-alice";
@@ -473,6 +483,7 @@ check("BL-061 : l'accueil classe par instants (fuseau), une date illisible passe
     mkTopic("c", "Sujet C", { updatedAt: "pas une date" }),
     mkTopic("d", "Sujet D", { updatedAt: "2026-10-01T00:00:00Z" }),
   ] });
+  t.go(TOPICS);
   const c = cardsOf(t);
   same(c.grouped, ["topic-d", "topic-b", "topic-a", "topic-c"], "ordre de l'accueil");
   assert(c.flat.length === 0, "cartes hors regroupement");
@@ -586,21 +597,27 @@ check("BL-065 : sans copie locale (révision 0, rien reçu), « pas encore dispo
 
 check("BL-065 : une fois l'espace reçu, un sujet absent reste « Introuvable » ; en mode local aussi", () => {
   const received = boot({ revision: 12, lastSyncAt: T0, route: topicRoute("inconnu") });
+  received.go(topicRoute("inconnu"));
   let text = received.app().textContent;
   assert(text.indexOf("Introuvable") >= 0 && text.indexOf("Ce contenu n'existe plus") >= 0, "écran habituel attendu : « " + text + " »");
   assert(text.indexOf(WAITING) < 0, "« pas encore disponible » à tort après réception");
   assert(received.doc.title === "Introuvable - BrainstO.", "titre du document : « " + received.doc.title + " »");
   const local = boot({ revision: 0, lastSyncAt: null, code: "local", route: topicRoute("inconnu") });
+  local.go(topicRoute("inconnu"));
   text = local.app().textContent;
   assert(text.indexOf("Introuvable") >= 0 && text.indexOf(WAITING) < 0, "mode local : écran habituel attendu : « " + text + " »");
 });
 
 /* ================================================== Synthèse : pastille, BL-066 ==== */
 
-check("BL-066 : la synthèse montre la pastille d'état dans sa barre, la barre est masquée à l'impression", () => {
+check("BL-066 : la synthèse montre la pastille d'état, hors de la barre déjà pleine, retirée de l'impression", () => {
   const t = boot({ route: MEETING });
-  const pills = t.app().querySelectorAll(".topbar .status-pill");
-  assert(pills.length === 1, "une pastille attendue dans la barre de la synthèse : " + pills.length);
+  t.go(MEETING);
+  const pills = t.app().querySelectorAll(".status-pill");
+  assert(pills.length === 1, "une pastille attendue sur la synthèse : " + pills.length);
+  assert(t.app().querySelectorAll(".topbar .status-pill").length === 0,
+    "pas de pastille dans la barre : elle porte déjà « Imprimer » (le titre y est réduit à « Ré… » à 390 px)");
+  assert(t.app().querySelectorAll(".no-print .status-pill").length === 1, "la pastille doit se trouver dans une zone no-print");
   assert(t.app().querySelectorAll('[role="status"]').length === 1, "une seule région role=status par écran");
   assert(pills[0].textContent.indexOf("À jour") >= 0, "libellé de l'état attendu : « " + pills[0].textContent + " »");
   t.status.code = "offline";
@@ -610,7 +627,7 @@ check("BL-066 : la synthèse montre la pastille d'état dans sa barre, la barre 
   const imprimer = t.app().querySelectorAll(".topbar-actions button").filter((b) => b.textContent.indexOf("Imprimer") >= 0)[0];
   assert(imprimer && imprimer.classes().has("no-print"), "le bouton Imprimer reste marqué no-print");
   const css = fs.readFileSync(path.join(ROOT, "css/app.css"), "utf8");
-  assert(/@media print\s*\{[^}]*\.topbar[^}]*display:\s*none/.test(css), "css/app.css doit masquer .topbar à l'impression");
+  assert(/@media print\s*\{[^}]*\.no-print[^}]*display:\s*none/.test(css), "css/app.css doit masquer .no-print à l'impression");
 });
 
 /* ============================================ Marqueur « vu » sans écriture inutile : BL-068 ==== */

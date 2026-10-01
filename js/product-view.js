@@ -13,8 +13,25 @@
   function arr(value) { return Array.isArray(value) ? value : []; }
   function obj(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
 
+  /* ⚠️ Tri par INSTANTS, pas par chaînes (BL-061) : comparer des chaînes classait « pas une date »
+   * avant toute date ISO, et 10:00+02:00 (= 08:00 UTC) avant 09:00Z. Une activité absente ou
+   * illisible passe en dernier ; à instants égaux l'ordre d'entrée est conservé (tri stable).
+   * Seules les dates de forme ISO sont lues : Date.parse accepte tout texte qui contient un
+   * nombre. UNE règle pour l'accueil, le regroupement et la synthèse. */
+  function instantOf(item) {
+    var value = item && item.updatedAt;
+    return typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? Date.parse(value) : NaN;
+  }
+
   function recentFirst(a, b) {
-    return String((b && b.updatedAt) || "").localeCompare(String((a && a.updatedAt) || ""));
+    var ta = instantOf(a);
+    var tb = instantOf(b);
+    var okA = !isNaN(ta);
+    var okB = !isNaN(tb);
+    if (okA && okB) { return tb === ta ? 0 : (tb > ta ? 1 : -1); }
+    if (okA) { return -1; }
+    if (okB) { return 1; }
+    return 0;
   }
 
   ProductView.TOPIC_GROUP_ORDER = ["ready", "open", "closed", "archived"];
@@ -42,16 +59,32 @@
     return groups;
   };
 
+  /* Recherche (BL-060) : la casse, les accents, les ligatures œ et æ et les espaces multiples sont
+   * ignorés, des deux côtés. ⚠️ L'accueil (js/ui.js) et js/product-ui.js appellent tous deux
+   * visibleTopics : c'est ce qui garde la liste des cartes et celle du regroupement strictement
+   * identiques (ordre compris). */
+  ProductView.normalizeSearch = function (value) {
+    var text = String(value == null ? "" : value);
+    if (typeof text.normalize === "function") { text = text.normalize("NFD"); }
+    return text
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/œ/g, "oe")
+      .replace(/æ/g, "ae")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
   ProductView.visibleTopics = function (topics, query, showArchived) {
-    var normalized = String(query || "").trim().toLowerCase();
+    var normalized = ProductView.normalizeSearch(query);
     return arr(topics)
       .slice()
       .sort(recentFirst)
       .filter(function (topic) { return showArchived || topic.status !== "archived"; })
       .filter(function (topic) {
         if (!normalized) { return true; }
-        return String((topic.title || "") + " " + (topic.description || ""))
-          .toLowerCase().indexOf(normalized) >= 0;
+        return ProductView.normalizeSearch((topic.title || "") + " " + (topic.description || ""))
+          .indexOf(normalized) >= 0;
       });
   };
 

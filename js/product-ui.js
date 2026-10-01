@@ -87,7 +87,10 @@
     if (!topic) { return; }
     var record = seenRecord(state);
     if (!record) { return; }
-    record.topics[topic.id] = ProductView.topicFingerprint(topic, mineFor());
+    var fingerprint = ProductView.topicFingerprint(topic, mineFor());
+    /* Chaque rendu et chaque sondage repassent ici : sans changement, aucune écriture (BL-068). */
+    if (JSON.stringify(record.topics[topic.id]) === JSON.stringify(fingerprint)) { return; }
+    record.topics[topic.id] = fingerprint;
     saveSeen(record);
   }
 
