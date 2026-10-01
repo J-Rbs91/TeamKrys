@@ -55,11 +55,19 @@ function makeServer(options) {
   const srv = {
     data: Core.emptyState(), features,
     calls: { revision: 0, state: 0, post: 0, actionsPosted: 0 },
-    down: false
+    down: false,
+    /* Pannes injectées au niveau HTTP (client « realApi » seulement, voir makeFetch). */
+    faults: [], http: { GET: 0, POST: 0 }, beacons: []
   };
 
   function envelope(payload) {
     return Object.assign({ ok: true, features }, payload);
+  }
+
+  /* Contrat de Code.gs (WP-01) : un rejet de validation porte code « invalid »,
+   * définitif. options.legacy : backend d'AVANT, qui refusait sans aucun code. */
+  function refusal(id, error) {
+    return options.legacy ? { id, ok: false, error } : { id, ok: false, code: "invalid", error };
   }
 
   function applyOne(action) {
@@ -67,13 +75,13 @@ function makeServer(options) {
      * optimiste du client passe (sa vue est encore à jour) mais où l'état
      * serveur a changé entre-temps. */
     if (srv.rejectWhen && srv.rejectWhen(action)) {
-      return { id: action.id, ok: false, error: "Refus simulé côté serveur." };
+      return refusal(action.id, "Refus simulé côté serveur.");
     }
     if (srv.data.processedActionIds.indexOf(action.id) >= 0) {
       return { id: action.id, ok: true, duplicate: true };
     }
     const verdict = Core.validateAction(srv.data, action);
-    if (!verdict.ok) { return { id: action.id, ok: false, error: verdict.error }; }
+    if (!verdict.ok) { return refusal(action.id, verdict.error); }
     Core.applyAction(srv.data, action, new Date().toISOString());
     srv.data.revision += 1;
     srv.data.processedActionIds.push(action.id);
@@ -89,7 +97,7 @@ function makeServer(options) {
     if (!Array.isArray(body)) {
       /* Chemin d'origine : un refus métier est une erreur de la requête. */
       const result = applyOne(body);
-      if (result.ok === false) { const e = new Error(result.error); e.kind = "server"; throw e; }
+      if (result.ok === false) { const e = new Error(result.error); e.kind = "server"; e.code = result.code || null; throw e; }
       return envelope({ revision: srv.data.revision, state: lean(srv.data), duplicate: !!result.duplicate });
     }
 
@@ -128,6 +136,68 @@ function lean(state) {
 const MODERN = ["since", "batch", "lean"];
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+/* Faux `fetch` devant le faux backend : le VRAI js/api.js lit ses réponses
+ * (statut, corps, JSON). Une panne de srv.faults ({ method, kind, times }) vaut
+ * pour la prochaine requête de cette méthode :
+ *   html200    page d'erreur HTML en 200, rien d'exécuté
+ *   garbage    JSON tronqué en 200, rien d'exécuté
+ *   lateGarbage  exécutée, puis réponse illisible (le verdict se perd)
+ *   lock, drive  exception de Code.gs : { ok:false, code:"retry" }, rien d'exécuté
+ *   legacyFail exception d'un backend d'AVANT : { ok:false } sans code
+ *   oddCode    code inconnu de ce client
+ *   status500  statut 500
+ *   hang       en-têtes reçus, corps qui n'arrive jamais
+ *   noResults  lot : seule la 1re action exécutée, réponse ok SANS results
+ *   holes      lot : 2e action en retry (non exécutée), verdict de la 3e absent */
+function makeFetch(srv) {
+  return function (url, init) {
+    const method = (init && init.method) || "GET";
+    srv.http[method] = (srv.http[method] || 0) + 1;
+    const i = srv.faults.findIndex((f) => f.method === method && f.times > 0);
+    const kind = i >= 0 ? srv.faults[i].kind : null;
+    if (i >= 0) { srv.faults[i].times -= 1; }
+    const reply = (status, text) => Promise.resolve({
+      ok: status >= 200 && status < 300, status,
+      text: () => (kind === "hang" ? new Promise(() => {}) : Promise.resolve(text))
+    });
+    const failure = { lock: "Lock timeout: another process was holding the lock for too long.",
+      drive: "Service error: Drive" };
+    if (kind === "html200") { return reply(200, "<!DOCTYPE html><html><body>Erreur du script</body></html>"); }
+    if (kind === "garbage") { return reply(200, "{\"ok\":true,\"revision\":"); }
+    if (kind === "status500") { return reply(500, "<html>500</html>"); }
+    if (kind === "hang") { return reply(200, ""); }
+    if (failure[kind]) { return reply(200, JSON.stringify({ ok: false, code: "retry", error: failure[kind] })); }
+    if (kind === "legacyFail") { return reply(200, JSON.stringify({ ok: false, error: "Service error: Drive" })); }
+    if (kind === "oddCode") { return reply(200, JSON.stringify({ ok: false, code: "quota", error: "Quota dépassé." })); }
+
+    const query = new URL(url).searchParams;
+    let body = init && init.body ? JSON.parse(init.body) : null;
+    let payload;
+    try {
+      if (method === "POST" && kind === "noResults") {
+        srv.post(body[0]);
+        payload = { ok: true, features: srv.features, revision: srv.data.revision, state: lean(srv.data) };
+      } else if (method === "POST" && kind === "holes") {
+        payload = srv.post([body[0]]);
+        srv.post([body[2]]);
+        payload = Object.assign({}, payload, { revision: srv.data.revision, state: lean(srv.data), results: [
+          payload.results[0], { id: body[1].id, ok: false, code: "retry", error: "Service error: Drive" }] });
+      } else if (method === "POST") {
+        payload = srv.post(body);
+      } else if (query.get("mode") === "revision") {
+        payload = srv.revision();
+      } else {
+        payload = srv.state(query.get("since"));
+      }
+    } catch (e) {
+      if (e.kind === "network") { return Promise.reject(new TypeError("Failed to fetch")); }
+      payload = { ok: false, error: e.message, code: e.code || undefined };
+    }
+    if (kind === "lateGarbage") { return reply(200, "{\"ok\":tr"); }
+    return reply(200, JSON.stringify(payload));
+  };
+}
 
 /* ------------------------------------------- Un client complet, isolé --- */
 
@@ -179,12 +249,22 @@ function makeClient(name, server, options) {
      * On reproduit les deux traits : appliqué côté serveur, muet côté client. */
     beacon: (url, token, body) => {
       if (server.refuseBeacon) { return false; }
+      server.beacons.push(body);
       try { server.post(body); } catch (e) { /* muet, par construction */ }
       return true;
     }
   };
 
-  ["js/state.js", "js/database.js", "js/sync.js"].forEach(function (file) {
+  /* options.realApi : le VRAI js/api.js (classement des réponses, délais) sur le
+   * faux fetch de makeFetch, au lieu de la doublure ci-dessus. */
+  const files = ["js/state.js", "js/database.js", "js/sync.js"];
+  if (options.realApi) {
+    delete sandbox.Api;
+    sandbox.fetch = makeFetch(server);
+    sandbox.AbortController = AbortController;
+    files.unshift("js/api.js");
+  }
+  files.forEach(function (file) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   });
 
@@ -192,7 +272,7 @@ function makeClient(name, server, options) {
   Sync.setHooks({ onMessage: (text, kind) => messages.push(kind + ": " + text) });
   Sync.setConnection({ url: "https://exemple/exec", token: "", localMode: false, unlocked: true });
 
-  return { name, Sync, Store: ctx.Store, DB: ctx.DB, messages,
+  return { name, Sync, Store: ctx.Store, DB: ctx.DB, Api: ctx.Api, messages,
     user: { id: "u-" + name, name: name } };
 }
 
