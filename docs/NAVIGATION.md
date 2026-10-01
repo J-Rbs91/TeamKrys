@@ -129,6 +129,11 @@ aura plusieurs, un libellé figé mentirait deux fois sur trois : il faudra alor
 nommer le nœud réellement atteint, ou retomber sur « Retour » — jamais annoncer
 un parent statique quand le geste mène ailleurs.
 
+Sous 22 rem de large, le libellé disparaît et le bouton se réduit à sa flèche : le
+titre de l'écran garde la place. Le seuil suit la taille de police de l'appareil
+(352 px à 100 %, 457 px à 130 %, 704 px à 200 %). Le nom accessible ne change pas :
+« Retour vers Sujets », posé par `aria-label` dans `topbar()` (`js/ui.js`).
+
 ## 5. Comment le vérifier
 
 Six vérifications, sur un téléphone, dans cet ordre. Elles sont reprises dans

@@ -18,7 +18,8 @@ Le journal garde les **5000** derniers identifiants (`MAX_PROCESSED` dans
 plus reconnue comme déjà traitée. C'est pourquoi les choix (vote, réaction,
 soutien) s'envoient sous la forme marquée `set:true` (voir « Choix idempotents »),
 dont le rejeu est sans effet, et pourquoi le client retient, au lieu de la renvoyer
-en silence, une action restée en file plus de 30 jours (`CONFIG.STALE_ACTION_MS`).
+en silence, une action restée en file plus de 30 jours (`CONFIG.STALE_ACTION_MS`) :
+le bouton « Envoyer quand même » des Réglages la libère (`Sync.releaseStale()`).
 
 Le serveur annonce ses capacités dans `features` : `since` (lecture conditionnelle
 par révision), `batch` (lots de 20 actions au plus), `lean` (état sans
@@ -170,8 +171,14 @@ relisaient pas : la première écriture l'effaçait du fichier. `ensureShape()`
 
 **Un fichier déjà réécrit par une version 1.x** a perdu `conclusion` dans le fichier
 vivant : le nouveau noyau ne peut plus la reprendre. Le texte reste dans la copie
-`brainsto-data.json.avant-brainsto-backend-1.0.0.<date>`, déposée par le backend
-avant sa première écriture. Deux voies :
+`brainsto-data.json.avant-<version>.<date>`, déposée par le backend avant sa
+première écriture. Le nom porte la version du code qui s'apprête à écrire
+(`BACKEND_VERSION`), donc celle du **nouveau** code : le backend 1.0.0 dépose
+`brainsto-data.json.avant-brainsto-backend-1.0.0.<date>`, puis le backend 1.1.0
+dépose `brainsto-data.json.avant-brainsto-backend-1.1.0.<date>` avant sa propre
+première écriture. Si la 1.0.0 a déjà réécrit le fichier, le texte de `conclusion`
+n'est que dans la copie de la 1.0.0 : celle de la 1.1.0 garde l'état déjà réécrit,
+sans `conclusion`. Deux voies :
 
 1. recopier à la main les textes voulus depuis cette copie (ouverte dans Drive) et
    les saisir comme formulations de consensus : rien de ce qui a été écrit depuis
@@ -182,6 +189,26 @@ avant sa première écriture. Deux voies :
    par celui de la copie** : les sujets, messages et votes écrits depuis sont
    perdus (l'état remplacé est gardé dans une copie `avant-restauration`, mais
    n'est pas refusionné).
+
+### Ce que `restoreFromBackup` refuse et garde
+
+- **Une copie sans liste de sujets est refusée, sans rien écrire.** Le fichier doit
+  contenir une liste `topics` (vide ou non). Un fichier `{}`, un export de
+  diagnostic ou le fichier d'une autre application est refusé avec le message
+  « La copie … n'est pas un fichier de données lisible : rien n'a été modifié. » :
+  ni le fichier de données, ni la révision, ni les copies de sécurité ne changent.
+  Les copies des anciennes versions (TeamKrys v1 et v2) restent acceptées, même vides.
+- **Les anonymisations faites après la copie sont conservées.** Un message qui est
+  anonyme dans l'état actuel et qui est signé dans la copie reste anonyme après la
+  restauration : le noyau lui applique `SET_MESSAGE_SIGNATURE` avec `anon: true`, donc
+  `authorId` est vidé, `authorName` devient « Anonyme » et la clé de réaction de son
+  auteur est retirée, comme pour une anonymisation ordinaire. Un message anonyme dans
+  la copie le reste, même s'il a été signé de nouveau depuis.
+- **Limites.** Si le fichier actuel est illisible, il n'y a rien à reporter : les
+  anonymisations faites après la copie ne subsistent alors que dans la copie
+  `avant-restauration`, qui garde le texte abîmé tel quel. `updatedAt` du message et
+  du sujet concernés prend la date de la restauration : le sujet remonte dans la
+  liste.
 
 ---
 
@@ -283,3 +310,56 @@ la carte, de la synthèse et du nom accessible :
 
 Le mot « Consensus » n'est jamais utilisé pour le vote d'une proposition, et
 aucun quorum n'est appliqué.
+
+---
+
+## Données gardées sur l'appareil
+
+Le fichier Drive est la seule copie partagée de l'espace. Chaque appareil garde en
+plus, pour lui seul, une copie de lecture et quelques réglages. Ce sont des états
+locaux, pas un second exemplaire à synchroniser.
+
+- **IndexedDB** (`js/database.js`) : la file des actions pas encore confirmées par
+  le serveur et le dernier état connu de l'espace, pour le hors ligne. Là où
+  IndexedDB est refusée, un repli en mémoire prend le relais (voir le README).
+- **`localStorage`** : les clés ci-dessous, toutes préfixées `brainsto.`. Les huit
+  premières sont déclarées dans `CONFIG.KEYS` (`js/config.js`).
+
+| Clé | Contenu | Retirée par « Se déconnecter de l'équipe » |
+|---|---|---|
+| `brainsto.apiUrl` | adresse du script de l'équipe | oui |
+| `brainsto.lockVerifier` | hachage qui sert à vérifier le code d'accès hors ligne, jamais le code lui-même | oui |
+| `brainsto.session` | session déverrouillée : vérificateur, jeton dérivé du code, moment de la dernière manipulation | oui |
+| `brainsto.user` | identité locale (identifiant et nom choisi) | oui |
+| `brainsto.ownItems` | suivi local des identifiants des contenus créés sur cet appareil (la preuve des messages anonymes) | oui |
+| `brainsto.localMode` | choix du mode local | oui |
+| `brainsto.showArchived` | choix « Afficher les sujets archivés » | non |
+| `brainsto.onboarding` | état de la présentation initiale (étape atteinte, terminée ou passée) | non |
+| `brainsto.seenTopics.v1` (`js/product-ui.js`) | ce que l'appareil a déjà consulté, pour signaler les nouveautés | non |
+| `brainsto.drafts.v1` (`js/ui.js`) | brouillons des messages en cours d'écriture | oui |
+| `brainsto.probe` (`js/utils.js`) | sonde d'écriture du stockage, écrite puis retirée aussitôt | sans objet |
+
+### Les brouillons (`brainsto.drafts.v1`)
+
+- **Ce qui est stocké** : le texte en cours d'écriture dans le champ de message de
+  chaque sujet, sous la forme `{ "composer:<identifiant du sujet>": "texte" }`. Seules
+  les clés qui commencent par `composer:` sont acceptées, à l'écriture comme à la
+  lecture ; une valeur absente, abîmée ou d'une autre forme est ignorée sans erreur.
+  Ne sont jamais conservés : le choix Anonyme / Signer (le composeur restauré
+  revient en mode signé), le nom et l'identité, la citation en cours, les champs de
+  connexion et de code, les fenêtres « Modifier » et de création, la recherche.
+- **Bornes** (`js/ui.js`) : 50 brouillons au plus (les plus anciens partent d'abord),
+  20 000 caractères au total, 4 000 caractères par brouillon. L'écriture a lieu après
+  500 ms sans frappe ; elle est faite tout de suite au passage en arrière-plan, à la
+  fermeture de la page et avant le rechargement de « Mettre à jour ».
+- **Quand il revient** : au premier rendu du composeur du même sujet, après un
+  rechargement (mise à jour, page fermée par le système, onglet restauré) et après
+  un déverrouillage. Il n'est jamais affiché sur l'écran de verrouillage.
+- **Quand il est effacé** : quand le message est accepté dans la file d'envoi (sauf si
+  un texte plus récent a été saisi pendant l'envoi), quand le champ est vidé, et par
+  « Se déconnecter de l'équipe ». Pas au verrouillage par inactivité. Un envoi refusé
+  sur l'appareil remet le texte dans le champ et dans le brouillon.
+- **Il ne quitte jamais l'appareil** : aucune requête ne le porte, et la clé n'est
+  définie que dans `js/ui.js`. Il est écrit en clair : l'écran de verrouillage
+  protège l'interface, pas le stockage. Si le stockage est refusé, le brouillon ne
+  vit qu'en mémoire.

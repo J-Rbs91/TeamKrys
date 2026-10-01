@@ -18,7 +18,8 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] Les autres tests : `for f in tests/*.test.js; do node "$f" >/dev/null || echo
       "ÉCHEC $f"; done` → aucune ligne « ÉCHEC » (backend, pastille d'état,
       nouveautés, code changé, choix idempotents, service worker, lecture des votes,
-      contrat CSS).
+      contrat CSS, démarrage robuste, focus, champs nommés, actions retenues,
+      recherche et synthèse, brouillons).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -165,6 +166,16 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 - [ ] Précache : renommer temporairement un fichier de la liste critique, publier, et
       vérifier que l'ancienne version **reste en place** au lieu d'être remplacée par
       une version cassée.
+- [ ] Navigateur qui refuse tout stockage (fenêtre intégrée d'une messagerie, ou
+      cookies et données de site bloqués) : au démarrage, le message « Ce navigateur
+      refuse d'enregistrer des données sur l'appareil : ouvrez BrainstO. dans votre
+      navigateur habituel. » s'affiche **une fois**, et une ligne fixe le répète dans
+      la carte de connexion ; « Enregistrer et continuer » ne connecte pas (rien
+      n'est enregistré ni envoyé). Le mode local reste possible.
+- [ ] Adresse du site ouverte en `http` (hors `localhost`) : connexion avec un code →
+      « Ce navigateur ne permet pas la connexion. Ouvrez BrainstO. dans Chrome ou
+      Safari. » ; même message au déverrouillage, l'appareil reste verrouillé ;
+      connexion **sans** code : possible.
 
 ### 1 sexies. Clavier : feuilles, fenêtres et bascule Anonyme / Signer
 
@@ -179,6 +190,30 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Le bouton **Anonyme / Signer** garde le focus quand on l'actionne et annonce
       l'état du prochain message (« Publié en anonyme » ou « Signé : » suivi du
       nom).
+
+### 1 septies. Lecteur d'écran : champs, erreurs, titres, mouvement réduit
+
+À faire avec VoiceOver ou TalkBack : ces contrôles ne se voient pas à l'écran.
+
+- [ ] Écran de connexion : chaque champ est annoncé avec son **nom** (« Adresse du
+      script de l'équipe », « Code d'accès »), pas seulement avec son texte
+      d'exemple ; idem pour « Votre nom », la recherche, le champ de message,
+      « Texte du message » (fenêtre Modifier le message) et « Titre » /
+      « Description » (fenêtre Modifier le sujet).
+- [ ] Nouveau sujet, champ « Votre nom » : la phrase « Laissez vide pour publier ce
+      sujet en anonyme : aucune identité ne sera enregistrée. » est lue avec le champ.
+- [ ] Valider un nouveau sujet sans titre : « Le titre du sujet est obligatoire. »
+      s'affiche **sous le champ**, le focus y revient, le lecteur d'écran lit le
+      message avec le champ, et le message disparaît à la première frappe. Même
+      contrôle avec un mauvais code sur l'écran de verrouillage (« Code d'accès
+      incorrect. »).
+- [ ] Chaque écran a un **titre** annoncé (un seul titre de niveau 1) et repris dans
+      l'onglet du navigateur : « Sujets - BrainstO. », le titre du sujet,
+      « Propositions : … », « Consensus : … », « Réglages - BrainstO. », « Synthèse
+      de réunion - BrainstO. » ; verrouillé : « Espace verrouillé - BrainstO. » (le
+      titre du sujet ne reste pas dans l'onglet).
+- [ ] Réglage du système « Réduire les animations » activé : « Aller au message
+      cité » défile **instantanément** ; désactivé, le défilement est animé.
 
 ## 2. Verrou
 
@@ -217,6 +252,18 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Titre obligatoire ; description facultative.
 - [ ] Nom laissé vide → sujet créé au nom d'**Anonyme**.
 - [ ] Plus de six sujets → champ de recherche ; la recherche filtre bien.
+- [ ] Recherche tolérante : « cafe » trouve « Café », « REUNION » trouve « réunion »,
+      « oeuvre » trouve « œuvre », et deux espaces dans la saisie ne gênent pas ; la
+      recherche porte sur le titre et la description.
+- [ ] Écrire un message dans un sujet du milieu de la liste : au retour sur l'accueil,
+      il est **en tête de son groupe** et sa carte dit « Actif à l'instant » ; plus
+      tard « Actif il y a 5 min », « Actif il y a 2 h », « Actif il y a 3 jours », puis
+      « Actif le jj/mm/aaaa » à partir de sept jours.
+- [ ] Ouvrir un lien direct vers un sujet sur un appareil connecté qui n'a pas encore
+      reçu les données (stockage vidé, avant le premier échange réussi) : « Contenu
+      pas encore disponible sur cet appareil » et « Il s'affichera à la prochaine
+      connexion. », jamais « Introuvable » ; après la première synchronisation, un
+      lien vers un sujet qui n'existe plus dit « Introuvable ».
 - [ ] Sujet archivé masqué ; bouton « Afficher les sujets archivés » ; le choix
       est conservé après rechargement.
 
@@ -254,6 +301,21 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
       ne l'annonce pas : rien ne le distingue des autres anonymes).
 - [ ] Message en cours d'écriture, application en arrière-plan au-delà du délai
       d'inactivité, retour et déverrouillage : **le brouillon est toujours là**.
+- [ ] Message en cours d'écriture dans un sujet, puis « Mettre à jour » (ou recharger
+      la page, ou fermer l'application et la rouvrir, ou restaurer l'onglet) : le
+      texte revient dans le composeur **de ce sujet**, et pas dans celui d'un autre
+      sujet, qui garde le sien.
+- [ ] Brouillon en cours, espace verrouillé : le texte n'est **jamais** affiché sur
+      l'écran de verrouillage ; il revient après le code. Envoyer le message : le
+      champ est vidé et le texte ne revient **pas** après un rechargement ; vider le
+      champ à la main efface aussi le brouillon ; « Se déconnecter » efface les
+      brouillons (rouvrir le sujet après la reconnexion : champ vide).
+- [ ] « Modifier le message », « Modifier le sujet » et « Modifier la formulation »
+      s'ouvrent avec le texte actuel déjà dans le champ.
+- [ ] Créer une proposition depuis un message de plus de 200 caractères : titre = début
+      du message, coupé à la fin d'un mot et terminé par « … » (200 caractères au
+      plus), description = message en entier. Depuis un message court : titre =
+      message, description vide.
 - [ ] Erreur pendant la saisie, clavier ouvert (couper le réseau et envoyer) :
       le message d'erreur est **visible à l'écran**.
 - [ ] Composeur qui grandit jusqu'à 4 lignes, ou aperçu « en réponse à … »
@@ -270,6 +332,8 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
       cadenas.
 - [ ] Barre compacte : compteurs Propositions / Conclusion à jour.
 - [ ] Appui sur le titre (ⓘ) → infos du sujet, changement de statut, modification.
+- [ ] Infos du sujet : l'auteur (ou « Anonyme »), « Créé le … » et « Dernière activité
+      le … », chacun avec la date et l'heure.
 - [ ] Bouton **Retour** visible et fonctionnel sur chaque écran secondaire.
 
 ## 5. Propositions
@@ -314,6 +378,13 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Propositions avec statut, indicateur et détail des votes.
 - [ ] Conclusions triées par nombre de votes, mention « en tête ».
 - [ ] Aperçu avant impression : barres, boutons et bandeaux masqués.
+- [ ] Les sujets suivent l'ordre de l'accueil (prêts, en discussion, clôturés), aucun
+      archivé ; la pastille d'état est en tête de la synthèse, à droite, et
+      n'apparaît pas à l'impression.
+- [ ] « Imprimer » ouvre l'impression du navigateur. Dans une fenêtre intégrée qui ne
+      sait pas imprimer : « Impression indisponible ici : affichez la synthèse à
+      l'écran ou ouvrez-la dans votre navigateur. », sans erreur en console, et la
+      synthèse reste à l'écran.
 
 ## 8. Synchronisation et hors ligne
 
@@ -325,6 +396,18 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Rechargement hors ligne → la file **survit** (IndexedDB).
 - [ ] Retour du réseau → envoi automatique, indicateur **À jour**.
 - [ ] Jamais « À jour » tant qu'il reste des actions en attente.
+- [ ] Ouvrir l'application connectée (réseau lent, ou serveur coupé avec une action en
+      attente) : dès l'ouverture du cycle, l'indicateur dit **Synchronisation**
+      (« Sync… » à 430 px et moins), jamais **À jour** ; serveur muet avec une action
+      en attente : **En attente (1)**, jamais **À jour**.
+- [ ] Action de plus de 30 jours (écrire une action hors ligne, puis avancer
+      l'horloge de l'appareil de plus de 30 jours, réseau revenu) : rien n'est envoyé,
+      l'indicateur reste sur **En attente (n)** et « 1 action de plus de 30 jours
+      attend : ouvrez Réglages pour l'envoyer. » s'affiche une fois. Réglages montre
+      « 1 action de plus de 30 jours attend sur cet appareil. » et **Envoyer quand
+      même** ; un appui annonce « 1 action va partir. », l'action et celles qui la
+      suivent partent dans l'ordre, le bloc disparaît, l'indicateur passe à
+      **À jour**. Sans action retenue, le bloc est absent.
 - [ ] Action devenue impossible (sujet supprimé ailleurs) → « Action refusée :
       (raison). Texte : « … » » (le texte saisi est repris) et file débloquée.
 - [ ] Panne du serveur (verrou Drive dépassé, erreur Drive, page HTML) : l'action
@@ -388,6 +471,17 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
       fichier n'est supprimé, et un téléphone resté sur l'ancienne révision recharge
       l'état restauré (jamais « À jour » sur l'ancien état).
 - [ ] La fonction temporaire est supprimée une fois la restauration faite.
+- [ ] `restoreFromBackup` avec l'identifiant d'un fichier qui n'est pas une copie
+      BrainstO (un fichier `{}`, ou un autre JSON) : refus avec « La copie … n'est pas
+      un fichier de données lisible : rien n'a été modifié. » ; la révision, le fichier
+      de données et les copies ne changent pas, aucune copie `avant-restauration`.
+- [ ] Rendre un message anonyme **après** une sauvegarde, puis restaurer cette
+      sauvegarde : le message reste « Anonyme » sur tous les appareils (nom et
+      identifiant de l'auteur absents des données).
+- [ ] Première écriture après le déploiement du backend 1.1.0 : une copie
+      `brainsto-data.json.avant-brainsto-backend-1.1.0.<date>` est déposée dans le
+      dossier du fichier de données, une seule ; l'écriture suivante n'en dépose pas
+      d'autre.
 
 ## 9. PWA
 
@@ -399,6 +493,12 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Nouvelle version publiée → bandeau « nouvelle version disponible » ;
       « Mettre à jour » recharge ; **aucune boucle de rechargement** au premier
       chargement.
+- [ ] Publier **deux** versions de suite sans toucher au bandeau de la première, puis
+      appuyer sur « Mettre à jour » : l'application passe à la **plus récente** (pas à
+      l'avant-dernière). S'il ne reste rien à installer, le bouton recharge
+      simplement la page.
+- [ ] Navigateur qui refuse le service worker : l'application démarre sans erreur en
+      console et ne propose aucune mise à jour.
 - [ ] Les appels API ne sont jamais servis depuis le cache.
 
 ## 10. Finition
@@ -415,6 +515,22 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
       (Chrome < 108, Samsung Internet < 21, iOS 15.0–15.3).
 - [ ] Aucune police externe chargée (onglet Réseau : aucune requête de police).
 - [ ] Un message contenant `<script>alert(1)</script>` s'affiche **en texte**.
+- [ ] Écran de 320 px de large, puis texte du système à 130 % et à 200 % : le bouton
+      retour se réduit à sa flèche (son nom « Retour vers … » reste lu), aucune
+      étiquette du parcours n'est coupée par « … » (les mots passent à la ligne),
+      aucun défilement horizontal sur l'accueil, les propositions, les réglages et la
+      synthèse.
+- [ ] Téléphone en paysage (moins de 480 px de haut) ou clavier ouvert, six lignes
+      saisies : le bouton d'envoi reste visible, les barres du haut ne collent plus,
+      et sous 300 px de haut le parcours est masqué. Limite connue : à 200 % de
+      zoom, les barres occupent encore environ 63 % de la hauteur de la discussion
+      sur un téléphone de 393 px de large.
+- [ ] Au clavier, un anneau de focus **plein** (2 px) entoure chaque commande (boutons,
+      champs, menu de statut), et l'élément qui a le focus n'est jamais caché derrière
+      la barre du haut ni derrière le bouton flottant.
+- [ ] Accueil sur grand écran (900 px de large et plus) : les groupes (prêts, en
+      discussion, clôturés) s'empilent sur toute la largeur, leurs cartes en colonnes ;
+      pas de colonnes façon tableau Kanban.
 
 ## 11. Navigateurs
 

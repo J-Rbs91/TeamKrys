@@ -88,9 +88,14 @@ rien d'irréversible n'arrive avant la vérification.
 
 À la première écriture, le script dépose sur Drive, dans le dossier du fichier de
 données, une copie `brainsto-data.json.avant-<version>.<date>` (`<version>` est la
-valeur de `BACKEND_VERSION`). Les autres copies portent `manuel` (créée par
+valeur de `BACKEND_VERSION` du **nouveau** code). La version actuelle du backend est
+`brainsto-backend-1.1.0` : la première écriture après son déploiement dépose donc
+`brainsto-data.json.avant-brainsto-backend-1.1.0.<date>`, une seule fois par version
+du backend. Les autres copies portent `manuel` (créée par
 `backupNow()`) ou `avant-restauration` (créée par `restoreFromBackup`). Pour
-revenir en arrière, voir « Revenir en arrière » plus bas.
+revenir en arrière, voir « Revenir en arrière » plus bas : `restoreFromBackup`
+refuse une copie qui n'a pas de liste de sujets et conserve les anonymisations
+faites après la copie.
 
 > **Pas besoin de synchroniser les deux déploiements.** Le frontend et le
 > backend négocient leurs capacités : un téléphone resté sur l'ancienne version
@@ -129,12 +134,20 @@ rattaché ; et supprimer ce fichier casse le service.
 `restoreFromBackup` travaille sous le verrou du service (les écritures des
 téléphones attendent la fin) :
 
-- elle refuse, sans rien modifier, un identifiant vide ou inconnu, une copie
-  illisible, ou le fichier déjà utilisé ;
+- elle refuse, sans rien modifier et sans créer de copie de sécurité, un
+  identifiant vide ou inconnu, une copie illisible ou sans liste de sujets (un
+  fichier `{}`, ou le fichier d'une autre application), ou le fichier déjà
+  utilisé. Pour une copie illisible ou sans liste de sujets, le message est
+  « La copie … n'est pas un fichier de données lisible : rien n'a été modifié. » ;
 - elle crée d'abord une **copie de sécurité** de l'état actuel
   (`brainsto-data.json.avant-restauration.<date>`) ;
 - elle écrit le contenu de la copie **dans le fichier rattaché** : le
   rattachement ne change pas ;
+- elle conserve les anonymisations faites après la copie : un message qui est
+  anonyme dans l'état actuel et qui était signé dans la copie reste anonyme (nom et
+  identifiant de l'auteur vidés, clé de réaction de l'auteur retirée). Si le fichier
+  actuel est illisible, il n'y a rien à reporter : ces anonymisations ne subsistent
+  que dans la copie `avant-restauration`, qui garde le texte abîmé tel quel ;
 - elle donne à l'état restauré une révision égale au plus grand des deux numéros
   (état actuel, copie) **plus un**. Cause : un numéro de révision ne doit jamais
   se répéter. Conséquence : un téléphone qui avait déjà ce numéro recharge l'état
@@ -272,6 +285,9 @@ l'équipe, sur Drive, ne sont pas touchées ; les actions qui n'avaient pas enco
 | **Erreur (n)** et le message « Le serveur ne répond pas correctement : vos actions sont gardées et repartiront. » | le script répond mal plusieurs fois de suite (verrou Drive dépassé, panne de Google Drive, plusieurs fichiers de données non rattachés, page d'erreur) | ne rien supprimer et ne pas se déconnecter : les actions restent en file et repartent toutes seules quand le script répond bien. Si cela dure, lire l'erreur dans l'éditeur (Exécutions) et exécuter `diagnoseStorage()` |
 | « Action refusée : … Texte : « … » » | le script a jugé l'action invalide (par exemple, le sujet a été supprimé entre-temps) : refus définitif | l'action est retirée de la file et le message reprend le texte saisi, pour le recopier. Un ancien script, qui ne renvoie pas de code, voit son refus réessayé trois fois avant le retrait |
 | « Enregistrement sur cet appareil impossible : l'envoi continue, gardez l'application ouverte. » | le téléphone a fermé ou refusé sa base locale (iPhone après un passage en arrière-plan, stockage plein) | garder l'application ouverte jusqu'à **À jour** : l'action part quand même au serveur |
+| « Ce navigateur refuse d'enregistrer des données sur l'appareil : ouvrez BrainstO. dans votre navigateur habituel. » | le navigateur refuse tout stockage local : fenêtre intégrée à une application (WhatsApp, Instagram, Messenger, Gmail, Teams), cookies et données de site bloqués, ou stockage plein | ouvrir l'adresse dans Chrome ou Safari. Le message s'affiche au démarrage et reste affiché dans la carte de connexion ; tant que le stockage est refusé, « Enregistrer et continuer » ne connecte pas (rien n'est enregistré ni envoyé). Le mode local reste possible, mais rien n'y survit à un rechargement |
+| « Ce navigateur ne permet pas la connexion. Ouvrez BrainstO. dans Chrome ou Safari. » | l'adresse est ouverte en `http` hors `localhost` (contexte non sécurisé), ou le navigateur n'offre pas le calcul de hachage (`crypto.subtle`) : le code d'accès ne peut pas être vérifié | ouvrir l'adresse en `https`, dans Chrome ou Safari. Le message s'affiche aussi au déverrouillage, et l'appareil reste verrouillé. Sans code d'accès, la connexion reste possible : rien n'est haché |
+| « 1 action de plus de 30 jours attend : ouvrez Réglages pour l'envoyer. » (ou « n actions de plus de 30 jours attendent : ouvrez Réglages pour les envoyer. ») | une action est en file depuis plus de 30 jours (écrite hors ligne, ou avec une horloge déréglée) : l'application ne la renvoie pas en silence, et celles écrites après elle attendent derrière, pour garder l'ordre | Réglages → **Envoyer quand même** : les actions retenues partent dans l'ordre de la file. L'indicateur reste sur **En attente (n)** tant qu'elles ne sont pas parties. Ne pas se déconnecter : la déconnexion efface la file |
 
 ---
 
@@ -282,5 +298,7 @@ script. Pour en faire une copie de sauvegarde : exécuter `backupNow()` (la copi
 `brainsto-data.json.manuel.<date>` est créée dans le même dossier), ou ouvrir le
 dossier créé par `setupProject` et dupliquer le fichier. Pour restaurer une copie,
 voir « Revenir en arrière ». Aucune donnée n'est stockée ailleurs,
-hormis une copie locale de lecture sur chaque appareil (pour le hors-ligne),
-effacée par « Se déconnecter de l'équipe ».
+hormis, sur chaque appareil, une copie locale de lecture (pour le hors-ligne) et
+le brouillon du message en cours d'écriture dans chaque sujet (détail dans
+[`MODELE_DONNEES.md`](MODELE_DONNEES.md)), effacés par « Se déconnecter de
+l'équipe ».

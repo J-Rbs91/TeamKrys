@@ -763,7 +763,9 @@ Le reste du cahier des charges tient inchangé :
   comme les scripts : HTML et scripts sont toujours de la même version, et une
   nouvelle version passe par le bandeau « Mettre à jour ». Seul un appareil encore
   servi par un ancien service worker (réseau d'abord, jusqu'à la version 1.12.0
-  incluse) peut charger une dernière fois un `index.html` neuf avec un `js/ui.js`
+  incluse ; la version 1.13.0 est la première à servir la navigation depuis le
+  cache versionné) peut charger une dernière fois un `index.html` neuf avec un
+  `js/ui.js`
   de cache ancien. Le code doit se comporter comme « rien à faire » si la règle de
   décision est absente.
 - `js/app.js:484` (Échap) est le seul point du chantier qui touche `app.js` en

@@ -556,6 +556,20 @@ IndexedDB — c'est le rôle du déballage commun de `withStore`. L'application 
 signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
 écrite hors ligne n'y survit pas à la fermeture de la page.
 
+**Brouillons.** Le texte en cours d'écriture dans le composeur de chaque sujet est
+gardé dans le `localStorage`, sous la clé `brainsto.drafts.v1` (définie dans
+`js/ui.js` et nulle part ailleurs), à raison d'une entrée `composer:<sujet>` par
+sujet. Il survit à « Mettre à jour », à l'éviction de la page par le système et à la
+restauration d'un onglet : l'écriture suit la frappe après 500 ms de silence, et
+`js/app.js` la force tout de suite avant le rechargement d'une mise à jour, au
+passage en arrière-plan et au `pagehide`. Bornes : 50 brouillons, 20 000 caractères
+en tout,
+4 000 par brouillon. Il est effacé quand le message est accepté en file et par
+`App.logout`, jamais par le reverrouillage d'inactivité ; un refus local rend le
+texte au champ. Il ne quitte jamais l'appareil (aucune requête ne le porte) et reste
+en clair dans le stockage. Détail : [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md),
+« Données gardées sur l'appareil ».
+
 > Le POST part volontairement en `Content-Type: text/plain;charset=utf-8` :
 > c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
 > sait pas répondre.
@@ -625,8 +639,12 @@ Drive, code inconnu).
 - Une action en file depuis plus de 30 jours (`CONFIG.STALE_ACTION_MS`) n'est
   jamais renvoyée en silence : elle est **retenue**. Elle reste en file et en base,
   l'indicateur la compte, un message le dit une fois par session. Celles qui la
-  suivent attendent aussi, pour garder l'ordre. `Sync.releaseStale()` (dans
-  `js/sync.js`) les libère : elles repartent alors dans l'ordre de la file.
+  suivent attendent aussi, pour garder l'ordre. Le bloc « Envoyer quand même » des
+  Réglages (`js/ui.js`), affiché seulement quand `Sync.staleCount()` n'est pas nul,
+  appelle `Sync.releaseStale()` (dans `js/sync.js`) : les actions retenues sont
+  libérées et repartent dans l'ordre de la file. La libération est gardée en
+  mémoire : si la page se ferme avant l'envoi, elles sont retenues de nouveau au
+  démarrage suivant.
 
 ---
 
@@ -778,6 +796,15 @@ node tests/session.test.js
 node tests/onboarding.test.js
 node tests/navigation.test.js
 node tests/qa/compat-scan.js
+```
+
+Les autres fichiers de `tests/` (backend, démarrage robuste, focus, champs nommés,
+actions retenues, recherche et synthèse, brouillons, contrat CSS) se lancent de la
+même façon. Cette boucle les exécute tous ; aucune ligne « ÉCHEC » ne doit
+apparaître :
+
+```bash
+for f in tests/*.test.js; do node "$f" >/dev/null || echo "ÉCHEC $f"; done
 ```
 
 `sync.test.js` monte **deux clients complets** (`state.js` + `database.js` +
