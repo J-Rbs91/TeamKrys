@@ -1010,6 +1010,11 @@ p { margin: 0; }
   margin-top: 6px;
   font-size: var(--fs-xs);
   color: var(--muted);
+  /* Dans un pied de carte, un nom d'auteur sans espace (41 caractères collés) poussait
+     « Ouvrir » hors de la carte : débord de 57 px à 320 px une fois les titres corrigés. */
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .card-desc {
@@ -1198,7 +1203,10 @@ p { margin: 0; }
      À jour : disque plein, vert          Hors ligne : tiret, gris
      Synchronisation : anneau creux, ocre (il pulse si le mouvement est permis)
      En attente : losange plein, ocre     Erreur : triangle plein, carmin
-     Mode local : carré creux, gris */
+     Mode local : carré plein, gris
+   L'anneau de « Synchronisation » est tracé avec une bordure, pas une ombre interne : elle
+   survit au mode contraste forcé. Les autres formes sont pleines, donc mesurables comme des
+   aplats (a11y/t04b-nontext.js ne lit pas les bordures des pastilles). */
 .status-dot {
   width: 10px;
   height: 10px;
@@ -1208,11 +1216,11 @@ p { margin: 0; }
 }
 
 .status-idle .status-dot { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
-.status-syncing .status-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--warning), 0 0 0 3px var(--warning-bg); }
+.status-syncing .status-dot { background: transparent; border: 2px solid var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
 .status-pending .status-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); transform: rotate(45deg); }
 .status-offline .status-dot { width: 10px; height: 4px; border-radius: 2px; background: var(--faint); }
 .status-error .status-dot { width: 11px; height: 10px; border-radius: 0; background: var(--danger); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.status-local .status-dot { width: 9px; height: 9px; border-radius: 2px; background: transparent; box-shadow: inset 0 0 0 2px var(--faint); }
+.status-local .status-dot { width: 9px; height: 9px; border-radius: 2px; background: var(--faint); box-shadow: 0 0 0 3px var(--neutral-bg); }
 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
@@ -1363,6 +1371,7 @@ p { margin: 0; }
   letter-spacing: 0.02em;
   color: var(--faint);
   margin: 0 10px 4px;
+  overflow-wrap: anywhere;
 }
 
 .bubble {

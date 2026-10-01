@@ -227,7 +227,7 @@ check("BL-008 une forme de gommette distincte par état (jamais la couleur seule
   ["idle", "syncing", "pending", "offline", "error", "local"].forEach(function (state) {
     var dot = { tag: "span", classes: ["status-dot"], ancestors: [{ tag: "div", classes: ["status-pill", "status-" + state] }] };
     var get = function (p) { return declFor(dot, p, BASE) || ""; };
-    var shape = [get("width"), get("height"), get("border-radius"), get("clip-path"), get("transform"), get("background") === "transparent" ? "creux" : "plein"].join(" ");
+    var shape = [get("width"), get("height"), get("border-radius"), get("clip-path"), get("transform"), get("border"), get("background") === "transparent" ? "creux" : "plein"].join(" ");
     expect(!seen[shape], "les états « " + seen[shape] + " » et « " + state + " » ont la même forme de gommette (" + shape + ")");
     seen[shape] = state;
   });
@@ -241,12 +241,14 @@ check("BL-016 la rangée Pour / Contre / Abstention passe à la ligne", function
 });
 
 check("BL-036 titres, descriptions et synthèse coupent les mots trop longs", function () {
-  [["card-title", "div"], ["card-desc", "p"], ["sheet-title", "div"], ["modal-title", "h2"], ["print-doc", "div"]].forEach(function (t) {
+  [["card-title", "div"], ["card-desc", "p"], ["card-meta", "span"], ["msg-author", "div"], ["sheet-title", "div"], ["modal-title", "h2"], ["print-doc", "div"]].forEach(function (t) {
     var e = { tag: t[1], classes: [t[0]], ancestors: [] };
     expect(declFor(e, "overflow-wrap", BASE) === "anywhere", "." + t[0] + " doit porter overflow-wrap: anywhere");
   });
   var title = { tag: "div", classes: ["card-title"], ancestors: [{ tag: "div", classes: ["row"] }] };
   expect(declFor(title, "min-width", BASE) === "0", ".card-title doit porter min-width: 0 (bloc flexible dans .row)");
+  var meta = { tag: "span", classes: ["card-meta"], ancestors: [{ tag: "div", classes: ["card-foot"] }] };
+  expect(declFor(meta, "min-width", BASE) === "0", ".card-meta doit porter min-width: 0 (nom d'auteur collé dans un pied de carte)");
 });
 
 check("BL-037 .card.stack est une colonne flex, les autres cartes restent des blocs", function () {
