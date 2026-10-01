@@ -148,6 +148,10 @@
   line-height: 1;
 }
 
+/* À 320 px (22rem), « Détails » n'a plus la place et était coupé : l'icône d'information et la description « Voir les détails du
+   sujet » gardent l'indication (REC-RUI-009). */
+@media (max-width: 22rem) { .ux-title-hint { display: none; } }
+
 .ux-bubble-cue {
   display: inline-block;
   min-width: 18px;

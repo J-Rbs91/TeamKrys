@@ -256,6 +256,11 @@
     Utils.storage.remove(CONFIG.KEYS.localMode);
     Utils.storage.remove(CONFIG.KEYS.user);
     Utils.storage.remove(CONFIG.KEYS.ownItems);
+    /* §5 et §11 : le marqueur des nouveautés (js/product-ui.js, SEEN_KEY) porte un condensat de mon identifiant (`by`) et des
+     * comptes « sans moi » (`o`) : de quoi désigner l'auteur d'un message anonyme. Preuve locale DÉRIVÉE, effacée avec l'autre.
+     * ⚠️ Même chaîne que SEEN_KEY (tests/ui-review.test.js le vérifie) ; à passer dans CONFIG.KEYS avec js/config.js. Le
+     * reverrouillage d'inactivité (App.relock), lui, le garde : même personne après le code. */
+    Utils.storage.remove("brainsto.seenTopics.v1");
     ownItems = [];
     clearSession();
     lockVerifier = null;
@@ -801,6 +806,13 @@
     return Store.view ? Core.findTopic(Store.view, topicId) : null;
   }
 
+  /* ⚠️ Une fenêtre d'édition ne se ferme QUE si l'action est acceptée (REC-RUI-005) : sur un refus local (message verrouillé par
+   * une réaction, sujet supprimé), Sync.dispatch affiche déjà le message d'erreur et rend {ok:false} ; la fenêtre reste ouverte
+   * avec le texte rédigé (à corriger ou à copier) et le focus dedans. Résultat inconnu : comportement d'avant, elle se ferme. */
+  function closeIfAccepted(result) {
+    if (!result || result.ok !== false) { UI.set({ modal: null }); }
+  }
+
   App.actions = {
     createTopic: function (title, description, authorName) {
       var topicId = Utils.uid();
@@ -821,7 +833,7 @@
 
     updateTopic: function (topicId, title, description) {
       dispatch("UPDATE_TOPIC", { topicId: topicId, title: title, description: description })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     changeTopicStatus: function (topicId, status) {
@@ -842,7 +854,7 @@
 
     updateMessage: function (topicId, messageId, text) {
       dispatch("UPDATE_MESSAGE", { topicId: topicId, messageId: messageId, text: text })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     setMessageSignature: function (topicId, messageId, anon) {
@@ -885,7 +897,7 @@
 
     updateProposal: function (topicId, proposalId, title, description) {
       dispatch("UPDATE_PROPOSAL", { topicId: topicId, proposalId: proposalId, title: title, description: description })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     changeProposalStatus: function (topicId, proposalId, status) {
@@ -917,7 +929,7 @@
 
     updateConclusion: function (topicId, conclusionId, text) {
       dispatch("UPDATE_CONCLUSION_ITEM", { topicId: topicId, conclusionId: conclusionId, text: text })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     deleteConclusion: function (topicId, conclusionId) {

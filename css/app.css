@@ -510,7 +510,11 @@ p { margin: 0; }
   text-overflow: ellipsis;
 }
 
-.topbar-sub .icon { opacity: 0.7; }
+.topbar-sub .icon { opacity: 0.7; flex: none; }
+
+/* `text-overflow` ne s'applique pas aux enfants d'un conteneur flex : à 320 px le sous-titre était coupé net. Seul son premier
+   texte rétrécit, avec des points de suspension ; l'icône et le repère « Détails » gardent leur place (REC-RUI-009). */
+.topbar-sub > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .topbar-actions { display: flex; align-items: center; gap: 6px; }
 

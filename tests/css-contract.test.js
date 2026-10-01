@@ -503,6 +503,20 @@ check("BL-009 message d'erreur d'un champ : texte en couleur d'erreur, champ inv
   }), "un champ invalide doit être encadré par la couleur d'erreur");
 });
 
+check("REC-RUI-009 sous-titre de la barre du haut : le premier texte rétrécit avec des points de suspension, le repère « Détails » disparaît sous 22rem", function () {
+  expect(ruleExists(function (r) {
+    return r.selectors.indexOf(".topbar-sub > span:first-child") >= 0 && r.decls["min-width"] === "0" &&
+      r.decls["overflow"] === "hidden" && r.decls["text-overflow"] === "ellipsis";
+  }), "le premier texte de .topbar-sub doit pouvoir rétrécir (min-width: 0) avec overflow: hidden et text-overflow: ellipsis (text-overflow ne s'applique pas aux enfants d'un conteneur flex)");
+  expect(ruleExists(function (r) { return r.selectors.indexOf(".topbar-sub .icon") >= 0 && r.decls.flex === "none"; }), "l'icône du sous-titre ne doit pas rétrécir");
+  var hide = null;
+  RULES.forEach(function (r) { if (r.selectors.indexOf(".ux-title-hint") >= 0 && r.decls.display === "none") { hide = r; } });
+  expect(hide, "il manque la règle .ux-title-hint { display: none } en petit écran");
+  expect(mediaApplies(hide.media, { width: 320, rem: 16 }), "à 320 px le repère « Détails » doit être masqué");
+  expect(mediaApplies(hide.media, { width: 700, rem: 32 }), "à 200 % de police le repère doit être masqué jusqu'à 704 px");
+  expect(!mediaApplies(hide.media, { width: 360, rem: 16 }) && !mediaApplies(hide.media, { width: 393, rem: 16 }), "à 100 % le repère reste visible dès 353 px (aucun changement sur les téléphones courants)");
+});
+
 if (failures.length) {
   console.error("css-contract : " + failures.length + " échec(s) sur " + total + " contrôles");
   failures.forEach(function (f) { console.error(" - " + f); });

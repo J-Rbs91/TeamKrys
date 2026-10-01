@@ -12,8 +12,10 @@
  *  - un refus LOCAL de publication (sujet supprimé entre-temps, texte refusé) ne vide plus le champ ;
  *  - il est borné (50 brouillons, 20 000 caractères, 4 000 par brouillon) ; un stockage refusé ou abîmé ne
  *    produit aucune erreur ;
- *  - jamais de champ de connexion, de code ou de nom, jamais de fenêtre « Modifier », jamais le choix anonyme
- *    ou signé, jamais sur le réseau ;
+ *  - jamais de champ de connexion, de code ou de nom, jamais de fenêtre « Modifier », jamais sur le réseau ;
+ *  - le choix ANONYME (et lui seul) suit le brouillon, sans identité (REC-RUI-001, arbitrage WP-22 : remplace l'ancienne règle
+ *    « jamais stocké ») : indicateur écrit seulement si anonyme, brouillon rétabli anonyme, jamais converti en signé, note près
+ *    du composeur, effacé à l'envoi et à la déconnexion ;
  *  - js/app.js écrit les brouillons avant pagehide, le passage en arrière-plan et le rechargement d'une mise à
  *    jour, les efface à App.logout et rend le résultat de createMessage.
  *
@@ -811,29 +813,166 @@ check("BL-059 jamais gardés : connexion, code, nom, fenêtres « Modifier » (l
   });
 });
 
-check("BL-059 jamais le choix anonyme ou signé, ni aucune donnée d'interface ; rien sur le réseau", async () => {
+/* ======= Le choix anonyme suit le brouillon (REC-RUI-001, arbitrage WP-22 : REMPLACE l'ancienne règle « jamais stocké ») === */
+
+const NOTE_ANON_TEXT = "Brouillon retrouvé sur cet appareil. Il sera publié en anonyme : vérifiez avant d'envoyer.";
+const NOTE_CHECK_TEXT = "Brouillon retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant d'envoyer.";
+const whoLine = (t) => t.doc.getElementById("composer-who").textContent;
+const noteNodeOf = (t) => t.doc.getElementById("composer-restored");
+const pressToggle = (t) => t.app().querySelector('[data-key="composer-anon"]').click();
+
+/* Un appareil où le brouillon du sujet `id` a été écrit en mode ANONYME (le choix est fait comme la personne : une bascule). */
+function anonDeviceFor(id) {
+  const t = boot();
+  t.go(topicRoute(id));
+  pressToggle(t);
+  assert(whoLine(t) === "Publié en anonyme", "contrôle sans objet : la bascule ne donne pas « Publié en anonyme » (" + whoLine(t) + ")");
+  t.type(t.composer(id), TEXT);
+  t.fire();
+  return t;
+}
+
+check("REC-RUI-001 stocké SEULEMENT quand le choix est anonyme, sans aucune identité ; absent pour un brouillon signé ; rien sur le réseau", () => {
+  const a = anonDeviceFor("t1");
+  const raw = a.ls.getItem(KEY);
+  const saved = a.saved();
+  assert(saved && saved["composer:t1"] === TEXT, "le texte n'est plus sous sa clé : " + raw);
+  assert(JSON.stringify(saved.anon) === '["composer:t1"]', "indicateur anonyme absent ou mal formé : " + raw);
+  Object.keys(saved).forEach((k) => {
+    assert((k.indexOf("composer:") === 0 && typeof saved[k] === "string") || k === "anon", "entrée inattendue : " + k + " = " + JSON.stringify(saved[k]));
+  });
+  assert(!/Alice|p-alice|Bruno|p-bruno|authorName|authorId|userId/i.test(raw.replace(TEXT, "")), "une identité est écrite avec le brouillon : " + raw);
+  const s = boot();                                   // même texte, choix SIGNÉ : aucun indicateur
+  s.go(topicRoute("t1"));
+  s.type(s.composer("t1"), TEXT);
+  s.fire();
+  assert(s.saved()["composer:t1"] === TEXT && !("anon" in s.saved()) && !/anon/.test(s.ls.getItem(KEY)), "indicateur écrit pour un brouillon signé : " + s.ls.getItem(KEY));
+  a.ctx.UI.flushDrafts();
+  a.ctx.UI.clearDrafts();
+  assert(a.calls.fetch === 0 && a.calls.beacon === 0, "une requête est partie : fetch " + a.calls.fetch + ", sendBeacon " + a.calls.beacon);
+});
+
+check("REC-RUI-001 rechargement : le brouillon anonyme revient ANONYME, la note est lue près du composeur, l'envoi publie anonyme", async () => {
+  const a = anonDeviceFor("t1");
+  const b = boot({ storage: a.ls });
+  assert(b.ctx.UI.local.composerAnon === false, "contrôle sans objet : le choix en mémoire démarre signé après un rechargement");
+  b.go(topicRoute("t1"));
+  assert(b.ctx.UI.local.composerAnon === true, "le brouillon anonyme n'a pas rétabli l'anonymat");
+  assert(whoLine(b) === "Publié en anonyme", "la ligne dit : " + whoLine(b));
+  assert(b.composer("t1").value === TEXT, "texte non restauré");
+  const note = noteNodeOf(b);
+  assert(note && note.textContent === NOTE_ANON_TEXT, "note absente ou autre : " + (note && note.textContent));
+  assert(note.getAttribute("role") === "status", "la note n'est pas annoncée (role=status) à sa première apparition");
+  assert(b.composer("t1").getAttribute("aria-describedby") === "composer-restored", "le champ ne porte pas la note en description");
+  b.ctx.UI.force();                                   // arrivée de données : même choix, même note, pas de nouvelle annonce
+  assert(whoLine(b) === "Publié en anonyme" && noteNodeOf(b) && noteNodeOf(b).textContent === NOTE_ANON_TEXT, "un rendu de plus perd le choix ou la note");
+  assert(noteNodeOf(b).getAttribute("role") !== "status", "la note est ré-annoncée à chaque rendu");
+  assert(b.composer("t1").getAttribute("aria-describedby") === "composer-restored", "un rendu de plus perd la description du champ");
+  b.send();
+  await settle();
+  assert(b.world.sent.length === 1 && b.world.sent[0].anon === true && b.world.sent[0].text === TEXT.trim(), "envoi non anonyme : " + JSON.stringify(b.world.sent));
+});
+
+check("REC-RUI-001 brouillon SANS indicateur (signé, ou écrit avant) : lisible sans erreur, restauré SIGNÉ avec la note de vérification, jamais converti", () => {
+  [
+    { "composer:t1": TEXT },                                                 // format de WP-20
+    { "composer:t1": TEXT, anon: [] },
+    { "composer:t1": TEXT, anon: "composer:t1" },                            // formes inattendues
+    { "composer:t1": TEXT, anon: { "composer:t1": true } },
+    { "composer:t1": TEXT, anon: ["composer:t2", 7, null, "autre:t1", "composer:"] },   // clés sans texte ou étrangères
+  ].forEach((stored, i) => {
+    const ls = storage();
+    ls.setItem(KEY, JSON.stringify(stored));
+    const b = boot({ storage: ls });
+    b.go(topicRoute("t1"));
+    assert(b.ctx.UI.local.composerAnon === false, "forme " + i + " : converti en anonyme sans indicateur valable");
+    assert(whoLine(b) === "Signé : Alice", "forme " + i + " : la ligne dit « " + whoLine(b) + " »");
+    assert(b.composer("t1").value === TEXT, "forme " + i + " : texte non restauré");
+    assert(noteNodeOf(b) && noteNodeOf(b).textContent === NOTE_CHECK_TEXT, "forme " + i + " : note de vérification absente ou autre");
+  });
+});
+
+check("REC-RUI-001 la note disparaît à la bascule (l'anonymat n'est plus rétabli de force), au champ vidé et à l'envoi ; le geste explicite est écrit", async () => {
+  const fresh = () => { const b = boot({ storage: anonDeviceFor("t1").ls }); b.go(topicRoute("t1")); return b; };
+  let b = fresh();
+  assert(noteNodeOf(b), "contrôle sans objet : pas de note");
+  pressToggle(b);                                     // « Signer » : un geste explicite de la personne
+  assert(whoLine(b) === "Signé : Alice" && !noteNodeOf(b), "bascule : « " + whoLine(b) + " », note " + !!noteNodeOf(b));
+  assert(!b.composer("t1").getAttribute("aria-describedby"), "le champ garde la description d'une note disparue");
+  b.fire();
+  assert(!("anon" in b.saved()), "bascule vers Signé : l'indicateur est resté écrit : " + b.ls.getItem(KEY));
+  b.ctx.UI.force();
+  assert(whoLine(b) === "Signé : Alice" && !noteNodeOf(b), "le rendu suivant rétablit l'anonymat malgré le geste de la personne");
+  const c = boot({ storage: b.ls });                  // rechargement après ce choix explicite : signé, avec la note de vérification
+  c.go(topicRoute("t1"));
+  assert(whoLine(c) === "Signé : Alice" && noteNodeOf(c) && noteNodeOf(c).textContent === NOTE_CHECK_TEXT, "après un choix explicite « Signé » : « " + whoLine(c) + " »");
+  b = fresh();                                        // champ vidé
+  b.type(b.composer("t1"), "");
+  assert(!noteNodeOf(b), "champ vidé : la note reste");
+  b.fire();
+  assert(b.saved() === null, "champ vidé : brouillon ou indicateur encore écrits : " + b.ls.getItem(KEY));
+  b = fresh();                                        // envoi accepté
+  b.send();
+  await settle();
+  assert(!noteNodeOf(b), "envoi : la note reste");
+  assert(b.saved() === null, "envoi : brouillon ou indicateur encore écrits : " + b.ls.getItem(KEY));
+  b.ctx.UI.force();
+  assert(!noteNodeOf(b) && b.composer("t1").value === "", "envoi : le message ou la note reviennent au rendu suivant");
+});
+
+check("REC-RUI-001 refus LOCAL d'un envoi anonyme : le texte revient avec son indicateur, jamais signé après un rechargement", async () => {
   const t = boot();
   t.go(topicRoute("t1"));
-  t.ctx.UI.local.composerAnon = true;
-  t.ctx.UI.force();
+  pressToggle(t);
   t.type(t.composer("t1"), TEXT);
-  t.fire();
-  const raw = t.ls.getItem(KEY);
-  assert(raw !== null, "contrôle sans objet : brouillon non écrit");
-  const saved = JSON.parse(raw);
-  Object.keys(saved).forEach((k) => {
-    assert(k.indexOf("composer:") === 0 && typeof saved[k] === "string", "entrée inattendue : " + k + " = " + JSON.stringify(saved[k]));
-  });
-  assert(!/anon|Alice|signé/i.test(raw.replace(TEXT, "")), "le choix anonyme ou signé, ou une identité, est écrit : " + raw);
-  const b = boot({ storage: t.ls });
-  b.go(topicRoute("t1"));
-  assert(b.ctx.UI.local.composerAnon === false, "le choix anonyme a été déduit du brouillon");
-  assert(b.app().textContent.includes("Signé : Alice"), "le composeur restauré ne dit pas qu'il est signé");
+  t.world.refuse = true;
   t.send();
   await settle();
-  t.ctx.UI.flushDrafts();
-  t.ctx.UI.clearDrafts();
-  assert(t.calls.fetch === 0 && t.calls.beacon === 0, "une requête est partie : fetch " + t.calls.fetch + ", sendBeacon " + t.calls.beacon);
+  assert(t.composer("t1").value === TEXT, "texte non rendu au champ");
+  const saved = t.saved();
+  assert(saved && saved["composer:t1"] === TEXT && JSON.stringify(saved.anon) === '["composer:t1"]', "refus : texte ou indicateur non conservés : " + t.ls.getItem(KEY));
+  const b = boot({ storage: t.ls });
+  b.go(topicRoute("t1"));
+  assert(whoLine(b) === "Publié en anonyme", "après rechargement : « " + whoLine(b) + " »");
+});
+
+check("REC-RUI-001 le choix est global, le brouillon est par sujet : un brouillon anonyme n'est jamais affiché « Signé » parce que le choix a été changé ailleurs", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  pressToggle(t);                                     // Anonyme, dans le sujet t1
+  t.type(t.composer("t1"), TEXT);
+  t.go(topicRoute("t2"));
+  pressToggle(t);                                     // Signer, mais dans l'AUTRE sujet (sans texte)
+  assert(whoLine(t) === "Signé : Alice", "contrôle sans objet : « " + whoLine(t) + " »");
+  t.go(topicRoute("t1"));
+  assert(whoLine(t) === "Publié en anonyme", "le brouillon anonyme revient signé dans son sujet : « " + whoLine(t) + " »");
+  assert(noteNodeOf(t) && /anonyme/.test(noteNodeOf(t).textContent), "le retour à l'anonymat n'est pas expliqué par une note");
+});
+
+check("REC-RUI-001 déconnexion : l'indicateur et la note partent avec le brouillon (UI.clearDrafts), rien ne revient après un redémarrage", () => {
+  const b = boot({ storage: anonDeviceFor("t1").ls });
+  b.go(topicRoute("t1"));
+  assert(noteNodeOf(b), "contrôle sans objet : pas de note");
+  b.ctx.UI.clearDrafts();
+  assert(b.ls.getItem(KEY) === null, "le stockage garde quelque chose : " + b.ls.getItem(KEY));
+  assert(!noteNodeOf(b), "la note reste à l'écran");
+  b.ctx.UI.force();
+  assert(!noteNodeOf(b) && b.composer("t1").value === "", "le texte ou la note reviennent au rendu suivant");
+  const c = boot({ storage: b.ls });
+  c.go(topicRoute("t1"));
+  assert(!noteNodeOf(c) && c.composer("t1").value === "" && whoLine(c) === "Signé : Alice", "après redémarrage : « " + whoLine(c) + " »");
+});
+
+check("REC-RUI-001 bornes : un indicateur ne survit jamais à son texte évincé", () => {
+  const ids = Array.from({ length: 60 }, (_, i) => "s" + i);
+  const t = boot({ topics: ids });
+  t.ctx.UI.local.composerAnon = true;
+  ids.forEach((id) => { t.go(topicRoute(id)); t.type(t.composer(id), "Texte " + id); t.fire(); });
+  const saved = t.saved();
+  const texts = Object.keys(saved).filter((k) => k !== "anon");
+  assert(texts.length === 50, "50 brouillons attendus, " + texts.length + " écrits");
+  assert(Array.isArray(saved.anon) && saved.anon.length === 50 && saved.anon.every((k) => texts.indexOf(k) >= 0), "indicateur sans texte, ou texte sans indicateur : " + JSON.stringify(saved.anon));
+  assert(texts.indexOf("composer:s0") < 0 && saved.anon.indexOf("composer:s0") < 0, "le plus ancien brouillon (ou son indicateur) est resté");
 });
 
 check("BL-059 la clé vit dans js/ui.js seulement : jamais dans config.js ni dans le code du réseau", () => {
@@ -925,7 +1064,7 @@ function appWorld(opts) {
   vm.runInContext(STATE_JS.code, ctx, { filename: STATE_JS.file });
   ctx.Store = Store;
   vm.runInContext(APP_JS.code, ctx, { filename: APP_JS.file });
-  return Object.assign(w, { App: ctx.App, UI, Sync, sw, registration, waiting, document: sandbox.document });
+  return Object.assign(w, { App: ctx.App, UI, Sync, sw, registration, waiting, document: sandbox.document, store });
 }
 
 check("BL-059 App.logout efface les brouillons, dès le début", async () => {
@@ -935,6 +1074,53 @@ check("BL-059 App.logout efface les brouillons, dès le début", async () => {
   w.App.logout();
   assert(w.log.indexOf("clear") === 0, "UI.clearDrafts n'est pas le premier appel de la déconnexion : " + JSON.stringify(w.log));
   await settle();
+});
+
+check("REC-RUI-008 compteur de caractères : recalé sur le texte gardé après un rendu (pas « 0 / 150 » sous un champ plein)", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  t.ctx.UI.set({ modal: { type: "createTopic" } });
+  const field = () => t.overlay().querySelector('[data-draft="newTopic:title"]');
+  const counter = () => t.overlay().querySelector('[data-counter="newTopic:title"]');
+  assert(field() && counter(), "contrôle sans objet : la fenêtre « Nouveau sujet » n'a pas son champ ou son compteur");
+  t.type(field(), "Titre en cours");
+  t.ctx.UI.force();                                   // des données arrivent : tout est reconstruit
+  assert(field().value === "Titre en cours", "contrôle sans objet : le texte n'est pas gardé (« " + field().value + " »)");
+  assert(counter().textContent === "14 / 150", "compteur après le rendu : « " + counter().textContent + " »");
+});
+
+check("REC-RUI-002 App.logout efface aussi le marqueur des nouveautés (condensat de l'identifiant publique) ; App.relock le garde", async () => {
+  const SEEN = "brainsto.seenTopics.v1";
+  const w = appWorld();
+  await settle();
+  w.store.set(SEEN, JSON.stringify({ v: 1, initialized: true, topics: { t1: { messages: 4, by: "1xprk0w", o: { messages: 3 } } } }));
+  w.App.relock();                                     // reverrouillage d'inactivité : même personne après le code
+  assert(w.store.has(SEEN), "App.relock a effacé le marqueur des nouveautés (même personne après le code)");
+  w.App.logout();
+  assert(!w.store.has(SEEN), "App.logout laisse le marqueur des nouveautés (de quoi désigner l'auteur d'un message anonyme) : " + w.store.get(SEEN));
+  await settle();
+});
+
+check("REC-RUI-005 fenêtres « Modifier » (sujet, message, proposition, formulation) : fermées SEULEMENT si l'action est acceptée", async () => {
+  const cases = [
+    ["updateTopic", ["t1", "Titre", "Description"]],
+    ["updateMessage", ["t1", "m1", "Texte"]],
+    ["updateProposal", ["t1", "p1", "Titre", "Description"]],
+    ["updateConclusion", ["t1", "c1", "Texte"]],
+  ];
+  const run = async (name, args, answer) => {
+    const w = appWorld({ dispatch: () => Promise.resolve(answer) });
+    await settle();
+    w.UI.local.modal = { type: "editMessage", topicId: "t1" };
+    w.App.actions[name].apply(null, args);
+    await settle();
+    return w.UI.local.modal;
+  };
+  for (const [name, args] of cases) {
+    assert(await run(name, args, { ok: false, error: "Message verrouillé : quelqu'un y a déjà réagi." }) !== null, name + " : la fenêtre s'est fermée sur un refus, le texte rédigé est perdu");
+    assert(await run(name, args, { ok: true, error: null }) === null, name + " : la fenêtre reste ouverte après une action acceptée");
+    assert(await run(name, args, undefined) === null, name + " : résultat inconnu (ancien code en cache) : comportement d'avant, la fenêtre se ferme");
+  }
 });
 
 check("BL-059 reverrouillage d'inactivité (App.relock) : les brouillons ne sont PAS effacés", async () => {

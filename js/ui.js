@@ -178,6 +178,9 @@
     }, true);
     /* Brouillons durables : relus de l'appareil, restaurés au premier rendu du composeur (BL-059). */
     composerDrafts = readStoredDrafts();
+    anonDrafts = readStoredAnon(composerDrafts);
+    draftNote = {};
+    Object.keys(composerDrafts).forEach(function (key) { draftNote[key] = anonDrafts[key] ? "anon" : "check"; });
 
     bindViewport();
   };
@@ -191,6 +194,18 @@
    * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
   var composerDrafts = {};
 
+  /* ⚠️ Choix Anonyme/Signé d'un brouillon (REC-RUI-001, arbitrage WP-22 : il REMPLACE l'ancienne règle « jamais stocké »).
+   * Le choix est global et en mémoire (UI.local.composerAnon), les brouillons sont par sujet et durables : le texte voulu
+   * anonyme revenait après un rechargement prêt à partir SIGNÉ, nom publié, irrattrapable. Règle asymétrique : on ne
+   * convertit JAMAIS implicitement l'anonyme en signé. Un brouillon rédigé en anonyme garde ce choix sur l'appareil
+   * (clé dans la liste `anon` de DRAFTS_KEY, écrite seulement s'il y en a ; absence = signé, donc les brouillons d'avant
+   * restent lisibles) et revient anonyme. Rien d'autre d'identitaire n'y entre. Un brouillon retrouvé s'accompagne d'une
+   * note près du composeur ; l'envoi, la bascule ou le champ vidé la retirent. */
+  var DRAFTS_ANON = "anon";
+  var anonDrafts = {};   // clé -> true : brouillon rédigé en mode anonyme (absent = signé)
+  var draftNote = {};    // clé -> "anon" | "check" : brouillon retrouvé sur l'appareil, note à garder près du composeur
+  var noteSaid = {};     // clés dont la note a déjà été annoncée (role=status) : pas de ré-annonce à chaque rendu
+
   /* ⚠️ Brouillons DURABLES (BL-059). Le relais ci-dessus mourait avec la page : « Mettre à jour » (rechargement),
    * l'éviction de la page par iOS ou la restauration d'un onglet Android emportaient le message en cours
    * d'écriture. Il est donc relu de l'appareil au démarrage (UI.init) et recopié dans localStorage à chaque
@@ -199,7 +214,7 @@
    * config.js. Seul le composeur de chaque sujet est conservé (clé « composer:<sujet> », donc jamais restauré
    * dans un autre sujet) : ni champ de connexion, de code ou de nom, ni fenêtre « Modifier » (un texte
    * d'édition abandonné ne doit pas ressurgir, et le préremplissage doit toujours l'emporter à l'ouverture),
-   * ni le choix anonyme ou signé, qui ne se déduit pas d'un brouillon. */
+   * ni aucune identité. Le choix ANONYME (et lui seul) suit le brouillon : voir `anonDrafts` (REC-RUI-001). */
   var DRAFTS_KEY = "brainsto.drafts.v1";
   var DRAFTS_MAX_ENTRIES = 50;      // un brouillon par sujet
   var DRAFTS_MAX_CHARS = 20000;     // taille totale écrite : les plus anciens partent d'abord
@@ -231,20 +246,47 @@
     return out;
   }
 
+  /* Brouillons rédigés en anonyme : liste de clés « composer:<sujet> » sous la propriété réservée `anon` (jamais un nom ni
+   * un identifiant). Lecture tolérante comme la précédente : forme inattendue, clé étrangère ou sans texte = ignorée. */
+  function readStoredAnon(texts) {
+    var found = Utils.storage.get(DRAFTS_KEY, null);
+    var list = found && typeof found === "object" && !Array.isArray(found) ? found[DRAFTS_ANON] : null;
+    var out = {};
+    if (!Array.isArray(list)) { return out; }
+    for (var i = 0; i < list.length; i++) {
+      if (typeof list[i] === "string" && storedDraft(list[i]) && texts[list[i]]) { out[list[i]] = true; }
+    }
+    return out;
+  }
+
   /* Écriture bornée : au plus DRAFTS_MAX_ENTRIES brouillons et DRAFTS_MAX_CHARS caractères, les plus anciens
    * (les premiers de l'objet) partent d'abord. Stockage refusé : comportement d'avant, sans erreur. */
-  function writeStoredDrafts(drafts) {
+  function writeStoredDrafts(drafts, anon) {
     var keys = Object.keys(drafts);
-    while (keys.length > DRAFTS_MAX_ENTRIES || (keys.length && JSON.stringify(drafts).length > DRAFTS_MAX_CHARS)) {
+    /* Les textes, puis (seulement s'il y en a) la liste des brouillons anonymes : un indicateur ne survit jamais à son texte. */
+    function payload() {
+      var out = {};
+      var flagged = [];
+      for (var i = 0; i < keys.length; i++) {
+        out[keys[i]] = drafts[keys[i]];
+        if (anon && anon[keys[i]] === true) { flagged.push(keys[i]); }
+      }
+      if (flagged.length) { out[DRAFTS_ANON] = flagged; }
+      return out;
+    }
+    while (keys.length > DRAFTS_MAX_ENTRIES || (keys.length && JSON.stringify(payload()).length > DRAFTS_MAX_CHARS)) {
       delete drafts[keys.shift()];
     }
-    if (keys.length) { Utils.storage.set(DRAFTS_KEY, drafts); }
+    if (keys.length) { Utils.storage.set(DRAFTS_KEY, payload()); }
     else { Utils.storage.remove(DRAFTS_KEY); }
   }
 
   /* Saisie : relais tout de suite, écriture après un court silence. */
-  function stageDraft(key, value) {
-    if (value) { composerDrafts[key] = value; } else { delete composerDrafts[key]; }
+  function stageDraft(key, value, anon) {
+    if (value) { composerDrafts[key] = value; } else { delete composerDrafts[key]; dismissNote(key); }
+    /* Le choix suit le texte : noté « anonyme » seulement si c'est le choix au moment de la frappe (ou du geste explicite). */
+    if (value && (anon === undefined ? UI.local.composerAnon === true : anon === true)) { anonDrafts[key] = true; }
+    else { delete anonDrafts[key]; }
     draftsPending[key] = clipDraft(value);
     if (draftsTimer) { clearTimeout(draftsTimer); }
     draftsTimer = setTimeout(flushDrafts, DRAFTS_DELAY_MS);
@@ -255,18 +297,24 @@
     var keys = Object.keys(draftsPending);
     if (!keys.length) { return; }
     var stored = readStoredDrafts();
+    var storedAnon = readStoredAnon(stored);
     for (var i = 0; i < keys.length; i++) {
       delete stored[keys[i]];                  // la clé repasse en dernier : c'est la plus récente
-      if (draftsPending[keys[i]]) { stored[keys[i]] = draftsPending[keys[i]]; }
+      delete storedAnon[keys[i]];
+      if (draftsPending[keys[i]]) {
+        stored[keys[i]] = draftsPending[keys[i]];
+        if (anonDrafts[keys[i]]) { storedAnon[keys[i]] = true; }
+      }
     }
     draftsPending = {};
-    writeStoredDrafts(stored);
+    writeStoredDrafts(stored, storedAnon);
   }
 
   /* La publication est partie en file : son brouillon disparaît, sauf si un texte PLUS RÉCENT a été saisi depuis. */
   function dropDraft(key, sent) {
     var latest = Object.prototype.hasOwnProperty.call(draftsPending, key) ? draftsPending[key] : readStoredDrafts()[key];
     if (latest && latest !== clipDraft(sent)) { return; }
+    delete anonDrafts[key];
     draftsPending[key] = "";
     flushDrafts();
   }
@@ -281,14 +329,29 @@
     flushDrafts();
   }
 
+  /* La note « brouillon retrouvé » s'en va : envoi, appui sur la bascule, champ vidé (REC-RUI-001). */
+  function dismissNote(key) {
+    if (!draftNote[key]) { return; }
+    delete draftNote[key];
+    delete noteSaid[key];
+    var note = document.getElementById("composer-restored");
+    if (note && note.parentNode) { note.parentNode.removeChild(note); }
+    var field = findDraftNode(key);
+    if (field && field.removeAttribute) { field.removeAttribute("aria-describedby"); }
+  }
+
   /* Appelés par js/app.js : écriture immédiate avant ce qui peut tuer la page (pagehide, arrière-plan, rechargement
    * d'une mise à jour) et effacement complet à la déconnexion (relais, champs à l'écran et appareil). */
   UI.flushDrafts = function () { flushDrafts(); };
 
   UI.clearDrafts = function () {
     if (draftsTimer) { clearTimeout(draftsTimer); draftsTimer = 0; }
+    Object.keys(draftNote).forEach(dismissNote);
     draftsPending = {};
     composerDrafts = {};
+    anonDrafts = {};
+    draftNote = {};
+    noteSaid = {};
     touchedDrafts = {};
     var nodes = document.querySelectorAll("[data-draft]");
     for (var i = 0; i < nodes.length; i++) {
@@ -344,6 +407,17 @@
     return null;
   }
 
+  /* Le champ garde son texte au rendu, mais son compteur est recréé à « 0 / max » : on le recale (REC-RUI-008). */
+  function refreshCounter(key, node) {
+    /* Comparaison d'attribut, pas de sélecteur construit avec la clé : une clé étrange ne doit jamais casser le rendu. */
+    var counters = document.querySelectorAll("[data-counter]");
+    for (var i = 0; i < counters.length; i++) {
+      if (counters[i].getAttribute("data-counter") !== key) { continue; }
+      var max = counters[i].textContent.split(" / ")[1];
+      if (max) { counters[i].textContent = node.value.length + " / " + max; }
+    }
+  }
+
   function restoreDrafts(snapshot) {
     var nodes = document.querySelectorAll("[data-draft]");
     for (var i = 0; i < nodes.length; i++) {
@@ -360,6 +434,7 @@
       if (touchedDrafts[key] && saved !== undefined) { node.value = saved; }
       else if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
       autoGrow(node);
+      refreshCounter(key, node);
     }
     if (snapshot.active) {
       var target = findDraftNode(snapshot.active.key);
@@ -1049,7 +1124,9 @@
   function countChip(iconName, count, label) {
     return el("span", { class: "legend-chip", title: Utils.plural(count, label, label + "s") }, [
       icon(iconName, 13),
-      el("span", { text: String(count) })
+      el("span", { text: String(count) }),
+      /* Lu avec le nombre : « 1 message », pas « 1 1 1 » (le `title` n'entre pas dans le nom d'un bouton) (REC-RUI-007). */
+      el("span", { class: "visually-hidden", text: " " + (count > 1 ? label + "s" : label) })
     ]);
   }
 
@@ -1222,7 +1299,7 @@
 
     if (all.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter un sujet", "data-key": "create-topic",
+        class: "fab", type: "button", "data-key": "create-topic",
         onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
       }, [icon("plus", 20), el("span", { text: "Nouveau sujet" })]));
     }
@@ -1411,6 +1488,7 @@
       var typed = textarea.value;
       var text = Utils.trim(typed);
       if (!text) { return; }
+      dismissNote(draftKey);
       var quote = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote : null;
       var quoteId = quote ? quote.messageId : null;
       /* ⚠️ On vide le champ AVANT de déclencher l'action : le dispatch provoque
@@ -1444,6 +1522,15 @@
       class: "send-btn", type: "button", "aria-label": "Envoyer", "data-key": "send", onclick: send
     }, [icon("send", 20)]);
 
+    /* ⚠️ Un brouillon rédigé en anonyme n'est jamais affiché « Signé » par déduction (REC-RUI-001) : le choix est global, le
+     * brouillon est par sujet. Le geste explicite de la personne (la bascule) retire l'indicateur AVANT ce rendu. */
+    var note = draftNote[draftKey];
+    if (note && !composerDrafts[draftKey]) { delete draftNote[draftKey]; delete noteSaid[draftKey]; note = undefined; }
+    if (composerDrafts[draftKey] && anonDrafts[draftKey] && !UI.local.composerAnon) {
+      UI.local.composerAnon = true;
+      if (!note) { note = draftNote[draftKey] = "anon"; }
+    }
+
     var parts = [];
     if (UI.local.quote && UI.local.quote.topicId === topic.id) {
       var quoted = Core.findMessage(topic, UI.local.quote.messageId);
@@ -1459,6 +1546,21 @@
       }
     }
 
+    if (note) {
+      var said = !noteSaid[draftKey];
+      noteSaid[draftKey] = true;
+      var noteNode = el("div", { class: "note", id: "composer-restored" }, [
+        icon("info", 14),
+        el("span", { class: "note-body", text: note === "anon"
+          ? "Brouillon retrouvé sur cet appareil. Il sera publié en anonyme : vérifiez avant d'envoyer."
+          : "Brouillon retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant d'envoyer." })
+      ]);
+      /* Annoncée une seule fois (role=status) : un rendu de plus ne la relit pas ; le champ la porte en description. */
+      if (said) { noteNode.setAttribute("role", "status"); }
+      textarea.setAttribute("aria-describedby", "composer-restored");
+      parts.push(noteNode);
+    }
+
     parts.push(el("div", { class: "signature-toggle" }, [
       el("span", { class: "who" }, [
         icon(UI.local.composerAnon ? "mask" : "user", 15),
@@ -1470,7 +1572,13 @@
       el("button", {
         class: "btn btn-sm btn-outline", type: "button",
         "data-key": "composer-anon", "aria-describedby": "composer-who",
-        onclick: function () { UI.set({ composerAnon: !UI.local.composerAnon }); }
+        onclick: function () {
+          var next = !UI.local.composerAnon;
+          dismissNote(draftKey);
+          /* Geste explicite : le choix du brouillon suit (sinon un rechargement le rétablirait ou le perdrait). */
+          if (composerDrafts[draftKey]) { stageDraft(draftKey, composerDrafts[draftKey], next); }
+          UI.set({ composerAnon: next });
+        }
       }, [
         icon(UI.local.composerAnon ? "user" : "mask", 15),
         el("span", { text: UI.local.composerAnon ? "Signer" : "Anonyme" })

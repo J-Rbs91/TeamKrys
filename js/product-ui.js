@@ -338,6 +338,18 @@
     if (topic) { markTopicSeen(topic, state); }
   }
 
+  /* ⚠️ Un élément qui a le focus et que l'on DÉPLACE dans le DOM le perd : le focus retombe sur <body>. js/ui.js venait de le
+   * rendre (settleFocus, BL-012) ; cette couche range ensuite des nœuds dans de nouveaux conteneurs. Elle rend donc le focus au
+   * nœud qu'elle a déplacé, et à lui seul : jamais quand le focus était déjà sur <body> (changement d'écran), jamais par-dessus
+   * un autre champ en cours de saisie (REC-RUI-003, REC-RUI-004). */
+  function restoreFocus(focused) {
+    var now = document.activeElement;
+    if (!focused || focused === document.body || focused === document.documentElement || focused === now) { return; }
+    if (now && now !== document.body && now !== document.documentElement) { return; }
+    if (!document.documentElement.contains(focused)) { return; }
+    try { focused.focus({ preventScroll: true }); } catch (error) { /* non focalisable */ }
+  }
+
   function enhance() {
     var currentApp = app();
     var currentStore = store();
@@ -347,6 +359,7 @@
       return;
     }
 
+    var focused = document.activeElement;
     var state = currentStore.view;
     var route = currentApp.route || {};
     markCurrentTopic(state, route);
@@ -357,6 +370,7 @@
     renameConsensusOverlay();
     renameMeeting(route);
     renameOnboarding();
+    restoreFocus(focused);
   }
 
   UI.render = function () {
