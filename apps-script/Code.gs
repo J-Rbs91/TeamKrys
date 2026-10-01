@@ -19,7 +19,9 @@ var PROP_FILE_ID = "BRAINSTO_FILE_ID";
 var PROP_BACKUP_VERSION = "BRAINSTO_BACKUP_VERSION";
 var MAX_PROCESSED = 5000;
 var MAX_BATCH = 20;
-var FEATURES = ["since", "batch", "lean"];
+/* "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
+ * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé. */
+var FEATURES = ["since", "batch", "lean", "idempotent"];
 
 var ANON_NAME = "Anonyme";
 var LIMITS = {
@@ -52,6 +54,7 @@ function cut(value, max) { return trim(value).slice(0, max); }
 function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function arr(value) { return Array.isArray(value) ? value : []; }
 function oneOf(value, list, fallback) { return list.indexOf(value) >= 0 ? value : fallback; }
+function ownValue(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined; }
 
 function emptyState() {
   return {
@@ -258,7 +261,10 @@ function validateAction(state, action) {
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!findMessage(topic, trim(p.messageId))) { return fail("Ce message n'existe plus."); }
       if (!trim(action.actorId)) { return fail("Réaction sans participant."); }
-      if (REACTIONS.indexOf(trim(p.emoji)) < 0) { return fail("Réaction non autorisée."); }
+      /* emoji "" = retrait, admis seulement dans une action marquée (set:true). */
+      if (REACTIONS.indexOf(trim(p.emoji)) < 0 && !(p.set === true && trim(p.emoji) === "")) {
+        return fail("Réaction non autorisée.");
+      }
       return OK;
     case "CREATE_PROPOSAL":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
@@ -386,7 +392,12 @@ function applyAction(state, action, now) {
       var ms = findMessage(topic, trim(p.messageId));
       var anon = p.anon === true;
       ms.anon = anon;
-      if (anon) { ms.authorId = ""; ms.authorName = ANON_NAME; }
+      if (anon) {
+        /* L'anonymat efface aussi l'identité comme clé de réaction : auteur et acteur (§5). */
+        if (ms.authorId) { delete ms.reactions[ms.authorId]; }
+        if (trim(action.actorId)) { delete ms.reactions[trim(action.actorId)]; }
+        ms.authorId = ""; ms.authorName = ANON_NAME;
+      }
       else {
         var signed = author(action, false);
         ms.authorId = signed.id; ms.authorName = signed.name;
@@ -397,7 +408,14 @@ function applyAction(state, action, now) {
       var mr = findMessage(topic, trim(p.messageId));
       var actor = trim(action.actorId);
       var emoji = trim(p.emoji);
-      if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
+      /* ⚠️ set:true (FEATURES "idempotent") : AFFECTE, "" retire, rejouée = sans effet ;
+       * sans marqueur : bascule historique (anciens clients). */
+      if (p.set === true) {
+        var had = ownValue(mr.reactions, actor);
+        if (emoji) { mr.reactions[actor] = emoji; } else { delete mr.reactions[actor]; }
+        if (ownValue(mr.reactions, actor) === had) { return; }
+      }
+      else if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
       else { mr.reactions[actor] = emoji; }
       touch(state, topic, now); return;
     }
@@ -424,7 +442,12 @@ function applyAction(state, action, now) {
       var pv = findProposal(topic, trim(p.proposalId));
       var voter = trim(action.actorId);
       var value = trim(p.value);
-      if (pv.votes[voter] === value) { delete pv.votes[voter]; }
+      if (p.set === true) {
+        var was = ownValue(pv.votes, voter);
+        pv.votes[voter] = value;
+        if (ownValue(pv.votes, voter) === was) { return; }
+      }
+      else if (pv.votes[voter] === value) { delete pv.votes[voter]; }
       else { pv.votes[voter] = value; }
       touch(state, topic, now); return;
     }
@@ -455,7 +478,12 @@ function applyAction(state, action, now) {
     case "SET_CONCLUSION_VOTE": {
       var cv = trim(action.actorId);
       var target = trim(p.conclusionId);
-      if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
+      if (p.set === true) {
+        var prev = ownValue(topic.conclusionVotes, cv);
+        topic.conclusionVotes[cv] = target;
+        if (ownValue(topic.conclusionVotes, cv) === prev) { return; }
+      }
+      else if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
       else { topic.conclusionVotes[cv] = target; }
       touch(state, topic, now); return;
     }

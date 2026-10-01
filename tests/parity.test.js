@@ -614,6 +614,297 @@ tests.push(() => check("PARITÉ : l'état allégé ne perd que processedActionId
   equal(rebuilt, expected, "l'allègement de l'état perd des données");
 }));
 
+/* ==========================================================================
+ *   CHOIX IDEMPOTENTS (marqueur set:true) ET RÉACTIONS D'UN MESSAGE ANONYMISÉ
+ * ==========================================================================
+ *
+ * SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE sont historiquement des
+ * BASCULES : rejouées (vue optimiste qui rejoue la file sur un état serveur qui
+ * contient déjà l'action, retransmission après l'oubli de son identifiant par le
+ * journal de déduplication), elles RETIRENT le choix. Marquée `set: true`, la même
+ * action AFFECTE la valeur : la rejouer ne change rien, pas même la date
+ * d'activité. Sans marqueur, la bascule reste à l'identique : un ancien client en
+ * cache continue de fonctionner. Le serveur annonce le marqueur par FEATURES
+ * "idempotent". Rendre un message anonyme retire aussi la réaction de son auteur,
+ * sinon son identifiant resterait dans les données partagées (§5).
+ * Chaque vecteur est joué sur les DEUX implémentations.
+ */
+
+const { Store } = require("../js/state.js");
+const MID = "2026-01-01T10:30:00.000Z";
+const SIDES = [{ name: "client", impl: Core }, { name: "serveur", impl: GS }];
+
+function sideAction(type, payload, who, id) {
+  return { id: id, type: type, actorId: who, actorName: who === "u1" ? "Marie" : "Alex", ts: NOW, payload: payload };
+}
+
+function sideApply(impl, state, type, payload, who, id, now) {
+  const verdict = impl.validateAction(state, sideAction(type, payload, who, id));
+  assert(verdict.ok, "action refusée : " + type + " → " + verdict.error);
+  impl.applyAction(state, sideAction(type, payload, who, id), now || NOW);
+  return state;
+}
+
+/* Marie (u1) a écrit m1 ; Alex (u2) a ouvert le sujet, la proposition et deux formulations. */
+function sideSeed(impl) {
+  const state = impl.emptyState();
+  sideApply(impl, state, "REGISTER_PARTICIPANT", { participantId: "u1", name: "Marie" }, "u1", "s1");
+  sideApply(impl, state, "REGISTER_PARTICIPANT", { participantId: "u2", name: "Alex" }, "u2", "s2");
+  sideApply(impl, state, "CREATE_TOPIC", { topicId: "t1", title: "Planning d'été" }, "u2", "s3");
+  sideApply(impl, state, "CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Qui est dispo en août ?" }, "u1", "s4");
+  sideApply(impl, state, "CREATE_PROPOSAL", { topicId: "t1", proposalId: "p1", title: "Roulement par binômes" }, "u2", "s5");
+  sideApply(impl, state, "ADD_CONCLUSION", { topicId: "t1", conclusionId: "c1", text: "On part sur les binômes." }, "u2", "s6");
+  sideApply(impl, state, "ADD_CONCLUSION", { topicId: "t1", conclusionId: "c2", text: "On en reparle." }, "u2", "s7");
+  return state;
+}
+
+/* Les trois choix de Marie, lus comme l'écran les lit. */
+const CHOICES = [
+  { type: "SET_VOTE", values: ["for", "against"], payload: (v) => ({ topicId: "t1", proposalId: "p1", value: v }),
+    read: (t) => t.proposals[0].votes.u1 },
+  { type: "SET_REACTION", values: ["👌", "💪"], payload: (v) => ({ topicId: "t1", messageId: "m1", emoji: v }),
+    read: (t) => t.messages[0].reactions.u1 },
+  { type: "SET_CONCLUSION_VOTE", values: ["c1", "c2"], payload: (v) => ({ topicId: "t1", conclusionId: v }),
+    read: (t) => t.conclusionVotes.u1 }
+];
+
+function withSet(payload, flag) {
+  const p = Object.assign({}, payload);
+  if (flag !== "absent") { p.set = flag; }
+  return p;
+}
+
+tests.push(() => check("IDEMPOTENCE : un choix marqué (set:true) rejoué ou ré-appuyé ne change rien, des deux côtés", () => {
+  const finals = { client: [], serveur: [] };
+  SIDES.forEach((side) => {
+    CHOICES.forEach((choice) => {
+      const label = side.name + " " + choice.type;
+      const state = sideSeed(side.impl);
+      const payload = withSet(choice.payload(choice.values[0]), true);
+      sideApply(side.impl, state, choice.type, payload, "u1", "a1", MID);
+      equal(choice.read(state.topics[0]), choice.values[0], label + " : le choix est affecté");
+      equal(state.topics[0].updatedAt, MID, label + " : un vrai changement remonte le sujet");
+      const once = JSON.stringify(state);
+      assert(once.indexOf('"set"') < 0, label + " : le marqueur ne doit jamais entrer dans les données");
+      /* La MÊME action rejouée (vue optimiste, retransmission), puis un second appui. */
+      sideApply(side.impl, state, choice.type, payload, "u1", "a1", LATER);
+      sideApply(side.impl, state, choice.type, payload, "u1", "a2", LATER);
+      assert(JSON.stringify(state) === once, label + " : rejouée, l'action marquée a changé l'état " + JSON.stringify(state.topics[0]));
+      /* Un autre choix marqué DÉPLACE le choix, sans jamais le retirer. */
+      sideApply(side.impl, state, choice.type, withSet(choice.payload(choice.values[1]), true), "u1", "a3", LATER);
+      equal(choice.read(state.topics[0]), choice.values[1], label + " : le choix se déplace");
+      finals[side.name].push(JSON.stringify(state));
+    });
+  });
+  equal(finals.serveur, finals.client, "parité des états");
+}));
+
+tests.push(() => check("IDEMPOTENCE : retrait marqué (emoji \"\" et set:true) idempotent ; REMOVE_VOTE et REMOVE_CONCLUSION_VOTE rejoués : même contenu", () => {
+  const finals = [];
+  SIDES.forEach((side) => {
+    const state = sideSeed(side.impl);
+    const untouched = JSON.stringify(state);
+    const removal = { topicId: "t1", messageId: "m1", emoji: "", set: true };
+    sideApply(side.impl, state, "SET_REACTION", removal, "u1", "r0", MID);
+    assert(JSON.stringify(state) === untouched, side.name + " : retirer une réaction absente a changé l'état");
+    sideApply(side.impl, state, "SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌", set: true }, "u1", "r1");
+    sideApply(side.impl, state, "SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "💪", set: true }, "u2", "r2");
+    sideApply(side.impl, state, "SET_REACTION", removal, "u1", "r3", MID);
+    equal(state.topics[0].messages[0].reactions, { u2: "💪" }, side.name + " : seul mon retrait est appliqué");
+    equal(state.topics[0].updatedAt, MID, side.name + " : un vrai retrait remonte le sujet");
+    const once = JSON.stringify(state);
+    sideApply(side.impl, state, "SET_REACTION", removal, "u1", "r3", LATER);
+    sideApply(side.impl, state, "SET_REACTION", removal, "u1", "r4", LATER);
+    assert(JSON.stringify(state) === once, side.name + " : rejoué, le retrait marqué a changé l'état");
+    /* Les retraits explicites existants restent sûrs à rejouer (contenu identique). */
+    sideApply(side.impl, state, "SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for", set: true }, "u1", "v1");
+    sideApply(side.impl, state, "SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c1", set: true }, "u1", "k1");
+    ["x1", "x1", "x2"].forEach((id) => {
+      sideApply(side.impl, state, "REMOVE_VOTE", { topicId: "t1", proposalId: "p1" }, "u1", "rv-" + id, LATER);
+      sideApply(side.impl, state, "REMOVE_CONCLUSION_VOTE", { topicId: "t1" }, "u1", "rc-" + id, LATER);
+      equal(state.topics[0].proposals[0].votes, {}, side.name + " : REMOVE_VOTE rejoué");
+      equal(state.topics[0].conclusionVotes, {}, side.name + " : REMOVE_CONCLUSION_VOTE rejoué");
+    });
+    finals.push(JSON.stringify(state));
+  });
+  equal(finals[1], finals[0], "parité des états");
+}));
+
+tests.push(() => check("BASCULE HISTORIQUE : sans set:true (absent, false, \"true\", 1, null), l'action garde sa bascule à l'identique", () => {
+  const finals = { client: [], serveur: [] };
+  SIDES.forEach((side) => {
+    ["absent", false, "true", 1, null].forEach((flag) => {
+      CHOICES.forEach((choice) => {
+        const label = side.name + " " + choice.type + " set=" + JSON.stringify(flag);
+        const state = sideSeed(side.impl);
+        sideApply(side.impl, state, choice.type, withSet(choice.payload(choice.values[0]), flag), "u1", "b1", MID);
+        equal(choice.read(state.topics[0]), choice.values[0], label + " : pose");
+        sideApply(side.impl, state, choice.type, withSet(choice.payload(choice.values[1]), flag), "u1", "b2", MID);
+        equal(choice.read(state.topics[0]), choice.values[1], label + " : déplace");
+        sideApply(side.impl, state, choice.type, withSet(choice.payload(choice.values[1]), flag), "u1", "b3", LATER);
+        equal(choice.read(state.topics[0]), undefined, label + " : re-appui = retrait");
+        equal(state.topics[0].updatedAt, LATER, label + " : la bascule remonte le sujet comme avant");
+        finals[side.name].push(JSON.stringify(state));
+      });
+    });
+  });
+  equal(finals.serveur, finals.client, "parité des états");
+}));
+
+tests.push(() => check("VALIDATION : emoji \"\" (retrait) accepté seulement avec set:true, des deux côtés ; le reste inchangé", () => {
+  const cases = [
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "" }, false],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: false }, false],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: "true" }, false],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: 1 }, false],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: true }, true],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", set: true }, true],  // champ absent = "" (normalisation du noyau)
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🔥", set: true }, false],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤞", set: true }, false],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌", set: true }, true],
+    ["SET_REACTION", { topicId: "t1", messageId: "absent", emoji: "", set: true }, false],
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "", set: true }, false],
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "peut-être", set: true }, false],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "", set: true }, false],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c9", set: true }, false]
+  ];
+  const verdicts = SIDES.map((side) => {
+    const state = sideSeed(side.impl);
+    return cases.map(([type, payload, expected], i) => {
+      const verdict = side.impl.validateAction(state, sideAction(type, payload, "u1", "v" + i));
+      equal(verdict.ok, expected, side.name + " #" + i + " " + type + " " + JSON.stringify(payload));
+      return { ok: verdict.ok, error: verdict.error };
+    });
+  });
+  equal(verdicts[1], verdicts[0], "verdicts et messages identiques des deux côtés");
+  equal(verdicts[0][0].error, "Réaction non autorisée.", "message de refus inchangé");
+}));
+
+tests.push(() => check("DÉDUPLICATION : rejouée après l'oubli de son identifiant (5 000 actions), une action marquée est sans effet", () => {
+  equal(GS.MAX_PROCESSED, 5000, "le serveur garde 5 000 identifiants");
+  const state = sideSeed(GS);
+  sideApply(GS, state, "CREATE_TOPIC", { topicId: "t2", title: "Autre sujet" }, "u2", "s8");
+  const choices = [
+    sideAction("SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for", set: true }, "u1", "vote-a1"),
+    sideAction("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "💪", set: true }, "u1", "reaction-a1"),
+    sideAction("SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c1", set: true }, "u1", "soutien-a1"),
+    sideAction("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌", set: true }, "u2", "reaction-a2"),
+    sideAction("SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: true }, "u2", "retrait-a2")
+  ];
+  choices.forEach((a) => equal(GS.applyOne(state, a, MID).ok, true, "première application de " + a.id));
+  /* 5 000 autres actions, sur un autre sujet : le journal oublie les cinq identifiants. */
+  for (let i = 0; i < 5000; i++) {
+    GS.applyOne(state, sideAction("CHANGE_TOPIC_STATUS", { topicId: "t2", status: i % 2 ? "open" : "ready" }, "u2", "fill-" + i), NOW);
+  }
+  choices.forEach((a) => assert(state.processedActionIds.indexOf(a.id) < 0, a.id + " devrait être sorti du journal"));
+  const late = (a) => {
+    const result = GS.applyOne(state, a, LATER);
+    assert(result.ok && !result.duplicate, a.id + " : le serveur ne doit plus la reconnaître (préalable du scénario)");
+  };
+  /* File d'Alex rejouée dans son ordre (pose puis retrait) : même contenu, seule la date d'activité bouge. */
+  late(choices[3]);
+  late(choices[4]);
+  equal(state.topics[0].messages[0].reactions, { u1: "💪" }, "file rejouée dans son ordre : même contenu");
+  /* Rejeu tardif de chaque choix de Marie : rien ne change, pas même la date d'activité. */
+  const before = JSON.stringify(state.topics[0]);
+  choices.slice(0, 3).forEach(late);
+  assert(JSON.stringify(state.topics[0]) === before, "le rejeu tardif a modifié le sujet : " + JSON.stringify(state.topics[0]));
+  equal([state.topics[0].proposals[0].votes, state.topics[0].messages[0].reactions, state.topics[0].conclusionVotes],
+    [{ u1: "for" }, { u1: "💪" }, { u1: "c1" }], "choix conservés");
+}));
+
+tests.push(() => check("VUE OPTIMISTE : un choix marqué encore en file, déjà appliqué par le serveur, reste affiché", () => {
+  CHOICES.forEach((choice, i) => {
+    const a1 = sideAction(choice.type, withSet(choice.payload(choice.values[0]), true), "u1", "vue-" + i);
+    const server = sideSeed(GS);
+    server.revision = 100 * (i + 1);
+    GS.applyOne(server, a1, MID);
+    /* La réponse s'est perdue : l'action reste en file pendant que la lecture suivante adopte l'état serveur. */
+    Store.setBase(JSON.parse(JSON.stringify(GS.leanState(server))));
+    Store.setQueue([{ seq: 1, action: a1 }]);
+    equal(choice.read(Store.view.topics[0]), choice.values[0], choice.type + " : la vue montre le choix enregistré");
+    equal(Store.view.topics, Store.base.topics, choice.type + " : la vue ne diffère pas de l'état serveur");
+  });
+  Store.setQueue([]);
+}));
+
+tests.push(() => check("ANONYMAT : rendu anonyme, un message ne garde aucun identifiant de son auteur, clés de réactions comprises", () => {
+  const finals = [];
+  SIDES.forEach((side) => {
+    const state = sideSeed(side.impl);
+    const m1 = () => state.topics[0].messages[0];
+    sideApply(side.impl, state, "SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "💪" }, "u1", "r1");
+    sideApply(side.impl, state, "SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌", set: true }, "u2", "r2");
+    sideApply(side.impl, state, "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: true }, "u1", "a1");
+    equal([m1().authorId, m1().authorName, m1().anon], ["", "Anonyme", true], side.name + " : identité effacée");
+    equal(m1().reactions, { u2: "👌" }, side.name + " : la réaction de l'autrice est retirée, celle d'Alex reste");
+    assert(JSON.stringify(m1()).indexOf("u1") < 0, side.name + " : identifiant de l'autrice encore présent " + JSON.stringify(m1()));
+    assert(side.impl.isMessageLocked(m1(), "u1"), side.name + " : le verrou posé par la réaction d'Alex est inchangé");
+    /* Réaction de l'autrice sur son message déjà anonyme : « Rendre anonyme » la retire aussi. */
+    sideApply(side.impl, state, "SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤏" }, "u1", "r3");
+    sideApply(side.impl, state, "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: true }, "u1", "a2");
+    equal(m1().reactions, { u2: "👌" }, side.name + " : réaction retirée à la nouvelle anonymisation");
+    /* Re-signer ne ressuscite rien et garde les réactions des autres. */
+    sideApply(side.impl, state, "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: false }, "u1", "a3");
+    equal([m1().authorId, m1().reactions], ["u1", { u2: "👌" }], side.name + " : re-signature");
+    finals.push(JSON.stringify(state));
+  });
+  equal(finals[1], finals[0], "parité des états");
+}));
+
+tests.push(() => check("PARITÉ : le serveur annonce le marqueur par FEATURES \"idempotent\" (drapeaux existants conservés)", () => {
+  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent"]);
+  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent"], "liste lue par Sync.supports()");
+}));
+
+tests.push(() => check("PARITÉ : actions marquées et non marquées, action par action", () => {
+  const script = [
+    ["REGISTER_PARTICIPANT", { participantId: "u1", name: "Marie" }],
+    ["CREATE_TOPIC", { topicId: "t1", title: "Rayon" }],
+    ["CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Premier" }],
+    ["CREATE_PROPOSAL", { topicId: "t1", proposalId: "p1", title: "Proposition" }],
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "c1", text: "A" }],
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "c2", text: "B" }],
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for", set: true }],
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for", set: true }],         // sans effet
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "against", set: true }],     // déplace
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "against" }],               // bascule : retire
+    ["SET_VOTE", { topicId: "t1", proposalId: "p1", value: "", set: true }],            // refus
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌", set: true }],
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "👌", set: true }],       // sans effet
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: true }],         // retrait
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: true }],         // sans effet
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "" }],                    // refus
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "", set: "true" }],       // refus
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "💪", set: false }],      // bascule : pose
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "💪", set: false }],      // bascule : retire
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c1", set: true }],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c2", set: true }],          // déplace
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c2", set: true }],          // sans effet
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c2" }],                     // bascule : retire
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c9", set: true }],          // refus
+    ["SET_REACTION", { topicId: "t1", messageId: "m1", emoji: "🤏", set: true }],
+    ["SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: true }],          // retire la réaction de l'autrice
+    ["SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "m1", anon: false }]
+  ];
+  const front = Core.emptyState();
+  const back = GS.emptyState();
+  script.forEach(([type, payload], index) => {
+    const now = new Date(Date.UTC(2026, 1, 2, 9, 0, index)).toISOString();
+    const act = { id: "s" + index, type, actorId: "u1", actorName: "Marie", ts: NOW, payload };
+    const frontVerdict = Core.validateAction(front, act);
+    equal(GS.validateAction(back, act), frontVerdict, "verdict divergent sur #" + index + " " + type);
+    if (frontVerdict.ok) {
+      Core.applyAction(front, act, now);
+      GS.applyAction(back, act, now);
+      equal(back, front, "état divergent après #" + index + " " + type);
+    }
+  });
+  const topic = front.topics[0];
+  equal([topic.proposals[0].votes, topic.conclusionVotes, topic.messages[0].reactions, topic.messages[0].authorId],
+    [{}, {}, {}, "u1"], "état final attendu");
+}));
+
 /* ------------------------------------------------------------ Exécution --- */
 
 (async function run() {

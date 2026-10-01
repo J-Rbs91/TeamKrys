@@ -67,6 +67,8 @@
   function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
   function arr(value) { return Array.isArray(value) ? value : []; }
   function oneOf(value, list, fallback) { return list.indexOf(value) >= 0 ? value : fallback; }
+  /* Valeur PROPRE d'une clé (jamais celle héritée d'Object.prototype : « toString »…). */
+  function ownValue(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined; }
 
   Core.cut = cut;
   Core.trim = trim;
@@ -346,7 +348,10 @@
         var e6 = needTopic(); if (e6) { return e6; }
         if (!Core.findMessage(topic, trim(p.messageId))) { return fail("Ce message n'existe plus."); }
         if (!trim(action.actorId)) { return fail("Réaction sans participant."); }
-        if (Core.REACTIONS.indexOf(trim(p.emoji)) < 0) { return fail("Réaction non autorisée."); }
+        /* emoji "" = retrait, admis seulement dans une action marquée (set:true). */
+        if (Core.REACTIONS.indexOf(trim(p.emoji)) < 0 && !(p.set === true && trim(p.emoji) === "")) {
+          return fail("Réaction non autorisée.");
+        }
         return OK;
       }
 
@@ -533,7 +538,10 @@
         var anon = p.anon === true;
         ms.anon = anon;
         if (anon) {
-          /* L'anonymat EFFACE l'identité du JSON partagé. */
+          /* L'anonymat EFFACE l'identité du JSON partagé, y compris comme clé de
+           * réaction : celle de l'auteur et celle de qui anonymise (§5). */
+          if (ms.authorId) { delete ms.reactions[ms.authorId]; }
+          if (trim(action.actorId)) { delete ms.reactions[trim(action.actorId)]; }
           ms.authorId = "";
           ms.authorName = Core.ANON_NAME;
         } else {
@@ -550,7 +558,15 @@
         var mr = Core.findMessage(topic, trim(p.messageId));
         var actor = trim(action.actorId);
         var emoji = trim(p.emoji);
-        if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
+        /* ⚠️ Action marquée set:true (FEATURES "idempotent") : elle AFFECTE, "" retire ;
+         * rejouée, elle ne change rien, pas même la date d'activité. Sans marqueur :
+         * bascule historique, gardée pour les appareils restés sur l'ancienne version. */
+        if (p.set === true) {
+          var had = ownValue(mr.reactions, actor);
+          if (emoji) { mr.reactions[actor] = emoji; } else { delete mr.reactions[actor]; }
+          if (ownValue(mr.reactions, actor) === had) { return; }
+        }
+        else if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
         else { mr.reactions[actor] = emoji; }
         touch(state, topic, now);
         return;
@@ -589,8 +605,14 @@
         var pv = Core.findProposal(topic, trim(p.proposalId));
         var voter = trim(action.actorId);
         var value = trim(p.value);
+        if (p.set === true) {
+          /* Action marquée : AFFECTE ; rejouée, elle ne change rien. */
+          var was = ownValue(pv.votes, voter);
+          pv.votes[voter] = value;
+          if (ownValue(pv.votes, voter) === was) { return; }
+        }
         /* Un vote par personne ; re-cliquer le même vote le retire. */
-        if (pv.votes[voter] === value) { delete pv.votes[voter]; }
+        else if (pv.votes[voter] === value) { delete pv.votes[voter]; }
         else { pv.votes[voter] = value; }
         touch(state, topic, now);
         return;
@@ -638,8 +660,14 @@
       case "SET_CONCLUSION_VOTE": {
         var cv = trim(action.actorId);
         var target = trim(p.conclusionId);
+        if (p.set === true) {
+          /* Action marquée : AFFECTE (déplace le choix) ; rejouée, elle ne change rien. */
+          var prev = ownValue(topic.conclusionVotes, cv);
+          topic.conclusionVotes[cv] = target;
+          if (ownValue(topic.conclusionVotes, cv) === prev) { return; }
+        }
         /* Choix unique : re-cliquer retire, voter ailleurs déplace le vote. */
-        if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
+        else if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
         else { topic.conclusionVotes[cv] = target; }
         touch(state, topic, now);
         return;
