@@ -15,7 +15,9 @@
  * repli mémoire. C'est délibéré — c'est exactement ce chemin qui était cassé,
  * et c'est celui qu'empruntent en vrai les fenêtres in-app des messageries et
  * la navigation privée. La branche IndexedDB elle-même, faute de moteur ici,
- * reste couverte par la recette manuelle (docs/CHECKLIST_TEST.md).
+ * reste couverte par la recette manuelle (docs/CHECKLIST_TEST.md) ; ses PANNES
+ * (ouverture muette ou refusée, connexion fermée, quota, base partagée par deux
+ * onglets) sont jouées sur une fausse IndexedDB minimale (makeIDB).
  */
 "use strict";
 
@@ -142,6 +144,12 @@ function makeClient(name, server, options) {
   const ctx = vm.createContext(sandbox);
   sandbox.globalThis = sandbox;
   if (options.indexedDB !== false) { sandbox.indexedDB = options.indexedDB; }
+  /* options.timers : horloge accélérée. Chaque délai demandé est noté, puis
+   * écoulé cent fois plus vite : on vérifie un délai de plusieurs secondes sans
+   * l'attendre. */
+  if (options.timers) {
+    sandbox.setTimeout = (fn, ms) => { options.timers.push(ms || 0); return setTimeout(fn, (ms || 0) / 100); };
+  }
 
   const messages = [];
   sandbox.Api = {
@@ -190,6 +198,105 @@ function makeClient(name, server, options) {
 
 /* Laisse les promesses et les micro-tâches se dérouler. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
+
+/* ---------------------------------------------- Fausse IndexedDB --- */
+
+/* Juste ce qu'emploie database.js, avec ce qui compte ici : clé auto-incrémentée
+ * acquise à la fin de la transaction, données partagées par plusieurs clients
+ * (deux onglets du même appareil, ou deux lancements successifs), et pannes à
+ * la demande : ouverture muette ou refusée, connexion fermée par le système
+ * (transaction() lève InvalidStateError), quota dépassé à l'écriture. */
+function makeIDB() {
+  const data = {};
+  const conns = [];
+  const faults = { openHang: 0, openFail: 0, txThrow: 0, addQuota: 0 };
+  const later = (fn) => setTimeout(fn, 0);
+  const fault = (name) => { const e = new Error(name); e.name = name; return e; };
+  const request = () => ({ result: undefined, onsuccess: null });
+
+  function transaction() {
+    const tx = { oncomplete: null, onerror: null, onabort: null, error: null };
+    const steps = [];              // appliquées à la validation, dans l'ordre
+    tx.objectStore = (name) => {
+      const s = data[name];
+      return {
+        add(value) {
+          if (faults.addQuota > 0) { faults.addQuota -= 1; throw fault("QuotaExceededError"); }
+          const r = request();
+          steps.push(() => {
+            s.auto += 1;
+            s.rows.set(s.auto, Object.assign({}, value, { [s.keyPath]: s.auto }));
+            r.result = s.auto; if (r.onsuccess) { r.onsuccess(); }
+          });
+          return r;
+        },
+        put(value) { steps.push(() => { s.rows.set(value[s.keyPath], value); }); return request(); },
+        get(key) {
+          const r = request();
+          steps.push(() => { r.result = s.rows.get(key); if (r.onsuccess) { r.onsuccess(); } });
+          return r;
+        },
+        delete(key) { steps.push(() => { s.rows.delete(key); }); return request(); },
+        clear() { steps.push(() => { s.rows.clear(); }); return request(); },
+        openCursor() {
+          const r = request();
+          steps.push(() => new Promise((done) => {
+            const keys = [...s.rows.keys()].sort((a, b) => a - b);
+            let i = 0;
+            const next = () => {
+              if (i >= keys.length) { r.result = null; if (r.onsuccess) { r.onsuccess(); } done(); return; }
+              const key = keys[i++];
+              r.result = { key, value: s.rows.get(key), continue: () => later(next) };
+              if (r.onsuccess) { r.onsuccess(); }
+            };
+            next();
+          }));
+          return r;
+        }
+      };
+    };
+    later(async () => {
+      for (const step of steps) { await step(); }
+      if (tx.oncomplete) { tx.oncomplete(); }
+    });
+    return tx;
+  }
+
+  return {
+    faults,
+    open() {
+      const req = { result: null, error: null, onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null };
+      if (faults.openHang > 0) { faults.openHang -= 1; return req; }      // muette, pour toujours
+      later(() => {
+        if (faults.openFail > 0) {
+          faults.openFail -= 1; req.error = fault("UnknownError");
+          if (req.onerror) { req.onerror(); }
+          return;
+        }
+        const db = {
+          closed: false, onclose: null, onversionchange: null,
+          objectStoreNames: { contains: (n) => !!data[n] },
+          createObjectStore(n, o) { data[n] = { keyPath: o.keyPath, auto: 0, rows: new Map() }; },
+          close() { db.closed = true; },
+          transaction() {
+            if (db.closed) { throw fault("InvalidStateError"); }
+            if (faults.txThrow > 0) { faults.txThrow -= 1; throw fault("InvalidStateError"); }
+            return transaction();
+          }
+        };
+        conns.push(db);
+        req.result = db;
+        if (!data.queue && req.onupgradeneeded) { req.onupgradeneeded(); }
+        if (req.onsuccess) { req.onsuccess(); }
+      });
+      return req;
+    },
+    /* Ce que fait le système (iOS au retour d'arrière-plan) : fermer les
+     * connexions sous les pieds de l'application, sans prévenir. */
+    closeAll() { conns.forEach((db) => { db.closed = true; }); },
+    rows(name) { return data[name] ? [...data[name].rows.values()] : []; }
+  };
+}
 
 async function say(client, payload, type) {
   await client.Sync.dispatch(client.Sync.makeAction(type || "CREATE_MESSAGE", payload, client.user));
@@ -655,6 +762,157 @@ async function run() {
     assert(A.Store.base.processedActionIds.length === 0,
       "le client reçoit encore les identifiants de déduplication");
     assert(Core.findTopic(A.Store.view, "t1"), "l'allègement a fait perdre le sujet");
+  });
+
+  /* --------------------------------------- Pannes d'IndexedDB (§22) --- */
+
+  /* ⚠️ RÉGRESSION (BL-002). Quand la base refusait d'écrire (connexion fermée par
+   * le système, quota), l'action était RETIRÉE de la file et jamais envoyée,
+   * réseau sain : le message disparaissait, composeur déjà vidé. */
+  await check("base qui refuse d'écrire (connexion perdue, puis quota) : l'action reste en file et part", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    srv.down = true;                       // l'envoi traîne : on voit ce que garde la file
+    idb.faults.txThrow = 2;                // connexion perdue, et encore après la réouverture
+    const r1 = await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "base fermée" }, A.user));
+    idb.faults.addQuota = 1;               // puis disque plein
+    const r2 = await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m2", text: "quota" }, A.user));
+    await settle();
+
+    assert(r1.ok && r2.ok, "l'action est refusée pour un échec du stockage local");
+    assert(A.Sync.pendingCount() === 2, "action retirée de la file : " + A.Sync.pendingCount() + " en attente au lieu de 2");
+    assert(A.Store.queue.every((e) => e.seq !== null), "l'action gardée en mémoire n'est pas envoyable");
+    const shown = Core.findTopic(A.Store.view, "t1");
+    assert(Core.findMessage(shown, "m1") && Core.findMessage(shown, "m2"), "le message a disparu de l'écran");
+    const warnings = A.messages.filter((m) => m.indexOf("Enregistrement sur cet appareil impossible") >= 0);
+    assert(warnings.length === 1, warnings.length + " avertissement(s) au lieu d'un seul");
+
+    srv.down = false;
+    await A.Sync.now(); await settle(); await A.Sync.now(); await settle();
+    const texts = Core.findTopic(srv.data, "t1").messages.map((m) => m.text).join(" | ");
+    assert(texts === "base fermée | quota", "le serveur a reçu : [" + texts + "]");
+    assert(A.Sync.pendingCount() === 0, "la file ne se vide pas après l'acquittement");
+    assert(idb.rows("queue").length === 0, "une action acquittée reste en base");
+  });
+
+  await check("connexion fermée par le système : la base est rouverte, l'action suivante y est écrite", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    srv.down = true;
+    idb.closeAll();
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "après fermeture" }, A.user));
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m2", text: "la suivante" }, A.user));
+    await settle();
+
+    const saved = idb.rows("queue").map((r) => r.action.payload.messageId).join(",");
+    assert(saved === "m1,m2", "file en base après la fermeture : [" + saved + "] au lieu de [m1,m2]");
+    assert(A.messages.every((m) => m.indexOf("appareil") < 0), "avertissement de stockage affiché alors que la base a été rouverte");
+
+    srv.down = false;
+    await A.Sync.now(); await settle();
+    assert(Core.findMessage(Core.findTopic(srv.data, "t1"), "m2"), "l'action suivante n'est pas arrivée");
+    assert(A.Sync.pendingCount() === 0 && idb.rows("queue").length === 0, "la file ne se vide pas");
+  });
+
+  /* BL-021 : une ouverture qui ne répond jamais (iOS 14.6, vues intégrées)
+   * laissait l'écran blanc indéfiniment, Sync.boot n'aboutissant jamais. */
+  await check("ouverture de la base muette : le démarrage aboutit en 5 s au plus, en repli mémoire", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    idb.faults.openHang = 1;
+    const timers = [];
+    const A = makeClient("A", srv, { indexedDB: idb, timers });
+    const booted = await Promise.race([
+      A.Sync.boot().then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 1500))
+    ]);
+    assert(booted, "le démarrage attend indéfiniment une base qui ne répond pas (écran blanc)");
+    assert(timers.length > 0 && Math.max(...timers) <= 5000, "délai d'ouverture demandé : " + Math.max(...timers) + " ms");
+    assert(A.DB.isPersistent() === false, "le repli mémoire n'est pas actif");
+    assert(A.messages.some((m) => m.indexOf("Stockage") >= 0), "aucun message honnête sur le stockage");
+
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    assert(Core.findTopic(srv.data, "t1"), "rien ne part après une ouverture muette");
+  });
+
+  /* ⚠️ BL-021 (SYN-018) : après une ouverture ratée, la file d'hier restait
+   * invisible pour la session et partait PLUS TARD, après la décision du jour,
+   * qu'elle écrasait. */
+  await check("ouverture ratée puis rétablie : la décision d'hier part AVANT celle d'aujourd'hui", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const vote = (client, value) => client.Sync.dispatch(client.Sync.makeAction("SET_VOTE",
+      { topicId: "t1", proposalId: "p1", value }, client.user));
+
+    /* Hier, hors ligne : « pour », écrit en base, puis l'application est fermée. */
+    const A1 = makeClient("A", srv, { indexedDB: idb });
+    await A1.Sync.boot(); await settle();
+    await say(A1, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(A1, { topicId: "t1", proposalId: "p1", title: "Proposition" }, "CREATE_PROPOSAL");
+    srv.down = true;
+    await vote(A1, "for"); await settle();
+    A1.Sync.stop();
+    assert(idb.rows("queue").length === 1, "le scénario ne teste rien : le vote d'hier n'est pas en base");
+
+    /* Aujourd'hui : l'ouverture échoue une fois, et l'on vote « contre » aussitôt. */
+    srv.down = false;
+    idb.faults.openFail = 1;
+    const A2 = makeClient("A", srv, { indexedDB: idb });
+    await A2.Sync.boot(); await settle();
+    A2.Store.setBase(lean(srv.data));
+    await vote(A2, "against");
+    await settle(); await A2.Sync.now(); await settle(); await A2.Sync.now(); await settle();
+    A2.Sync.stop();
+
+    /* Plus tard, la base répond normalement. */
+    const A3 = makeClient("A", srv, { indexedDB: idb });
+    await A3.Sync.boot(); await settle(); await A3.Sync.now(); await settle();
+
+    const final = Core.findTopic(srv.data, "t1").proposals[0].votes["u-A"];
+    assert(final === "against", "vote final = " + final + " (voulu : against) : la décision d'hier a écrasé celle du jour");
+    assert(A3.Sync.pendingCount() === 0 && idb.rows("queue").length === 0, "la file ne se vide pas");
+  });
+
+  /* BL-006 : un onglet resté ouvert ne relisait jamais la base, et affichait
+   * « À jour » au-dessus d'une action laissée par un autre onglet. */
+  await check("une action laissée en base par un autre onglet part au cycle suivant", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });     // l'onglet qui sera fermé
+    const B = makeClient("B", srv, { indexedDB: idb });     // l'onglet resté ouvert
+    await A.Sync.boot(); await B.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await B.Sync.now(); await settle();
+
+    srv.down = true;
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "laissé par A" }, A.user));
+    await settle();
+    A.Sync.stop();
+    assert(idb.rows("queue").length === 1, "le scénario ne teste rien : rien en base");
+
+    await B.Sync.now(); await settle();
+    const label = B.Sync.status().label;
+    assert(B.Sync.pendingCount() === 1 && label === "En attente (1)",
+      "B ignore l'action laissée en base : indicateur « " + label + " »");
+
+    srv.down = false;
+    await B.Sync.now(); await settle();
+    assert(Core.findMessage(Core.findTopic(srv.data, "t1"), "m1"), "B n'envoie pas l'action de l'autre onglet");
+    assert(B.Sync.pendingCount() === 0 && B.Sync.status().label === "À jour", "B ne revient pas à « À jour »");
+    assert(idb.rows("queue").length === 0, "l'entrée acquittée reste en base");
   });
 
   console.log(failures.length

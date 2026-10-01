@@ -32,6 +32,14 @@
   var failures = 0;          // échecs réseau consécutifs
   var activeUntil = 0;       // régime nerveux jusqu'à cet instant
   var storageWarned = false;
+  /* File de la base lue au moins une fois ? Tant que non (ouverture ratée au
+   * démarrage), elle peut cacher des actions PLUS ANCIENNES que celles de la
+   * session : on retente de la lire avant d'envoyer (voir pushSoon). */
+  var queueRead = false;
+  var localSeq = 0;          // clés « local-n » des actions que la base n'a pas pu écrire
+  var forgotten = {};        // ids des actions retirées de la file ici (acquittées ou refusées)
+  var saving = Promise.resolve();
+  var refreshing = null;
 
   /* Capacités annoncées par le serveur. Le frontend et le backend se déploient
    * séparément — GitHub Pages d'un côté, Apps Script de l'autre, et des
@@ -126,11 +134,13 @@
       if (saved) { Store.setBase(saved); }
       return DB.queued();
     }).then(function (entries) {
-      Store.setQueue(entries || []);
+      queueRead = true;
+      Store.setQueue(merge(entries) || Store.queue);
       warnIfVolatile();
       changed();
     }).catch(function () {
-      Store.setQueue([]);
+      /* File de la base illisible pour l'instant : elle sera relue à chaque cycle. */
+      Store.setQueue(Store.queue);
       warnIfVolatile();
       changed();
     });
@@ -187,22 +197,58 @@
     wake();
     changed();
 
-    return DB.enqueue(action).then(function (saved) {
-      /* ⚠️ Tant que « seq » n'est pas attribué, l'action n'est PAS envoyée. */
-      entry.seq = saved && saved.seq !== undefined && saved.seq !== null ? saved.seq : null;
-      if (entry.seq === null) { throw new Error("clé de file non attribuée"); }
+    /* ⚠️ Tant que « seq » n'est pas attribué, l'action n'est PAS envoyée. Écrite
+     * en base ou gardée en mémoire sous une clé « local-n », elle l'est ensuite :
+     * plus jamais retirée pour un échec du stockage local. */
+    return persistPending().then(function () {
       changed();
       schedulePush();
       return { ok: true, error: null };
-    }).catch(function () {
-      /* L'action est retirée de la file : la garder « pas prête » la rendrait
-       * invisible à l'envoi tout en la comptant indéfiniment « en attente ». */
-      Store.removeEntry(entry);
-      changed();
-      message("Impossible d'enregistrer l'action sur cet appareil.", "error");
-      return { ok: false, error: "stockage" };
     });
   };
+
+  /* Écrit en base, DANS L'ORDRE de la file, les entrées qui n'y sont pas encore
+   * (seq null : premier essai ; unsaved : essai manqué). Une écriture à la fois :
+   * au redémarrage l'ordre de la base fait foi, une action récente ne doit donc
+   * jamais y entrer avant une plus ancienne. */
+  function persistPending() {
+    saving = saving.then(saveNext).catch(keepInMemory).catch(function () { return null; });
+    return saving;
+  }
+
+  function saveNext() {
+    var entry = null;
+    for (var i = 0; i < Store.queue.length && !entry; i++) {
+      if (Store.queue[i].seq === null || Store.queue[i].unsaved) { entry = Store.queue[i]; }
+    }
+    if (!entry) { return null; }
+    return DB.enqueue(entry.action).then(function (saved) {
+      if (!saved || saved.seq === undefined || saved.seq === null) { throw new Error("clé de file non attribuée"); }
+      /* Acquittée (ou effacée) pendant l'écriture : elle ne doit pas rester en base. */
+      if (Store.queue.indexOf(entry) < 0) {
+        return DB.dequeue(saved.seq).catch(function () { return null; }).then(saveNext);
+      }
+      entry.seq = saved.seq;
+      entry.unsaved = false;
+      return saveNext();
+    });
+  }
+
+  /* ⚠️ La base refuse d'écrire (connexion perdue malgré la réouverture, quota) :
+   * l'action RESTE dans la file en mémoire, sous une clé qui ne peut pas se
+   * confondre avec une clé de la base, et PART au serveur comme les autres. Une
+   * nouvelle écriture est tentée à chaque cycle. La retirer, c'était perdre le
+   * message réseau sain, composeur déjà vidé (WebKit 273827 : la réouverture
+   * elle-même peut échouer). */
+  function keepInMemory() {
+    Store.queue.forEach(function (entry) {
+      if (entry.seq === null) { localSeq += 1; entry.seq = "local-" + localSeq; entry.unsaved = true; }
+    });
+    if (storageWarned) { return; }
+    storageWarned = true;
+    message("Enregistrement sur cet appareil impossible : l'envoi continue, "
+      + "gardez l'application ouverte.", "error");
+  }
 
   /* ------------------------------------------------------------ Envoi --- */
 
@@ -211,12 +257,81 @@
   /* Laisse une rafale se regrouper avant de partir. Contre un serveur qui ne
    * sait pas grouper, on envoie tout de suite : attendre ne servirait à rien. */
   function schedulePush() {
-    if (!Sync.supports("batch")) { Sync.push(); return; }
+    if (!Sync.supports("batch")) { pushSoon(); return; }
     if (pushTimer) { return; }
     pushTimer = setTimeout(function () {
       pushTimer = null;
-      Sync.push();
+      pushSoon();
     }, CONFIG.BATCH_COALESCE_MS);
+  }
+
+  /* ⚠️ File de la base encore jamais lue (ouverture ratée au démarrage) : elle
+   * peut tenir une décision d'hier. On retente de la lire AVANT d'envoyer celle
+   * du jour, sinon l'ancienne partirait après et l'écraserait. */
+  function pushSoon() {
+    if (queueRead) { return Sync.push(); }
+    return refresh().then(function () { return Sync.push(); });
+  }
+
+  /* Avant chaque envoi : rouvre la base si elle manquait, relit sa file (lecture
+   * seule) et y écrit les actions restées en mémoire. Ne rejette jamais. */
+  function refresh() {
+    if (refreshing) { return refreshing; }
+    var wasDown = !DB.isPersistent();
+    function done() { refreshing = null; }
+    refreshing = DB.reopen().then(function (db) {
+      /* La base répond de nouveau alors que rien n'avait pu en être lu : on reprend
+       * la dernière version connue, pour la consultation hors ligne (§12). */
+      if (!db || !wasDown || Store.base.revision) { return null; }
+      return DB.loadState().then(function (saved) {
+        if (saved && !Store.base.revision) { Store.setBase(saved); changed(); }
+      });
+    }).then(function () {
+      return DB.queued();
+    }).then(function (entries) {
+      queueRead = true;
+      var queue = merge(entries);
+      if (queue) { Store.setQueue(queue); changed(); }
+    }, function () { /* base encore illisible : nouvel essai au prochain cycle */ })
+      .then(persistPending)
+      .then(done, done);
+    return refreshing;
+  }
+
+  /* ⚠️ Fusionne les entrées lues en base que la file en mémoire n'a pas : laissées
+   * par un autre onglet, ou écrites avant une ouverture ratée. Chacune reprend sa
+   * place d'origine, sinon une décision ancienne partirait après une plus récente
+   * et l'écraserait. Rien n'est retiré de la base avant acquittement : un envoi
+   * double est absorbé par la déduplication du serveur. Rend la nouvelle file, ou
+   * null si rien ne change. */
+  function merge(entries) {
+    var queue = Store.queue.slice();
+    var known = {};
+    var seen = {};
+    var added = false;
+    queue.forEach(function (e) { known[e.action.id] = true; });
+    (entries || []).forEach(function (item) {
+      var id = item && item.action && item.action.id;
+      if (!id) { return; }
+      seen[id] = true;
+      /* Déjà retirée ici, mais son retrait de la base avait échoué : on le refait. */
+      if (forgotten[id]) { DB.dequeue(item.seq).catch(function () { return null; }); return; }
+      if (known[id]) { return; }
+      known[id] = true;
+      var at = 0;
+      while (at < queue.length && !comesAfter(queue[at], item)) { at += 1; }
+      queue.splice(at, 0, { seq: item.seq, action: item.action });
+      added = true;
+    });
+    Object.keys(forgotten).forEach(function (id) { if (!seen[id]) { delete forgotten[id]; } });
+    return added ? queue : null;
+  }
+
+  /* L'entrée déjà en file passe-t-elle APRÈS celle qu'on fusionne ? Par clé de la
+   * base quand elle en a une, sinon (pas encore écrite) par date de création. */
+  function comesAfter(entry, item) {
+    if (typeof entry.seq === "number") { return entry.seq > item.seq; }
+    return String(entry.action.ts) > String(item.action.ts);
   }
 
   /* Classification commune des refus du serveur. Elle ne porte QUE sur la
@@ -237,6 +352,7 @@
 
   /* Retire une liste d'entrées de la file, en mémoire quoi qu'il arrive. */
   function dropEntries(entries) {
+    entries.forEach(function (item) { forgotten[item.action.id] = true; });
     return entries.reduce(function (chain, item) {
       return chain
         .then(function () { return DB.dequeue(item.seq).catch(function () { return null; }); })
@@ -548,7 +664,10 @@
   function cycle(force) {
     if (inFlight) { return inFlight; }
     if (!Sync.isConnected()) { return Promise.resolve(); }
-    inFlight = Sync.push()
+    /* La file de la base est relue à chaque tour (BL-006) : une action laissée
+     * par un autre onglet part, et compte « en attente » au lieu de « À jour ». */
+    inFlight = refresh()
+      .then(function () { return Sync.push(); })
       .catch(function () { /* déjà traité */ })
       .then(function () { return Sync.pull(force); })
       .catch(function () { /* déjà traité */ })
