@@ -163,7 +163,8 @@ Propres à ce produit :
 - **Aucune signature de mouvement au-delà du monogramme.** La règle de fréquence du
   dépôt prime : ce qui est vu cent fois par jour reste court ou immobile.
 
-Dérives génériques : voir le fichier des signatures génériques du corpus UXER
-(`references/generic-ai-design-antipatterns.md`), qui reste opposable en entier.
+Dérives génériques : le corpus UXER tient une liste des signatures génériques
+d'interface produite par IA ; elle n'est pas copiée dans ce dépôt, mais elle reste
+opposable en entier.
 Un parti pris ne lève aucun seuil d'accessibilité : un écart qui échoue au contraste
 se corrige en gardant l'intention et en changeant la valeur.

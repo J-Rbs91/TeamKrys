@@ -26,6 +26,10 @@ application (PWA) sur iPhone et Android.
 > ce que la séparation empêchait : `tests/parity.test.js` charge maintenant
 > `apps-script/Code.gs` et lui fait passer les mêmes vecteurs qu'au frontend.
 > La parité client/serveur n'est plus une relecture à l'œil, c'est un test.
+>
+> Le `.gitignore` ne masque plus ces deux fichiers (`apps-script/Code.gs` et
+> `apps-script/appsscript.json`). Tout autre fichier posé dans `apps-script/` reste
+> ignoré par défaut : c'est un garde-fou contre un secret ajouté par mégarde.
 
 Règles tenues par ce dépôt :
 
@@ -36,6 +40,12 @@ Règles tenues par ce dépôt :
   (typographie 100 % système, donc zéro requête réseau pour l'affichage) ;
 - aucune image distante non plus : les icônes sont des SVG construits en
   JavaScript et le grain est un data-URI (voir « Direction artistique »).
+- **cibles tactiles** : la règle tenue est WCAG 2.2, critère
+  [2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+  (taille de cible, minimum : **24 px**). La plupart des commandes atteignent 44 px
+  (`--tap`), mais les plus petites (pastilles de réaction, boutons `.btn-sm`)
+  mesurent de 24 à 36 px de haut, délibérément (`min-height: 24px`). Ne pas
+  promettre « 44 px partout » dans la documentation.
 
 L'adresse du script et le code d'accès sont saisis **par chaque utilisateur dans
 l'application**. L'adresse reste dans le `localStorage` de son appareil ; le code
@@ -506,15 +516,15 @@ Le rythme d'interrogation n'est pas fixe : il suit l'activité réelle
 | Régime | Cadence | Quand |
 |---|---|---|
 | Nerveux | 1,8 s | pendant les 90 s qui suivent une écriture — la sienne ou celle d'un autre |
-| Repos | jusqu'à 6 s | personne n'écrit ; relâchement progressif, pas un saut |
+| Repos | 6 s | personne n'écrit ; passage direct de 1,8 s à 6 s quand la fenêtre de 90 s se ferme, sans rampe |
 | Arrière-plan | 60 s | onglet masqué |
 | Recul | ×2 par échec, plafond 60 s | le réseau ou le serveur ne répond pas |
 
 Une cadence fixe de 3 s était le pire des deux mondes : 1 200 requêtes par
-heure et par personne sur un backend Apps Script qui sérialise tout derrière un
-`LockService` — donc contention, latence et erreurs dès que plusieurs
-téléphones interrogent ensemble — et malgré ce coût une réception toujours en
-retard d'un tour de boucle.
+heure et par personne, chacune relisant le fichier Drive côté Apps Script (les
+écritures, elles, sont sérialisées derrière un `LockService` ; les lectures ne
+prennent pas le verrou), et malgré ce coût une réception toujours en retard d'un
+tour de boucle.
 
 Le repos reste volontairement **court** (6 s) : c'est lui qui plafonne l'attente
 du *premier* message après un silence, le seul cas où la nouvelle cadence peut
@@ -557,8 +567,9 @@ d'interrogation — qui **meurt avec la page**. Écrire un message puis ranger s
 téléphone dans la seconde suffisait donc à ce que l'action reste en file, sans
 que rien ne la rejoue avant la prochaine **ouverture** de l'application : des
 heures, ou des jours. Et l'échec du premier envoi n'a rien d'exceptionnel ici,
-puisque Apps Script sérialise tout derrière un `LockService` : un envoi attend
-son tour derrière les lectures des autres appareils.
+puisque Apps Script sérialise les écritures derrière un `LockService` : un envoi
+attend son tour derrière les écritures des autres appareils (les lectures ne
+prennent pas le verrou).
 
 Trois règles répondent à ça, dans cet ordre :
 
@@ -568,10 +579,11 @@ Trois règles répondent à ça, dans cet ordre :
    l'action **reste en file** et repart au démarrage suivant ; le doublon est
    absorbé par la déduplication serveur. Perdre un message coûte cher, le poster
    deux fois ne coûte rien.
-2. **Une écriture a plus de temps qu'une lecture** (`WRITE_TIMEOUT_MS`, 45 s,
-   contre 20 s). Couper une écriture ne l'annule pas côté serveur : ça ne fait
-   que nous en cacher l'issue, et fabriquer un doublon. Une lecture, elle, est
-   rejouée au tour suivant sans rien risquer.
+2. **Une écriture a plus de temps qu'une lecture** (`WRITE_TIMEOUT_MS`, 55 s,
+   contre 20 s, au-delà des 45 s d'attente du verrou côté serveur : un verrou
+   dépassé répond « retry » avant la coupure). Couper une écriture ne l'annule pas
+   côté serveur : ça ne fait que nous en cacher l'issue, et fabriquer un doublon.
+   Une lecture, elle, est rejouée au tour suivant sans rien risquer.
 3. **Une lecture périmée n'écrase jamais un état plus frais.** Une réponse de
    lecture décrit le serveur au moment où elle a été *calculée* : partie avant
    une écriture et revenue après elle, l'appliquer remettrait l'état d'avant, et
@@ -584,14 +596,47 @@ d'une heure : celle du serveur n'existe pas encore, et celle de l'appareil n'est
 pas celle que les autres verront. C'est un **état**, pas une alerte — il dure le
 temps d'un aller-retour.
 
+### Une action ne quitte la file que sur confirmation
+
+Une action sort de la file dans trois cas seulement : le serveur l'a appliquée, il
+la reconnaît comme déjà appliquée (`duplicate`), ou il la refuse de façon
+**définitive** (`code: "invalid"`, un rejet de validation). Tout le reste la laisse
+en file : coupure réseau, délai dépassé (il couvre aussi la lecture du corps de la
+réponse), et toute réponse sans verdict (page HTML, JSON illisible ou tronqué,
+statut 5xx, `code: "retry"` pour une exception, un verrou dépassé ou une panne
+Drive, code inconnu).
+
+- Le recul est progressif (×2 par échec, plafond 60 s) et l'indicateur passe à
+  **Erreur (n)** dès le deuxième échec consécutif où le serveur a répondu, avec un
+  message unique : « Le serveur ne répond pas correctement : vos actions sont
+  gardées et repartiront. » Il ne dit jamais **À jour** tant qu'une action attend.
+- Un refus définitif retire l'action et affiche « Action refusée : `raison`. Texte :
+  « … » » : le texte saisi est repris (coupé à 200 caractères) pour être recopié.
+- Un backend d'avant, qui ne renvoie pas de code, refuse sans dire si c'est
+  définitif : un `ok: false` sans code est réessayé trois fois, espacées, puis
+  retiré avec le même message.
+- Dans un lot, chaque action est jugée sur son entrée de `results` ; un lot sans
+  `results` ne retire rien.
+- L'envoi de secours au `pagehide` (`sendBeacon`) est borné à 60 000 octets : il
+  emporte le plus long début de file qui tient (20 actions au plus) et ne retire
+  rien.
+- Un refus d'authentification fait reculer le rythme jusqu'à 60 s et n'est notifié
+  qu'**une fois** par série ; l'application se reverrouille.
+- Une action en file depuis plus de 30 jours (`CONFIG.STALE_ACTION_MS`) n'est
+  jamais renvoyée en silence : elle est **retenue**. Elle reste en file et en base,
+  l'indicateur la compte, un message le dit une fois par session. Celles qui la
+  suivent attendent aussi, pour garder l'ordre. `Sync.releaseStale()` (dans
+  `js/sync.js`) les libère : elles repartent alors dans l'ordre de la file.
+
 ---
 
 ### Le précache échoue plutôt que de mentir
 
 La coquille est précachée en **deux listes**, et la différence n'est pas cosmétique.
 
-Ce dont dépend un démarrage à froid — le document, la feuille de style, les huit
-scripts — part dans un `addAll` unique passé à `waitUntil`, **sans `catch`**. Une
+Ce dont dépend un démarrage à froid (le document, les trois feuilles de style et
+les onze scripts : 16 entrées avec `./` et `index.html`) part dans un `addAll`
+unique passé à `waitUntil`, **sans `catch`**. Une
 ressource manquante fait donc échouer l'installation : l'ancien service worker reste
 actif avec son cache **complet**, et l'équipe garde une version qui fonctionne.
 
@@ -644,7 +689,20 @@ une garantie qui n'était pas faite.
   application fermée, en arrière-plan ou laissée ouverte à l'écran, c'est le
   même compteur. En deçà, rouvrir l'application entre directement.
 - Si le serveur refuse le jeton en cours de session, l'application se
-  reverrouille immédiatement.
+  reverrouille immédiatement et demande le **nouveau code** (« saisissez le
+  nouveau code de l'équipe »). Un code qui ne correspond pas au vérificateur local
+  est alors vérifié auprès du serveur, par une requête de lecture avec le jeton
+  dérivé : accepté, il remplace le vérificateur et le jeton, déverrouille, et la
+  file d'actions est conservée ; refusé, ou impossible à vérifier hors ligne, rien
+  ne change. Le même chemin sert à un appareil resté en accès libre quand l'équipe
+  pose un code : il se verrouille et demande ce code.
+- Le jeton voyage dans l'adresse des lectures (paramètre `auth` des requêtes
+  `GET`) : c'est inhérent à Apps Script, un `GET` n'a que des paramètres
+  d'adresse. Il peut donc figurer dans les journaux d'exécution du propriétaire du
+  script. Deux mesures limitent l'exposition : `<meta name="referrer"
+  content="no-referrer">` (la page n'envoie son adresse à aucun autre site : aucun
+  en-tête `Referer` sur les requêtes vers le script) et une
+  `Content-Security-Policy` en `meta`. Sortir le jeton de l'adresse n'est pas fait.
 
 Ce que la session pose sur l'appareil, et le compromis assumé :
 
@@ -701,9 +759,13 @@ Incrémenter **ensemble** :
 - `CONFIG.APP_VERSION` dans `js/config.js` ;
 - `CACHE_VERSION` dans `service-worker.js`.
 
-Sans quoi les appareils garderont l'ancienne coquille en cache. Au chargement
-suivant, un bandeau « nouvelle version disponible » propose la mise à jour ;
-le rechargement n'a lieu que si l'utilisateur l'a demandé.
+Sans quoi les appareils déjà installés garderont l'ancienne coquille en cache :
+la navigation vers l'application est servie par la coquille du cache versionné
+(comme les scripts, pour que HTML et scripts soient toujours de la même version),
+donc une publication **sans** montée de `CACHE_VERSION` n'atteint plus ces
+appareils. Une fois la version montée, au chargement suivant, un bandeau
+« nouvelle version disponible » propose la mise à jour ; le rechargement n'a lieu
+que si l'utilisateur l'a demandé.
 
 ---
 

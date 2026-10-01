@@ -4,8 +4,8 @@ Ce document dit ce que doit faire le bouton retour d'Android, le bouton retour
 de l'en-tête et le glissement latéral d'iOS, comment c'est tenu dans le code, et
 comment le vérifier.
 
-Il applique à BrainstO. le contrat de navigation arrière de la méthode UXER
-(`references/back-navigation-contract.md`).
+Il applique à BrainstO. le contrat de navigation arrière de la méthode UXER ; les
+règles utiles ici sont reprises dans ce document.
 
 ---
 

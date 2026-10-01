@@ -15,6 +15,10 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] `node tests/navigation.test.js` → tous les tests passent (chaque écran a
       une profondeur déclarée, aucune navigation n'écrit `location.hash` dans son
       coin, les boutons retour dépilent au lieu de naviguer).
+- [ ] Les autres tests : `for f in tests/*.test.js; do node "$f" >/dev/null || echo
+      "ÉCHEC $f"; done` → aucune ligne « ÉCHEC » (backend, pastille d'état,
+      nouveautés, code changé, choix idempotents, service worker, lecture des votes,
+      contrat CSS).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -26,6 +30,9 @@ du navigateur ouverte : **zéro erreur console** attendue.
 - [ ] `git status` propre : aucun secret, aucun `node_modules/` ni
       `package*.json`. Les seuls fichiers backend versionnés sont
       `apps-script/Code.gs` et `apps-script/appsscript.json`.
+      Le `.gitignore` ignore tout autre fichier de `apps-script/` par défaut :
+      `git check-ignore -v --no-index apps-script/Helpers.gs` le montre ignoré, et
+      la même commande sur `apps-script/Code.gs` ne le déclare pas ignoré.
 - [ ] `CONFIG.APP_VERSION` et `CACHE_VERSION` incrémentés **ensemble**.
 
 ## 0 bis. Geste retour — sur un téléphone, en comptant les appuis
@@ -53,7 +60,7 @@ Le raisonnement est dans [`NAVIGATION.md`](NAVIGATION.md).
 - [ ] Adresse invalide → message d'erreur clair, on reste sur l'écran.
 - [ ] Mauvais code → « Code d'accès refusé par le serveur. »
 - [ ] Bon code → passage à l'écran du nom.
-- [ ] « Continuer sans connexion (mode local) » fonctionne et affiche **Local**.
+- [ ] « Continuer sans connexion (mode local) » fonctionne et affiche **Mode local**.
 - [ ] Nom vide refusé ; nom saisi → liste des sujets.
 
 ### 1 bis. Présentation initiale
@@ -137,7 +144,12 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       (nouveau sujet, confirmation) : chacune s'annonce **avec son titre**, jamais
       « boîte de dialogue » seule.
 - [ ] La pastille de synchronisation : passer hors ligne, poser une action, revenir en
-      ligne. « En attente (1) » puis « À jour » sont **annoncés** sans toucher l'écran.
+      ligne. L'indicateur affiche **Hors ligne (1)**, puis **Synchronisation** ou
+      **En attente (1)**, puis **À jour**. Le lecteur d'écran annonce l'entrée en
+      attente, hors ligne ou erreur et le retour à **À jour**, sans annoncer chaque
+      va-et-vient entre Synchronisation et À jour : il n'y a qu'une région
+      d'annonce par écran. À 430 px et moins, le libellé court est affiché
+      (« Sync… », « Local ») ; le nom complet reste lu.
 
 ### 1 quinquies. Déconnexion et stockage
 
@@ -154,6 +166,20 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       vérifier que l'ancienne version **reste en place** au lieu d'être remplacée par
       une version cassée.
 
+### 1 sexies. Clavier : feuilles, fenêtres et bascule Anonyme / Signer
+
+À faire avec un clavier (celui d'un ordinateur, ou un clavier externe sur le
+téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
+
+- [ ] **Tab** reste dans une feuille ou une fenêtre ouverte : après la dernière
+      commande il revient à la première, **Maj + Tab** va à la dernière.
+- [ ] **Échap** ferme la feuille et rend le focus au bouton qui l'a ouverte.
+- [ ] Le fond ne défile pas et ne reçoit pas le focus tant qu'une feuille est
+      ouverte.
+- [ ] Le bouton **Anonyme / Signer** garde le focus quand on l'actionne et annonce
+      l'état du prochain message (« Publié en anonyme » ou « Signé : » suivi du
+      nom).
+
 ## 2. Verrou
 
 - [ ] Fermer puis rouvrir l'application dans la foulée → **aucun code demandé**,
@@ -166,8 +192,15 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       dans `js/config.js` le temps du test, **et le remettre ensuite**.)
 - [ ] Verrouillé par inactivité, puis bon code → on revient sur le contenu et la
       synchronisation repart.
-- [ ] Code changé côté serveur, puis reconnexion avec le nouveau code → l'ancienne
-      session n'ouvre plus rien.
+- [ ] Code changé côté serveur → l'espace se reverrouille avec « Code d'accès refusé
+      par le serveur : saisissez le nouveau code de l'équipe. »
+- [ ] Nouveau code saisi sur l'écran de verrouillage → « Nouveau code accepté. » ;
+      les actions en attente partent ; rien n'est effacé.
+- [ ] Nouveau code saisi hors ligne → « Code d'accès incorrect, ou nouveau code
+      impossible à vérifier sans connexion. » ; l'appareil reste verrouillé et la
+      file est conservée.
+- [ ] Équipe en accès libre qui pose un code → chaque appareil affiche l'écran de
+      verrouillage et demande ce code ; le saisir ; la file est conservée.
 - [ ] Réglages → « Se déconnecter de l'équipe » → retour à l'écran d'accueil,
       adresse et vérificateur oubliés.
 
@@ -207,15 +240,18 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       fonctionnait déjà.
 - [ ] Taper un texte, ouvrir puis fermer une feuille → **le brouillon est intact**,
       curseur compris.
-- [ ] Appui sur une bulle → feuille : 6 émojis, Citer, Créer une proposition,
-      et pour ses propres messages Modifier + Rendre anonyme / Signer.
+- [ ] Appui sur une bulle → feuille : les 5 réactions (pictogrammes), Citer, Créer
+      une proposition, et pour ses propres messages Modifier + Rendre anonyme /
+      Signer. Sur son propre message anonyme, la feuille ne propose **aucune
+      réaction**.
 - [ ] Message cité : la feuille propose **« Aller au message cité »** en tête ;
       elle défile jusqu'à l'original et le fait clignoter. La citation
       elle-même n'est plus tactile.
 - [ ] Lecteur d'écran (VoiceOver / TalkBack) : sur trois messages consécutifs
       d'une même personne, **l'auteur est annoncé sur les trois** ; sur un
       message cité, l'expéditeur est annoncé **avant** la personne citée ; un
-      message verrouillé annonce « verrouillé ».
+      message signé verrouillé annonce « verrouillé » (un message anonyme verrouillé
+      ne l'annonce pas : rien ne le distingue des autres anonymes).
 - [ ] Message en cours d'écriture, application en arrière-plan au-delà du délai
       d'inactivité, retour et déverrouillage : **le brouillon est toujours là**.
 - [ ] Erreur pendant la saisie, clavier ouvert (couper le réseau et envoyer) :
@@ -228,8 +264,10 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       cité ; appui sur le bloc → défilement + flash sur l'original.
 - [ ] Rendre anonyme après envoi → nom remplacé par « Anonyme » ; re-signer
       restaure le nom ; l'auteur conserve ses droits après rechargement.
-- [ ] Réaction d'une **autre** personne → 🔒 et modification refusée ; la
-      signature reste modifiable.
+- [ ] Réaction d'une **autre** personne → 🔒 sur un message signé, et « Modifier »
+      grisé avec sa raison (« Modifier (verrouillé : quelqu'un y a déjà réagi) ») ;
+      la signature reste modifiable. Un message anonyme verrouillé n'a pas de
+      cadenas.
 - [ ] Barre compacte : compteurs Propositions / Conclusion à jour.
 - [ ] Appui sur le titre (ⓘ) → infos du sujet, changement de statut, modification.
 - [ ] Bouton **Retour** visible et fonctionnel sur chaque écran secondaire.
@@ -251,8 +289,15 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       le titre de la proposition reste dominant.
 - [ ] Vote Pour / Contre / Abstention ; re-tap = retrait ; « Retirer mon vote ».
 - [ ] Barre de répartition cohérente avec les compteurs.
-- [ ] Indicateur : Aucun vote / Avis partagés / Consensus favorable /
-      Majorité favorable / Majorité défavorable.
+- [ ] Lecture du vote : « 3 pour · 1 contre · 2 abstentions », puis le pourcentage
+      suivi du nombre d'avis exprimés (« 75 % favorables sur 4 avis exprimés ») et la
+      participation (« 6 participants sur 8 ont voté », « 1 participant sur 8 a
+      voté ») ; jamais « 6 / 8 ». Tout le monde s'est abstenu : « Aucun avis
+      exprimé », sans pourcentage.
+- [ ] Tendance affichée : Aucun vote / Abstentions uniquement / Avis exprimés
+      favorables / Avis partagés / Avis exprimés plutôt favorables / Avis exprimés
+      plutôt défavorables (ce sont les libellés de l'écran, pas ceux de
+      `Core.voteSummary`).
 - [ ] Pourcentage favorable calculé **hors abstentions**.
 
 ## 6. Conclusion
@@ -274,12 +319,18 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 
 - [ ] Deux appareils : une action apparaît sur l'autre en quelques secondes.
 - [ ] Mode avion : l'application s'ouvre et affiche les dernières données.
-- [ ] Action hors ligne → affichage immédiat, indicateur **En attente (n)**.
+- [ ] Action hors ligne → affichage immédiat, indicateur **Hors ligne (n)** (réseau
+      coupé) ; **En attente (n)** quand le réseau est là mais que l'envoi n'a pas
+      abouti.
 - [ ] Rechargement hors ligne → la file **survit** (IndexedDB).
 - [ ] Retour du réseau → envoi automatique, indicateur **À jour**.
 - [ ] Jamais « À jour » tant qu'il reste des actions en attente.
-- [ ] Action devenue impossible (sujet supprimé ailleurs) → message clair et
-      file débloquée.
+- [ ] Action devenue impossible (sujet supprimé ailleurs) → « Action refusée :
+      (raison). Texte : « … » » (le texte saisi est repris) et file débloquée.
+- [ ] Panne du serveur (verrou Drive dépassé, erreur Drive, page HTML) : l'action
+      reste en file, l'indicateur passe à **Erreur (n)** dès le 2e échec avec le
+      message « Le serveur ne répond pas correctement : vos actions sont gardées et
+      repartiront. », puis **À jour** une fois l'action appliquée une seule fois.
 - [ ] Code invalidé côté serveur → reverrouillage immédiat.
 - [ ] Réglages → **Code d'espace identique** sur les deux appareils. Deux codes
       différents = deux scripts différents, et c'est la première explication à
@@ -319,10 +370,32 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       les deux appareils en même temps) : le message envoyé **ne disparaît
       jamais** de l'écran de son auteur, même une fraction de seconde.
 
+### 8 ter. Sauvegarde, rattachement et restauration (éditeur Apps Script)
+
+- [ ] `backupNow()` crée `brainsto-data.json.manuel.<date>` dans le dossier du
+      fichier de données.
+- [ ] `diagnoseStorage()` : `used` est le fichier attendu (identifiant, dossier,
+      taille, date, révision) ; `candidates` liste chaque `brainsto-data.json` ;
+      `warning` est absent quand il n'y a qu'un fichier.
+- [ ] Deux fichiers `brainsto-data.json` sans rattachement : le service refuse (les
+      téléphones affichent **Erreur** et gardent leurs actions), le message liste
+      chaque fichier et dit comment rattacher le bon ; `setupProject()` n'en
+      rattache aucun ; rien n'est supprimé. Avec `DATA_FILE_ID` ou la propriété
+      `BRAINSTO_FILE_ID`, le rattachement l'emporte.
+- [ ] `restoreFromBackup("<identifiant de la copie>")`, appelée par une fonction
+      temporaire : la révision devient le plus grand des deux numéros plus un, une
+      copie `avant-restauration` est créée, le rattachement ne change pas, aucun
+      fichier n'est supprimé, et un téléphone resté sur l'ancienne révision recharge
+      l'état restauré (jamais « À jour » sur l'ancien état).
+- [ ] La fonction temporaire est supprimée une fois la restauration faite.
+
 ## 9. PWA
 
 - [ ] Installation sur l'écran d'accueil (iPhone et Android), icône monogramme.
 - [ ] Démarrage à froid hors ligne : la coquille se charge.
+- [ ] Réseau connecté mais muet (lie-fi) ou réponse 503 du site : l'application
+      installée **démarre depuis le cache** sans écran blanc ; HTML et scripts sont
+      toujours de la même version.
 - [ ] Nouvelle version publiée → bandeau « nouvelle version disponible » ;
       « Mettre à jour » recharge ; **aucune boucle de rechargement** au premier
       chargement.
@@ -331,7 +404,10 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 ## 10. Finition
 
 - [ ] Thèmes clair et sombre corrects (sombre en vrai noir).
-- [ ] Cibles tactiles ≥ 44 px, rien sous l'encoche ni sous la barre d'accueil.
+- [ ] Cibles tactiles : 24 px au minimum dans les deux sens (WCAG 2.5.8, la règle
+      tenue). La plupart des commandes atteignent 44 px (`--tap`) ; les plus petites
+      (réactions, boutons `btn-sm`) mesurent de 24 à 36 px de haut, délibérément.
+      Rien sous l'encoche ni sous la barre d'accueil.
 - [ ] Barre d'URL **affichée**, écran qui tient en une page : aucun défilement
       résiduel. Écran de discussion : composeur et bouton d'envoi entièrement
       visibles sans faire défiler la page. Idem sur Chrome **et** Samsung

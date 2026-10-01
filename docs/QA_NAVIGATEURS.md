@@ -126,9 +126,9 @@ en thème clair **et** sombre, console ouverte, **zéro erreur** attendue.
 
 | Quand | Passe | Agent |
 |---|---|---|
-| Le lien circule dans WhatsApp, Instagram, Gmail, Teams | ouvrir depuis chaque application : l'écran d'accueil s'affiche, l'adresse se ressaisit sans erreur, la sortie vers un vrai navigateur est possible | `qa-webview-inapp` |
+| Le lien circule dans WhatsApp, Instagram, Gmail, Teams | ouvrir depuis chaque application : l'écran d'accueil s'affiche, l'adresse se ressaisit sans erreur, la sortie vers un vrai navigateur est possible (les guides demandent d'en sortir avant d'installer) | `qa-webview-inapp` |
 | `service-worker.js` ou `manifest.webmanifest` changent | cycle de mise à jour, bandeau sans boucle, file conservée | `qa-pwa-offline` |
-| `css/app.css` change | 320 px → tablette, paysage, clavier, cibles 44 px | `qa-responsive-touch` |
+| `css/app.css` change | 320 px → tablette, paysage, clavier, cibles (24 px au minimum, WCAG 2.5.8 ; 44 px pour les commandes principales) | `qa-responsive-touch` |
 | `js/ui.js` change | VoiceOver et TalkBack : libellés, focus dans les feuilles, annonces d'état | `qa-mobile-a11y` |
 | Lenteur signalée, longue discussion | 500 messages, défilement, flou, boucle de synchronisation | `qa-mobile-perf` |
 | Vieux téléphone, réseau du magasin | échec propre, message utile, aucune saisie perdue | `qa-legacy-proxy-browsers` |

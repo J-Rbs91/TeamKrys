@@ -587,7 +587,7 @@ réseau (R8).
 |---|---|
 | Abandon au panneau 3 | `done(skipped)` écrit, calque retiré sans confirmation, aucune relance automatique |
 | Espace déjà peuplé | Variante de panneau 2 ; aucune écriture provoquée |
-| Mode local | Variante de panneau 1 ; le badge « Local » des Réglages sert d'appui au panneau 6 |
+| Mode local | Variante de panneau 1 ; le badge « Mode local » des Réglages sert d'appui au panneau 6 |
 | Lien profond, séquence non finie | La route est conservée ; les panneaux ne parlent d'aucun écran précis, la séquence reste valable où que l'on soit |
 | Rotation, 200 %, clavier ouvert | Aucune mesure de position n'est en jeu : rien à recalculer |
 
@@ -736,7 +736,7 @@ Le reste du cahier des charges tient inchangé :
 - **Contrastes** : le texte vit sur `--surface-sheet`, opaque, où `--text`,
   `--muted` et `--faint` passent dans les deux thèmes. Sur le voile en thème
   clair, le blanc mesure 2,94:1, `--muted` 2,08:1, `--accent` 2,02:1 — R13.
-- Cibles ≥ 44 px (`--tap`), « Passer » compris : c'est le piège habituel, un lien
+- Dans la séquence, cibles ≥ 44 px (`--tap`), « Passer » compris : c'est le piège habituel, un lien
   de 11 px.
 - **Aucune hauteur fixe** : `max-height: 86vh` + `overflow-y: auto`, sur le
   modèle de `.sheet` (`css/app.css:1504`), sinon le texte est tronqué à 200 % de
@@ -756,13 +756,16 @@ Le reste du cahier des charges tient inchangé :
 - `signature()` (`js/ui.js:1620`) et `place` (`:1659`) **ne changent pas** :
   l'étape ne vit pas dans `UI.local` (arbitrage C). Rien ne rejoue la cascade.
 - Un nouveau point de montage dans `index.html` : la coquille change, donc
-  `CACHE_VERSION` (`service-worker.js:10`) **et** `APP_VERSION`
-  (`js/config.js:13`) sont incrémentés ensemble, à chaque lot. `SHELL` n'a
+  `CACHE_VERSION` (`service-worker.js`) **et** `APP_VERSION`
+  (`js/config.js`) sont incrémentés ensemble, à chaque lot. `SHELL` n'a
   aucun fichier à recevoir (arbitrage D).
-- La navigation est *network-first* et les sous-ressources *cache-first*
-  (`service-worker.js:70-92`) : un `index.html` neuf peut coexister avec un
-  `js/ui.js` de cache ancien. Le code doit se comporter comme « rien à faire »
-  si la règle de décision est absente.
+- La navigation vers l'application est servie par la coquille du cache versionné,
+  comme les scripts : HTML et scripts sont toujours de la même version, et une
+  nouvelle version passe par le bandeau « Mettre à jour ». Seul un appareil encore
+  servi par un ancien service worker (réseau d'abord, jusqu'à la version 1.12.0
+  incluse) peut charger une dernière fois un `index.html` neuf avec un `js/ui.js`
+  de cache ancien. Le code doit se comporter comme « rien à faire » si la règle de
+  décision est absente.
 - `js/app.js:484` (Échap) est le seul point du chantier qui touche `app.js` en
   dehors du point de décision — R11.
 - **La garde de chargement mixte va dans `js/app.js`, pas dans `js/ui.js`.** C'est
@@ -879,7 +882,7 @@ tier A/B, un « non observé » sur WebKit iOS, Blink, `qa-pwa-offline` ou
 |---|---|---|---|---|
 | **L0** | Clé, révision et **règle pure** + tests | `js/config.js`, `tests/onboarding.test.js` | 1er | `node tests/onboarding.test.js` vert, trois autres suites toujours vertes, **aucun effet visible** |
 | **L1** | Mécanique du calque : point de montage, montage/démontage, piège de focus, région live, Échap, ajournement du bandeau, **un seul panneau** | `index.html`, `js/ui.js`, `js/app.js`, `css/app.css` | 2e | Le risque architectural est levé en production avec un contenu minimal ; verrou, brouillons, retour arrière et Échap éprouvés |
-| **L2** | Les cinq panneaux, navigation avant/arrière, compteur adaptatif, et les trois segments de 9.2 bis | `js/ui.js`, `css/app.css` | 3e | 320 px sans défilement horizontal, cibles ≥ 44 px, contrastes tenus dans les deux thèmes ; les trois segments produisent trois séquences distinctes |
+| **L2** | Les cinq panneaux, navigation avant/arrière, compteur adaptatif, et les trois segments de 9.2 bis | `js/ui.js`, `css/app.css` | 3e | 320 px sans défilement horizontal, cibles de la séquence ≥ 44 px, contrastes tenus dans les deux thèmes ; les trois segments produisent trois séquences distinctes |
 | **L3** | Mouvement : arrivée, transitions, sortie, repli | `css/app.css` | 4e — **coupable** | État au repos = état final vérifié ; aucun flou ajouté ; aucune boucle |
 | **L4** | Rejeu depuis les Réglages | `js/ui.js` | 5e | Rejeu avec un brouillon en cours → brouillon intact |
 | **L5** | Ligne « et ensuite ? » dans les 4 états vides + documentation | `js/ui.js`, `README.md`, `docs/CHECKLIST_TEST.md`, `docs/GUIDE_UTILISATEUR.md` | 6e | Checklist complète ; dépôt auto-documenté |
@@ -896,8 +899,8 @@ bump de version. Le vrai garde-fou reste architectural : jamais un gate,
 
 **Retour arrière** : `git revert` du lot fautif **plus** une version incrémentée
 — jamais décrémentée, `CACHE_VERSION` se compare par égalité. Chez l'utilisateur
-qui ne peut rien vider, la navigation étant *network-first*, la coquille
-corrigée est resollicitée à la prochaine ouverture en ligne, **mais le
+qui ne peut rien vider, le service worker corrigé est téléchargé à la prochaine
+ouverture en ligne, **mais le
 rechargement n'a lieu que s'il clique « Mettre à jour »** : d'où R1 et R10, qui
 ne sont pas négociables.
 
@@ -970,3 +973,5 @@ douce dans un chantier d'onboarding.**
    et il ne reste **aucun** indicateur de focus au clavier externe.
 5. **`statusPill` change en silence** (`js/ui.js:310`) : « En attente (n) » n'est
    ni `role="status"` ni annoncé.
+   Corrigé depuis : la pastille est une région `role="status"` unique par écran, qui
+   n'annonce que les transitions utiles (`statusAnnouncement` dans `js/ui.js`).

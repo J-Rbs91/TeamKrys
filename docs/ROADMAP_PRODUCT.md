@@ -76,8 +76,8 @@ Pour chaque proposition, afficher clairement :
 - `X pour`
 - `Y contre`
 - `Z abstention(s)`
-- `N / T participants ont voté`
-- le pourcentage favorable parmi les avis exprimés, quand il y a au moins un avis exprimé
+- `N participants sur T ont voté` (`1 participant sur T a voté`, `0 participant sur T a voté` au singulier)
+- le pourcentage favorable parmi les avis exprimés, toujours suivi du nombre d'avis exprimés (`75 % favorables sur 4 avis exprimés`), ou `Aucun avis exprimé` sans pourcentage quand tout le monde s'est abstenu
 
 ### Règle de vocabulaire
 
