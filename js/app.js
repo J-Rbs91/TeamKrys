@@ -246,8 +246,10 @@
 
   /* ------------------------------------------------------------- Verrou --- */
 
+  /* Sans vérificateur (appareil connecté sans code), seul App.relock verrouille : le
+   * serveur exige désormais un code. */
   App.needsUnlock = function () {
-    return !!lockVerifier && !unlocked;
+    return !unlocked && (!!lockVerifier || !!Sync.connection.url);
   };
 
   /* ⚠️ Le code de l'équipe a pu CHANGER (§18 : c'est la seule révocation possible).
@@ -324,8 +326,14 @@
     });
   };
 
+  /* ⚠️ Appareil connecté SANS code (aucun vérificateur) : s'il est refusé, c'est que le
+   * serveur exige désormais un code. Sortir sans rien faire laissait la synchronisation
+   * essuyer un refus toutes les trois secondes, avec un message à chaque fois, sans aucun
+   * endroit où saisir le code. On verrouille donc aussi : l'écran demande le code, que le
+   * serveur valide (unlockWithNewCode, dont la sonde écarte un serveur ouvert). La file
+   * d'actions n'est pas touchée. Mode local : rien à verrouiller. */
   App.relock = function () {
-    if (!lockVerifier) { return; }
+    if (!lockVerifier && (!Sync.connection.url || Sync.connection.localMode)) { return; }
     unlocked = false;
     clearSession();
     Sync.setConnection({ token: "", unlocked: false });
@@ -733,6 +741,19 @@
     return Sync.dispatch(Sync.makeAction(type, payload, actorOverride || App.user));
   }
 
+  /* ⚠️ §4, §7, §9, §19, §22 : sans marqueur, SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE
+   * sont des BASCULES. Rejouées (réponse perdue, file rejouée sur un état qui les contient
+   * déjà, identifiant sorti du journal de 5 000), elles retirent ce que la personne voulait
+   * fixer. Quand le serveur annonce le marqueur (FEATURES "idempotent"), l'appui décide
+   * donc d'après ce qui est AFFICHÉ (Store.view, la vue optimiste) : bouton non enfoncé,
+   * on AFFECTE (`set:true`) ; bouton enfoncé, on RETIRE explicitement. Sinon (ancien
+   * serveur, ou aucune réponse reçue : liste vide), l'envoi reste exactement l'ancien. */
+  function idempotent() { return Sync.supports("idempotent"); }
+
+  function shownTopic(topicId) {
+    return Store.view ? Core.findTopic(Store.view, topicId) : null;
+  }
+
   App.actions = {
     createTopic: function (title, description, authorName) {
       var topicId = Utils.uid();
@@ -794,6 +815,11 @@
         UI.toast("Vous ne pouvez pas réagir à votre propre message anonyme.", "error");
         return;
       }
+      if (idempotent()) {
+        var mine = message ? (message.reactions || {})[App.user.id] : undefined;
+        dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: mine === emoji ? "" : emoji, set: true });
+        return;
+      }
       dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: emoji });
     },
 
@@ -818,6 +844,15 @@
     },
 
     setVote: function (topicId, proposalId, value) {
+      if (idempotent()) {
+        var proposal = Core.findProposal(shownTopic(topicId), proposalId);
+        if (proposal && (proposal.votes || {})[App.user.id] === value) {
+          dispatch("REMOVE_VOTE", { topicId: topicId, proposalId: proposalId });
+        } else {
+          dispatch("SET_VOTE", { topicId: topicId, proposalId: proposalId, value: value, set: true });
+        }
+        return;
+      }
       dispatch("SET_VOTE", { topicId: topicId, proposalId: proposalId, value: value });
     },
 
@@ -842,6 +877,15 @@
     },
 
     setConclusionVote: function (topicId, conclusionId) {
+      if (idempotent()) {
+        var topic = shownTopic(topicId);
+        if (topic && (topic.conclusionVotes || {})[App.user.id] === conclusionId) {
+          dispatch("REMOVE_CONCLUSION_VOTE", { topicId: topicId });
+        } else {
+          dispatch("SET_CONCLUSION_VOTE", { topicId: topicId, conclusionId: conclusionId, set: true });
+        }
+        return;
+      }
       dispatch("SET_CONCLUSION_VOTE", { topicId: topicId, conclusionId: conclusionId });
     }
   };
