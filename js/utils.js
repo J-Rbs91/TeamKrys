@@ -16,6 +16,10 @@
         if (value === null || value === undefined || value === false) { return; }
         if (key === "class") { node.className = value; return; }
         if (key === "text") { node.textContent = String(value); return; }
+        /* ⚠️ Un <textarea> n'a pas d'attribut « value » : setAttribute n'y change rien et le champ
+         * s'ouvrait VIDE (« Modifier le message », « Modifier le sujet », « Modifier la conclusion »).
+         * Son contenu courant est la propriété. */
+        if (key === "value" && tag === "textarea") { node.value = String(value); return; }
         if (key === "dataset") {
           Object.keys(value).forEach(function (k) { node.dataset[k] = value[k]; });
           return;

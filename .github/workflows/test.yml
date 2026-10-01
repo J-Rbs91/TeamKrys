@@ -40,7 +40,7 @@ jobs:
         run: node tests/product-integration.test.js
       - name: Contrats UXER
         run: node tests/uxer-integration.test.js
-      - name: Verrou, indicateur d'état, focus, formulaires, actions anciennes, anonymat, nouveautés, envois idempotents
+      - name: Verrou, indicateur d'état, focus, formulaires, actions anciennes, produit, champs préremplis, anonymat, nouveautés, envois idempotents
         run: |
           node tests/app-unlock.test.js
           node tests/app-idempotent.test.js
@@ -48,6 +48,8 @@ jobs:
           node tests/ui-focus.test.js
           node tests/ui-a11y-forms.test.js
           node tests/ui-stale-release.test.js
+          node tests/ui-product.test.js
+          node tests/utils-el.test.js
           node tests/news-own-activity.test.js
       - name: Coquille hors ligne (service worker, CSP, démarrage)
         run: |
