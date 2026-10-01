@@ -41,17 +41,43 @@
     } catch (error) { return false; }
   }
 
+  /* Cet appareil vu de la couche produit : son identifiant et la preuve locale de ses
+   * éléments, lus par l'API existante d'app.js (ownsItem). Lecture seule, rien n'en est
+   * envoyé (§11). Sans elle, tout se compte comme avant. */
+  function mineFor() {
+    var currentApp = app();
+    if (!currentApp || typeof currentApp.ownsItem !== "function" || !currentApp.user) { return null; }
+    return {
+      id: String(currentApp.user.id || ""),
+      owns: function (id, authorId) { return currentApp.ownsItem(id, authorId) === true; }
+    };
+  }
+
+  /* ⚠️ Appareil connecté qui n'a encore rien reçu du serveur (révision 0) : la vue n'est
+   * que l'état vide de départ, pas l'espace de l'équipe. */
+  function awaitingFirstSync(state) {
+    var sync = root.Sync;
+    var connection = sync && sync.connection;
+    return !!(connection && connection.url && !connection.localMode && state && !state.revision);
+  }
+
   /* Au déploiement de la fonctionnalité, l'état déjà visible devient la baseline,
    * y compris quand l'espace est vide. Ainsi le premier sujet créé plus tard par
    * un collègue est bien détecté comme nouveau, sans transformer le déploiement
-   * lui-même en avalanche de fausses nouveautés. */
+   * lui-même en avalanche de fausses nouveautés.
+   * Exception : un appareil connecté qui n'a encore rien reçu du serveur n'a pas de
+   * baseline à prendre (null). Sinon l'état vide de départ deviendrait la référence et
+   * tous les sujets de l'équipe s'afficheraient « Nouveau sujet » au premier rapatriement :
+   * la baseline est prise sur l'état réel, en silence, dès qu'il est là. */
   function seenRecord(state) {
     var record = loadSeen();
     if (record) { return record; }
+    if (awaitingFirstSync(state)) { return null; }
     var topics = state && Array.isArray(state.topics) ? state.topics : [];
+    var mine = mineFor();
     record = { v: 1, initialized: true, topics: {} };
     topics.forEach(function (topic) {
-      record.topics[topic.id] = ProductView.topicFingerprint(topic);
+      record.topics[topic.id] = ProductView.topicFingerprint(topic, mine);
     });
     saveSeen(record);
     return record;
@@ -60,7 +86,8 @@
   function markTopicSeen(topic, state) {
     if (!topic) { return; }
     var record = seenRecord(state);
-    record.topics[topic.id] = ProductView.topicFingerprint(topic);
+    if (!record) { return; }
+    record.topics[topic.id] = ProductView.topicFingerprint(topic, mineFor());
     saveSeen(record);
   }
 
@@ -98,11 +125,11 @@
 
     /* La consultation de l'accueil établit la baseline AVANT de regarder le DOM.
      * Quand l'espace est vide, screenTopics ne crée pas `.topics-grid` du tout. */
-    var seen = seenRecord(state);
+    var seen = seenRecord(state) || { v: 1, initialized: false, topics: {} };
     var container = document.querySelector(".topics-grid");
     if (!container || container.querySelector(".product-topic-group")) { return; }
 
-    var currentApp = app();
+    var mine = mineFor();
     var visible = ProductView.visibleTopics(
       state.topics,
       UI.local && UI.local.search,
@@ -139,13 +166,13 @@
 
         /* Un élément créé sur cet appareil vient d'être vu au moment de sa création.
          * ownItems couvre aussi le cas anonyme où createdBy.id est volontairement vide. */
-        if (!seen.topics[topic.id] && seen.initialized && currentApp &&
-            typeof currentApp.ownsItem === "function" && currentApp.ownsItem(topic.id, topic.createdBy && topic.createdBy.id)) {
-          seen.topics[topic.id] = ProductView.topicFingerprint(topic);
+        if (!seen.topics[topic.id] && seen.initialized && mine &&
+            mine.owns(topic.id, topic.createdBy && topic.createdBy.id)) {
+          seen.topics[topic.id] = ProductView.topicFingerprint(topic, mine);
           seenDirty = true;
         }
 
-        var activity = ProductView.topicActivity(topic, seen.topics[topic.id], seen.initialized === true);
+        var activity = ProductView.topicActivity(topic, seen.topics[topic.id], seen.initialized === true, mine);
         if (activity.changed && !card.querySelector(".product-unread")) {
           var counts = card.querySelector(".card-foot .row-wrap");
           if (counts) { counts.insertBefore(unreadBadge(activity.label), counts.firstChild); }

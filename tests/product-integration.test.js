@@ -90,6 +90,21 @@ check("Nouveautés : une baseline vide est persistée", () => {
     "la consultation d'un espace vide n'établit pas de baseline");
 });
 
+check("Nouveautés : la signature ignore ce qui vient de cet appareil (preuve locale lue, jamais écrite)", () => {
+  assert(/topicFingerprint\(topic, mine\)/.test(ui), "l'empreinte du sujet ne reçoit pas la preuve locale de l'appareil");
+  assert(/topicActivity\([^)]*mine\)/.test(ui), "le signalement ne reçoit pas la preuve locale de l'appareil");
+  assert(ui.includes("ownsItem"), "la preuve locale d'app.js (ownsItem) n'est pas lue");
+});
+
+check("Nouveautés : strictement local, la couche produit n'envoie rien au serveur (§11)", () => {
+  assert(!/fetch\s*\(|XMLHttpRequest|sendBeacon|Sync\.dispatch|Sync\.makeAction/.test(ui),
+    "product-ui.js ne doit jamais rien envoyer");
+});
+
+check("Nouveautés : un appareil connecté sans état reçu n'enregistre pas l'état vide comme baseline", () => {
+  assert(ui.includes("awaitingFirstSync(state)"), "la baseline du premier démarrage connecté n'attend pas l'état réel");
+});
+
 if (failures.length) {
   console.error("\nÉCHECS product-integration :");
   failures.forEach((failure) => console.error("- " + failure));

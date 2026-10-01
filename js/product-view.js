@@ -114,13 +114,88 @@
     return ProductView.voteLabel(proposal) + ". " + bits.join(". ") + ".";
   };
 
-  ProductView.topicFingerprint = function (topic) {
+  /* Empreinte courte (32 bits) : le marqueur local garde de quoi voir qu'une chose a
+   * changé, jamais un texte de message, un nom ni un identifiant d'auteur. */
+  function shortHash(text) {
+    var h = 5381;
+    for (var i = 0; i < text.length; i++) { h = ((h << 5) + h + text.charCodeAt(i)) | 0; }
+    return (h >>> 0).toString(36);
+  }
+
+  function txt(value) { return String(value == null ? "" : value); }
+
+  /* Ce que LES AUTRES ont fait dans le sujet : les mêmes compteurs que l'empreinte
+   * historique, plus une signature de tout le reste (valeur des votes, réactions,
+   * modifications, statut des propositions, titre). Rien de ce qui vient de cet appareil
+   * n'y entre : ni mes messages, propositions et formulations (auteur == moi, ou
+   * identifiant dans la preuve locale pour un contenu anonyme), ni mes votes, réactions
+   * et soutiens (clé == mon identifiant). Les horodatages que le serveur pose à la
+   * confirmation de mes actions ne comptent donc jamais (§11, ROADMAP P3.1). */
+  function withoutMine(topic, mine) {
+    var me = txt(mine.id);
+    function mineItem(item) {
+      var authorId = item && item.authorId;
+      return authorId ? authorId === me : mine.owns(item && item.id, "") === true;
+    }
+    function others(map) {
+      var out = [];
+      Object.keys(obj(map)).sort().forEach(function (key) {
+        if (key !== me) { out.push(key + "=" + map[key]); }
+      });
+      return out;
+    }
+
+    var counts = { messages: 0, proposals: 0, proposalVotes: 0, consensus: 0, consensusVotes: 0 };
+    var parts = [txt(topic && topic.title), txt(topic && topic.description)];
+
+    arr(topic && topic.messages).forEach(function (message) {
+      if (!mineItem(message)) {
+        counts.messages += 1;
+        parts.push("m" + txt(message && message.id) + "@" + txt(message && message.updatedAt));
+      }
+      var reacted = others(message && message.reactions);
+      if (reacted.length) { parts.push("r" + txt(message && message.id) + ":" + reacted.join(",")); }
+    });
+    arr(topic && topic.proposals).forEach(function (proposal) {
+      var votes = others(proposal && proposal.votes);
+      var status = txt(proposal && proposal.status);
+      var own = mineItem(proposal);
+      counts.proposalVotes += votes.length;
+      if (!own) {
+        counts.proposals += 1;
+        parts.push("p" + txt(proposal && proposal.id) + ":" + txt(proposal && proposal.title) + "\n" + txt(proposal && proposal.description));
+      }
+      /* Ma proposition ne laisse de trace que si d'autres la font évoluer (votes, statut) :
+       * la voir apparaître ne doit pas changer la signature. */
+      if (!own || votes.length || status !== "voting") {
+        parts.push("v" + txt(proposal && proposal.id) + ":" + status + ":" + votes.join(","));
+      }
+    });
+    arr(topic && topic.conclusions).forEach(function (conclusion) {
+      if (!mineItem(conclusion)) {
+        counts.consensus += 1;
+        parts.push("c" + txt(conclusion && conclusion.id) + "@" + txt(conclusion && conclusion.updatedAt));
+      }
+    });
+    var supports = others(topic && topic.conclusionVotes);
+    counts.consensusVotes = supports.length;
+    parts.push("s" + supports.join(","));
+
+    counts.sig = shortHash(parts.join("|"));
+    return counts;
+  }
+
+  /* `mine` (facultatif) = { id, owns(id, authorId) } : la preuve locale de cet appareil,
+   * lue dans app.js et strictement locale (§11). Avec lui l'empreinte porte aussi `o`, le
+   * point de vue « sans moi », et `by`, l'identité qui l'a calculé. Sans lui : la forme
+   * historique, inchangée. */
+  ProductView.topicFingerprint = function (topic, mine) {
     var proposals = arr(topic && topic.proposals);
     var proposalVotes = 0;
     proposals.forEach(function (proposal) {
       proposalVotes += Object.keys(obj(proposal && proposal.votes)).length;
     });
-    return {
+    var fingerprint = {
       updatedAt: String((topic && topic.updatedAt) || ""),
       status: String((topic && topic.status) || ""),
       messages: arr(topic && topic.messages).length,
@@ -129,12 +204,17 @@
       consensus: arr(topic && topic.conclusions).length,
       consensusVotes: Object.keys(obj(topic && topic.conclusionVotes)).length
     };
+    if (mine && typeof mine.owns === "function") {
+      fingerprint.by = shortHash(txt(mine.id));
+      fingerprint.o = withoutMine(topic, mine);
+    }
+    return fingerprint;
   };
 
   /* `baselineExists` distingue un appareil qui vient d'activer la fonctionnalité
    * d'un appareil déjà initialisé sur lequel un collègue crée ensuite un nouveau sujet. */
-  ProductView.topicActivity = function (topic, seen, baselineExists) {
-    var current = ProductView.topicFingerprint(topic);
+  ProductView.topicActivity = function (topic, seen, baselineExists, mine) {
+    var current = ProductView.topicFingerprint(topic, mine);
     var previous = seen && typeof seen === "object" ? seen : null;
     if (!previous) {
       return baselineExists
@@ -142,12 +222,21 @@
         : { changed: false, label: null, current: current };
     }
 
-    var messageDelta = current.messages - (Number(previous.messages) || 0);
-    var proposalDelta = current.proposals - (Number(previous.proposals) || 0);
-    var consensusDelta = current.consensus - (Number(previous.consensus) || 0);
-    var votesChanged = current.proposalVotes !== (Number(previous.proposalVotes) || 0);
-    var consensusVotesChanged = current.consensusVotes !== (Number(previous.consensusVotes) || 0);
-    var updated = current.updatedAt !== String(previous.updatedAt || "") || current.status !== String(previous.status || "");
+    /* Point de vue « sans moi » des deux côtés (même appareil, même identité) : seules les
+     * actions des autres comptent, et la signature remplace l'horodatage du sujet, que mes
+     * propres actions font changer à la confirmation du serveur. Un marqueur plus ancien,
+     * ou pris sous une autre identité (reconnexion), se lit comme avant. */
+    var scoped = !!(current.o && previous.o && previous.by === current.by);
+    var now = scoped ? current.o : current;
+    var then = scoped ? previous.o : previous;
+
+    var messageDelta = now.messages - (Number(then.messages) || 0);
+    var proposalDelta = now.proposals - (Number(then.proposals) || 0);
+    var consensusDelta = now.consensus - (Number(then.consensus) || 0);
+    var votesChanged = now.proposalVotes !== (Number(then.proposalVotes) || 0);
+    var consensusVotesChanged = now.consensusVotes !== (Number(then.consensusVotes) || 0);
+    var updated = (scoped ? now.sig !== then.sig : current.updatedAt !== String(previous.updatedAt || "")) ||
+      current.status !== String(previous.status || "");
 
     if (messageDelta > 0) {
       return { changed: true, label: "+" + messageDelta + " message" + (messageDelta > 1 ? "s" : ""), current: current };
