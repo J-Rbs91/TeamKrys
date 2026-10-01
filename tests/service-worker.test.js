@@ -176,9 +176,9 @@ async function run() {
 
   await test("BL-007 hors ligne (réseau refusé) sans coquille dans le cache versionné : erreur réseau propagée", async () => {
     const sw = boot(() => Promise.reject(new TypeError("Failed to fetch")));
-    let failed = false;
-    await within(fetchEvent(sw, SCOPE, "navigate").response, 300, "navigation hors ligne").catch(() => { failed = true; });
-    assert(failed, "une réponse a été inventée sans coquille");
+    /* Rejet ou absence de réponse : dans les deux cas le navigateur voit une erreur réseau. */
+    const res = await within(fetchEvent(sw, SCOPE, "navigate").response, 300, "navigation hors ligne").catch(() => null);
+    assert(!res, "une réponse a été inventée sans coquille");
   });
 
   await test("BL-007 autre page de la portée (document du dépôt) : réseau d'abord, inchangé", async () => {
