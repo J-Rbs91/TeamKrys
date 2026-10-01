@@ -37,6 +37,10 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* `.badge` passe à `white-space: normal` (BL-044) ; ce repère garde sa ligne unique et son ellipse.
+     Sécable en mots, sa largeur minimale tomberait à celle d'un mot, le pied de carte le rétrécirait
+     et les compteurs se replieraient sur plusieurs lignes à 320 px (mesuré : +43 px sur l'accueil). */
+  white-space: nowrap;
 }
 
 .product-participation {

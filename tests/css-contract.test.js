@@ -408,6 +408,8 @@ check("BL-044 rangées, pastilles, pieds de carte et lignes de diagnostic passen
   var badge = { tag: "span", classes: ["badge", "tone-accord"], ancestors: [{ tag: "div", classes: ["row"] }] };
   expect(declFor(badge, "white-space", BASE) === "normal", ".badge ne doit plus être en nowrap (292 px à 200 % de texte)");
   expect(declFor(badge, "max-width", BASE) === "100%", ".badge doit rester dans sa ligne (max-width: 100 %)");
+  var unread = { tag: "span", classes: ["badge", "tone-info", "product-unread"], ancestors: [{ tag: "div", classes: ["row-wrap"] }, { tag: "div", classes: ["card-foot"] }, { tag: "button", classes: ["card"] }] };
+  expect(declFor(unread, "white-space", BASE) === "nowrap", ".product-unread doit garder sa ligne unique : sécable, il ferait replier les compteurs du pied de carte à 320 px");
   var diag = { tag: "div", classes: ["diag-row"], ancestors: [{ tag: "div", classes: ["diag"] }] };
   expect(declFor(diag, "flex-wrap", BASE) === "wrap", ".diag-row doit passer à la ligne");
   expect(ruleExists(function (r) {
