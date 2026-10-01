@@ -250,14 +250,69 @@
     return !!lockVerifier && !unlocked;
   };
 
+  /* ⚠️ Le code de l'équipe a pu CHANGER (§18 : c'est la seule révocation possible).
+   * Le vérificateur local reste alors celui de l'ancien code : le nouveau était refusé
+   * ici, l'ancien par le serveur, et la seule issue, « Se déconnecter », effaçait les
+   * actions en attente (§22). Un code qui ne correspond pas au vérificateur local est
+   * donc soumis au serveur, UNE fois par tentative, sous la forme de son jeton : le code
+   * en clair ne part pas et ne se stocke pas. Seule une réponse positive déverrouille,
+   * par les mêmes chemins que la connexion initiale ; la file n'est jamais touchée.
+   *
+   * ⚠️ Un serveur SANS code d'accès (ACCESS_CODE vide) accepte n'importe quel jeton : sa
+   * réponse positive ne prouve alors rien, et le verrou local deviendrait contournable
+   * en tapant n'importe quoi. On commence donc par lui présenter un jeton FABRIQUÉ : s'il
+   * l'accepte, l'accès est libre, le nouveau code ne peut pas être vérifié et le verrou
+   * local (ancien code) reste seul juge. */
+  function serverEnforcesCode(url) {
+    return Utils.sha256Hex("probe|" + Utils.uid()).then(function (probe) {
+      return Api.getRevision(url, probe).then(function (data) {
+        return data && data.ok === true ? "open" : "unknown";
+      }, function (error) {
+        return Api.isAuthError(error) ? "enforced" : "unknown";
+      });
+    });
+  }
+
+  function unlockWithNewCode(value, verifier) {
+    var url = Sync.connection.url;
+    if (!url || Sync.connection.localMode) {
+      UI.toast("Code d'accès incorrect.", "error");
+      return null;
+    }
+    return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
+      return serverEnforcesCode(url).then(function (mode) {
+        if (mode !== "enforced") { return mode === "open" ? false : null; }
+        return Api.getRevision(url, token).then(function (data) {
+          return data && data.ok === true ? true : null;
+        }, function (error) {
+          return Api.isAuthError(error) ? false : null;
+        });
+      }).then(function (accepted) {
+        /* Réponse tardive : déconnexion, autre adresse ou déjà déverrouillé entre-temps. */
+        if (!App.needsUnlock() || Sync.connection.url !== url) { return; }
+        if (accepted !== true) {
+          UI.toast(accepted === false ? "Code d'accès incorrect."
+            : "Code d'accès incorrect, ou nouveau code impossible à vérifier sans connexion.", "error");
+          return;
+        }
+        Utils.storage.set(CONFIG.KEYS.lockVerifier, verifier);
+        lockVerifier = verifier;
+        unlocked = true;
+        Sync.setConnection({ token: token, unlocked: true });
+        startSession();
+        UI.toast("Nouveau code accepté.");
+        Sync.start();
+        Sync.now();
+        UI.force();
+      });
+    });
+  }
+
   App.unlock = function (code) {
     var value = String(code == null ? "" : code);
     if (!value) { UI.toast("Saisissez le code d'accès.", "error"); return; }
     Utils.sha256Hex(CONFIG.verifierInput(value)).then(function (verifier) {
-      if (verifier !== lockVerifier) {
-        UI.toast("Code d'accès incorrect.", "error");
-        return null;
-      }
+      if (verifier !== lockVerifier) { return unlockWithNewCode(value, verifier); }
       return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
         unlocked = true;
         Sync.setConnection({ token: token, unlocked: true });
@@ -721,10 +776,24 @@
     },
 
     setMessageSignature: function (topicId, messageId, anon) {
+      /* ⚠️ §5 : une fois anonyme, le message n'a plus d'authorId ; seule la preuve locale
+       * permet encore de le modifier ou de le signer. Un message signé absent de cette
+       * liste (plafond de 2000, par exemple) n'était reconnu que par son authorId : on
+       * l'inscrit AVANT l'envoi, sinon l'appareil en perd la maîtrise. */
+      if (anon) { remember(messageId); }
       dispatch("SET_MESSAGE_SIGNATURE", { topicId: topicId, messageId: messageId, anon: !!anon });
     },
 
     setReaction: function (topicId, messageId, emoji) {
+      /* ⚠️ §5 : réagir à son PROPRE message anonyme écrirait son identifiant comme clé de
+       * `reactions`, dans les données partagées. Retirer une réaction déjà posée (données
+       * antérieures) reste permis : cela ôte l'identifiant au lieu de l'ajouter. */
+      var message = Core.findMessage(Store.view ? Core.findTopic(Store.view, topicId) : null, messageId);
+      if (message && message.anon && App.ownsMessage(message) && emoji &&
+          emoji !== (message.reactions || {})[App.user.id]) {
+        UI.toast("Vous ne pouvez pas réagir à votre propre message anonyme.", "error");
+        return;
+      }
       dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: emoji });
     },
 
@@ -897,7 +966,7 @@
       onChange: function () { UI.render(); UI.refreshStatus(); },
       onMessage: function (text, kind) { UI.toast(text, kind); },
       onAuthError: function () {
-        UI.toast("Code d'accès refusé : espace reverrouillé.", "error");
+        UI.toast("Code d'accès refusé par le serveur : saisissez le nouveau code de l'équipe.", "error");
         App.relock();
       }
     });
