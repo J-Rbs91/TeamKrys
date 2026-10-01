@@ -126,7 +126,17 @@
     if (unlocked) { startSession(); }
   }
 
+  /* ⚠️ Stockage de l'appareil refusé (WebView, cookies et données de site bloqués) :
+   * `Utils.storage.set` échoue en SILENCE. Connecté quand même, l'appareil oubliait tout au
+   * rechargement : retour muet à l'écran de connexion et identité NEUVE (un participant de
+   * plus pour l'équipe) à chaque ouverture. On sonde donc au démarrage (App.start), UN message
+   * honnête, et on n'enregistre pas la connexion plutôt que de dupliquer les identités. Le mode
+   * local, qui n'envoie rien à l'équipe, reste possible. */
+  var STORAGE_REFUSED = "Ce navigateur refuse d'enregistrer des données sur l'appareil : ouvrez BrainstO. dans votre navigateur habituel.";
+  var storageRefused = false;
+
   App.saveConnection = function (url, code) {
+    if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); return; }
     var clean = Utils.trim(url);
     if (!clean) { UI.toast("Collez l'adresse du script de l'équipe.", "error"); return; }
     /* https obligatoire, sauf pour un serveur local de test. */
@@ -323,6 +333,10 @@
         Sync.now();
         UI.force();
       });
+    }).catch(function (error) {
+      /* ⚠️ Sans crypto.subtle (contexte non sécurisé, WebView), Utils.sha256Hex rejette avec une
+       * erreur typée : on le dit au lieu de laisser le bouton muet. L'appareil reste verrouillé. */
+      UI.toast(Utils.isCryptoUnavailable(error) ? error.message : "Déverrouillage impossible.", "error");
     });
   };
 
@@ -383,12 +397,12 @@
   }
 
   function onboardingDecide() {
-    /* Chargement mixte : la navigation est servie en network-first et les
-     * sous-ressources en cache-first, donc un `index.html` neuf peut cohabiter avec
-     * un `js/config.js` de cache ancien. Sans cette garde, l'appel lèverait une
-     * exception ICI — c'est-à-dire AVANT `Sync.boot()`, donc avant que la file
-     * d'actions ne soit relue et rejouée. Un onboarding raté ne doit jamais coûter
-     * une file d'actions. */
+    /* Chargement mixte : un appareil encore servi par un ancien service worker (réseau
+     * d'abord, jusqu'à la 1.12.0) peut charger une dernière fois un `index.html` neuf avec
+     * un `js/config.js` de cache ancien ; depuis, la page et les scripts viennent du même
+     * cache versionné. Sans cette garde, l'appel lèverait une exception ICI, c'est-à-dire
+     * AVANT `Sync.boot()`, donc avant que la file d'actions ne soit relue et rejouée. Un
+     * onboarding raté ne doit jamais coûter une file d'actions. */
     if (typeof CONFIG.onboardingDue !== "function") { return null; }
     return CONFIG.onboardingDue(
       Utils.storage.get(CONFIG.KEYS.onboarding, null),
@@ -620,20 +634,29 @@
    * retenir la personne sur le premier écran serait un défaut, pas une
    * protection. */
   function entreesSousNous() {
-    var etat = window.history.state;
-    return (etat && typeof etat.tkIndex === "number") ? etat.tkIndex : 0;
+    try {
+      var etat = window.history.state;
+      return (etat && typeof etat.tkIndex === "number") ? etat.tkIndex : 0;
+    } catch (e) { return 0; }   // historique refusé : voir empiler
   }
 
   var traverseesAIgnorer = 0;   // provoquées par nous, donc déjà appliquées
   var cibleAttendue = null;     // adresse visée par la traversée en cours
   var resynchronisation = false;
 
+  /* ⚠️ WebView en bac à sable, document d'origine opaque : l'historique est refusé et
+   * `pushState` / `replaceState` LÈVENT (SecurityError). Sans garde, l'exception sortait de
+   * `UI.set` (la feuille ne s'ouvrait pas) ou d'`App.start` (écran vide). L'écran suit
+   * `App.route`, jamais l'adresse : la navigation interne continue donc SANS historique.
+   * Seule dégradation : le geste retour du système sort alors de l'application. */
   function empiler(hash) {
-    window.history.pushState({ tkIndex: entreesSousNous() + 1 }, "", hash);
+    try { window.history.pushState({ tkIndex: entreesSousNous() + 1 }, "", hash); }
+    catch (e) { /* historique refusé : navigation sans historique */ }
   }
 
   function remplacer(hash) {
-    window.history.replaceState({ tkIndex: entreesSousNous() }, "", hash);
+    try { window.history.replaceState({ tkIndex: entreesSousNous() }, "", hash); }
+    catch (e) { /* historique refusé : navigation sans historique */ }
   }
 
   /* Remontée. On dépile ce que la pile contient réellement ; s'il en manque —
@@ -892,18 +915,57 @@
 
   /* ---------------------------------------------------- Service worker --- */
 
+  /* ⚠️ `navigator.serviceWorker` se lit UNE fois, sous try/catch, et c'est sa VALEUR qu'on teste :
+   * `"serviceWorker" in navigator` reste vrai quand elle vaut undefined (fenêtre privée de Firefox
+   * avant la 139, Focus, Tor) et le getter peut lever (SecurityError : cookies bloqués, bac à
+   * sable). Sans ce garde, l'exception sortait d'App.start, après l'affichage, sans un mot.
+   * L'application fonctionne sans service worker : on ne propose alors aucune mise à jour. */
+  function serviceWorkerContainer() {
+    try {
+      var found = navigator.serviceWorker;
+      return found && typeof found.register === "function" && typeof found.addEventListener === "function"
+        ? found : null;
+    } catch (e) { return null; }
+  }
+
   function registerServiceWorker() {
-    if (!("serviceWorker" in navigator)) { return; }
-    navigator.serviceWorker.register("service-worker.js").then(function (registration) {
+    var container = serviceWorkerContainer();
+    if (!container) { return; }
+
+    /* ⚠️ Le bandeau n'est posé qu'UNE fois (UI.showUpdateBanner ignore un second appel tant que
+     * le premier est affiché) : son rappel ne doit donc JAMAIS retenir un worker. Au clic, on
+     * relit l'enregistrement COURANT. Un autre onglet a pu appliquer la mise à jour entre-temps
+     * (plus rien n'attend : on recharge simplement), ou une version plus récente a remplacé celle
+     * qui attendait (l'ancienne est obsolète : un message qui lui serait envoyé n'aurait aucun
+     * effet, et le bouton resterait muet). */
+    function applyUpdate(known) {
+      updateRequested = true;
+      function conclude(registration) {
+        var waiting = registration && registration.waiting;
+        if (waiting) {
+          try { waiting.postMessage({ type: "SKIP_WAITING" }); return; }
+          catch (e) { /* devenu obsolète entre la lecture et l'envoi : on recharge */ }
+        }
+        window.location.reload();
+      }
+      var asking = null;
+      try { asking = typeof container.getRegistration === "function" ? container.getRegistration() : null; }
+      catch (e) { asking = null; }
+      if (!asking || typeof asking.then !== "function") { conclude(known); return; }
+      asking.then(function (found) { conclude(found || known); }, function () { conclude(known); });
+    }
+
+    var registering;
+    try { registering = Promise.resolve(container.register("service-worker.js")); }
+    catch (e) { return; }
+    registering.then(function (registration) {
+      function offer() {
+        UI.showUpdateBanner(function () { applyUpdate(registration); });
+      }
       function watch(worker) {
         if (!worker) { return; }
         worker.addEventListener("statechange", function () {
-          if (worker.state === "installed" && navigator.serviceWorker.controller) {
-            UI.showUpdateBanner(function () {
-              updateRequested = true;
-              worker.postMessage({ type: "SKIP_WAITING" });
-            });
-          }
+          if (worker.state === "installed" && container.controller) { offer(); }
         });
       }
       /* Un worker peut être DÉJÀ en cours d'installation quand `register()` résout :
@@ -911,16 +973,11 @@
        * encore nul — sans cette ligne, cette mise à jour n'a aucun bandeau, et il faut
        * attendre le chargement suivant pour en proposer un. */
       watch(registration.installing);
-      if (registration.waiting && navigator.serviceWorker.controller) {
-        UI.showUpdateBanner(function () {
-          updateRequested = true;
-          registration.waiting.postMessage({ type: "SKIP_WAITING" });
-        });
-      }
+      if (registration.waiting && container.controller) { offer(); }
       registration.addEventListener("updatefound", function () { watch(registration.installing); });
     }).catch(function () { /* hors ligne ou contexte non sécurisé */ });
 
-    navigator.serviceWorker.addEventListener("controllerchange", function () {
+    container.addEventListener("controllerchange", function () {
       /* ⚠️ On ne recharge QUE si l'utilisateur a demandé la mise à jour :
        * sinon le tout premier chargement partirait en boucle. */
       if (updateRequested) { window.location.reload(); }
@@ -991,6 +1048,9 @@
 
   App.start = function () {
     UI.init();
+    /* Sonde d'écriture, UNE fois, avant toute lecture : voir STORAGE_REFUSED. */
+    storageRefused = !Utils.storage.available();
+    if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); }
     loadUser();
     loadOwnItems();
     loadConnection();

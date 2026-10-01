@@ -380,7 +380,13 @@
 
   Utils.trim = function (value) { return String(value == null ? "" : value).trim(); };
 
-  Utils.limit = function (value, max) { return Utils.trim(value).slice(0, max); };
+  /* ⚠️ Même règle que cut() du noyau (js/state.js) : une coupe ne laisse jamais une moitié de
+   * paire UTF-16 (emoji tranché). Un demi-caractère haut final est retiré. */
+  Utils.limit = function (value, max) {
+    var text = Utils.trim(value).slice(0, max);
+    var last = text.charCodeAt(text.length - 1);
+    return last >= 0xD800 && last <= 0xDBFF ? text.slice(0, -1) : text;
+  };
 
   Utils.initials = function (name) {
     var parts = Utils.trim(name).split(/\s+/).filter(Boolean);
@@ -402,16 +408,36 @@
     return out;
   }
 
+  /* ⚠️ `crypto.subtle` n'existe que dans un contexte SÉCURISÉ (https ou localhost) : une page ouverte
+   * en http hors localhost, ou certaines WebView, n'en ont pas. L'ancien repli appelait `require`
+   * (inconnu d'un navigateur) et LEVAIT une ReferenceError synchrone : le bouton de connexion
+   * restait muet. On rejette maintenant avec une erreur TYPÉE (code « crypto-unavailable »), que les
+   * appelants transforment en message. Aucun SHA-256 écrit à la main : un repli maison pour un
+   * condensat d'authentification serait pire que l'échec honnête. */
+  function cryptoUnavailable() {
+    var error = new Error("Ce navigateur ne permet pas la connexion. Ouvrez BrainstO. dans Chrome ou Safari.");
+    error.code = "crypto-unavailable";
+    return error;
+  }
+
+  Utils.isCryptoUnavailable = function (error) {
+    return !!error && error.code === "crypto-unavailable";
+  };
+
   /* SHA-256 hexadécimal minuscule. Le backend Apps Script doit produire
    * exactement la même chaîne (attention aux octets signés côté Google). */
   Utils.sha256Hex = function (text) {
     var subtle = root.crypto && root.crypto.subtle;
-    if (subtle) {
+    if (subtle && typeof TextEncoder === "function") {
       return subtle.digest("SHA-256", new TextEncoder().encode(text)).then(toHex);
     }
-    /* Repli Node (tests hors navigateur). */
-    var nodeCrypto = require("crypto");
-    return Promise.resolve(nodeCrypto.createHash("sha256").update(text, "utf8").digest("hex"));
+    /* Repli Node (tests hors navigateur), SEULEMENT sous Node. */
+    if (typeof process !== "undefined" && process.versions && process.versions.node &&
+        typeof require === "function") {
+      var nodeCrypto = require("crypto");
+      return Promise.resolve(nodeCrypto.createHash("sha256").update(text, "utf8").digest("hex"));
+    }
+    return Promise.reject(cryptoUnavailable());
   };
 
   /* ---------------------------------------------------------- Stockage --- */
