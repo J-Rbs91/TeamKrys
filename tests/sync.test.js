@@ -1378,6 +1378,37 @@ async function run() {
     assert(CONFIG.WRITE_TIMEOUT_MS > 45000, "délai d'écriture " + CONFIG.WRITE_TIMEOUT_MS + " ms : la réponse d'un verrou dépassé arrive après la coupure");
   });
 
+  /* REC-SYNC-005 (§12) : au démarrage connecté, la relecture de la file (réouverture de la base,
+   * jusqu'à 5 s si elle ne répond pas) fait partie de la synchronisation. L'indicateur ne peut pas
+   * rester sur « À jour » pendant ce temps : il n'y a eu aucun contact réussi. */
+  await check("démarrage connecté : « Sync… » dès l'ouverture du cycle, jamais « À jour » avant le premier contact", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: makeIDB() });
+    await A.Sync.boot(); await settle();
+    assert(A.Sync.status().code === "idle", "préambule : appareil au repos attendu, obtenu « " + A.Sync.status().label + " »");
+
+    const seen = [];
+    A.Sync.subscribe((status) => seen.push(status.code));
+    A.Sync.start();
+    assert(A.Sync.status().code === "syncing",
+      "au démarrage du cycle (même tâche) l'indicateur dit « " + A.Sync.status().label + " » au lieu de « Sync… »");
+    await settle();
+    assert(seen.indexOf("syncing") >= 0, "aucun abonné n'a été prévenu de la synchronisation : " + seen.join(","));
+    assert(A.Sync.status().code === "idle", "après le contact réussi : « " + A.Sync.status().label + " » au lieu de « À jour »");
+    A.Sync.stop();
+
+    /* Même départ avec une action en attente et un serveur muet : jamais « À jour », puis « En attente ». */
+    srv.down = true;
+    const B = makeClient("B", srv, { indexedDB: makeIDB() });
+    await B.Sync.boot(); await settle();
+    await B.Sync.dispatch(B.Sync.makeAction("CREATE_TOPIC", { topicId: "t9", title: "Sujet" }, B.user));
+    B.Sync.start();
+    assert(B.Sync.status().code === "syncing", "avec une action en attente : « " + B.Sync.status().label + " » au démarrage du cycle");
+    await settle();
+    assert(B.Sync.status().label === "En attente (1)", "serveur muet : « " + B.Sync.status().label + " » au lieu de « En attente (1) »");
+    B.Sync.stop();
+  });
+
   console.log(failures.length
     ? "✗ " + failures.length + " échec(s) :\n  - " + failures.join("\n  - ")
     : "✓ " + passed + " tests réussis sur " + passed + ".");

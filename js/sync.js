@@ -14,6 +14,7 @@
   var pollTimer = null;
   var busy = false;          // un envoi est en cours
   var pulling = false;
+  var reading = false;       // relecture de la file en début de cycle (la base peut tarder, jusqu'à 5 s)
   var lastError = null;      // dernier message d'erreur réseau/serveur
   var lastSyncAt = null;
   var lastFlushAt = null;    // dernier envoi de secours au départ de la page
@@ -109,7 +110,7 @@
       /* Le serveur répond, mais mal, et de façon répétée : ce n'est plus une simple
        * attente. Les actions restent en file et repartiront (§12, §22). */
       code = "error"; label = "Erreur (" + pending + ")";
-    } else if (busy || pulling) {
+    } else if (busy || pulling || reading) {
       code = "syncing"; label = "Sync…";
     } else if (pending > 0) {
       code = "pending"; label = "En attente (" + pending + ")";
@@ -836,16 +837,21 @@
     /* La file de la base est relue à chaque tour (BL-006) : une action laissée
      * par un autre onglet part, et compte « en attente » au lieu de « À jour ». */
     var refusedBefore = authFailures;
+    /* §12 : la relecture de la file fait partie de la synchronisation. Tant qu'elle dure, rien n'a
+     * encore été confirmé par le serveur : on dit « Sync… » dès l'ouverture du cycle, pas « À jour ». */
+    reading = true;
     inFlight = refresh()
-      .then(function () { announceStale(); return Sync.push(); })
+      .then(function () { reading = false; announceStale(); return Sync.push(); })
       .catch(function () { /* déjà traité */ })
       .then(function () {
+        reading = false;
         /* Refusé pour l'authentification à l'instant : la lecture le serait aussi. */
-        if (authFailures > refusedBefore) { return null; }
+        if (authFailures > refusedBefore) { notify(); return null; }
         return Sync.pull(force);
       })
       .catch(function () { /* déjà traité */ })
       .then(function () { inFlight = null; });
+    notify();
     return inFlight;
   }
 
