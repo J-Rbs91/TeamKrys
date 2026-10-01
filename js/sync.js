@@ -819,7 +819,8 @@
      * lieu à la fin d'une conversation : idleRounds compte aussi les sondages inchangés
      * PENDANT la fenêtre (une trentaine en 90 s), donc il vaut déjà 8 quand elle se ferme,
      * et l'écart passe directement de 1,8 s à 6 s, comme le demande §21. La rampe ne joue
-     * qu'après une interruption (sondages ratés, non comptés) : elle repart alors de 1,8 s. */
+     * qu'après une interruption : les sondages ratés ne comptent pas, idleRounds peut alors
+     * être resté bas et le rythme remonte par paliers. */
     var span = CONFIG.POLL_IDLE_MS - CONFIG.POLL_ACTIVE_MS;
     var ramp = Math.min(idleRounds, 8) / 8;
     return Math.round(CONFIG.POLL_ACTIVE_MS + span * ramp);
