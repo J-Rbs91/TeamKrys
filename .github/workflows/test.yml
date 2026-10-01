@@ -48,7 +48,9 @@ jobs:
           node tests/ui-focus.test.js
           node tests/news-own-activity.test.js
       - name: Coquille hors ligne (service worker, CSP, démarrage)
-        run: node tests/service-worker.test.js
+        run: |
+          node tests/service-worker.test.js
+          node tests/startup-robust.test.js
       - name: Contrat CSS (lisibilité à 320 px, pastille d'état)
         run: node tests/css-contract.test.js
       - name: Tout test du dépôt est câblé dans ce fichier
