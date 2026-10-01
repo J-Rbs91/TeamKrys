@@ -2311,6 +2311,16 @@ html.has-layer body { overflow: hidden; }
 :focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
 :focus:not(:focus-visible) { outline: none; }
 
+/* Feuilles et fenêtres : le conteneur reçoit le focus par programme à l'ouverture (tabindex="-1",
+   js/ui.js). Sur un moteur qui ignore :focus-visible (iOS 15.0 à 15.3), la règle :focus entourerait
+   toute la feuille après un toucher, et :focus:not(:focus-visible) y est rejetée. Ce repli, réservé
+   à ces moteurs-là, neutralise l'anneau du conteneur seul : les contrôles de la feuille gardent le
+   leur, et ailleurs l'anneau clavier du conteneur (:focus-visible) n'est pas touché. */
+@supports not selector(:focus-visible) {
+  .sheet[tabindex="-1"]:focus,
+  .modal[tabindex="-1"]:focus { outline: none; }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px; height: 1px;
@@ -2351,20 +2361,19 @@ html.has-layer body { overflow: hidden; }
 
   .quickbar { position: static; }
 
-  /* Plafond du composeur : la moitié de la fenêtre pour l'ensemble, un quart pour le champ, qui
-     défile en interne (autoGrow plafonne à 140 px, ce plafond-ci est plus bas). Repli vh avant dvh. */
+  /* Plafond du CHAMP d'envoi, pas du composeur entier : un quart de la fenêtre (44 px au moins), avec
+     défilement interne du champ (autoGrow plafonne à 140 px, ce plafond-ci est plus bas). Un composeur
+     plafonné qui défile laissait le bouton d'envoi sous son propre défilement, à 160 px de haut.
+     Repli vh avant dvh. */
   .composer {
     padding-top: 6px;
     padding-bottom: calc(var(--safe-bottom) + 6px);
-    max-height: 50vh;
-    max-height: 50dvh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
 
   .composer .textarea { max-height: 24vh; max-height: 24dvh; }
   .signature-toggle { margin-bottom: 6px; padding-top: 2px; padding-bottom: 2px; }
   .quote-preview { margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
+  .quote-preview .quote-text { -webkit-line-clamp: 1; }
   .thread { padding-top: 8px; padding-bottom: 10px; }
 
   /* La barre du haut ne colle plus : plus de marge de défilement à lui réserver. */

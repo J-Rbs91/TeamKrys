@@ -364,11 +364,11 @@ var TALL = { width: 390, height: 844, rem: 16 };
 
 check("BL-042 / BL-045 fenêtre basse : composeur plafonné, barre du haut non collante, parcours effacé sous 300 px", function () {
   var composer = { tag: "div", classes: ["composer"], ancestors: [] };
-  expect(declFor(composer, "overflow-y", LOW) === "auto", ".composer doit défiler en interne sous 480 px de hauteur");
-  expect(!declFor(composer, "max-height", TALL), "aucun plafond de composeur au-dessus de 480 px de hauteur (rien ne change à 100 %)");
+  expect(declFor(composer, "overflow-y", LOW) !== "auto" && !declFor(composer, "max-height", LOW),
+    ".composer ne doit ni plafonner ni défiler en interne : le bouton d'envoi passerait sous son défilement (fenêtre de 160 px)");
   var bodies = mediaBodies(APP_TEXT, "(max-height: 480px)").join("\n");
-  expect(/\.composer \{[^}]*max-height: 50vh;\s*max-height: 50dvh;/.test(bodies), ".composer : repli vh AVANT dvh (la dernière déclaration gagne)");
-  expect(/\.composer \.textarea \{\s*max-height: 24vh;\s*max-height: 24dvh;/.test(bodies), ".composer .textarea : repli vh AVANT dvh");
+  expect(/\.composer \.textarea \{\s*max-height: 24vh;\s*max-height: 24dvh;/.test(bodies), ".composer .textarea : repli vh AVANT dvh (la dernière déclaration gagne)");
+  expect(/\.quote-preview \.quote-text \{\s*-webkit-line-clamp: 1;/.test(bodies), "la citation du composeur tient sur une ligne en fenêtre basse");
   var field = { tag: "textarea", classes: ["textarea", "grow"], ancestors: [{ tag: "div", classes: ["composer"] }] };
   expect(/24d?vh/.test(declFor(field, "max-height", LOW) || ""), "le champ d'envoi doit être plafonné (24 % de la hauteur) en fenêtre basse");
   expect(declFor(field, "max-height", TALL) === "140px", "à 100 % le champ garde son plafond de 140 px (celui d'autoGrow)");
@@ -446,6 +446,18 @@ check("BL-047 anneau de focus : :focus et :focus-visible en règles séparées (
   expect(plain, "il manque la règle :focus seule (anneau de 2 px) pour les moteurs sans :focus-visible");
   expect(visible, "il manque la règle :focus-visible seule (anneau de 2 px)");
   expect(ruleExists(function (r) { return r.selectors.indexOf(":focus:not(:focus-visible)") >= 0 && r.decls.outline === "none"; }), "il manque :focus:not(:focus-visible) { outline: none } (pas d'anneau au pointeur)");
+});
+
+check("repli iOS 15.0 à 15.3 : l'anneau du conteneur d'une feuille ou d'une fenêtre n'est neutralisé que sans :focus-visible", function () {
+  expect(/@supports not selector\(:focus-visible\) \{\s*\.sheet\[tabindex="-1"\]:focus,\s*\.modal\[tabindex="-1"\]:focus \{ outline: none; \}\s*\}/.test(APP_TEXT),
+    "il manque le repli @supports not selector(:focus-visible) sur .sheet et .modal");
+  RULES.forEach(function (r) {
+    r.selectors.forEach(function (s) {
+      if (/^\.(sheet|modal)\[tabindex="-1"\]/.test(s) && s.indexOf(":focus-visible") >= 0) {
+        expect(r.decls.outline !== "none", "l'anneau clavier (:focus-visible) du conteneur ne doit pas être retiré");
+      }
+    });
+  });
 });
 
 check("BL-048 bouton retour compact : le libellé se masque sous 22rem, l'aria-label porte le nom", function () {
