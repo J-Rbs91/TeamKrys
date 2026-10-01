@@ -50,11 +50,23 @@ var ACTION_TYPES = [
 
 function str(value) { return value === null || value === undefined ? "" : String(value); }
 function trim(value) { return str(value).trim(); }
-function cut(value, max) { return trim(value).slice(0, max); }
+/* ⚠️ Jamais une moitié de paire UTF-16 en fin de coupe : demi-caractère haut final retiré. */
+function cut(value, max) {
+  var text = trim(value).slice(0, max);
+  var last = text.charCodeAt(text.length - 1);
+  return last >= 0xD800 && last <= 0xDBFF ? text.slice(0, -1) : text;
+}
 function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function arr(value) { return Array.isArray(value) ? value : []; }
 function oneOf(value, list, fallback) { return list.indexOf(value) >= 0 ? value : fallback; }
 function ownValue(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined; }
+/* ⚠️ Identifiant : 120 caractères au plus, jamais un nom hérité d'Object.prototype (clé de vote,
+ * réaction ou soutien ; journal de déduplication). Liste partagée avec js/state.js. */
+var ID_MAX_LENGTH = 120;
+var RESERVED_IDS = ["__proto__", "constructor", "prototype", "hasOwnProperty", "toString", "valueOf",
+  "toLocaleString", "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "__defineSetter__",
+  "__lookupGetter__", "__lookupSetter__"];
+function badId(value) { return str(value).length > ID_MAX_LENGTH || RESERVED_IDS.indexOf(trim(value)) >= 0; }
 
 function emptyState() {
   return {
@@ -124,7 +136,7 @@ function ensureShape(input) {
       });
     });
 
-    var messageIds = {};
+    var messageIds = Object.create(null);
     topic.messages.forEach(function (m) { messageIds[m.id] = true; });
     topic.messages.forEach(function (m) {
       if (m.quoteId && (!messageIds[m.quoteId] || m.quoteId === m.id)) { m.quoteId = null; }
@@ -164,7 +176,24 @@ function ensureShape(input) {
       });
     });
 
-    var conclusionIds = {};
+    /* TeamKrys v1/v2 (d1823d6, af0500a) : le texte unique « conclusion » devient UNE
+     * formulation sans auteur, d'id déterministe ; rien n'est écrasé, et relire ne
+     * l'ajoute pas deux fois (l'état normalisé ne garde pas « conclusion »). */
+    var legacyText = typeof t.conclusion === "string" ? cut(t.conclusion, LIMITS.conclusion) : "";
+    if (legacyText && !findConclusion(topic, "legacy-" + topic.id) &&
+      !topic.conclusions.some(function (c) { return c.text === legacyText; })) {
+      topic.conclusions.push({
+        id: "legacy-" + topic.id,
+        text: legacyText,
+        source: "manual",
+        authorId: "",
+        authorName: ANON_NAME,
+        createdAt: trim(t.conclusionUpdatedAt) || topic.createdAt,
+        updatedAt: trim(t.conclusionUpdatedAt) || topic.createdAt
+      });
+    }
+
+    var conclusionIds = Object.create(null);
     topic.conclusions.forEach(function (c) { conclusionIds[c.id] = true; });
     if (isObject(t.conclusionVotes)) {
       Object.keys(t.conclusionVotes).forEach(function (pid) {
@@ -213,6 +242,8 @@ function validateAction(state, action) {
   if (!trim(action.id)) { return fail("Action sans identifiant."); }
   var p = isObject(action.payload) ? action.payload : {};
   var topic = null;
+  if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
+    p.conclusionId, p.quoteId].some(badId)) { return fail("Identifiant invalide."); }
 
   function needTopic() {
     topic = findTopic(state, trim(p.topicId));
@@ -295,22 +326,22 @@ function validateAction(state, action) {
       return OK;
     case "ADD_CONCLUSION":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!trim(p.conclusionId)) { return fail("Conclusion sans identifiant."); }
-      if (!trim(p.text)) { return fail("La conclusion est vide."); }
-      if (findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion existe déjà."); }
+      if (!trim(p.conclusionId)) { return fail("Formulation du consensus sans identifiant."); }
+      if (!trim(p.text)) { return fail("La formulation du consensus est vide."); }
+      if (findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus existe déjà."); }
       return OK;
     case "UPDATE_CONCLUSION_ITEM":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
-      if (!trim(p.text)) { return fail("La conclusion est vide."); }
+      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
+      if (!trim(p.text)) { return fail("La formulation du consensus est vide."); }
       return OK;
     case "DELETE_CONCLUSION":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
+      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
       return OK;
     case "SET_CONCLUSION_VOTE":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
+      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
       if (!trim(action.actorId)) { return fail("Vote sans participant."); }
       return OK;
     case "REMOVE_CONCLUSION_VOTE":
@@ -415,7 +446,7 @@ function applyAction(state, action, now) {
         if (emoji) { mr.reactions[actor] = emoji; } else { delete mr.reactions[actor]; }
         if (ownValue(mr.reactions, actor) === had) { return; }
       }
-      else if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
+      else if (ownValue(mr.reactions, actor) === emoji) { delete mr.reactions[actor]; }
       else { mr.reactions[actor] = emoji; }
       touch(state, topic, now); return;
     }
@@ -447,7 +478,7 @@ function applyAction(state, action, now) {
         pv.votes[voter] = value;
         if (ownValue(pv.votes, voter) === was) { return; }
       }
-      else if (pv.votes[voter] === value) { delete pv.votes[voter]; }
+      else if (ownValue(pv.votes, voter) === value) { delete pv.votes[voter]; }
       else { pv.votes[voter] = value; }
       touch(state, topic, now); return;
     }
@@ -483,7 +514,7 @@ function applyAction(state, action, now) {
         topic.conclusionVotes[cv] = target;
         if (ownValue(topic.conclusionVotes, cv) === prev) { return; }
       }
-      else if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
+      else if (ownValue(topic.conclusionVotes, cv) === target) { delete topic.conclusionVotes[cv]; }
       else { topic.conclusionVotes[cv] = target; }
       touch(state, topic, now); return;
     }
