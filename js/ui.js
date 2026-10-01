@@ -1160,6 +1160,8 @@
 
   function proposalCard(topic, proposal) {
     var summary = Core.voteSummary(proposal);
+    /* Textes de vote (§8) : le même calcul que la synthèse et le nom de la barre. */
+    var reading = ProductView.voteReading(proposal, Store.view.participants);
     var myVote = proposal.votes[App.user.id] || null;
     var total = summary.total || 1;
 
@@ -1197,13 +1199,11 @@
      * seule oblige à deviner ce que veut dire le chaud, et la teinte ne doit
      * jamais porter l'information toute seule. */
     var legend = el("div", { class: "vote-legend" }, [
-      el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.for + " pour" })]),
-      el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.against + " contre" })]),
-      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }),
-        el("span", { text: summary.counts.abstain + " abstention" + (summary.counts.abstain > 1 ? "s" : "") })]),
-      summary.expressed
-        ? el("span", { class: "legend-chip", text: summary.favorablePercent + " % favorables" })
-        : null
+      el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[0] })]),
+      el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[1] })]),
+      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[2] })]),
+      reading.favorable ? el("span", { class: "legend-chip", text: reading.favorable }) : null,
+      reading.participation ? el("span", { class: "legend-chip product-participation", text: reading.participation }) : null
     ]);
 
     return el("article", { class: "card card-static stack" }, [
@@ -1219,7 +1219,7 @@
         el("span", { text: Utils.formatDateTime(proposal.createdAt) })
       ]),
       el("div", {}, [
-        el("div", { class: "vote-bar", role: "img", "aria-label": summary.label }, [
+        el("div", { class: "vote-bar", role: "img", "aria-label": reading.aria }, [
           el("span", { class: "vote-for", style: { width: (summary.counts.for / total * 100) + "%" } }),
           el("span", { class: "vote-against", style: { width: (summary.counts.against / total * 100) + "%" } }),
           el("span", { class: "vote-abstain", style: { width: (summary.counts.abstain / total * 100) + "%" } })
@@ -1374,7 +1374,8 @@
 
   function screenMeeting() {
     var state = Store.view;
-    var topics = state.topics.filter(function (t) { return t.status !== "archived"; });
+    /* Même ordre de maturité que l'accueil (prêts, en discussion, clôturés), archivés exclus. */
+    var topics = ProductView.meetingTopics(state.topics);
 
     var doc = el("div", { class: "print-doc stack" }, [
       el("div", { class: "stack", style: { gap: "6px", marginBottom: "10px" } }, [
@@ -1406,11 +1407,11 @@
         block.appendChild(el("h3", { class: "print-h3", text: "Propositions" }));
         var pl = el("ul", { class: "print-list" });
         topic.proposals.forEach(function (proposal) {
-          var summary = Core.voteSummary(proposal);
+          /* Lecture de la carte (§8) : positions, pourcentage avec ses avis exprimés et participation. */
+          var reading = ProductView.voteReading(proposal, state.participants);
           pl.appendChild(el("li", {}, [
             el("strong", { text: proposal.title }),
-            el("span", { text: " : " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + summary.label +
-              " (" + summary.counts.for + " pour / " + summary.counts.against + " contre / " + summary.counts.abstain + " abst.)" }),
+            el("span", { text: " : " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + reading.line }),
             proposal.description ? el("div", { class: "hint pre-wrap", text: proposal.description }) : null
           ]));
         });

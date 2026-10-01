@@ -186,13 +186,6 @@
     if (seenDirty) { saveSeen(seen); }
   }
 
-  function participationLabel(participation) {
-    if (!participation.total) { return null; }
-    return participation.voters + " / " + participation.total + " participant" +
-      (participation.total > 1 ? "s" : "") + " " +
-      (participation.voters > 1 ? "ont" : "a") + " voté";
-  }
-
   function enhanceProposalStatus(select, proposal) {
     if (!select || !proposal) { return; }
     var options = Array.prototype.slice.call(select.options || []);
@@ -221,19 +214,20 @@
     for (var i = 0; i < cards.length; i++) {
       var card = cards[i];
       var proposal = topic.proposals[i];
-      var participation = ProductView.voteParticipation(proposal, state.participants || []);
-      var label = participationLabel(participation);
+      /* Même lecture (§8) que la carte de ui.js, qui pose déjà la participation : ce
+       * complément ne sert que si elle manque, et ne compose aucun texte lui-même. */
+      var reading = ProductView.voteReading(proposal, state.participants || []);
       var legend = card.querySelector(".vote-legend");
-      if (legend && label && !legend.querySelector(".product-participation")) {
+      if (legend && reading.participation && !legend.querySelector(".product-participation")) {
         var chip = document.createElement("span");
         chip.className = "legend-chip product-participation";
-        chip.textContent = label;
+        chip.textContent = reading.participation;
         legend.appendChild(chip);
       }
 
       var voteBar = card.querySelector('.vote-bar[role="img"]');
       if (voteBar) {
-        voteBar.setAttribute("aria-label", ProductView.voteAriaLabel(proposal, state.participants || []));
+        voteBar.setAttribute("aria-label", reading.aria);
       }
 
       enhanceProposalStatus(card.querySelector("select"), proposal);

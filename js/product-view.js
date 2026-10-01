@@ -55,13 +55,37 @@
       });
   };
 
+  /* Synthèse de réunion (§10) : les sujets non archivés dans l'ordre de maturité de
+   * l'accueil (prêts, en discussion, clôturés), les plus actifs d'abord dans chaque groupe. */
+  ProductView.meetingTopics = function (topics) {
+    var groups = ProductView.groupTopics(topics);
+    var ordered = [];
+    ProductView.TOPIC_GROUP_ORDER.forEach(function (status) {
+      if (status !== "archived") { ordered = ordered.concat(groups[status]); }
+    });
+    return ordered;
+  };
+
+  /* Dénominateur T = |participants connus ∪ votants| : un votant absent du registre (son
+   * inscription n'est jamais arrivée) agrandit T, qui n'est jamais inférieur au nombre de
+   * votants (PRO-016). Un nombre reste un effectif ; 0 = effectif inconnu. */
   ProductView.voteParticipation = function (proposal, participants) {
     var votes = proposal && proposal.votes && typeof proposal.votes === "object"
       ? proposal.votes : {};
-    var voters = Object.keys(votes).length;
-    var total = Array.isArray(participants)
-      ? participants.length
-      : (typeof participants === "number" && isFinite(participants) ? Math.max(0, Math.floor(participants)) : 0);
+    var voterIds = Object.keys(votes);
+    var voters = voterIds.length;
+    var total = 0;
+    if (Array.isArray(participants)) {
+      /* ⚠️ Clés préfixées : un identifiant comme « __proto__ » ne doit pas fausser le compte. */
+      var known = {};
+      participants.forEach(function (participant) {
+        if (participant && participant.id != null) { known["id:" + participant.id] = true; }
+      });
+      total = participants.length;
+      voterIds.forEach(function (id) { if (!known["id:" + id]) { total += 1; } });
+    } else if (typeof participants === "number" && isFinite(participants) && participants >= 1) {
+      total = Math.max(Math.floor(participants), voters);
+    }
 
     return {
       voters: voters,
@@ -97,21 +121,49 @@
     return "Avis exprimés plutôt défavorables";
   };
 
-  ProductView.voteAriaLabel = function (proposal, participants) {
+  /* Lecture d'un vote (§8), seule source des textes de vote de la carte, de la synthèse
+   * (§10) et des noms accessibles. Deux informations distinctes : le rapport des positions
+   * (« 3 pour · 1 contre · 2 abstentions ») et la participation (« 6 participants sur 8
+   * ont voté »). Le pourcentage favorable exclut les abstentions, qui comptent dans la
+   * participation, et ne se lit jamais seul : « 75 % favorables sur 4 avis exprimés » ;
+   * sans avis exprimé, « Aucun avis exprimé » et pas de pourcentage. Aucun quorum. */
+  ProductView.voteReading = function (proposal, participants) {
     var counts = ProductView.voteCounts(proposal);
-    var participation = ProductView.voteParticipation(proposal, participants);
-    var bits = [
+    var turnout = ProductView.voteParticipation(proposal, participants);
+    var positions = [
       counts.for + " pour",
       counts.against + " contre",
       counts.abstain + " abstention" + (counts.abstain > 1 ? "s" : "")
     ];
-    if (participation.total > 0) {
-      bits.push(participation.voters + " sur " + participation.total + " participants ont voté");
+    var favorable = null;
+    if (counts.expressed) {
+      favorable = counts.favorablePercent + " % favorables sur " + counts.expressed +
+        " avis exprimé" + (counts.expressed > 1 ? "s" : "");
+    } else if (counts.total) {
+      favorable = "Aucun avis exprimé";
     }
-    if (counts.expressed > 0) {
-      bits.push(counts.favorablePercent + " % des avis exprimés favorables");
-    }
-    return ProductView.voteLabel(proposal) + ". " + bits.join(". ") + ".";
+    var participation = turnout.total
+      ? turnout.voters + " participant" + (turnout.voters > 1 ? "s" : "") + " sur " + turnout.total +
+        " " + (turnout.voters > 1 ? "ont" : "a") + " voté"
+      : null;
+    var parts = positions.concat([favorable, participation].filter(function (part) { return !!part; }));
+    var label = ProductView.voteLabel(proposal);
+    return {
+      counts: counts,
+      voters: turnout.voters,
+      total: turnout.total,
+      label: label,
+      positions: positions,
+      favorable: favorable,
+      participation: participation,
+      text: parts.join(" · "),
+      line: label + " · " + parts.join(" · "),
+      aria: label + ". " + parts.join(". ") + "."
+    };
+  };
+
+  ProductView.voteAriaLabel = function (proposal, participants) {
+    return ProductView.voteReading(proposal, participants).aria;
   };
 
   /* Empreinte courte (32 bits) : le marqueur local garde de quoi voir qu'une chose a
