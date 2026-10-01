@@ -74,7 +74,11 @@
 }
 
 .ux-flow-step .icon { flex: 0 0 auto; }
-.ux-flow-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Jamais de points de suspension sur Discussion, Propositions, Consensus (BL-043) : ces trois mots
+   nomment l'étape. Un mot qui ne tient pas (texte à 200 %, fenêtre de 196 px) passe à la ligne, avec
+   une césure si le moteur sait la faire. À 100 %, les règles de largeur plus bas gardent chaque mot
+   sur une seule ligne entre 351 et 480 px. */
+.ux-flow-label { min-width: 0; overflow-wrap: anywhere; -webkit-hyphens: auto; hyphens: auto; text-align: center; }
 
 .ux-flow-count {
   display: inline-grid;
@@ -377,11 +381,38 @@ html.ux-route-fallback .screen--enter .reveal {
 
 /* ============================================================ Responsive ==== */
 
-@media (max-width: 430px) {
+/* Le parcours se resserre jusqu'à 480 px (et non 430) et l'icône cède sa place au mot jusqu'à 440 px :
+   avec l'icône et le compteur, « Propositions » (73 px) ne tenait plus dans sa colonne entre 351 et
+   431 px, ni dès 431 px (mesures de responsive-touch/probe-label-flow.js). */
+@media (max-width: 480px) {
   .ux-flow { gap: 5px; padding-left: 10px; padding-right: 10px; }
-  .ux-flow-step { gap: 5px; padding-left: 6px; padding-right: 6px; }
-  .ux-flow-count { min-width: 18px; height: 18px; padding: 0 4px; }
+  .ux-flow-step { gap: 4px; padding-left: 4px; padding-right: 4px; }
+  .ux-flow-count { min-width: 18px; height: 18px; padding: 0 3px; }
+}
+
+@media (max-width: 440px) {
+  .ux-flow-step .icon { display: none; }
+}
+
+@media (max-width: 430px) {
   .ux-status-control { width: 100%; justify-content: space-between; }
+}
+
+/* Pied de carte de l'accueil, très étroit (fenêtre de 196 px) ou très grand texte (BL-044) : le bouton
+   « Ouvrir » passait de 27 px hors de l'écran. Le pied passe à la ligne ; « Ouvrir » reste à droite. */
+@media (max-width: 19rem) {
+  .card-foot { flex-wrap: wrap; row-gap: 6px; }
+  .ux-card-action { margin-left: auto; }
+}
+
+/* Fenêtre basse (BL-045) : le parcours resserre ses marges ; sous 300 px de hauteur (clavier ouvert en
+   paysage) il s'efface pour laisser la place au champ d'envoi, et revient à la fermeture du clavier. */
+@media (max-height: 480px) {
+  .ux-flow { padding-top: 4px; padding-bottom: 4px; }
+}
+
+@media (max-height: 300px) {
+  .ux-flow { display: none; }
 }
 
 @media (max-width: 350px) {

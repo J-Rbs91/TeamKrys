@@ -14,7 +14,12 @@
  *  - plus d'opacité de groupe sur « Clôturés » et « Archivés » (BL-038), bord du composeur
  *    sur `--line-field` (BL-039), repère de bulle sans opacité (BL-040) ;
  *  - marges de zone sûre latérales (BL-041), `overscroll-behavior: contain` et verrou du
- *    défilement sous une couche (BL-011, partie CSS).
+ *    défilement sous une couche (BL-011, partie CSS) ;
+ *  - lot WP-16 : composeur plafonné et barres resserrées en fenêtre basse (BL-042, BL-045),
+ *    libellés du parcours sans ellipse (BL-043), rangées, pastilles et pieds de carte qui passent
+ *    à la ligne (BL-044), marge de défilement (BL-046), anneau de focus en règles séparées
+ *    (BL-047), bouton retour compact (BL-048), repli vh avant dvh (BL-049), accueil de bureau
+ *    sans colonnes de tableau (BL-050).
  *
  * `CSS_CONTRACT_ROOT` : racine alternative (par exemple une copie de HEAD) pour prouver que
  * le test échoue sur l'ancien CSS. */
@@ -86,20 +91,22 @@ var RULES = [];
 sheets.forEach(function (s) { s.rules.forEach(function (r) { r.order = RULES.length; RULES.push(r); }); });
 var APP_TEXT = sheets[0].text;
 
-/* Une condition de media est évaluée seulement si elle ne porte que sur la largeur (px, rem) ;
-   toute autre (mouvement, survol, impression, @supports) rend la règle « non évaluée ». */
+/* Une condition de media est évaluée seulement si elle ne porte que sur la largeur ou la hauteur
+   (px, rem) ; toute autre (mouvement, survol, impression, @supports) rend la règle « non évaluée ». */
 function mediaApplies(conds, env) {
   return conds.every(function (c) {
     if (c === "@supports") { return false; }
     var seen = false;
     var ok = true;
-    c.replace(/\((min|max)-width:\s*([\d.]+)(px|rem|em)\)/g, function (m, kind, n, unit) {
+    c.replace(/\((min|max)-(width|height):\s*([\d.]+)(px|rem|em)\)/g, function (m, kind, dim, n, unit) {
       seen = true;
       var px = parseFloat(n) * (unit === "px" ? 1 : env.rem);
-      ok = ok && (kind === "min" ? env.width >= px : env.width <= px);
+      /* Sans `height` dans l'environnement : une fenêtre haute (900 px), donc aucune règle de fenêtre basse. */
+      var size = dim === "width" ? env.width : (env.height === undefined ? 900 : env.height);
+      ok = ok && (kind === "min" ? size >= px : size <= px);
       return m;
     });
-    var rest = c.replace(/\((min|max)-width:\s*[\d.]+(px|rem|em)\)/g, "").replace(/\band\b/g, "").trim();
+    var rest = c.replace(/\((min|max)-(width|height):\s*[\d.]+(px|rem|em)\)/g, "").replace(/\band\b/g, "").trim();
     return seen && !rest && ok;
   });
 }
@@ -328,6 +335,149 @@ check("BL-011 le défilement du document se verrouille sous une couche (html.has
   expect(declFor(body, "overflow", BASE) === "hidden", "html.has-layer body doit porter overflow: hidden");
   var noLayer = { tag: "body", classes: [], ancestors: [{ tag: "html", classes: [] }] };
   expect(declFor(noLayer, "overflow", BASE) !== "hidden", "sans has-layer, le corps ne doit pas être verrouillé");
+});
+
+/* --- WP-16 : confort (fenêtres basses, zoom 200 %, troncatures, focus) ----------- */
+
+/* Corps de tous les blocs `@media <entête> { ... }` d'un texte CSS (comptage d'accolades). */
+function mediaBodies(text, header) {
+  var out = [];
+  var marker = "@media " + header + " {";
+  var from = 0;
+  var at = text.indexOf(marker, from);
+  while (at >= 0) {
+    var depth = 1;
+    var i = at + marker.length;
+    while (i < text.length && depth) {
+      if (text.charAt(i) === "{") { depth++; } else if (text.charAt(i) === "}") { depth--; }
+      i++;
+    }
+    out.push(text.slice(at + marker.length, i - 1));
+    from = i;
+    at = text.indexOf(marker, from);
+  }
+  return out;
+}
+
+var LOW = { width: 568, height: 320, rem: 16 };
+var TALL = { width: 390, height: 844, rem: 16 };
+
+check("BL-042 / BL-045 fenêtre basse : composeur plafonné, barre du haut non collante, parcours effacé sous 300 px", function () {
+  var composer = { tag: "div", classes: ["composer"], ancestors: [] };
+  expect(declFor(composer, "overflow-y", LOW) === "auto", ".composer doit défiler en interne sous 480 px de hauteur");
+  expect(!declFor(composer, "max-height", TALL), "aucun plafond de composeur au-dessus de 480 px de hauteur (rien ne change à 100 %)");
+  var bodies = mediaBodies(APP_TEXT, "(max-height: 480px)").join("\n");
+  expect(/\.composer \{[^}]*max-height: 50vh;\s*max-height: 50dvh;/.test(bodies), ".composer : repli vh AVANT dvh (la dernière déclaration gagne)");
+  expect(/\.composer \.textarea \{\s*max-height: 24vh;\s*max-height: 24dvh;/.test(bodies), ".composer .textarea : repli vh AVANT dvh");
+  var field = { tag: "textarea", classes: ["textarea", "grow"], ancestors: [{ tag: "div", classes: ["composer"] }] };
+  expect(/24d?vh/.test(declFor(field, "max-height", LOW) || ""), "le champ d'envoi doit être plafonné (24 % de la hauteur) en fenêtre basse");
+  expect(declFor(field, "max-height", TALL) === "140px", "à 100 % le champ garde son plafond de 140 px (celui d'autoGrow)");
+  var topbar = { tag: "header", classes: ["topbar"], ancestors: [] };
+  expect(declFor(topbar, "position", LOW) === "static", "la barre du haut ne colle plus sous 480 px de hauteur");
+  expect(declFor(topbar, "position", { width: 568, height: 700, rem: 16 }) === "sticky", "au-dessus de 480 px de hauteur la barre reste collante");
+  var flow = { tag: "nav", classes: ["ux-flow"], ancestors: [] };
+  expect(declFor(flow, "display", { width: 568, height: 299, rem: 16 }) === "none", "le parcours s'efface sous 300 px de hauteur (clavier ouvert en paysage)");
+  expect(declFor(flow, "display", LOW) === "grid", "le parcours reste affiché à 320 px de hauteur");
+});
+
+check("BL-043 libellés du parcours : jamais de points de suspension, un mot par ligne de 351 à 480 px", function () {
+  var chain = [{ tag: "button", classes: ["ux-flow-step"] }, { tag: "nav", classes: ["ux-flow"] }];
+  var label = { tag: "span", classes: ["ux-flow-label"], ancestors: chain };
+  expect(!declFor(label, "text-overflow", BASE), ".ux-flow-label ne doit plus porter text-overflow");
+  expect(declFor(label, "white-space", BASE) !== "nowrap", ".ux-flow-label ne doit plus être en nowrap");
+  expect(declFor(label, "overflow-wrap", BASE) === "anywhere", ".ux-flow-label doit passer à la ligne (overflow-wrap: anywhere) quand le mot ne tient pas");
+  var icon = { tag: "svg", classes: ["icon"], ancestors: chain };
+  var count = { tag: "span", classes: ["ux-flow-count"], ancestors: chain };
+  [320, 351, 390, 412, 430, 440].forEach(function (w) {
+    expect(declFor(icon, "display", { width: w, rem: 16 }) === "none", "l'icône doit céder sa place au mot à " + w + " px");
+  });
+  [441, 480, 600, 1280].forEach(function (w) {
+    expect(declFor(icon, "display", { width: w, rem: 16 }) !== "none", "l'icône reste visible à " + w + " px");
+  });
+  [351, 390, 480].forEach(function (w) {
+    expect(declFor(count, "display", { width: w, rem: 16 }) !== "none", "le compteur reste visible à " + w + " px");
+  });
+  expect(declFor(count, "display", { width: 350, rem: 16 }) === "none", "le compteur n'apparaît pas à 350 px");
+  var step = { tag: "button", classes: ["ux-flow-step"], ancestors: [{ tag: "nav", classes: ["ux-flow"] }] };
+  expect(declFor(step, "padding-left", { width: 351, rem: 16 }) === "4px" && declFor(step, "padding-left", { width: 480, rem: 16 }) === "4px", "marges du parcours resserrées de 351 à 480 px");
+  expect(!declFor(step, "padding-left", { width: 481, rem: 16 }), "le resserrage du parcours s'arrête à 480 px");
+});
+
+check("BL-044 rangées, pastilles, pieds de carte et lignes de diagnostic passent à la ligne au lieu de déborder", function () {
+  expect(declFor({ tag: "div", classes: ["row"], ancestors: [] }, "flex-wrap", BASE) === "wrap", ".row doit porter flex-wrap: wrap");
+  var badge = { tag: "span", classes: ["badge", "tone-accord"], ancestors: [{ tag: "div", classes: ["row"] }] };
+  expect(declFor(badge, "white-space", BASE) === "normal", ".badge ne doit plus être en nowrap (292 px à 200 % de texte)");
+  expect(declFor(badge, "max-width", BASE) === "100%", ".badge doit rester dans sa ligne (max-width: 100 %)");
+  var diag = { tag: "div", classes: ["diag-row"], ancestors: [{ tag: "div", classes: ["diag"] }] };
+  expect(declFor(diag, "flex-wrap", BASE) === "wrap", ".diag-row doit passer à la ligne");
+  expect(ruleExists(function (r) {
+    return r.selectors.indexOf(".row > .card-title") >= 0 && /^min\(100%,\s*5\.5em\)$/.test(r.decls["min-width"] || "");
+  }), "il manque .row > .card-title { min-width: min(100%, 5.5em) } (une pastille large ne doit pas écraser le titre)");
+  var foot = { tag: "div", classes: ["card-foot"], ancestors: [{ tag: "button", classes: ["card"] }] };
+  expect(declFor(foot, "flex-wrap", { width: 390, rem: 16 }) !== "wrap", "à 100 % sur 390 px le pied de carte ne change pas");
+  expect(declFor(foot, "flex-wrap", { width: 196, rem: 16 }) === "wrap", "le pied de carte doit passer à la ligne sur 196 px");
+  expect(declFor(foot, "flex-wrap", { width: 600, rem: 32 }) === "wrap", "le pied de carte doit passer à la ligne à 200 % de police (19rem = 608 px)");
+  ["bubble-text", "bubble-meta", "emoji-label"].forEach(function (k) {
+    var e = { tag: "div", classes: [k], ancestors: [] };
+    expect(/rem$/.test(declFor(e, "font-size", BASE) || ""), "." + k + " doit être en rem (il suit le réglage de police)");
+  });
+});
+
+check("BL-046 marge de défilement : la barre collante et le bouton flottant ne cachent plus l'élément focalisé", function () {
+  var html = { tag: "html", classes: [], ancestors: [] };
+  var top = declFor(html, "scroll-padding-top", BASE) || "";
+  var bottom = declFor(html, "scroll-padding-bottom", BASE) || "";
+  expect(/safe-top/.test(top) && /5rem/.test(top), "html doit réserver la barre du haut (--safe-top + 5rem) dans scroll-padding-top");
+  expect(/safe-bottom/.test(bottom) && /6rem/.test(bottom), "html doit réserver le bouton flottant (--safe-bottom + 6rem) dans scroll-padding-bottom");
+  expect(declFor(html, "scroll-padding-top", LOW) === "var(--safe-top)", "sous 480 px de hauteur la barre ne colle plus : plus de marge en haut");
+  expect(/6rem/.test(declFor(html, "scroll-padding-bottom", LOW) || ""), "la marge du bouton flottant reste en fenêtre basse");
+});
+
+check("BL-047 anneau de focus : :focus et :focus-visible en règles séparées (jamais un groupe)", function () {
+  var plain = false;
+  var visible = false;
+  RULES.forEach(function (r) {
+    var hasFocus = r.selectors.indexOf(":focus") >= 0;
+    var hasVisible = r.selectors.indexOf(":focus-visible") >= 0;
+    expect(!(hasFocus && hasVisible), "le groupe « :focus, :focus-visible » est rejeté en bloc par un moteur sans :focus-visible : l'anneau disparaît");
+    if (hasFocus && /solid/.test(r.decls.outline || "")) { plain = true; }
+    if (hasVisible && /solid/.test(r.decls.outline || "")) { visible = true; }
+  });
+  expect(plain, "il manque la règle :focus seule (anneau de 2 px) pour les moteurs sans :focus-visible");
+  expect(visible, "il manque la règle :focus-visible seule (anneau de 2 px)");
+  expect(ruleExists(function (r) { return r.selectors.indexOf(":focus:not(:focus-visible)") >= 0 && r.decls.outline === "none"; }), "il manque :focus:not(:focus-visible) { outline: none } (pas d'anneau au pointeur)");
+});
+
+check("BL-048 bouton retour compact : le libellé se masque sous 22rem, l'aria-label porte le nom", function () {
+  var hide = null;
+  RULES.forEach(function (r) { if (r.selectors.indexOf(".btn-back > span") >= 0) { hide = r; } });
+  expect(hide && hide.decls.display === "none", "il manque la règle .btn-back > span { display: none }");
+  expect(mediaApplies(hide.media, { width: 320, rem: 16 }), "à 320 px et 100 % le libellé du bouton retour doit être masqué");
+  expect(mediaApplies(hide.media, { width: 320, rem: 20.8 }) && mediaApplies(hide.media, { width: 430, rem: 20.8 }), "à 130 % de police le libellé doit être masqué sur tous les téléphones");
+  expect(mediaApplies(hide.media, { width: 700, rem: 32 }), "à 200 % de police le libellé doit être masqué jusqu'à 704 px");
+  expect(!mediaApplies(hide.media, { width: 360, rem: 16 }) && !mediaApplies(hide.media, { width: 393, rem: 16 }), "à 100 % le libellé reste visible dès 353 px (aucun changement sur les téléphones courants)");
+  var btn = { tag: "button", classes: ["btn-back"], ancestors: [{ tag: "header", classes: ["topbar"] }] };
+  expect(declFor(btn, "padding", { width: 320, rem: 16 }) === "0", "bouton retour compact : plus de marge latérale");
+  expect(declFor(btn, "padding", { width: 393, rem: 16 }) === "0 10px 0 4px", "à 100 % le bouton retour garde sa forme");
+  expect(declFor(btn, "min-width", { width: 320, rem: 16 }) === "var(--tap)", "la flèche garde une cible de 44 px");
+  expect(/class: "btn-back"[\s\S]{0,200}"aria-label"/.test(read("js/ui.js")), "topbar() doit nommer le bouton retour par un aria-label (le libellé visible est masqué sous 22rem)");
+});
+
+check("BL-049 feuilles et fenêtres : repli vh puis ligne dvh", function () {
+  expect(/\.sheet \{[^}]*max-height: 86vh;\s*max-height: 86dvh;/.test(APP_TEXT), ".sheet : max-height: 86vh puis 86dvh (repli AVANT la valeur moderne)");
+  expect(/\.modal \{[^}]*max-height: 88vh;\s*max-height: 88dvh;/.test(APP_TEXT), ".modal : max-height: 88vh puis 88dvh (repli AVANT la valeur moderne)");
+});
+
+check("BL-050 accueil de bureau : les groupes s'empilent, seules leurs cartes se répartissent en colonnes", function () {
+  var grid = null;
+  RULES.forEach(function (r) { if (r.selectors.indexOf(".topics-grid > .product-topic-group") >= 0) { grid = r; } });
+  expect(grid, "il manque la règle .topics-grid > .product-topic-group");
+  expect(grid.decls["grid-column"] === "1 / -1", "chaque groupe doit occuper toute la largeur de la grille (pas une colonne de tableau)");
+  expect(grid.decls.display === "grid" && /repeat\(auto-fill,\s*minmax\(320px/.test(grid.decls["grid-template-columns"] || ""), "les cartes d'un groupe se répartissent en colonnes de 320 px au moins");
+  expect(mediaApplies(grid.media, { width: 1280, rem: 16 }) && mediaApplies(grid.media, { width: 900, rem: 16 }) && !mediaApplies(grid.media, { width: 899, rem: 16 }), "la règle ne vaut que dès 900 px (le mobile reste une colonne)");
+  expect(ruleExists(function (r) {
+    return r.selectors.indexOf(".product-topic-group > .product-topic-group-title") >= 0 && r.decls["grid-column"] === "1 / -1";
+  }), "le titre d'un groupe doit occuper toute la ligne");
 });
 
 if (failures.length) {

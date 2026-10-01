@@ -53,6 +53,22 @@
   }
 }
 
+/* Accueil de bureau (BL-050) : les groupes s'empilent, ils ne deviennent plus des colonnes de
+   tableau façon Kanban. Chaque groupe prend toute la largeur, sous son titre ; ce sont ses CARTES
+   qui se répartissent en colonnes, comme avant (320 px au moins). Lecture de haut en bas : prêts pour
+   la réunion, en discussion, puis clôturés et archivés en dernier, donc secondaires. */
+@media (min-width: 900px) {
+  .topics-grid > .product-topic-group {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    align-items: start;
+    gap: 16px;
+  }
+
+  .product-topic-group > .product-topic-group-title { grid-column: 1 / -1; }
+}
+
 @media print {
   .product-unread { display: none; }
 }

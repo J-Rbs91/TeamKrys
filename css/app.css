@@ -400,6 +400,15 @@ html, body {
   color: var(--text);
 }
 
+/* Marge de défilement (BL-046) : la barre du haut est collante et le bouton flottant couvre le bas.
+   Sans cette marge, un élément déjà « visible » à l'écran, mais sous elles, reçoit le focus sans que
+   le navigateur le déplace : l'anneau de focus est caché (WCAG 2.4.11). 5rem couvre la barre (65 px
+   à 100 %, 86 px à 200 % de texte), 6rem le bouton (48 px et ses marges). */
+html {
+  scroll-padding-top: calc(var(--safe-top) + 5rem);
+  scroll-padding-bottom: calc(var(--safe-bottom) + 6rem);
+}
+
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Noto Sans", sans-serif;
@@ -521,7 +530,10 @@ p { margin: 0; }
    valeur absolue — un espacement uniforme, même généreux, n'en crée aucun. */
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .stack-lg { display: flex; flex-direction: column; gap: 26px; }
-.row { display: flex; align-items: center; gap: 8px; }
+/* `wrap` (BL-044) : une rangée dont les éléments ne tiennent plus (pastille d'état, bouton, libellé
+   long à 200 % de texte ou sur 196 px de large) passe à la ligne au lieu de sortir de l'écran. Un
+   élément souple (`flex: 1`, base nulle) ne déclenche jamais le retour : à 100 %, rien ne bouge. */
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .row-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
 
@@ -793,6 +805,16 @@ p { margin: 0; }
 
 .btn-back:hover { background: var(--surface-sunken); }
 
+/* Sous 22rem (352 px à 100 %, 457 px à 130 %, 704 px à 200 % de police) le libellé de l'écran
+   parent ne tient plus à côté du titre : il pesait 77 px à 320 px, 89 px à 130 %, 117 px à 200 %, et
+   « Réunion » était coupé. Le bouton ne garde que sa flèche (44 x 44 px). Son nom accessible vient de
+   l'aria-label (« Retour vers Sujets »), posé par topbar() dans js/ui.js : ne pas le retirer. `rem`
+   suit le réglage de police de la personne, pas la largeur seule. */
+@media (max-width: 22rem) {
+  .btn-back { padding: 0; justify-content: center; }
+  .btn-back > span { display: none; }
+}
+
 /* Bouton d'action principal : étendu (icône + libellé) plutôt qu'un « + » nu.
    Sur un outil utilisé par toute une équipe, le libellé supprime l'hésitation. */
 .fab {
@@ -1002,6 +1024,11 @@ p { margin: 0; }
   overflow-wrap: anywhere;
 }
 
+/* Dans une rangée titre + pastille, le titre garde au moins 5,5 em avant que la pastille ne passe
+   dessous. Sans cela, avec un grand texte, une pastille large lui laissait 29 px : une lettre par
+   ligne. À 100 %, titre et pastille tiennent côte à côte comme avant. */
+.row > .card-title { min-width: min(100%, 5.5em); }
+
 .card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1049,6 +1076,8 @@ p { margin: 0; }
   align-items: baseline;
   justify-content: space-between;
   gap: 14px;
+  /* La valeur passe sous son libellé quand les deux ne tiennent plus (200 % de texte, 320 px). */
+  flex-wrap: wrap;
   padding: 9px 0;
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-xs);
@@ -1056,7 +1085,7 @@ p { margin: 0; }
 
 .diag-row:last-child { border-bottom: 0; }
 .diag-label { color: var(--faint); font-weight: 650; letter-spacing: 0.01em; white-space: nowrap; }
-.diag-value { color: var(--text); text-align: right; word-break: break-word; }
+.diag-value { color: var(--text); text-align: right; word-break: break-word; margin-left: auto; }
 .diag-value.is-danger { color: var(--danger); }
 
 /* --- Pastilles ----------------------------------------------------------- */
@@ -1072,7 +1101,12 @@ p { margin: 0; }
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--muted);
-  white-space: nowrap;
+  /* `normal` (BL-044) : une pastille plus large que sa ligne (« Prêt pour la réunion » à 200 % de
+     texte, 292 px) passe sur deux lignes au lieu de pousser la page de 136 px. À 100 % elle tient
+     sur une ligne, comme avant. */
+  white-space: normal;
+  max-width: 100%;
+  text-align: center;
 }
 
 .badge-ink { background: var(--ink); color: var(--on-ink); }
@@ -1410,7 +1444,9 @@ p { margin: 0; }
 .bubble:active { background: var(--surface-sunken); }
 .msg-row.mine .bubble:active { background: var(--n-800); }
 
-.bubble-text { white-space: pre-wrap; font-size: 15.5px; line-height: 1.45; }
+/* En rem (BL-044) : 15,5 px et 10,5 px d'avant, identiques à la racine par défaut ; ils suivent
+   maintenant le réglage de police de la personne, comme le reste du texte. */
+.bubble-text { white-space: pre-wrap; font-size: 0.96875rem; line-height: 1.45; }
 
 .bubble-meta {
   display: flex;
@@ -1418,7 +1454,7 @@ p { margin: 0; }
   justify-content: flex-end;
   gap: 5px;
   margin-top: 4px;
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--faint);
@@ -1665,7 +1701,10 @@ p { margin: 0; }
 
 .sheet {
   width: 100%;
+  /* Repli vh AVANT dvh (BL-049) : avec une barre d'adresse rétractable, `vh` compte la fenêtre barre
+     rentrée et le bas de la feuille passait dessous. */
   max-height: 86vh;
+  max-height: 86dvh;
   overflow-y: auto;
   /* Défiler la feuille jusqu'au bout n'entraîne pas la page derrière. */
   overscroll-behavior: contain;
@@ -1769,7 +1808,7 @@ p { margin: 0; }
 .emoji-btn .mark { color: var(--ink); }
 
 .emoji-label {
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--muted);
@@ -1794,6 +1833,7 @@ p { margin: 0; }
   width: 100%;
   max-width: 480px;
   max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px;
@@ -2264,7 +2304,11 @@ html.has-layer body { overflow: hidden; }
    La seconde règle rétablit le comportement moderne — pas d'anneau au pointeur — et
    elle est elle-même rejetée sur le vieux moteur, où l'anneau apparaît alors aussi au
    doigt. Dégradation acceptable, et dans le bon sens. */
-:focus, :focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* TROIS règles, jamais un groupe `:focus, :focus-visible` (BL-047) : un sélecteur invalide invalide
+   tout son groupe. Sur un moteur qui ignore `:focus-visible`, la règle groupée disparaissait en
+   entier, `:focus` compris : il ne restait que l'anneau natif de 1 px, ou rien sur un <select>. */
+:focus { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
+:focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
 :focus:not(:focus-visible) { outline: none; }
 
 .visually-hidden {
@@ -2286,6 +2330,45 @@ html.has-layer body { overflow: hidden; }
   .topbar, .quickbar, .composer {
     background: var(--surface-opaque);
   }
+}
+
+/* ========================================================== Fenêtre basse ==== */
+
+/* Paysage sur téléphone, clavier ouvert (moteurs qui redimensionnent la fenêtre), zoom de page à
+   200 % : sous 480 px de hauteur, la barre du haut, le parcours et le composeur occupaient jusqu'à
+   72 % de la fenêtre, le fil gardait 0 à 99 px et le bouton d'envoi sortait de l'écran avec six
+   lignes saisies (BL-042, BL-045). Les marges se resserrent ; les cibles gardent leurs 44 px. */
+@media (max-height: 480px) {
+  /* Barres non collantes : sur les écrans qui défilent avec la page, la barre du haut part avec le
+     contenu. Dans la discussion, la page ne défile pas : la barre fait partie de la colonne fixe et
+     n'y gagne que ses marges. */
+  .topbar {
+    position: static;
+    padding-top: calc(var(--safe-top) + 4px);
+    padding-bottom: 4px;
+    min-height: var(--tap);
+  }
+
+  .quickbar { position: static; }
+
+  /* Plafond du composeur : la moitié de la fenêtre pour l'ensemble, un quart pour le champ, qui
+     défile en interne (autoGrow plafonne à 140 px, ce plafond-ci est plus bas). Repli vh avant dvh. */
+  .composer {
+    padding-top: 6px;
+    padding-bottom: calc(var(--safe-bottom) + 6px);
+    max-height: 50vh;
+    max-height: 50dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .composer .textarea { max-height: 24vh; max-height: 24dvh; }
+  .signature-toggle { margin-bottom: 6px; padding-top: 2px; padding-bottom: 2px; }
+  .quote-preview { margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
+  .thread { padding-top: 8px; padding-bottom: 10px; }
+
+  /* La barre du haut ne colle plus : plus de marge de défilement à lui réserver. */
+  html { scroll-padding-top: var(--safe-top); }
 }
 
 /* Au-delà du mobile, la mise en page respire : deux colonnes pour les listes
