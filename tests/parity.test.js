@@ -905,6 +905,354 @@ tests.push(() => check("PARITÉ : actions marquées et non marquées, action par
     [{}, {}, {}, "u1"], "état final attendu");
 }));
 
+/* ==========================================================================
+ *   ANCIENNES DONNÉES TEAMKRYS, IDENTIFIANTS RÉSERVÉS OU TROP LONGS, COUPE UTF-16
+ * ==========================================================================
+ *
+ * TeamKrys v1 (d1823d6) et v2 (af0500a) gardaient le consensus dans un texte unique
+ * `topic.conclusion` : la lecture l'ignorait et la première écriture l'effaçait du
+ * fichier Drive. Il devient UNE formulation « legacy-<id du sujet> », sans auteur,
+ * sans rien écraser ni dupliquer. Les deux fichiers ci-dessous sont AUTHENTIQUES :
+ * produits par les reducers d'époque (`git show d1823d6:apps-script/Code.gs`,
+ * `git show af0500a:apps-script/Code.gs`, action UPDATE_CONCLUSION comprise), figés
+ * ici pour ne pas dépendre de l'historique Git (clone superficiel de la CI).
+ * Un identifiant (action, acteur, participant, sujet, message, proposition,
+ * formulation, citation) fait au plus 120 caractères et n'est jamais un nom hérité
+ * d'Object.prototype. Une coupe ne laisse jamais une moitié d'emoji. Les refus
+ * visibles disent « formulation du consensus » (le vocabulaire interne ne change pas).
+ * Chaque vecteur est joué sur les DEUX implémentations.
+ */
+
+const LEGACY_V1 = {
+  revision: 11,
+  updatedAt: "2026-07-22T09:11:00.000Z",
+  participants: [{ id: "p-marie", name: "Marie" }, { id: "p-alex", name: "Alex" }],
+  topics: [
+    {
+      id: "t1",
+      title: "Réassort",
+      description: "Ruptures le samedi",
+      status: "ready",
+      createdBy: { id: "p-marie", name: "Marie" },
+      createdAt: "2026-07-22T09:03:00.000Z",
+      updatedAt: "2026-07-22T09:11:00.000Z",
+      messages: [
+        {
+          id: "m1",
+          authorId: "p-alex",
+          authorName: "Alex",
+          text: "Il manque du stock le samedi.",
+          createdAt: "2026-07-22T09:04:00.000Z",
+          updatedAt: "2026-07-22T09:05:00.000Z"
+        }
+      ],
+      proposals: [
+        {
+          id: "pr1",
+          title: "Commander le jeudi",
+          description: "",
+          authorId: "p-marie",
+          authorName: "Marie",
+          createdAt: "2026-07-22T09:06:00.000Z",
+          status: "selected",
+          votes: { "p-marie": "for", "p-alex": "abstain" }
+        }
+      ],
+      conclusion: "Cap v1 : on commande le jeudi (texte de conclusion écrit avec TeamKrys v1).",
+      conclusionUpdatedAt: "2026-07-22T09:10:00.000Z",
+      conclusionUpdatedBy: { id: "p-alex", name: "Alex" }
+    }
+  ],
+  processedActionIds: ["old-0", "old-1", "old-2", "old-3", "old-4", "old-5", "old-6", "old-7", "old-8", "old-9", "old-10"]
+};
+
+const LEGACY_V2 = {
+  revision: 15,
+  updatedAt: "2026-07-22T10:55:00.000Z",
+  participants: [{ id: "p-marie", name: "Marie" }, { id: "p-alex", name: "Alex" }],
+  topics: [
+    {
+      id: "t1",
+      title: "Planning",
+      description: "",
+      status: "open",
+      createdBy: { id: "p-marie", name: "Marie" },
+      createdAt: "2026-07-22T10:43:00.000Z",
+      updatedAt: "2026-07-22T10:55:00.000Z",
+      messages: [
+        {
+          id: "m1",
+          authorId: "p-alex",
+          authorName: "Alex",
+          text: "Premier",
+          createdAt: "2026-07-22T10:45:00.000Z",
+          updatedAt: null,
+          reactions: { "p-marie": "🤞" },
+          anon: false,
+          quoteId: null
+        },
+        {
+          id: "m2",
+          authorId: "",
+          authorName: "Anonyme",
+          text: "Réponse",
+          createdAt: "2026-07-22T10:46:00.000Z",
+          updatedAt: null,
+          reactions: { "p-alex": "👌" },
+          anon: true,
+          quoteId: "m1"
+        }
+      ],
+      proposals: [
+        {
+          id: "pr1",
+          title: "Binômes",
+          description: "",
+          authorId: "p-alex",
+          authorName: "Alex",
+          createdAt: "2026-07-22T10:50:00.000Z",
+          status: "implemented",
+          votes: { "p-alex": "against" }
+        }
+      ],
+      conclusions: [
+        {
+          id: "c1",
+          text: "Formulation A",
+          source: "manual",
+          authorId: "p-marie",
+          authorName: "Marie",
+          createdAt: "2026-07-22T10:53:00.000Z",
+          updatedAt: null
+        }
+      ],
+      conclusionVotes: { "p-alex": "c1" },
+      conclusion: "Cap v2 (champ unique, action UPDATE_CONCLUSION encore émise par app.js:335 en af0500a).",
+      conclusionUpdatedAt: "2026-07-22T10:55:00.000Z",
+      conclusionUpdatedBy: { id: "p-marie", name: "Marie" }
+    },
+    {
+      id: "t2",
+      title: "Sujet anonyme",
+      description: "",
+      status: "open",
+      createdBy: { id: "", name: "Anonyme" },
+      createdAt: "2026-07-22T10:44:00.000Z",
+      updatedAt: "2026-07-22T10:44:00.000Z",
+      messages: [],
+      proposals: [],
+      conclusions: [],
+      conclusionVotes: {},
+      conclusion: "",
+      conclusionUpdatedAt: null,
+      conclusionUpdatedBy: null
+    }
+  ],
+  processedActionIds: [
+    "old-100",
+    "old-101",
+    "old-102",
+    "old-103",
+    "old-104",
+    "old-105",
+    "old-106",
+    "old-107",
+    "old-108",
+    "old-109",
+    "old-110",
+    "old-111",
+    "old-112",
+    "old-113",
+    "old-114"
+  ]
+};
+
+const CONCL_V1 = "Cap v1 : on commande le jeudi (texte de conclusion écrit avec TeamKrys v1).";
+const CONCL_V2 = "Cap v2 (champ unique, action UPDATE_CONCLUSION encore émise par app.js:335 en af0500a).";
+
+function shapeBoth(raw, label) {
+  const front = Core.ensureShape(JSON.parse(JSON.stringify(raw)));
+  equal(GS.ensureShape(JSON.parse(JSON.stringify(raw))), front, label + " : ensureShape diverge");
+  return front;
+}
+
+tests.push(() => check("HÉRITAGE : le texte de consensus de TeamKrys v1 et v2 devient une formulation, à l'identique des deux côtés", () => {
+  [[LEGACY_V1, CONCL_V1], [LEGACY_V2, CONCL_V2]].forEach(([raw, text], index) => {
+    const label = "v" + (index + 1);
+    const old = raw.topics[0];
+    const topic = shapeBoth(raw, label).topics[0];
+    const kept = (old.conclusions || []).length;
+    equal(topic.conclusions.length, kept + 1, label + " : une seule formulation ajoutée");
+    equal(topic.conclusions[kept], { id: "legacy-t1", text: text, source: "manual", authorId: "", authorName: "Anonyme",
+      createdAt: old.conclusionUpdatedAt, updatedAt: old.conclusionUpdatedAt }, label + " : formulation reprise");
+    /* Le reste du sujet est relu comme avant. */
+    equal([topic.title, topic.status, topic.messages.map((m) => m.text), topic.proposals[0].votes],
+      [old.title, old.status, old.messages.map((m) => m.text), old.proposals[0].votes], label + " : sujet, messages et votes inchangés");
+  });
+  const v2 = shapeBoth(LEGACY_V2, "v2");
+  equal(v2.topics[0].conclusions.map((c) => c.id), ["c1", "legacy-t1"], "v2 : la formulation existante garde sa place");
+  equal(v2.topics[0].conclusionVotes, { "p-alex": "c1" }, "v2 : soutien conservé");
+  equal(v2.topics[1].conclusions, [], "v2 : texte d'époque vide, rien de repris");
+}));
+
+tests.push(() => check("HÉRITAGE : relire ne duplique rien, la première écriture garde le texte, rien n'est écrasé", () => {
+  SIDES.forEach((side) => {
+    [LEGACY_V1, LEGACY_V2].forEach((raw, index) => {
+      const once = side.impl.ensureShape(JSON.parse(JSON.stringify(raw)));
+      equal(side.impl.ensureShape(JSON.parse(JSON.stringify(once))), once, side.name + " v" + (index + 1) + " : relire est sans effet");
+    });
+    /* La formulation reprise se soutient et se modifie comme les autres. */
+    const state = side.impl.ensureShape(JSON.parse(JSON.stringify(LEGACY_V1)));
+    sideApply(side.impl, state, "SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "legacy-t1", set: true }, "u1", "l1");
+    sideApply(side.impl, state, "UPDATE_CONCLUSION_ITEM", { topicId: "t1", conclusionId: "legacy-t1", text: "Cap retouché" }, "u2", "l2");
+    equal([state.topics[0].conclusionVotes.u1, state.topics[0].conclusions[0].text], ["legacy-t1", "Cap retouché"],
+      side.name + " : formulation reprise utilisable");
+  });
+  /* Chaîne serveur : fichier v1 relu, puis UNE action passée par applyOne (doPost écrit ensuite cet état). */
+  const written = GS.ensureShape(JSON.parse(JSON.stringify(LEGACY_V1)));
+  const result = GS.applyOne(written, { id: "new-1", type: "SET_REACTION", actorId: "p-marie", actorName: "Marie",
+    payload: { topicId: "t1", messageId: "m1", emoji: "👌" } }, NOW);
+  assert(result.ok === true, "action refusée : " + JSON.stringify(result));
+  const file = JSON.stringify(written);
+  assert(file.indexOf(CONCL_V1) >= 0, "après la première écriture, le texte v1 doit rester dans le fichier");
+  assert(file.indexOf("conclusionUpdatedBy") < 0, "l'auteur d'époque n'est pas recopié");
+  /* Rien d'écrasé ni de dupliqué : id déjà pris, même texte déjà présent, valeur qui n'est pas un texte. */
+  const shaped = shapeBoth({ topics: [
+    { id: "t1", conclusion: "Ancien cap", conclusions: [{ id: "legacy-t1", text: "Autre texte" }] },
+    { id: "t2", conclusion: "  Même texte ", conclusions: [{ id: "c9", text: "Même texte" }] },
+    { id: "t3", conclusion: 42 }, { id: "t4", conclusion: "   " }, { id: "t5", conclusion: { text: "objet" } },
+    { id: "t6", conclusion: "Sans date d'époque" }
+  ] }, "cas limites");
+  equal(shaped.topics.map((t) => t.conclusions.map((c) => c.id + " : " + c.text)),
+    [["legacy-t1 : Autre texte"], ["c9 : Même texte"], [], [], [], ["legacy-t6 : Sans date d'époque"]], "rien d'écrasé ni de dupliqué");
+  equal(shaped.topics[5].conclusions[0].createdAt, shaped.topics[5].createdAt, "sans date d'époque : date du sujet");
+}));
+
+/* Une action par champ d'identifiant, valide en tout point sauf peut-être cet identifiant. */
+const ID_FIELDS = [
+  ["id d'action", (id) => ["SET_VOTE", id, "u1", { topicId: "t1", proposalId: "p1", value: "for" }]],
+  ["actorId", (id) => ["SET_REACTION", "x1", id, { topicId: "t1", messageId: "m1", emoji: "👌" }]],
+  ["participantId", (id) => ["REGISTER_PARTICIPANT", "x2", "u1", { participantId: id, name: "Zoé" }]],
+  ["topicId", (id) => ["CREATE_TOPIC", "x3", "u1", { topicId: id, title: "Nouveau sujet" }]],
+  ["messageId", (id) => ["CREATE_MESSAGE", "x4", "u1", { topicId: "t1", messageId: id, text: "Oui" }]],
+  ["proposalId", (id) => ["CREATE_PROPOSAL", "x5", "u1", { topicId: "t1", proposalId: id, title: "Idée" }]],
+  ["conclusionId", (id) => ["ADD_CONCLUSION", "x6", "u1", { topicId: "t1", conclusionId: id, text: "Cap" }]],
+  ["quoteId", (id) => ["CREATE_MESSAGE", "x7", "u1", { topicId: "t1", messageId: "m9", text: "Cité", quoteId: id }]]
+];
+
+/* Verdict des deux côtés (identiques, sinon échec) ; pour la citation, le message cité existe. */
+function idVerdict(field, build, id) {
+  const [type, actionId, actorId, payload] = build(id);
+  const verdicts = SIDES.map((side) => {
+    const state = sideSeed(side.impl);
+    if (field === "quoteId") {
+      state.topics[0].messages.push({ id: String(id).trim(), authorId: "u2", authorName: "Alex", text: "Cible",
+        createdAt: NOW, updatedAt: NOW, reactions: {}, anon: false, quoteId: null });
+    }
+    return side.impl.validateAction(state, { id: actionId, type: type, actorId: actorId, actorName: "Marie", ts: NOW, payload: payload });
+  });
+  equal(verdicts[1], verdicts[0], field + " : verdict divergent");
+  return verdicts[0];
+}
+
+tests.push(() => check("IDENTIFIANTS : un nom hérité d'Object.prototype est refusé des deux côtés, quel que soit le champ", () => {
+  const RESERVED = ["__proto__", "constructor", "prototype", "hasOwnProperty", "toString", "valueOf", "toLocaleString",
+    "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__"];
+  equal([Core.RESERVED_IDS, GS.RESERVED_IDS], [RESERVED, RESERVED], "liste partagée");
+  ID_FIELDS.forEach(([field, build]) => {
+    equal(idVerdict(field, build, "ok-1"), { ok: true, error: null }, field + " : témoin accepté");
+    RESERVED.concat([" __proto__ ", "toString "]).forEach((name) => {
+      equal(idVerdict(field, build, name), { ok: false, error: "Identifiant invalide." }, field + " « " + name + " »");
+    });
+    /* Seuls les noms exacts sont réservés. */
+    ["toString2", "constructors", "__proto", "Prototype"].forEach((name) => {
+      equal(idVerdict(field, build, name), { ok: true, error: null }, field + " « " + name + " » accepté");
+    });
+  });
+}));
+
+tests.push(() => check("IDENTIFIANTS : clés d'époque réservées relues telles quelles ; références pendantes neutralisées ; « __proto__ » réel compté", () => {
+  const raw = { topics: [{ id: "t1", title: "Ancien",
+    messages: [{ id: "constructor", text: "a", reactions: { toString: "👌", u1: "💪" } },
+      { id: "m2", text: "b", quoteId: "constructor" }, { id: "m3", text: "c", quoteId: "toString" }],
+    proposals: [{ id: "p1", title: "P", votes: { valueOf: "for", u2: "against" } }],
+    conclusions: [{ id: "__proto__", text: "Cap" }, { id: "c2", text: "Autre" }],
+    conclusionVotes: { u1: "__proto__", u2: "toString", u3: "c2", u4: "constructor" } }] };
+  const topic = shapeBoth(raw, "époque").topics[0];
+  equal(topic.messages.map((m) => m.quoteId), [null, "constructor", null], "citation réelle gardée, citation pendante neutralisée");
+  equal(topic.messages[0].reactions, { toString: "👌", u1: "💪" }, "réactions relues telles quelles");
+  equal(topic.proposals[0].votes, { valueOf: "for", u2: "against" }, "votes relus tels quels");
+  equal(topic.conclusionVotes, { u1: "__proto__", u3: "c2" }, "soutiens pendants retirés, soutien réel gardé");
+  const scores = Core.conclusionScores(topic);
+  equal([scores.scores["__proto__"], scores.scores.c2, typeof scores.scores.toString, scores.best], [1, 1, "undefined", 1],
+    "comptage des soutiens");
+  assert(Object.getPrototypeOf({}) === Object.prototype && ({}).toString === Object.prototype.toString, "Object.prototype intact");
+}));
+
+tests.push(() => check("IDENTIFIANTS : 120 caractères au plus, des deux côtés (121 refusé) ; UUID et ids d'époque acceptés", () => {
+  equal([Core.ID_MAX_LENGTH, GS.ID_MAX_LENGTH], [120, 120], "borne partagée");
+  const uuid = "3f1c9a52-7b0e-4c1d-9a8e-2b6f0d4c8e11";
+  ID_FIELDS.forEach(([field, build]) => {
+    ["i".repeat(120), uuid, "legacy-" + uuid, "p-marie", "m-42"].forEach((id) => {
+      equal(idVerdict(field, build, id), { ok: true, error: null }, field + " de " + id.length + " caractères accepté");
+    });
+    ["i".repeat(121), " " + "i".repeat(120), "i".repeat(1000000)].forEach((id) => {
+      equal(idVerdict(field, build, id), { ok: false, error: "Identifiant invalide." }, field + " de " + id.length + " caractères refusé");
+    });
+  });
+  /* Chaîne serveur : refus définitif « invalid » ; rien n'entre ni dans l'état ni dans le journal de déduplication. */
+  const state = sideSeed(GS);
+  const before = JSON.stringify(state);
+  const result = GS.applyOne(state, { id: "a".repeat(121), type: "CREATE_TOPIC", actorId: "u1", actorName: "Marie",
+    payload: { topicId: "t".repeat(1000000), title: "x" } }, NOW);
+  equal([result.ok, result.code, result.error], [false, "invalid", "Identifiant invalide."], "refus définitif");
+  equal(JSON.stringify(state), before, "rien n'est gardé");
+}));
+
+tests.push(() => check("COUPE : un texte coupé à sa limite ne garde jamais une moitié d'emoji, des deux côtés", () => {
+  const halfAtEnd = (s) => /[\uD800-\uDBFF]$/.test(s);
+  [["client", Core.cut], ["serveur", GS.cut]].forEach(([name, cutFn]) => {
+    equal(cutFn("a".repeat(149) + "😀fin", 150), "a".repeat(149), name + " : l'emoji tranché disparaît en entier");
+    equal(cutFn("a".repeat(148) + "😀fin", 150), "a".repeat(148) + "😀", name + " : l'emoji entier est gardé");
+    equal(cutFn("  Bravo 😀  ", 50), "Bravo 😀", name + " : texte court intact");
+    equal(cutFn("abc\uD83D", 50), "abc", name + " : moitié finale isolée retirée");
+  });
+  const finals = SIDES.map((side) => {
+    const state = sideSeed(side.impl);
+    sideApply(side.impl, state, "UPDATE_TOPIC", { topicId: "t1", title: "a".repeat(149) + "😀fin" }, "u1", "k1");
+    sideApply(side.impl, state, "UPDATE_PARTICIPANT", { participantId: "u1", name: "n".repeat(49) + "😀x" }, "u1", "k2");
+    sideApply(side.impl, state, "CREATE_MESSAGE", { topicId: "t1", messageId: "m7", text: "m".repeat(2999) + "👍🏽" }, "u1", "k3");
+    const topic = state.topics[0];
+    const texts = [topic.title, state.participants[0].name, topic.messages[0].authorName, topic.messages[1].text];
+    assert(!texts.some(halfAtEnd), side.name + " : moitié d'emoji stockée");
+    equal(texts.map((s) => s.length), [149, 49, 49, 2999], side.name + " : longueurs");
+    equal(side.impl.ensureShape(JSON.parse(JSON.stringify(state))), state, side.name + " : relu à l'identique");
+    return JSON.stringify(state);
+  });
+  equal(finals[1], finals[0], "parité des états");
+}));
+
+tests.push(() => check("VOCABULAIRE : les refus visibles disent « formulation du consensus », mêmes chaînes des deux côtés", () => {
+  [
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "", text: "x" }, "Formulation du consensus sans identifiant."],
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "c9", text: "  " }, "La formulation du consensus est vide."],
+    ["ADD_CONCLUSION", { topicId: "t1", conclusionId: "c1", text: "x" }, "Cette formulation du consensus existe déjà."],
+    ["UPDATE_CONCLUSION_ITEM", { topicId: "t1", conclusionId: "c9", text: "x" }, "Cette formulation du consensus n'existe plus."],
+    ["UPDATE_CONCLUSION_ITEM", { topicId: "t1", conclusionId: "c1", text: "" }, "La formulation du consensus est vide."],
+    ["DELETE_CONCLUSION", { topicId: "t1", conclusionId: "c9" }, "Cette formulation du consensus n'existe plus."],
+    ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c9" }, "Cette formulation du consensus n'existe plus."]
+  ].forEach(([type, payload, expected]) => {
+    const got = SIDES.map((side) => side.impl.validateAction(sideSeed(side.impl), sideAction(type, payload, "u1", "v1")));
+    equal(got, [{ ok: false, error: expected }, { ok: false, error: expected }], type + " " + JSON.stringify(payload));
+  });
+  /* Aucun refus du noyau ne dit encore « conclusion » ; les types d'actions et les clés, eux, ne changent pas. */
+  const sources = [["js/state.js", fs.readFileSync(require("path").join(__dirname, "..", "js", "state.js"), "utf8")],
+    ["Code.gs (noyau)", BACKEND_SOURCE.split("/* =============================================================== Hachage")[0]]];
+  sources.forEach(([name, source]) => {
+    equal((source.match(/fail\("[^"]*"\)/g) || []).filter((s) => /conclusion/i.test(s)), [], name);
+  });
+}));
+
 /* ------------------------------------------------------------ Exécution --- */
 
 (async function run() {
