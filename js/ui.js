@@ -174,7 +174,7 @@
   /* ------------------------------------------------------------ Brouillons --- */
 
   /* Les brouillons ne vivent que dans le DOM, et l'instantané ne franchit pas un
-   * rendu : au reverrouillage (3 minutes en arrière-plan), l'écran de verrou ne
+   * rendu : au reverrouillage (une heure sans interaction, CONFIG.LOCK_IDLE_MS), l'écran de verrou ne
    * contient aucun champ « composer:… », la valeur est donc jetée et le message
    * en cours d'écriture est perdu — ce que la recette annonce pourtant intact.
    * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
@@ -376,7 +376,51 @@
 
   /* ------------------------------------------------------ Blocs réutilisables --- */
 
-  function statusPill() {
+  /* Libellé LONG de la pastille : les six mots de §12, suivis du nombre d'actions
+   * en attente quand il y en a. Le libellé COURT reste Sync.status().label
+   * (« Sync… », « Local ») : c'est lui qui tient sur un téléphone (cf. app.css).
+   * Un code inconnu (sync.js plus récent que ce fichier) garde le libellé court. */
+  function statusLongLabel(status) {
+    var count = status.pending ? " (" + status.pending + ")" : "";
+    if (status.code === "idle") { return "À jour"; }
+    if (status.code === "syncing") { return "Synchronisation"; }
+    if (status.code === "pending") { return "En attente" + count; }
+    if (status.code === "offline") { return "Hors ligne" + count; }
+    if (status.code === "error") { return "Erreur" + count; }
+    if (status.code === "local") { return "Mode local"; }
+    return status.label;
+  }
+
+  /* ⚠️ La région d'annonce dit le libellé long du dernier état UTILE, pas l'état
+   * courant. Les sondages font alterner « À jour » et « Synchronisation » toutes
+   * les deux secondes : les annoncer, c'était 22 interruptions en 20 s pour le
+   * lecteur d'écran. L'annonce ne change donc qu'en entrant en attente, hors
+   * ligne, en erreur ou en mode local (ou quand leur nombre d'actions change), et
+   * au retour à « À jour » après l'un d'eux ; la toute première synchronisation
+   * dit aussi sa fin, une fois. L'état vit ici, hors du DOM : la pastille est
+   * recréée à chaque rendu d'écran, l'annonce ne doit pas repartir de zéro. */
+  var announcedCode = null;
+  var announcedText = "";
+
+  function statusAnnouncement(status) {
+    var text = statusLongLabel(status);
+    if (announcedCode === null) {
+      announcedCode = status.code; announcedText = text;
+    } else if (status.code === "idle") {
+      if (announcedCode !== "idle") { announcedCode = "idle"; announcedText = text; }
+    } else if (status.code !== "syncing" && text !== announcedText) {
+      announcedCode = status.code; announcedText = text;
+    }
+    return announcedText;
+  }
+
+  /* Réécrire un texte identique n'est pas neutre : un lecteur d'écran peut relire
+   * une région dont le nœud texte a été remplacé. */
+  function setStatusText(node, text) {
+    if (node && node.textContent !== text) { node.textContent = text; }
+  }
+
+  function statusPill(secondary) {
     var status = Sync.status();
     /* `role="status"` : « En attente (3) » devenait « À jour » sans que rien ne le
      * dise. C'est la seule information de l'écran qui change SEULE, sans geste — donc
@@ -384,24 +428,34 @@
      * c'est ce qu'il faut : la synchronisation n'a pas à couper la lecture en cours.
      * La pastille est mise à jour en place par UI.refreshStatus, jamais recréée : la
      * région préexiste donc à son contenu, condition pour qu'elle annonce. */
+    /* Libellés visibles (court et long, l'un ou l'autre selon la largeur) en
+     * aria-hidden : le lecteur d'écran n'entend que `.status-announce`.
+     * `secondary` : seconde pastille d'un même écran (Réglages). Une seule région
+     * role=status par écran : celle-ci n'a ni rôle ni annonce, et son libellé long
+     * se lit comme un texte ordinaire. */
     var pill = el("div", {
       class: "status-pill status-" + status.code, title: status.error || "",
-      role: "status"
+      role: secondary ? null : "status"
     }, [
       el("span", { class: "status-dot", "aria-hidden": "true" }),
-      el("span", { class: "status-label", text: status.label })
+      el("span", { class: "status-short", "aria-hidden": "true", text: status.label }),
+      el("span", { class: "status-label status-long", "aria-hidden": secondary ? null : "true", text: statusLongLabel(status) }),
+      secondary ? null : el("span", { class: "visually-hidden status-announce", text: statusAnnouncement(status) })
     ]);
     return pill;
   }
 
   UI.refreshStatus = function () {
     var status = Sync.status();
+    var long = statusLongLabel(status);
+    var said = statusAnnouncement(status);
     var nodes = document.querySelectorAll(".status-pill");
     for (var i = 0; i < nodes.length; i++) {
       nodes[i].className = "status-pill status-" + status.code;
       nodes[i].setAttribute("title", status.error || "");
-      var label = nodes[i].querySelector(".status-label");
-      if (label) { label.textContent = status.label; }
+      setStatusText(nodes[i].querySelector(".status-short"), status.label);
+      setStatusText(nodes[i].querySelector(".status-long"), long);
+      setStatusText(nodes[i].querySelector(".status-announce"), said);
     }
   };
 
@@ -658,7 +712,7 @@
     var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
       topic.messages.length ? countChip("message", topic.messages.length, "message") : null,
       topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
-      topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "conclusion") : null
+      topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "formulation") : null
     ]);
     if (!counts.childNodes.length) {
       counts.appendChild(el("span", { class: "legend-chip", text: "Rien encore" }));
@@ -698,14 +752,22 @@
     }
 
     var body;
-    if (!all.length) {
+    /* Rien reçu encore en mode connecté (révision 0, aucun échange réussi depuis
+     * l'ouverture) : l'équipe a peut-être cinquante sujets, inviter à créer « un
+     * premier sujet » serait faux. Une équipe vide confirmée par le serveur
+     * (échange réussi) et le mode local gardent l'invitation. */
+    var syncStatus = Sync.status();
+    if (!all.length && syncStatus.code !== "local" && !syncStatus.revision && !syncStatus.lastSyncAt) {
+      body = emptyState("sparkle", "Pas encore de données sur cet appareil",
+        "Elles s'afficheront à la prochaine connexion.");
+    } else if (!all.length) {
       body = emptyState("sparkle", "Aucun sujet pour l'instant",
         "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet.",
         el("button", {
           class: "btn btn-primary", type: "button",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
         }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]),
-        "Ensuite : on en discute, on en tire des propositions, on vote, et on retient une conclusion.");
+        "Ensuite : on en discute, on en tire des propositions, on vote, et on dégage un consensus.");
     } else {
       var list = el("div", { class: "stack topics-grid" });
       var index = 0;
@@ -883,7 +945,10 @@
       col.appendChild(el("div", { class: "msg-author", "aria-hidden": "true", text: message.authorName }));
     }
 
-    var locked = owns && Core.isMessageLocked(message, App.user.id);
+    /* Cadenas sur un message SIGNÉ seulement : sur un anonyme il ne paraîtrait
+     * que chez son auteur, et le désignerait à qui regarde l'écran (§5). Le
+     * verrou d'un anonyme s'explique dans sa feuille (« Modifier » désactivé). */
+    var locked = mine && Core.isMessageLocked(message, App.user.id);
 
     /* Un message encore en file n'existe que sur cet appareil. Afficher son
      * heure serait deux fois trompeur : elle laisse croire qu'il est parti, et
@@ -1249,10 +1314,10 @@
             onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
           }, [icon("check", 15), el("span", { text: chosen ? "Mon choix" : "Choisir" })]),
           el("div", { class: "spacer" }),
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la conclusion",
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la formulation du consensus",
             onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
           [icon("edit", 15), el("span", { text: "Modifier" })]) : null,
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la conclusion",
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la formulation du consensus",
             onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
           [icon("trash", 15)]) : null
         ])
@@ -1279,7 +1344,7 @@
         class: "btn btn-primary btn-block", type: "button", text: "Ajouter",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("La conclusion est vide.", "error"); return; }
+          if (!text) { UI.toast("La formulation du consensus est vide.", "error"); return; }
           textarea.value = "";
           App.actions.addConclusion(topic.id, text);
         }
@@ -1441,7 +1506,7 @@
       el("div", { class: "row" }, [
         sectionTitle("sync", "Synchronisation"),
         el("div", { class: "spacer" }),
-        statusPill()
+        statusPill(true)
       ]),
       el("button", { class: "btn btn-outline btn-block", type: "button",
         onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
@@ -1528,9 +1593,12 @@
 
     /* Le sélecteur de réaction nomme chaque marque : dessinée, elle n'est pas
      * toujours devinable au premier passage, et l'apprentissage se fait une
-     * seule fois. */
-    var emojiRow = el("div", { class: "emoji-row" });
-    Core.REACTIONS.forEach(function (emoji) {
+     * seule fois.
+     * Aucune réaction sur MON message anonyme : la clé d'une réaction est
+     * l'identifiant de qui réagit, elle relierait le message à son auteur dans
+     * les données partagées (§5). La liste reste la même pour tous les anonymes. */
+    var emojiRow = mine && message.anon ? null : el("div", { class: "emoji-row" });
+    (emojiRow ? Core.REACTIONS : []).forEach(function (emoji) {
       var isMine = message.reactions[App.user.id] === emoji;
       var label = Utils.reactionLabel(emoji);
       emojiRow.appendChild(el("button", {
@@ -1563,10 +1631,12 @@
       sheetAction("idea", "Créer une proposition", function () {
         UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
       }),
-      mine ? sheetAction(locked ? "lock" : "edit", locked ? "Modifier (verrouillé)" : "Modifier", function () {
+      /* Verrouillé : désactivé, la raison dans le libellé (le toast reste en
+       * garde, mais un bouton désactivé ne le déclenche plus). */
+      mine ? sheetAction(locked ? "lock" : "edit", locked ? "Modifier (verrouillé : quelqu'un y a déjà réagi)" : "Modifier", function () {
         if (locked) { UI.toast("Message verrouillé : quelqu'un y a déjà réagi.", "error"); return; }
         UI.set({ sheet: null, modal: { type: "editMessage", topicId: topic.id, messageId: message.id } });
-      }, { disabled: false }) : null,
+      }, { disabled: locked }) : null,
       mine ? sheetAction(message.anon ? "user" : "mask", message.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
         App.actions.setMessageSignature(topic.id, message.id, !message.anon);
         UI.set({ sheet: null });
@@ -1752,7 +1822,7 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("La conclusion est vide.", "error"); return; }
+          if (!text) { UI.toast("La formulation du consensus est vide.", "error"); return; }
           App.actions.updateConclusion(topic.id, conclusion.id, text);
         }
       })
@@ -1796,7 +1866,7 @@
           + "téléphone : c'est ce qui les rend anonymes."
           + (waiting
             ? " ⚠️ " + waiting + (waiting > 1 ? " actions attendent" : " action attend")
-              + " d'être envoyée" + (waiting > 1 ? "s" : "") + " et sera" + (waiting > 1 ? "nt" : "")
+              + " d'être envoyée" + (waiting > 1 ? "s" : "") + (waiting > 1 ? " et seront" : " et sera")
               + " perdue" + (waiting > 1 ? "s" : "") + "."
             : "")
           + " Les données de l'équipe restent sur Google Drive.",
