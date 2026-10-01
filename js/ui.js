@@ -174,19 +174,128 @@
       if (!node || !node.getAttribute) { return; }
       var key = node.getAttribute("data-draft");
       if (key) { touchedDrafts[key] = true; }
+      if (storedDraft(key)) { stageDraft(key, node.value); }
     }, true);
+    /* Brouillons durables : relus de l'appareil, restaurés au premier rendu du composeur (BL-059). */
+    composerDrafts = readStoredDrafts();
 
     bindViewport();
   };
 
   /* ------------------------------------------------------------ Brouillons --- */
 
-  /* Les brouillons ne vivent que dans le DOM, et l'instantané ne franchit pas un
+  /* Avant ce relais, les brouillons ne vivaient que dans le DOM, et l'instantané ne franchit pas un
    * rendu : au reverrouillage (une heure sans interaction, CONFIG.LOCK_IDLE_MS), l'écran de verrou ne
    * contient aucun champ « composer:… », la valeur est donc jetée et le message
    * en cours d'écriture est perdu — ce que la recette annonce pourtant intact.
    * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
   var composerDrafts = {};
+
+  /* ⚠️ Brouillons DURABLES (BL-059). Le relais ci-dessus mourait avec la page : « Mettre à jour » (rechargement),
+   * l'éviction de la page par iOS ou la restauration d'un onglet Android emportaient le message en cours
+   * d'écriture. Il est donc relu de l'appareil au démarrage (UI.init) et recopié dans localStorage à chaque
+   * saisie, après un court silence, puis tout de suite avant ce qui peut tuer la page (UI.flushDrafts, appelée
+   * par js/app.js). Il n'existe QUE sur cet appareil : aucune requête ne le porte, et la clé n'est pas dans
+   * config.js. Seul le composeur de chaque sujet est conservé (clé « composer:<sujet> », donc jamais restauré
+   * dans un autre sujet) : ni champ de connexion, de code ou de nom, ni fenêtre « Modifier » (un texte
+   * d'édition abandonné ne doit pas ressurgir, et le préremplissage doit toujours l'emporter à l'ouverture),
+   * ni le choix anonyme ou signé, qui ne se déduit pas d'un brouillon. */
+  var DRAFTS_KEY = "brainsto.drafts.v1";
+  var DRAFTS_MAX_ENTRIES = 50;      // un brouillon par sujet
+  var DRAFTS_MAX_CHARS = 20000;     // taille totale écrite : les plus anciens partent d'abord
+  var DRAFTS_MAX_VALUE = 4000;      // un seul brouillon (le champ est déjà limité à Core.LIMITS.message)
+  var DRAFTS_DELAY_MS = 500;        // silence avant l'écriture
+  var draftsPending = {};           // saisies pas encore écrites : clé -> texte ("" = à retirer)
+  var draftsTimer = 0;
+
+  /* Seul le composeur d'un sujet est conservé sur l'appareil. */
+  function storedDraft(key) {
+    return typeof key === "string" && key.indexOf("composer:") === 0 && key.length > 9;
+  }
+
+  function clipDraft(value) {
+    var text = value === null || value === undefined ? "" : String(value);
+    return text.length > DRAFTS_MAX_VALUE ? Utils.limit(text, DRAFTS_MAX_VALUE) : text;
+  }
+
+  /* Lecture tolérante : stockage refusé, JSON abîmé, forme inattendue ou clé étrangère = rien. */
+  function readStoredDrafts() {
+    var found = Utils.storage.get(DRAFTS_KEY, null);
+    var out = {};
+    if (!found || typeof found !== "object" || Array.isArray(found)) { return out; }
+    var keys = Object.keys(found);
+    for (var i = 0; i < keys.length; i++) {
+      var value = found[keys[i]];
+      if (storedDraft(keys[i]) && typeof value === "string" && value) { out[keys[i]] = clipDraft(value); }
+    }
+    return out;
+  }
+
+  /* Écriture bornée : au plus DRAFTS_MAX_ENTRIES brouillons et DRAFTS_MAX_CHARS caractères, les plus anciens
+   * (les premiers de l'objet) partent d'abord. Stockage refusé : comportement d'avant, sans erreur. */
+  function writeStoredDrafts(drafts) {
+    var keys = Object.keys(drafts);
+    while (keys.length > DRAFTS_MAX_ENTRIES || (keys.length && JSON.stringify(drafts).length > DRAFTS_MAX_CHARS)) {
+      delete drafts[keys.shift()];
+    }
+    if (keys.length) { Utils.storage.set(DRAFTS_KEY, drafts); }
+    else { Utils.storage.remove(DRAFTS_KEY); }
+  }
+
+  /* Saisie : relais tout de suite, écriture après un court silence. */
+  function stageDraft(key, value) {
+    if (value) { composerDrafts[key] = value; } else { delete composerDrafts[key]; }
+    draftsPending[key] = clipDraft(value);
+    if (draftsTimer) { clearTimeout(draftsTimer); }
+    draftsTimer = setTimeout(flushDrafts, DRAFTS_DELAY_MS);
+  }
+
+  function flushDrafts() {
+    if (draftsTimer) { clearTimeout(draftsTimer); draftsTimer = 0; }
+    var keys = Object.keys(draftsPending);
+    if (!keys.length) { return; }
+    var stored = readStoredDrafts();
+    for (var i = 0; i < keys.length; i++) {
+      delete stored[keys[i]];                  // la clé repasse en dernier : c'est la plus récente
+      if (draftsPending[keys[i]]) { stored[keys[i]] = draftsPending[keys[i]]; }
+    }
+    draftsPending = {};
+    writeStoredDrafts(stored);
+  }
+
+  /* La publication est partie en file : son brouillon disparaît, sauf si un texte PLUS RÉCENT a été saisi depuis. */
+  function dropDraft(key, sent) {
+    var latest = Object.prototype.hasOwnProperty.call(draftsPending, key) ? draftsPending[key] : readStoredDrafts()[key];
+    if (latest && latest !== clipDraft(sent)) { return; }
+    draftsPending[key] = "";
+    flushDrafts();
+  }
+
+  /* Refus local de la publication : le message d'erreur est déjà à l'écran (Sync.dispatch) ; le texte revient dans
+   * le champ et, tout de suite, dans le brouillon durable. Jamais par-dessus une saisie plus récente. */
+  function keepRefused(key, text) {
+    var node = findDraftNode(key);
+    touchedDrafts[key] = true;
+    if (node && !node.value) { node.value = text; autoGrow(node); }
+    stageDraft(key, node && node.value ? node.value : text);
+    flushDrafts();
+  }
+
+  /* Appelés par js/app.js : écriture immédiate avant ce qui peut tuer la page (pagehide, arrière-plan, rechargement
+   * d'une mise à jour) et effacement complet à la déconnexion (relais, champs à l'écran et appareil). */
+  UI.flushDrafts = function () { flushDrafts(); };
+
+  UI.clearDrafts = function () {
+    if (draftsTimer) { clearTimeout(draftsTimer); draftsTimer = 0; }
+    draftsPending = {};
+    composerDrafts = {};
+    touchedDrafts = {};
+    var nodes = document.querySelectorAll("[data-draft]");
+    for (var i = 0; i < nodes.length; i++) {
+      if (storedDraft(nodes[i].getAttribute("data-draft")) && nodes[i].value) { nodes[i].value = ""; autoGrow(nodes[i]); }
+    }
+    Utils.storage.remove(DRAFTS_KEY);
+  };
 
   /* ⚠️ Champs ÉDITÉS depuis leur dernière alimentation par le rendu.
    *
@@ -1299,9 +1408,11 @@
     });
 
     function send() {
-      var text = Utils.trim(textarea.value);
+      var typed = textarea.value;
+      var text = Utils.trim(typed);
       if (!text) { return; }
-      var quoteId = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote.messageId : null;
+      var quote = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote : null;
+      var quoteId = quote ? quote.messageId : null;
       /* ⚠️ On vide le champ AVANT de déclencher l'action : le dispatch provoque
        * un rendu synchrone et la restauration des brouillons réinjecterait le
        * message déjà publié. */
@@ -1313,7 +1424,20 @@
       autoGrow(textarea);
       UI.local.quote = null;
       UI.local.scrollToBottom = true;
-      App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon);
+      /* Le champ est vidé tout de suite (ci-dessus), mais le texte lui revient si la publication est refusée EN LOCAL
+       * (sujet supprimé entre-temps, texte refusé par le noyau) : le message d'erreur est déjà à l'écran, le texte
+       * reste dans le champ et dans le brouillon durable. Une publication acceptée en file efface ce brouillon.
+       * Issue inconnue (js/app.js d'avant, en cache, qui ne rend rien) : comportement d'avant, le texte est parti. */
+      var sent = App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon);
+      if (!sent || typeof sent.then !== "function") { dropDraft(draftKey, typed); return; }
+      sent.then(function (result) {
+        if (result && result.ok === false) {
+          keepRefused(draftKey, typed);
+          if (quote && !UI.local.quote) { UI.set({ quote: quote }); }
+        } else {
+          dropDraft(draftKey, typed);
+        }
+      }, function () { /* issue inconnue : le brouillon durable reste, rien ne se perd */ });
     }
 
     var sendBtn = el("button", {

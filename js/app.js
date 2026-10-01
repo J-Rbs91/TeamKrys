@@ -96,6 +96,17 @@
     return Date.now() - lastActivity > CONFIG.LOCK_IDLE_MS;
   }
 
+  /* ⚠️ Brouillons (BL-059) : écrits sur l'appareil juste avant tout ce qui peut détruire la page (arrière-plan,
+   * fermeture, rechargement d'une mise à jour) et effacés à la déconnexion. Les deux appels sont gardés : un
+   * ancien js/ui.js en cache n'a pas ces fonctions, et un stockage refusé ne doit jamais faire échouer ce qui suit. */
+  function saveDrafts() {
+    try { if (typeof UI.flushDrafts === "function") { UI.flushDrafts(); } } catch (e) { /* stockage refusé */ }
+  }
+
+  function discardDrafts() {
+    try { if (typeof UI.clearDrafts === "function") { UI.clearDrafts(); } } catch (e) { /* stockage refusé */ }
+  }
+
   /* ---------------------------------------------------------- Connexion --- */
 
   App.connectionConfigured = function () {
@@ -238,6 +249,8 @@
    * doit donc annoncer ce qui est en attente AVANT d'arriver ici — effacer les
    * porteurs de droit sans le dire détruirait du travail non synchronisé. */
   App.logout = function () {
+    /* Un brouillon est un texte de la personne : il ne reste pas sur un appareil qu'elle quitte (BL-059). */
+    discardDrafts();
     Utils.storage.remove(CONFIG.KEYS.apiUrl);
     Utils.storage.remove(CONFIG.KEYS.lockVerifier);
     Utils.storage.remove(CONFIG.KEYS.localMode);
@@ -819,10 +832,12 @@
       var messageId = Utils.uid();
       var actor = anon ? { id: "", name: Core.ANON_NAME } : App.user;
       remember(messageId);
-      dispatch("CREATE_MESSAGE", {
+      /* ⚠️ Le résultat est rendu à l'appelant (BL-059) : un refus local de validation ne doit pas vider le composeur. */
+      var sent = dispatch("CREATE_MESSAGE", {
         topicId: topicId, messageId: messageId, text: text, quoteId: quoteId || null, anon: !!anon
       }, actor);
       UI.set({ quote: null });
+      return sent;
     },
 
     updateMessage: function (topicId, messageId, text) {
@@ -952,6 +967,8 @@
     function applyUpdate(known) {
       updateRequested = true;
       function conclude(registration) {
+        /* Le rechargement, ou le changement de worker qui le provoque, détruit la page : les brouillons d'abord. */
+        saveDrafts();
         var waiting = registration && registration.waiting;
         if (waiting) {
           try { waiting.postMessage({ type: "SKIP_WAITING" }); return; }
@@ -991,7 +1008,7 @@
     container.addEventListener("controllerchange", function () {
       /* ⚠️ On ne recharge QUE si l'utilisateur a demandé la mise à jour :
        * sinon le tout premier chargement partirait en boucle. */
-      if (updateRequested) { window.location.reload(); }
+      if (updateRequested) { saveDrafts(); window.location.reload(); }
     });
   }
 
@@ -1018,6 +1035,7 @@
          * l'application sans prévenir, et c'est cette valeur qui décidera au
          * retour s'il faut redemander le code. */
         writeSession(lastActivity);
+        saveDrafts();
         /* ⚠️ Et on POSTE ce qui reste en file avant de disparaître. Passer en
          * arrière-plan sur un téléphone, c'est très souvent mourir : le système
          * gèle la page, puis la tue sans prévenir et sans redonner la main. Un
@@ -1034,6 +1052,7 @@
     /* iOS ne garantit pas visibilitychange à la fermeture ; pagehide, si. */
     window.addEventListener("pagehide", function () {
       writeSession(lastActivity);
+      saveDrafts();
       Sync.flush();
     });
 
