@@ -1026,7 +1026,7 @@ async function run() {
     got.invalid = await A.Api.postAction("https://exemple/exec", "", A.Sync.makeAction("CREATE_TOPIC",
       { topicId: "t9", title: "Refusé" }, A.user)).then(() => "ok", (e) => e.kind + "/" + e.code);
     const want = { html200: "unknown/null", garbage: "unknown/null", lock: "unknown/retry", oddCode: "unknown/quota",
-      legacyFail: "server/null", status500: "network/null", invalid: "server/invalid" };
+      legacyFail: "server/null", status500: "unknown/null", invalid: "server/invalid" };
     const wrong = Object.keys(want).filter((k) => got[k] !== want[k]).map((k) => k + "=" + got[k] + " (voulu " + want[k] + ")");
     assert(!wrong.length, "classement : " + wrong.join(", "));
   });
@@ -1054,7 +1054,8 @@ async function run() {
     const A = await connected(srv);
     const seen = [];
     A.Sync.subscribe((s) => seen.push({ code: s.code, label: s.label, applied: copies(srv, "m1") > 0 }));
-    srv.faults.push({ method: "POST", kind: "lock", times: 2 }, { method: "POST", kind: "drive", times: 2 });
+    srv.faults.push({ method: "POST", kind: "lock", times: 1 }, { method: "POST", kind: "status500", times: 1 },
+      { method: "POST", kind: "drive", times: 2 });
     await write(A, "m1"); await settle();
     let st = A.Sync.status();
     assert(st.pending === 1 && st.label === "En attente (1)", "1er échec : « " + st.label + " », file " + st.pending);

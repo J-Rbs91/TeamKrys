@@ -87,7 +87,9 @@
         if (response.status === 401 || response.status === 403) {
           throw apiError("auth", "Accès refusé par le serveur.", "auth");
         }
-        throw apiError("network", "Le serveur a répondu " + response.status + ".");
+        /* Réponse reçue mais en erreur (5xx, 404…) : rien de certain sur l'action,
+         * gardée ; une panne qui dure doit pouvoir s'afficher « Erreur ». */
+        throw apiError("unknown", "Le serveur a répondu " + response.status + ".");
       }
       /* Corps coupé en route : aucune réponse lisible, comme une coupure. */
       return response.text().then(null, function () {

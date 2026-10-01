@@ -356,15 +356,66 @@
     }
     if (Api.isNetworkError(error)) {
       failures += 1;
+      serverFailures = 0;    // une coupure n'est pas une panne du serveur : « En attente »
       lastError = error.message;
       return { done: false, halt: true };
     }
-    return null;   // erreur MÉTIER : au traitement appelant de décider
+    return null;   // réponse reçue : au traitement appelant de décider
+  }
+
+  /* ⚠️ Le serveur a répondu, mais sans verdict certain : l'action reste en file
+   * (§22) et le recul s'allonge (voir interval). Dès le 2e échec de suite,
+   * l'indicateur passe à « Erreur (n) » et un message, un seul, dit quoi faire. */
+  function trouble(text) {
+    serverFailures += 1;
+    lastError = text || "Réponse du serveur inexploitable.";
+    if (serverFailures >= 2 && !serverWarned) {
+      serverWarned = true;
+      message("Le serveur ne répond pas correctement : vos actions sont gardées et repartiront.", "error");
+    }
+  }
+
+  function recovered() { serverFailures = 0; serverWarned = false; }
+
+  /* Refus certain ? « invalid » : oui. Sans code (backend d'avant, qui répondait
+   * ainsi à une panne comme à un refus) : au LEGACY_TRIES-ième envoi seulement,
+   * espacés par le recul. « retry » ou code inconnu : jamais. */
+  function refusedForGood(action, code) {
+    if (code === "invalid") { return true; }
+    if (code) { return false; }
+    refusals[action.id] = (refusals[action.id] || 0) + 1;
+    return refusals[action.id] >= LEGACY_TRIES;
+  }
+
+  /* « Action refusée : <raison>. Texte : « … » » : le texte saisi est rendu à son
+   * auteur, sans quoi le refus le ferait disparaître sans trace. */
+  function refusalText(action, reason) {
+    var why = String(reason || "refus du serveur").replace(/[\s.]+$/, "");
+    var payload = (action && action.payload) || {};
+    var typed = String(payload.text || payload.title || "");
+    if (typed.length > 200) {
+      var cut = /[\uD800-\uDBFF]/.test(typed.charAt(198)) ? 198 : 199;   // jamais une demi-paire
+      typed = typed.slice(0, cut) + "…";
+    }
+    return "Action refusée : " + why + "." + (typed ? " Texte : « " + typed + " »" : "");
+  }
+
+  /* Taille en octets UTF-8, celle que compte le navigateur. */
+  function utf8Length(text) {
+    var bytes = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if (c < 0x80) { bytes += 1; }
+      else if (c < 0x800) { bytes += 2; }
+      else if (c >= 0xD800 && c <= 0xDBFF) { bytes += 4; i += 1; }
+      else { bytes += 3; }
+    }
+    return bytes;
   }
 
   /* Retire une liste d'entrées de la file, en mémoire quoi qu'il arrive. */
   function dropEntries(entries) {
-    entries.forEach(function (item) { forgotten[item.action.id] = true; });
+    entries.forEach(function (item) { forgotten[item.action.id] = true; delete refusals[item.action.id]; });
     return entries.reduce(function (chain, item) {
       return chain
         .then(function () { return DB.dequeue(item.seq).catch(function () { return null; }); })
@@ -388,42 +439,53 @@
         lastSyncAt = Utils.nowISO();
         if (response.state) { Store.setBase(response.state); }
         wake();
-        return { done: true, results: Array.isArray(response.results) ? response.results : null };
+        /* ⚠️ Lot accepté SANS « results » : aucun verdict par action, rien ne prouve
+         * qu'elles sont toutes passées. On ne retire rien et on repart une par une :
+         * chacune obtient un verdict certain (doublon si elle était passée). */
+        if (!Array.isArray(response.results)) {
+          trouble("Réponse du serveur sans verdict par action.");
+          return { done: true, results: null, single: true };
+        }
+        return { done: true, results: response.results };
       }, function (error) {
         var verdict = classify(error);
         if (verdict) { return verdict; }
-        /* Refus MÉTIER portant sur l'envoi ENTIER (corps illisible, lot trop
-         * gros) : on n'a aucun verdict par action. Repartir une par une isole
-         * la fautive au lieu de sacrifier tout le lot. */
-        message("Envoi refusé : " + error.message, "error");
+        /* Lot refusé EN BLOC (panne de Code.gs, page illisible, lot trop gros) :
+         * aucun verdict par action, donc rien n'est retiré. Repartir une par une
+         * isole la fautive au lieu de sacrifier tout le lot. */
+        trouble(error && error.message);
         return { done: true, results: null, single: true };
       })
       .then(function (outcome) {
         if (!outcome.done) { return outcome; }
 
         if (outcome.single) {
-          /* On ne retire rien : le prochain tour repassera en envoi unitaire,
-           * ce qui fera ressortir l'action réellement en cause. */
+          /* On ne retire rien : on repasse aussitôt en envoi unitaire, ce qui
+           * donne un verdict à chaque action. */
           features = features.filter(function (f) { return f !== "batch"; });
           return outcome;
         }
 
         var verdicts = {};
-        if (outcome.results) {
-          outcome.results.forEach(function (r) { if (r && r.id) { verdicts[r.id] = r; } });
-        }
+        outcome.results.forEach(function (r) { if (r && r.id) { verdicts[r.id] = r; } });
 
-        var settled = entries.filter(function (item) {
-          if (!outcome.results) { return true; }   // serveur muet : tout a été appliqué
-          return Object.prototype.hasOwnProperty.call(verdicts, item.action.id);
-        });
-
-        settled.forEach(function (item) {
-          var verdict = verdicts[item.action.id];
-          if (verdict && verdict.ok === false) {
-            message("Action refusée : " + verdict.error, "error");
+        /* ⚠️ Une action ne quitte la file que sur un verdict CERTAIN : appliquée,
+         * doublon reconnu, ou refus définitif. Verdict absent, « retry » ou code
+         * inconnu : elle reste et repartira ; la déduplication absorbe un doublon. */
+        var settled = [];
+        var open = null;
+        entries.forEach(function (item) {
+          var id = item.action.id;
+          var verdict = Object.prototype.hasOwnProperty.call(verdicts, id) ? verdicts[id] : null;
+          if (verdict && (verdict.ok === true || verdict.duplicate === true)) { settled.push(item); return; }
+          if (verdict && verdict.ok === false && refusedForGood(item.action, verdict.code || null)) {
+            message(refusalText(item.action, verdict.error), "error");
+            settled.push(item);
+            return;
           }
+          open = verdict || { error: "Action sans verdict du serveur." };
         });
+        if (open) { trouble(open.error); outcome.halt = true; } else { recovered(); }
 
         return dropEntries(settled).then(function () { return outcome; });
       })
@@ -478,14 +540,24 @@
      * voulu, et un beacon ne retire rien de la file : rien ne peut être
      * réordonné. La règle stricte de Sync.push, elle, reste nécessaire — c'est
      * elle qui garantit l'ordre APRÈS un redémarrage. */
-    var entries = Store.queue.slice(0, Sync.supports("batch") ? CONFIG.MAX_BATCH : 1);
-    if (!entries.length) { return false; }
+    /* ⚠️ Au-delà de 64 Kio le navigateur refuse l'envoi de secours EN ENTIER
+     * (sendBeacon comme keepalive) : on expédie le plus long début de file qui tient
+     * dans BEACON_BUDGET octets. Une action trop grosse pour tenir seule partira par
+     * la voie normale. */
+    var batch = Sync.supports("batch");
+    var actions = [];
+    var bytes = batch ? 2 : 0;
+    for (var i = 0; i < Store.queue.length && actions.length < (batch ? CONFIG.MAX_BATCH : 1); i++) {
+      var size = utf8Length(JSON.stringify(Store.queue[i].action)) + (actions.length ? 1 : 0);
+      if (bytes + size > BEACON_BUDGET) { break; }
+      bytes += size;
+      actions.push(Store.queue[i].action);
+    }
+    if (!actions.length) { return false; }
 
     /* Un serveur qui ne sait pas grouper attend UNE action : on lui envoie la
      * tête de file. Les suivantes partiront normalement au retour. */
-    var body = Sync.supports("batch")
-      ? entries.map(function (e) { return e.action; })
-      : entries[0].action;
+    var body = batch ? actions : actions[0];
 
     var handed = Api.beacon(Sync.connection.url, Sync.connection.token, body);
     if (handed) { lastFlushAt = Utils.nowISO(); }
@@ -514,6 +586,7 @@
       .then(function (response) {
         learn(response);
         failures = 0;
+        recovered();
         lastError = null;
         lastSyncAt = Utils.nowISO();
         if (response.state) { Store.setBase(response.state); }
@@ -524,10 +597,17 @@
          * intacte, on réessaiera plus doucement (voir interval()). */
         var verdict = classify(error);
         if (verdict) { return verdict; }
-        /* Erreur MÉTIER : l'action ne passera jamais, on la retire pour ne pas
-         * bloquer les suivantes, et on prévient clairement l'utilisateur. */
-        message("Action refusée : " + error.message, "error");
-        return { done: true };
+        /* Refus DÉFINITIF : l'action ne passera jamais, on la retire pour ne pas
+         * bloquer les suivantes, et on rend son texte à l'utilisateur. */
+        if (error && error.kind === "server" && refusedForGood(entry.action, error.code || null)) {
+          recovered();
+          message(refusalText(entry.action, error.message), "error");
+          return { done: true };
+        }
+        /* ⚠️ Sans verdict certain (panne de Code.gs, page illisible, refus sans code
+         * pas encore cru) : l'action RESTE en file et repartira après un recul. */
+        trouble(error && error.message);
+        return { done: false, halt: true };
       })
       .then(function (outcome) {
         if (!outcome.done) { return outcome; }
@@ -652,10 +732,11 @@
   function interval() {
     if (typeof document !== "undefined" && document.hidden) { return CONFIG.POLL_HIDDEN_MS; }
 
-    /* Le réseau ou le serveur ne répond pas : marteler toutes les deux secondes
-     * n'y change rien et aggrave la contention côté Apps Script. On recule. */
-    if (failures > 0) {
-      var backoff = CONFIG.POLL_ACTIVE_MS * Math.pow(2, Math.min(failures, 6));
+    /* Le réseau ou le serveur ne répond pas (ou mal) : marteler toutes les deux
+     * secondes n'y change rien et aggrave la contention côté Apps Script. On recule. */
+    var level = Math.max(failures, serverFailures);
+    if (level > 0) {
+      var backoff = CONFIG.POLL_ACTIVE_MS * Math.pow(2, Math.min(level, 6));
       return Math.min(backoff, CONFIG.POLL_BACKOFF_MAX_MS);
     }
 
@@ -725,7 +806,7 @@
     });
   };
 
-  Sync.resetError = function () { lastError = null; failures = 0; changed(); };
+  Sync.resetError = function () { lastError = null; failures = 0; recovered(); changed(); };
 
   Sync.diagnostics = function () {
     return {
