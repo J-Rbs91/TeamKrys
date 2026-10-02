@@ -388,6 +388,18 @@ tests.push(() => check("SET_TOPIC_PIN : épingle pour tous, se rejoue sans effet
   equal(Core.ensureShape({ topics: [{ id: "x", title: "t" }] }).topics[0].pinned, false, "un sujet d'avant n'est pas épinglé");
 }));
 
+tests.push(() => check("SUBMIT_IDEA : toujours anonyme, jamais dans l'état partagé", () => {
+  const state = seed();
+  const before = JSON.stringify(state);
+  const anon = action("SUBMIT_IDEA", { ideaId: "i1", text: "Planifier moins de réunions" }, { id: "", name: "Anonyme" });
+  assert(Core.validateAction(state, anon).ok, "une idée anonyme doit être acceptée");
+  Core.applyAction(state, anon, NOW);
+  equal(JSON.stringify(state), before, "l'état partagé ne doit RIEN contenir de l'idée");
+  const signed = action("SUBMIT_IDEA", { ideaId: "i2", text: "Avec mon nom" });
+  const verdict = Core.validateAction(state, signed);
+  assert(!verdict.ok && /anonyme/.test(verdict.error), "une idée qui porte un auteur doit être refusée : " + JSON.stringify(verdict));
+}));
+
 tests.push(() => check("Toutes les actions du modèle sont validées et appliquées", () => {
   const covered = {};
   const state = Core.emptyState();
@@ -413,11 +425,12 @@ tests.push(() => check("Toutes les actions du modèle sont validées et appliqu�
   run("REMOVE_CONCLUSION_VOTE", { topicId: "t1" });
   run("DELETE_CONCLUSION", { topicId: "t1", conclusionId: "c1" });
   run("SET_TOPIC_PIN", { topicId: "t1", pinned: true });
+  run("SUBMIT_IDEA", { ideaId: "i1", text: "Une idée" }, { id: "", name: "Anonyme" });
 
   Core.ACTION_TYPES.forEach((type) => {
     assert(covered[type], "action non couverte par les tests : " + type);
   });
-  equal(Core.ACTION_TYPES.length, 20, "le modèle compte 20 actions");
+  equal(Core.ACTION_TYPES.length, 21, "le modèle compte 21 actions");
 }));
 
 tests.push(() => check("Une action portant sur un objet disparu est refusée proprement", () => {
@@ -439,7 +452,7 @@ tests.push(() => check("Le rejeu d'un état complet est stable (ensureShape idem
 tests.push(() => check("Limites de saisie conformes à la spécification", () => {
   equal(Core.LIMITS, {
     name: 50, topicTitle: 150, topicDescription: 3000, message: 3000,
-    proposalTitle: 200, proposalDescription: 3000, conclusion: 5000
+    proposalTitle: 200, proposalDescription: 3000, conclusion: 5000, idea: 2000
   });
 }));
 
@@ -553,7 +566,7 @@ tests.push(() => check("PARITÉ : ensureShape rend le même état", () => {
 tests.push(() => check("PARITÉ : validateAction et applyAction, action par action", () => {
   const NOW_GS = "2026-02-02T09:00:00.000Z";
 
-  /* Un scénario qui traverse les 19 types d'actions, valides et refusées. */
+  /* Un scénario qui traverse les 21 types d'actions, valides et refusées. */
   const script = [
     ["REGISTER_PARTICIPANT", { participantId: "u1", name: "Marie" }],
     ["REGISTER_PARTICIPANT", { participantId: "u2", name: "Alex" }],
@@ -594,6 +607,10 @@ tests.push(() => check("PARITÉ : validateAction et applyAction, action par acti
     ["SET_TOPIC_PIN", { topicId: "absent", pinned: true }],                    // refus
     ["SET_TOPIC_PIN", { topicId: "t1", pinned: false }],
     ["SET_TOPIC_PIN", { topicId: "t1", pinned: true }],
+    ["SUBMIT_IDEA", { ideaId: "i1", text: "Idée anonyme" }, { id: "", name: "Anonyme" }],
+    ["SUBMIT_IDEA", { ideaId: "i2", text: "Idée signée" }],                      // refus : une idée est toujours anonyme
+    ["SUBMIT_IDEA", { ideaId: "i3", text: "   " }, { id: "", name: "Anonyme" }],  // refus : vide
+    ["SUBMIT_IDEA", { text: "Sans id" }, { id: "", name: "Anonyme" }],           // refus : sans identifiant
     ["UPDATE_PARTICIPANT", { participantId: "u1", name: "Marie L." }],         // propage le renommage
     ["ACTION_INVENTÉE", { topicId: "t1" }]                                     // refus
   ];
@@ -601,8 +618,8 @@ tests.push(() => check("PARITÉ : validateAction et applyAction, action par acti
   const front = Core.emptyState();
   const back = GS.emptyState();
 
-  script.forEach(([type, payload], index) => {
-    const action = { id: "a" + index, type, actorId: "u1", actorName: "Marie", ts: NOW_GS, payload };
+  script.forEach(([type, payload, actor], index) => {
+    const action = { id: "a" + index, type, actorId: actor ? actor.id : "u1", actorName: actor ? actor.name : "Marie", ts: NOW_GS, payload };
 
     const frontVerdict = Core.validateAction(front, action);
     const backVerdict = GS.validateAction(back, action);
@@ -873,8 +890,8 @@ tests.push(() => check("ANONYMAT : rendu anonyme, un message ne garde aucun iden
 }));
 
 tests.push(() => check("PARITÉ : le serveur annonce le marqueur par FEATURES \"idempotent\" (drapeaux existants conservés)", () => {
-  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins"]);
-  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins"], "liste lue par Sync.supports()");
+  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins", "ideas"]);
+  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins", "ideas"], "liste lue par Sync.supports()");
 }));
 
 tests.push(() => check("PARITÉ : actions marquées et non marquées, action par action", () => {

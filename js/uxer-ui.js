@@ -35,7 +35,7 @@
     if (typeof currentApp.gate === "function" && currentApp.gate()) { return 0; }
     var name = currentApp.route && currentApp.route.name;
     if (name === "proposals" || name === "conclusion") { return 2; }
-    if (name === "topic" || name === "settings" || name === "meeting") { return 1; }
+    if (name === "topic" || name === "settings" || name === "meeting" || name === "ideas") { return 1; }
     return 0;
   }
 

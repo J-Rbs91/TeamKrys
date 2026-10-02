@@ -19,7 +19,8 @@
     message: 3000,
     proposalTitle: 200,
     proposalDescription: 3000,
-    conclusion: 5000
+    conclusion: 5000,
+    idea: 2000
   };
 
   /* ⚠️ Liste partagée avec le backend : toute modification doit être reportée
@@ -57,7 +58,7 @@
     "CREATE_PROPOSAL", "UPDATE_PROPOSAL", "CHANGE_PROPOSAL_STATUS", "SET_VOTE", "REMOVE_VOTE",
     "ADD_CONCLUSION", "UPDATE_CONCLUSION_ITEM", "DELETE_CONCLUSION",
     "SET_CONCLUSION_VOTE", "REMOVE_CONCLUSION_VOTE",
-    "SET_TOPIC_PIN"
+    "SET_TOPIC_PIN", "SUBMIT_IDEA"
   ];
 
   /* ------------------------------------------------------------- Outils --- */
@@ -325,7 +326,7 @@
     var p = isObject(action.payload) ? action.payload : {};
     var topic = null;
     if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
-      p.conclusionId, p.quoteId].some(badId)) { return fail("Identifiant invalide."); }
+      p.conclusionId, p.quoteId, p.ideaId].some(badId)) { return fail("Identifiant invalide."); }
 
     function needTopic() {
       topic = Core.findTopic(state, trim(p.topicId));
@@ -361,6 +362,14 @@
         var ePin = needTopic(); if (ePin) { return ePin; }
         return OK;
       }
+
+      /* ⚠️ Une idée est TOUJOURS anonyme : une action qui porte un auteur est refusée, des deux côtés. Même un client
+       * défaillant ne peut pas attacher une identité à une idée. */
+      case "SUBMIT_IDEA":
+        if (!trim(p.ideaId)) { return fail("Idée sans identifiant."); }
+        if (trim(action.actorId)) { return fail("Une idée est toujours anonyme."); }
+        if (!trim(p.text)) { return fail("L'idée est vide."); }
+        return OK;
 
       case "CREATE_MESSAGE": {
         var e3 = needTopic(); if (e3) { return e3; }
@@ -560,6 +569,11 @@
       case "SET_TOPIC_PIN":
         topic.pinned = p.pinned === true;
         state.updatedAt = now;
+        return;
+
+      /* L'idée n'entre JAMAIS dans l'état partagé : le serveur la range à part (boîte à idées, Code.gs), et aucun
+       * téléphone ne la reçoit. Ici, rien à appliquer. */
+      case "SUBMIT_IDEA":
         return;
 
       case "CREATE_MESSAGE": {

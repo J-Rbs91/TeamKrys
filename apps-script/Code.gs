@@ -17,11 +17,18 @@ var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
 var PROP_FILE_ID = "BRAINSTO_FILE_ID";
 var PROP_BACKUP_VERSION = "BRAINSTO_BACKUP_VERSION";
+/* Boîte à idées : un fichier Drive À PART, jamais envoyé aux téléphones (doGet ne le lit pas), vidé par la collecte
+ * quotidienne (GitHub Actions, tools/collect-ideas.js). Le secret de collecte est une propriété du script, jamais
+ * dans ce fichier : sans lui (ou trop court), la collecte est désactivée. */
+var IDEAS_FILE_NAME = "brainsto-idees.json";
+var PROP_IDEAS_FILE_ID = "BRAINSTO_IDEAS_FILE_ID";
+var PROP_IDEAS_SECRET = "BRAINSTO_IDEAS_SECRET";
+var IDEAS_SECRET_MIN = 24;
 var MAX_PROCESSED = 5000;
 var MAX_BATCH = 20;
 /* "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
  * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé. */
-var FEATURES = ["since", "batch", "lean", "idempotent", "pins"];
+var FEATURES = ["since", "batch", "lean", "idempotent", "pins", "ideas"];
 
 var ANON_NAME = "Anonyme";
 var LIMITS = {
@@ -31,7 +38,8 @@ var LIMITS = {
   message: 3000,
   proposalTitle: 200,
   proposalDescription: 3000,
-  conclusion: 5000
+  conclusion: 5000,
+  idea: 2000
 };
 var REACTIONS = ["👌", "💪", "🤏", "👎", "💩"];
 var TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
@@ -44,7 +52,7 @@ var ACTION_TYPES = [
   "CREATE_PROPOSAL", "UPDATE_PROPOSAL", "CHANGE_PROPOSAL_STATUS", "SET_VOTE", "REMOVE_VOTE",
   "ADD_CONCLUSION", "UPDATE_CONCLUSION_ITEM", "DELETE_CONCLUSION",
   "SET_CONCLUSION_VOTE", "REMOVE_CONCLUSION_VOTE",
-  "SET_TOPIC_PIN"
+  "SET_TOPIC_PIN", "SUBMIT_IDEA"
 ];
 
 /* =============================================================== Noyau ==== */
@@ -245,7 +253,7 @@ function validateAction(state, action) {
   var p = isObject(action.payload) ? action.payload : {};
   var topic = null;
   if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
-    p.conclusionId, p.quoteId].some(badId)) { return fail("Identifiant invalide."); }
+    p.conclusionId, p.quoteId, p.ideaId].some(badId)) { return fail("Identifiant invalide."); }
 
   function needTopic() {
     topic = findTopic(state, trim(p.topicId));
@@ -273,6 +281,12 @@ function validateAction(state, action) {
       return OK;
     case "SET_TOPIC_PIN":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
+      return OK;
+    /* Une idée est TOUJOURS anonyme : une action qui porte un auteur est refusée. */
+    case "SUBMIT_IDEA":
+      if (!trim(p.ideaId)) { return fail("Idée sans identifiant."); }
+      if (trim(action.actorId)) { return fail("Une idée est toujours anonyme."); }
+      if (!trim(p.text)) { return fail("L'idée est vide."); }
       return OK;
     case "CREATE_MESSAGE":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
@@ -413,6 +427,9 @@ function applyAction(state, action, now) {
     /* Épingler n'est pas une activité du débat : la date du sujet ne bouge pas. */
     case "SET_TOPIC_PIN":
       topic.pinned = p.pinned === true; state.updatedAt = now; return;
+    /* L'idée n'entre jamais dans l'état partagé : doPost la range dans la boîte à idées (voir plus bas). */
+    case "SUBMIT_IDEA":
+      return;
     case "CREATE_MESSAGE": {
       var mWho = author(action, p.anon === true);
       topic.messages.push({
@@ -800,6 +817,94 @@ function diagnoseStorage() {
 
 function logResult(message) { Logger.log(message); return message; }
 
+/* ======================================================= Boîte à idées ===== */
+
+/* ⚠️ Anonymat par construction : la boîte ne garde QUE la référence et le texte. Ni auteur (l'action en est privée,
+ * voir validateAction), ni heure, ni identifiant d'appareil. La référence dérive de l'identifiant d'idée : une
+ * action renvoyée après une réponse perdue retombe sur la même référence et n'est pas comptée deux fois. */
+function ideaEntry(action) {
+  var p = isObject(action && action.payload) ? action.payload : {};
+  return { ref: sha256Hex("idea|" + trim(p.ideaId)).slice(0, 12), text: cut(p.text, LIMITS.idea) };
+}
+
+function ideasFolder() {
+  try {
+    var parents = getDataFile().getParents();
+    if (parents.hasNext()) { return parents.next(); }
+  } catch (ignore) { /* pas encore de fichier de données : dossier par défaut */ }
+  return getOrCreateFolder();
+}
+
+function ideasFile(create) {
+  var props = PropertiesService.getScriptProperties();
+  var id = trim(props.getProperty(PROP_IDEAS_FILE_ID));
+  if (id) { return DriveApp.getFileById(id); }
+  if (!create) { return null; }
+  var file = ideasFolder().createFile(IDEAS_FILE_NAME, JSON.stringify({ v: 1, ideas: [] }));
+  props.setProperty(PROP_IDEAS_FILE_ID, file.getId());
+  return file;
+}
+
+function readIdeas(file) {
+  var box = { v: 1, ideas: [] };
+  if (!file) { return box; }
+  var content = file.getBlob().getDataAsString("UTF-8");
+  var data = content ? JSON.parse(content) : null;
+  arr(isObject(data) ? data.ideas : null).forEach(function (i) {
+    if (isObject(i) && trim(i.ref) && trim(i.text)) { box.ideas.push({ ref: trim(i.ref), text: cut(i.text, LIMITS.idea) }); }
+  });
+  return box;
+}
+
+/* Appelé SOUS le verrou de doPost, AVANT l'écriture de l'état : si la boîte ne peut pas être écrite, l'action n'est
+ * pas marquée traitée et le client la renverra. L'ordre inverse perdrait l'idée en silence. */
+function queueIdeas(entries) {
+  if (!entries.length) { return; }
+  var file = ideasFile(true);
+  var box = readIdeas(file);
+  var known = {};
+  box.ideas.forEach(function (i) { known[i.ref] = true; });
+  var added = 0;
+  entries.forEach(function (entry) {
+    if (!known[entry.ref]) { box.ideas.push(entry); known[entry.ref] = true; added += 1; }
+  });
+  if (added) { file.setContent(JSON.stringify(box)); }
+}
+
+/* Collecte (GitHub Actions) : POST ?op=ideas-export ou ?op=ideas-ack, corps { secret, refs }. Pas de jeton d'équipe :
+ * le secret de collecte le remplace, et il n'ouvre QUE la boîte (jamais l'état). L'acquittement retire ce qui a été
+ * publié dans le dépôt ; sans acquittement, la collecte suivante le reverra (le script ignore les doublons). */
+function handleIdeasOp(e) {
+  var op = str(e.parameter.op);
+  var expected = trim(PropertiesService.getScriptProperties().getProperty(PROP_IDEAS_SECRET));
+  if (expected.length < IDEAS_SECRET_MIN) {
+    return { ok: false, code: "disabled", error: "Collecte désactivée : propriété " + PROP_IDEAS_SECRET +
+      " absente ou trop courte (" + IDEAS_SECRET_MIN + " caractères au moins)." };
+  }
+  var body = null;
+  try { body = JSON.parse(e && e.postData && e.postData.contents ? e.postData.contents : "null"); } catch (ignore) { body = null; }
+  if (!isObject(body) || str(body.secret) !== expected) { return authFailure(); }
+  if (op !== "ideas-export" && op !== "ideas-ack") { return { ok: false, code: "invalid", error: "Opération inconnue." }; }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(45000);
+    var file = ideasFile(false);
+    var box = readIdeas(file);
+    if (op === "ideas-export") {
+      return { ok: true, backendVersion: BACKEND_VERSION, ideas: box.ideas };
+    }
+    var refs = arr(body.refs).map(trim);
+    var keep = box.ideas.filter(function (i) { return refs.indexOf(i.ref) < 0; });
+    var removed = box.ideas.length - keep.length;
+    if (removed && file) { box.ideas = keep; file.setContent(JSON.stringify(box)); }
+    return { ok: true, removed: removed };
+  } catch (error) {
+    return retryFailure(String(error && error.message ? error.message : error));
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) { /* verrou non acquis */ }
+  }
+}
+
 /* =============================================================== API ======= */
 
 function envelope(payload) {
@@ -845,6 +950,10 @@ function applyOne(state, action, now) {
   }
   var verdict = validateAction(state, action);
   if (!verdict.ok) { return { id: actionId, ok: false, code: "invalid", error: verdict.error }; }
+  /* Une idée ne laisse AUCUNE trace dans l'état partagé : ni révision, ni date, ni identifiant d'action. Sinon un
+   * membre qui voit la révision avancer sans rien de visible saurait à quelle heure une idée a été déposée.
+   * Un renvoi est dédupliqué par la référence de l'idée : dans la boîte (queueIdeas), puis dans le dépôt (collecte). */
+  if (trim(action && action.type) === "SUBMIT_IDEA") { return { id: actionId, ok: true }; }
   applyAction(state, action, now);
   state.revision += 1;
   state.updatedAt = now;
@@ -856,6 +965,7 @@ function applyOne(state, action, now) {
 }
 
 function doPost(e) {
+  if (e && e.parameter && e.parameter.op) { return createJsonResponse(handleIdeasOp(e)); }
   if (!isAuthorized(e)) { return createJsonResponse(authFailure()); }
   var lock = LockService.getScriptLock();
   try {
@@ -871,6 +981,7 @@ function doPost(e) {
     var state = readDataFile();
     var results = [];
     var changed = false;
+    var ideas = [];
     for (var i = 0; i < actions.length; i++) {
       var before = state.revision;
       var result = applyOne(state, actions[i], new Date().toISOString());
@@ -879,7 +990,12 @@ function doPost(e) {
       if (!batched && !result.ok) {
         return createJsonResponse({ ok: false, code: "invalid", error: result.error });
       }
+      if (result.ok && !result.duplicate && trim(actions[i] && actions[i].type) === "SUBMIT_IDEA") {
+        ideas.push(ideaEntry(actions[i]));
+      }
     }
+    /* La boîte d'abord, l'état ensuite (voir queueIdeas). */
+    queueIdeas(ideas);
     if (changed) { writeDataFile(state); }
 
     var payload = { revision: state.revision, state: leanState(state) };

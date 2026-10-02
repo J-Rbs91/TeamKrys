@@ -41,9 +41,17 @@ function assert(condition, message) {
   if (!condition) { throw new Error(message || "assertion échouée"); }
 }
 
+/* Un contrôle peut être asynchrone (lecture d'un fichier) : sa promesse est retenue, et le rapport l'attend. */
+const pending = [];
 function check(name, fn) {
-  try { fn(); passed += 1; }
-  catch (error) { failures.push({ name, error }); }
+  try {
+    const result = fn();
+    if (result && typeof result.then === "function") {
+      pending.push(result.then(() => { passed += 1; }, (error) => { failures.push({ name, error }); }));
+      return;
+    }
+    passed += 1;
+  } catch (error) { failures.push({ name, error }); }
 }
 
 /* ------------------------------------------------------------ DOM minimal --- */
@@ -697,6 +705,71 @@ check("Détails du sujet : « Épingler pour toute l'équipe » envoie l'épingl
   assert(/mis à jour/.test(dialog(old).textContent), "la raison de l'indisponibilité n'est pas dite");
 });
 
+/* ========================================================== Boîte à idées ==== */
+
+const ideasRoute = { name: "ideas", topicId: null, raw: "#/ideas" };
+
+check("boîte à idées : entrée depuis l'accueil ; dépôt anonyme, champ vidé, avertissement public ; vide refusé", () => {
+  const t = boot();
+  t.go(TOPICS);
+  assert(t.app().querySelector('[data-key="open-ideas"]') && t.app().querySelector('[data-key="open-ideas"]').getAttribute("aria-label") === "Boîte à idées",
+    "aucune entrée « Boîte à idées » dans l'en-tête de l'accueil");
+  const sent = [];
+  t.ctx.App.actions.submitIdea = (text) => { sent.push(text); return Promise.resolve({ ok: true }); };
+  t.go(ideasRoute);
+  assert(/dépôt public/.test(t.app().textContent) && /aucun nom/.test(t.app().textContent), "l'avertissement de publication publique manque");
+  const area = () => t.app().querySelector('[data-draft="ideas:new"]');
+  const submit = () => t.app().querySelector('[data-key="ideas-submit"]');
+  assert(submit() && submit().textContent === "Déposer anonymement" && !submit().disabled, "bouton de dépôt");
+  submit().click();
+  assert(sent.length === 0 && area().getAttribute("aria-invalid") === "true", "une idée vide est partie, ou le refus n'est pas relié au champ");
+  area().value = "  Moins de réunions le lundi  ";
+  submit().click();
+  assert(JSON.stringify(sent) === '["Moins de réunions le lundi"]', "dépôt : " + JSON.stringify(sent));
+  assert(area().value === "", "le champ doit être vidé après le dépôt");
+});
+
+check("boîte à idées : mode local et serveur trop ancien désactivent le dépôt avec leur raison", () => {
+  const local = boot();
+  local.ctx.Sync.connection = { url: "", localMode: true, unlocked: true };
+  local.go(ideasRoute);
+  assert(local.app().querySelector('[data-key="ideas-submit"]').disabled && /mode local/.test(local.app().textContent), "mode local");
+  const old = boot();
+  old.ctx.Sync.supports = (name) => name === "since";
+  old.go(ideasRoute);
+  assert(old.app().querySelector('[data-key="ideas-submit"]').disabled && /mis à jour/.test(old.app().textContent), "serveur sans « ideas »");
+});
+
+check("idées reformulées : lues dans idees/reformulees.json, triées, affichées en TEXTE (jamais en HTML) ; erreur avec « Réessayer »", async () => {
+  const t = boot();
+  let calls = 0;
+  t.ctx.fetch = (url, opts) => {
+    calls += 1;
+    assert(url === "idees/reformulees.json" && opts && opts.cache === "no-store", "lecture : " + url + " " + JSON.stringify(opts));
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, misAJour: "2026-10-03", idees: [
+      { id: "r1", titre: "Ancienne", texte: "Texte A", date: "2026-09-01", sources: ["aaaaaa"] },
+      { id: "r2", titre: "<img src=x onerror=alert(1)>", texte: "<b>gras</b>", theme: "Réunions", date: "2026-10-03", sources: ["bbbbbb", "cccccc"] },
+      { id: "r3", titre: "", texte: "sans titre" }
+    ] }) });
+  };
+  t.go(ideasRoute);
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  const cards = t.app().querySelectorAll(".idea-card");
+  assert(cards.length === 2, cards.length + " carte(s), 2 attendues (l'idée sans titre est écartée)");
+  assert(cards[0].querySelector(".card-title").textContent === "<img src=x onerror=alert(1)>", "la plus récente d'abord, titre en texte brut");
+  assert(!t.app().querySelector("img") && !t.app().querySelector("b"), "du HTML venu du fichier a été interprété");
+  assert(/2 idées d'origine/.test(cards[0].textContent) && /Mises à jour le 03\/10\/2026/.test(t.app().textContent), "métadonnées");
+  t.go(ideasRoute);
+  assert(calls === 1, "un rendu de plus ne doit pas relire le fichier (" + calls + " lectures)");
+
+  const e = boot();
+  e.ctx.fetch = () => Promise.reject(new TypeError("Failed to fetch"));
+  e.go(ideasRoute);
+  await new Promise((r) => setImmediate(r));
+  assert(/Impossible de charger/.test(e.app().textContent) && e.app().querySelector('[data-key="ideas-retry"]'), "erreur muette");
+});
+
 /* ===================================================== Gestes sur les bulles ==== */
 
 /* Un doigt, tel que le navigateur l'envoie : pointerdown, pointermove, pointerup sur le document (délégation). */
@@ -964,11 +1037,13 @@ check("Réglages : le libellé court de la pastille secondaire reste lisible au 
 
 /* ------------------------------------------------------------ Rapport --- */
 
-if (failures.length) {
-  failures.forEach(({ name, error }) => {
-    console.error("✗ " + name + "\n  " + error.message);
-  });
-  console.error("\nui-focus : " + passed + " contrôle(s) OK, " + failures.length + " en échec.");
-  process.exit(1);
-}
-console.log("ui-focus : " + passed + " contrôles OK");
+Promise.all(pending).then(() => {
+  if (failures.length) {
+    failures.forEach(({ name, error }) => {
+      console.error("✗ " + name + "\n  " + error.message);
+    });
+    console.error("\nui-focus : " + passed + " contrôle(s) OK, " + failures.length + " en échec.");
+    process.exit(1);
+  }
+  console.log("ui-focus : " + passed + " contrôles OK");
+});

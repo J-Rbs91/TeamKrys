@@ -9,6 +9,10 @@
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
 var CACHE_VERSION = "brainsto-v1.13.2";
+/* Idées reformulées (boîte à idées) : publiées par l'IA dans le dépôt, elles changent SANS nouvelle version de
+ * l'application. Réseau d'abord ; la dernière copie reçue sert hors ligne, dans un cache à part qui survit aux mises
+ * à jour (il ne contient que ce fichier, public). */
+var IDEAS_CACHE = "brainsto-idees-v1";
 
 var SHELL_CRITICAL = [
   "./",
@@ -63,7 +67,7 @@ self.addEventListener("activate", function (event) {
       return Promise.all(keys.map(function (key) {
         /* ⚠️ Seulement NOS anciens caches : sur GitHub Pages, les sites d'un même
          * compte partagent l'origine, donc le CacheStorage. */
-        return key.indexOf("brainsto-") === 0 && key !== CACHE_VERSION ? caches.delete(key) : null;
+        return key.indexOf("brainsto-") === 0 && key !== CACHE_VERSION && key !== IDEAS_CACHE ? caches.delete(key) : null;
       }));
     }).then(function () { return self.clients.claim(); })
   );
@@ -79,6 +83,10 @@ function isShellRequest(url) {
 
 /* La page de l'application : racine de la portée ou index.html, avec ou sans
  * paramètres (un lien partagé en porte parfois, p. ex. ?fbclid=). */
+function isIdeasFeed(url) {
+  return url.pathname === new URL("idees/reformulees.json", self.location.href).pathname;
+}
+
 function isAppPage(url) {
   var root = new URL("./", self.location.href).pathname;
   return url.pathname === root || url.pathname === root + "index.html";
@@ -92,6 +100,24 @@ self.addEventListener("fetch", function (event) {
   try { url = new URL(request.url); } catch (e) { return; }
 
   if (!isShellRequest(url)) { return; }
+
+  if (isIdeasFeed(url)) {
+    event.respondWith(
+      fetch(request).then(function (response) {
+        if (response && response.status === 200) {
+          var copy = response.clone();
+          caches.open(IDEAS_CACHE).then(function (cache) { cache.put(request, copy); });
+        }
+        return response;
+      }).catch(function (error) {
+        return caches.open(IDEAS_CACHE).then(function (cache) { return cache.match(request); }).then(function (cached) {
+          if (cached) { return cached; }
+          throw error;
+        });
+      })
+    );
+    return;
+  }
 
   if (request.mode === "navigate" && isAppPage(url)) {
     /* ⚠️ Coquille d'abord, et depuis le cache VERSIONNÉ (SPEC §24) : l'application

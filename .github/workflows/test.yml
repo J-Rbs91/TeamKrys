@@ -19,7 +19,7 @@ jobs:
           node-version: 22
       - name: Syntaxe de tous les scripts de l'application
         run: |
-          for f in js/*.js service-worker.js tests/*.js tests/qa/*.js; do
+          for f in js/*.js service-worker.js tests/*.js tests/qa/*.js tools/*.js; do
             node --check "$f"
           done
       - name: Parité frontend / Apps Script
@@ -60,6 +60,10 @@ jobs:
           node tests/startup-robust.test.js
       - name: Contrat CSS (lisibilité à 320 px, pastille d'état)
         run: node tests/css-contract.test.js
+      - name: Boîte à idées (collecte, format publié par l'IA)
+        run: |
+          node tests/ideas.test.js
+          node tools/check-ideas.js
       - name: Tout test du dépôt est câblé dans ce fichier
         run: |
           # Un test ajouté sans être lancé ici ne protégerait rien : on échoue.

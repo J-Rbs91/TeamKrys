@@ -1,0 +1,31 @@
+name: Boîte à idées (collecte quotidienne)
+
+# Une fois par jour, les idées déposées dans l'application sont ajoutées au dépôt
+# (idees/boite/), dans un ordre aléatoire et sans heure, puis retirées du backend.
+# Configuration : docs/BOITE_A_IDEES.md. Sans les deux secrets, la tâche ne fait rien.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: boite-a-idees
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Collecter les idées
+        env:
+          BRAINSTO_SCRIPT_URL: ${{ secrets.BRAINSTO_SCRIPT_URL }}
+          BRAINSTO_IDEAS_SECRET: ${{ secrets.BRAINSTO_IDEAS_SECRET }}
+        run: node tools/collect-ideas.js

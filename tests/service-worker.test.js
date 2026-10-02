@@ -196,6 +196,23 @@ async function run() {
     assert(sw.caches.log.puts.length === 0, "une réponse 404 a été mise en cache");
   });
 
+  await test("boîte à idées : les idées reformulées viennent du RÉSEAU d'abord (jamais du cache versionné), copie hors ligne à part", async () => {
+    let online = true;
+    const sw = boot(() => online ? Promise.resolve(new FakeResponse("{\"idees\":[1]}", { status: 200 })) : Promise.reject(new TypeError("Failed to fetch")));
+    sw.caches.seed(sw.version, Object.assign(SHELL(sw), { "idees/reformulees.json": "{\"idees\":[\"ancienne\"]}" }));
+    const fresh = await within(fetchEvent(sw, SCOPE + "idees/reformulees.json").response, 300, "idées en ligne");
+    assert(await fresh.text() === "{\"idees\":[1]}", "les idées reformulées ont été servies depuis le cache versionné");
+    await new Promise((r) => setTimeout(r, 20));
+    assert(sw.caches.log.puts.some((p) => p.cache === "brainsto-idees-v1"), "pas de copie hors ligne : " + JSON.stringify(sw.caches.log.puts));
+    online = false;
+    const offline = await within(fetchEvent(sw, SCOPE + "idees/reformulees.json").response, 300, "idées hors ligne");
+    assert(await offline.text() === "{\"idees\":[1]}", "hors ligne, la dernière copie reçue doit servir");
+    let waited = null;
+    sw.handlers.activate({ waitUntil: (p) => { waited = p; } });
+    await within(waited, 300, "activation");
+    assert((await sw.caches.api.keys()).indexOf("brainsto-idees-v1") >= 0, "la copie des idées ne doit pas être purgée à la mise à jour");
+  });
+
   await test("BL-051 purge : seuls les anciens caches « brainsto- » sont supprimés", async () => {
     const sw = boot(never);
     sw.caches.seed("autre-application-v7", { "/autre/index.html": "autre" });

@@ -2,7 +2,8 @@
 # Seuls apps-script/Code.gs et apps-script/appsscript.json sont versionnés : tout
 # autre fichier posé dans apps-script/ reste ignoré par défaut (garde-fou contre
 # un secret ajouté par mégarde). Les secrets et les données de l'équipe n'entrent
-# jamais dans le dépôt.
+# jamais dans le dépôt. Seule exception, choisie : idees/, la boîte à idées anonyme
+# (voir docs/BOITE_A_IDEES.md).
 # Attention : les deux dégagements (!) doivent rester APRÈS la règle qui ignore le
 # dossier, car la dernière règle qui correspond l'emporte.
 apps-script/*

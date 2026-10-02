@@ -676,6 +676,84 @@ check("BACKEND_VERSION montée : une équipe restée sur la 1.0.0 reçoit UNE co
   equal(props.store.BRAINSTO_BACKUP_VERSION, version, "version mémorisée après la copie");
 });
 
+/* -------------------------------------------------------- Boîte à idées --- */
+
+const SECRET = "un-secret-de-collecte-assez-long-123";
+function idea(id, ideaId, text, actorId) {
+  return { id, type: "SUBMIT_IDEA", actorId: actorId || "", actorName: actorId ? "Alice" : "Anonyme", payload: { ideaId, text } };
+}
+function op(be, name, body) {
+  return JSON.parse(be.ctx.doPost({ parameter: { op: name }, postData: { contents: JSON.stringify(body) } }).getContent());
+}
+function boxOf(be) {
+  const rec = be.drive.named("brainsto-idees.json")[0];
+  return rec ? JSON.parse(rec.content) : null;
+}
+
+check("boîte à idées : l'idée va dans un fichier À PART (référence + texte seulement), jamais dans l'état ni vers les téléphones", () => {
+  const be = fresh();
+  const r = be.post(idea("a1", "idee-1", "Moins de réunions le lundi"));
+  equal(r.ok, true, "dépôt accepté");
+  const box = boxOf(be);
+  assert(box && box.ideas.length === 1, "la boîte doit contenir l'idée : " + JSON.stringify(box));
+  equal(Object.keys(box.ideas[0]).sort(), ["ref", "text"], "rien d'autre que la référence et le texte (ni auteur, ni heure)");
+  equal(box.ideas[0].text, "Moins de réunions le lundi");
+  assert(JSON.stringify(be.data()).indexOf("Moins de réunions") < 0, "le texte ne doit pas entrer dans l'état partagé");
+  assert(JSON.stringify(be.get()).indexOf("Moins de réunions") < 0, "doGet ne doit jamais renvoyer une idée");
+  assert(JSON.stringify(r).indexOf("Moins de réunions") < 0, "la réponse au dépôt ne doit pas renvoyer l'idée");
+});
+
+check("boîte à idées : une idée signée est refusée ; un renvoi (réponse perdue) n'ajoute rien ; une panne Drive de la boîte laisse l'action en file", () => {
+  const be = fresh();
+  const signed = be.post(idea("a1", "idee-1", "Signée", "u1"));
+  equal([signed.ok, signed.code], [false, "invalid"], "une idée qui porte un auteur");
+  equal(boxOf(be), null, "aucune boîte créée pour une idée refusée");
+  be.post(idea("a2", "idee-2", "Une idée"));
+  be.post(idea("a3", "idee-2", "Une idée"));                  // même idée, autre envoi
+  equal(boxOf(be).ideas.length, 1, "même idée renvoyée : comptée une fois");
+  be.drive.faults.setContent = 1;
+  const r = be.post(idea("a4", "idee-3", "Pendant une panne"));
+  equal([r.ok, r.code], [false, "retry"], "boîte non écrite : réessayer");
+  equal(be.data().processedActionIds.indexOf("a4"), -1, "l'action ne doit pas être marquée traitée sans son idée");
+  equal(be.post(idea("a4", "idee-3", "Pendant une panne")).ok, true, "le renvoi passe");
+  equal(boxOf(be).ideas.length, 2, "l'idée est bien là après le renvoi");
+});
+
+check("boîte à idées : un dépôt ne laisse aucune trace dans l'état partagé (révision, date, identifiant d'action)", () => {
+  const be = fresh();
+  const before = be.data();
+  const r = be.post(idea("a1", "idee-1", "Rien ne doit bouger"));
+  equal(r.ok, true, "dépôt accepté");
+  const after = be.data();
+  equal([after.revision, after.updatedAt], [before.revision, before.updatedAt], "révision ou date avancée : l'heure du dépôt se lirait");
+  equal(after.processedActionIds.indexOf("a1"), -1, "identifiant d'action retenu dans l'état");
+  equal(r.revision, before.revision, "la réponse annonce une révision nouvelle");
+  const batch = be.post([idea("a2", "idee-2", "En lot"), idea("a3", "idee-2", "En lot")]);
+  equal(batch.results.map((x) => x.ok), [true, true], "lot accepté");
+  equal(be.data().revision, before.revision, "un lot d'idées seules n'avance pas la révision");
+  equal(boxOf(be).ideas.length, 2, "renvoi dans le même lot : compté une fois");
+});
+
+check("collecte : désactivée sans secret ; secret faux refusé ; export puis acquittement vident la boîte", () => {
+  const be = fresh();
+  be.post(idea("a1", "idee-1", "Première"));
+  be.post(idea("a2", "idee-2", "Seconde"));
+  equal(op(be, "ideas-export", { secret: SECRET }).code, "disabled", "sans propriété, la collecte est fermée");
+  be.props.store.BRAINSTO_IDEAS_SECRET = "trop-court";
+  equal(op(be, "ideas-export", { secret: "trop-court" }).code, "disabled", "un secret trop court ne l'ouvre pas");
+  be.props.store.BRAINSTO_IDEAS_SECRET = SECRET;
+  equal(op(be, "ideas-export", { secret: "faux" }).code, "auth", "secret faux");
+  equal(op(be, "ideas-export", {}).code, "auth", "sans secret");
+  const out = op(be, "ideas-export", { secret: SECRET });
+  equal(out.ok, true, "export");
+  equal(out.ideas.map((i) => i.text).sort(), ["Première", "Seconde"]);
+  equal(op(be, "ideas-ack", { secret: SECRET, refs: [out.ideas[0].ref] }).removed, 1, "acquittement d'une idée");
+  equal(op(be, "ideas-export", { secret: SECRET }).ideas.length, 1, "il en reste une");
+  equal(op(be, "ideas-ack", { secret: SECRET, refs: ["inconnue"] }).removed, 0, "une référence inconnue ne retire rien");
+  equal(op(be, "ideas-dump", { secret: SECRET }).code, "invalid", "opération inconnue");
+  assert(JSON.stringify(op(be, "ideas-export", { secret: SECRET })).indexOf("revision") < 0, "la collecte n'expose jamais l'état");
+});
+
 /* ------------------------------------------------------------ Exécution --- */
 
 const total = passed + failures.length;

@@ -1291,6 +1291,8 @@
         sub: App.user.name ? "Bonjour " + App.user.name : null,
         actions: [
           statusPill(),
+          el("button", { class: "btn-icon", type: "button", "aria-label": "Boîte à idées", "data-key": "open-ideas",
+            onclick: function () { App.go("#/ideas"); } }, [icon("inbox", 21)]),
           el("button", { class: "btn-icon", type: "button", "aria-label": "Réglages",
             onclick: function () { App.go("#/settings"); } }, [icon("settings", 21)])
         ]
@@ -2171,6 +2173,155 @@
     if (!printed) { UI.toast(PRINT_UNAVAILABLE, "error"); }
   }
 
+  /* =========================================================== Boîte à idées ==== */
+
+  /* ⚠️ Deux circuits, jamais mélangés :
+   *   - DÉPÔT : une idée part par la file d'actions (SUBMIT_IDEA), toujours anonyme, et n'entre jamais dans l'état
+   *     partagé. Personne ne la relit dans l'application, pas même son auteur ;
+   *   - LECTURE : les idées REFORMULÉES par l'IA, publiées dans le dépôt (idees/reformulees.json) et servies par GitHub
+   *     Pages à côté de l'application. Affichées en TEXTE seulement : rien de ce fichier n'est interprété comme du HTML.
+   * Le fichier est relu en arrivant sur l'écran, puis au plus toutes les deux minutes (le service worker le prend sur
+   * le réseau d'abord, avec repli hors ligne). */
+  var IDEAS_URL = "idees/reformulees.json";
+  var IDEAS_STALE_MS = 2 * 60 * 1000;
+  var ideasFeed = { status: "idle", items: [], updated: "", loadedAt: 0 };
+
+  function cleanIdea(raw) {
+    if (!raw || typeof raw !== "object") { return null; }
+    var titre = Utils.trim(raw.titre);
+    var texte = Utils.trim(raw.texte);
+    if (!titre || !texte) { return null; }
+    return {
+      id: String(raw.id || ""), titre: Utils.limit(titre, 120), texte: Utils.limit(texte, 1500),
+      theme: Utils.limit(Utils.trim(raw.theme), 40), date: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.date || "")) ? raw.date : "",
+      sources: Array.isArray(raw.sources) ? raw.sources.length : 0
+    };
+  }
+
+  function loadReformulatedIdeas() {
+    if (ideasFeed.status === "loading") { return; }
+    if (typeof fetch !== "function") { ideasFeed.status = "error"; return; }
+    ideasFeed.status = "loading";
+    var done = function () { if (App.route && App.route.name === "ideas") { UI.force(); } };
+    fetch(IDEAS_URL, { cache: "no-store" }).then(function (response) {
+      if (!response.ok) { throw new Error("HTTP " + response.status); }
+      return response.json();
+    }).then(function (data) {
+      var items = (data && Array.isArray(data.idees) ? data.idees : []).map(cleanIdea).filter(Boolean);
+      items.sort(function (a, b) { return a.date === b.date ? 0 : (a.date < b.date ? 1 : -1); });
+      ideasFeed = { status: "ok", items: items, updated: data && /^\d{4}-\d{2}-\d{2}$/.test(String(data.misAJour || "")) ? data.misAJour : "", loadedAt: Utils.now() };
+      done();
+    }, function () {
+      ideasFeed.status = "error";
+      ideasFeed.loadedAt = Utils.now();
+      done();
+    });
+  }
+
+  function dayLabel(day) {
+    var parts = String(day || "").split("-");
+    return parts.length === 3 ? parts[2] + "/" + parts[1] + "/" + parts[0] : "";
+  }
+
+  /* Disponibilité du dépôt : en mode local, aucun serveur ne recevrait l'idée ; un serveur qui répond sans annoncer
+   * « ideas » (backend d'avant 1.2.0) la refuserait. Tant que le serveur n'a jamais répondu, on ne présume rien. */
+  function ideasUnavailableReason() {
+    if (Sync.connection && (Sync.connection.localMode || !Sync.connection.url)) {
+      return "La boîte à idées a besoin de l'espace de l'équipe : en mode local, aucun serveur ne recevrait votre idée.";
+    }
+    if (Sync.supports && Sync.supports("since") && !Sync.supports("ideas")) {
+      return "Boîte à idées indisponible : le serveur de l'équipe doit être mis à jour.";
+    }
+    return null;
+  }
+
+  function screenIdeas() {
+    if (ideasFeed.status === "idle" || (ideasFeed.status !== "loading" && Utils.now() - ideasFeed.loadedAt > IDEAS_STALE_MS)) {
+      loadReformulatedIdeas();
+    }
+    var unavailable = ideasUnavailableReason();
+
+    var area = bindCounter(el("textarea", {
+      class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Votre idée…", "aria-required": "true",
+      "data-draft": "ideas:new", disabled: !!unavailable
+    }), "ideas:new", Core.LIMITS.idea);
+
+    function submit() {
+      var text = Utils.trim(area.value);
+      if (!text) { invalid(area, "Écrivez votre idée avant de la déposer."); return; }
+      var typed = area.value;
+      /* Vidé AVANT l'envoi : le rendu qui suit réinjecterait sinon le texte déjà parti (même piège que le composeur). */
+      area.value = "";
+      var sent = App.actions.submitIdea(text);
+      var settle = function (result) {
+        if (result && result.ok === false) {
+          var node = findDraftNode("ideas:new");
+          if (node) { node.value = typed; }
+          return;
+        }
+        UI.toast("Idée déposée, sans votre nom. Elle apparaîtra ici une fois reformulée.");
+      };
+      if (sent && typeof sent.then === "function") { sent.then(settle, function () { settle(null); }); } else { settle(sent); }
+    }
+
+    var deposit = el("div", { class: "card card-static stack" }, [
+      sectionTitle("inbox", "Déposer une idée"),
+      el("p", { class: "hint", text: "Votre idée part sans nom ni identifiant. Personne ne la relit ici, pas même vous : une IA reformule les idées reçues, et les versions reformulées s'affichent plus bas, pour toute l'équipe." }),
+      el("div", { class: "note ideas-public" }, [
+        icon("warning", 14),
+        el("span", { class: "note-body", text: "Les idées sont publiées telles quelles dans le dépôt public du projet sur GitHub, une fois par jour. N'y mettez aucun nom ni rien de confidentiel. Une idée déposée ne se retire pas." })
+      ]),
+      field("Votre idée", area),
+      counterFor("ideas:new", Core.LIMITS.idea),
+      unavailable ? el("p", { class: "hint", text: unavailable }) : null,
+      el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "ideas-submit", disabled: !!unavailable, onclick: submit },
+        [icon("send", 17), el("span", { text: "Déposer anonymement" })])
+    ]);
+
+    var list = el("div", { class: "stack" });
+    if (ideasFeed.status === "loading" && !ideasFeed.items.length) {
+      list.appendChild(el("p", { class: "hint", text: "Chargement des idées reformulées…" }));
+    } else if (ideasFeed.status === "error" && !ideasFeed.items.length) {
+      list.appendChild(el("div", { class: "note" }, [
+        icon("warning", 14),
+        el("div", { class: "note-body" }, [
+          el("div", { text: "Impossible de charger les idées reformulées pour l'instant." }),
+          el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "ideas-retry",
+            onclick: function () { ideasFeed.status = "idle"; UI.force(); } }, [icon("sync", 15), el("span", { text: "Réessayer" })])
+        ])
+      ]));
+    } else if (!ideasFeed.items.length) {
+      list.appendChild(el("p", { class: "hint", text: "Aucune idée reformulée pour l'instant. Elles apparaîtront ici après le passage de l'IA." }));
+    }
+    ideasFeed.items.forEach(function (idea, i) {
+      list.appendChild(reveal(el("article", { class: "card card-static stack idea-card" }, [
+        idea.theme ? el("div", { class: "row-wrap" }, [toneBadge(idea.theme, "tone-neutral")]) : null,
+        el("h3", { class: "card-title", text: idea.titre }),
+        el("p", { class: "pre-wrap", text: idea.texte }),
+        el("div", { class: "card-meta" }, [
+          idea.date ? el("span", { text: "Reformulée le " + dayLabel(idea.date) }) : null,
+          idea.date && idea.sources ? el("span", { class: "meta-dot" }) : null,
+          idea.sources ? el("span", { text: Utils.plural(idea.sources, "idée d'origine", "idées d'origine") }) : null
+        ])
+      ]), i));
+    });
+
+    return el("div", { class: "screen" }, [
+      topbar({ title: "Boîte à idées", back: App.remonter, backLabel: "Sujets" }),
+      el("div", { class: "content stack-lg" }, [
+        reveal(deposit, 0),
+        el("section", { class: "stack" }, [
+          el("div", { class: "row" }, [
+            sectionTitle("sparkle", "Idées reformulées"),
+            el("div", { class: "spacer" }),
+            ideasFeed.updated ? el("span", { class: "hint", text: "Mises à jour le " + dayLabel(ideasFeed.updated) }) : null
+          ]),
+          list
+        ])
+      ])
+    ]);
+  }
+
   function screenMeeting() {
     var state = Store.view;
     /* Même ordre de maturité que l'accueil (prêts, en discussion, clôturés), archivés exclus. */
@@ -2869,6 +3020,7 @@
     if (route.name === "conclusion") { return screenConclusion(route.topicId); }
     if (route.name === "settings") { return screenSettings(); }
     if (route.name === "meeting") { return screenMeeting(); }
+    if (route.name === "ideas") { return screenIdeas(); }
     return screenTopics();
   }
 
@@ -2903,6 +3055,7 @@
     if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
     if (route.name === "settings") { return "Réglages" + tail; }
     if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
+    if (route.name === "ideas") { return "Boîte à idées" + tail; }
     return "Sujets" + tail;
   }
 

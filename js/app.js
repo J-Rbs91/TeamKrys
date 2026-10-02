@@ -566,6 +566,7 @@
     if (!parts.length) { return { raw: "#/", name: "topics", topicId: null }; }
     if (parts[0] === "settings") { return { raw: raw, name: "settings", topicId: null }; }
     if (parts[0] === "meeting") { return { raw: raw, name: "meeting", topicId: null }; }
+    if (parts[0] === "ideas") { return { raw: raw, name: "ideas", topicId: null }; }
     if (parts[0] === "topic" && parts[1]) {
       if (parts[2] === "proposals") { return { raw: raw, name: "proposals", topicId: parts[1] }; }
       if (parts[2] === "conclusion") { return { raw: raw, name: "conclusion", topicId: parts[1] }; }
@@ -626,6 +627,7 @@
     topics: null,
     settings: "topics",
     meeting: "settings",
+    ideas: "topics",
     topic: "topics",
     proposals: "topic",
     conclusion: "topic"
@@ -838,6 +840,12 @@
 
     changeTopicStatus: function (topicId, status) {
       dispatch("CHANGE_TOPIC_STATUS", { topicId: topicId, status: status });
+    },
+
+    /* ⚠️ Une idée part TOUJOURS sans auteur : l'acteur est forcé à l'anonyme ici, et le serveur refuse toute idée qui
+     * en porte un. Elle n'entre pas dans l'état partagé (voir Core.applyAction) : rien ne s'affiche, rien ne se relit. */
+    submitIdea: function (text) {
+      return dispatch("SUBMIT_IDEA", { ideaId: Utils.uid(), text: text }, { id: "", name: Core.ANON_NAME });
     },
 
     /* Épingler vaut pour toute l'équipe (donnée partagée). Affectation, jamais bascule : rejouée, elle ne change rien. */

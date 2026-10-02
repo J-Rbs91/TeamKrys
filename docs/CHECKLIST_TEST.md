@@ -19,7 +19,10 @@ du navigateur ouverte : **zéro erreur console** attendue.
       "ÉCHEC $f"; done` → aucune ligne « ÉCHEC » (backend, pastille d'état,
       nouveautés, code changé, choix idempotents, service worker, lecture des votes,
       contrat CSS, démarrage robuste, focus, champs nommés, actions retenues,
-      recherche et synthèse, brouillons).
+      recherche et synthèse, brouillons, boîte à idées).
+- [ ] `node tools/check-ideas.js` → « format conforme » (idées reformulées, rapports
+      et boîte : ni HTML, ni balise Liquid, ni lien autre que http(s) ou relatif,
+      aucune source inventée).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -498,6 +501,31 @@ agrandie.
       sait pas imprimer : « Impression indisponible ici : affichez la synthèse à
       l'écran ou ouvrez-la dans votre navigateur. », sans erreur en console, et la
       synthèse reste à l'écran.
+
+## 7 bis. Boîte à idées
+
+Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
+([`BOITE_A_IDEES.md`](BOITE_A_IDEES.md), « Vérifier la mise en place »).
+
+- [ ] Accueil → icône boîte aux lettres en haut → écran **Boîte à idées**, bouton
+      **Retour** vers l'accueil.
+- [ ] Message de prudence visible avant le champ : publication telle quelle dans le
+      dépôt public, une fois par jour, aucun nom.
+- [ ] Champ vide → **Déposer anonymement** affiche l'erreur sous le champ, rien ne part.
+- [ ] Idée déposée → bandeau « Idée déposée, sans votre nom. Elle apparaîtra ici une
+      fois reformulée. » ; champ vidé ; l'idée **n'apparaît nulle part** dans
+      l'application, ni chez soi ni sur un autre téléphone.
+- [ ] Hors connexion : l'idée part en file comme un message, puis au retour du réseau.
+- [ ] Après la collecte : l'idée est dans `idees/boite/<jour>.md`, sans nom, sans heure.
+- [ ] Après une reformulation publiée sur `main` et le déploiement de GitHub Pages
+      (le cache de Pages peut ajouter une dizaine de minutes) : en revenant sur l'écran,
+      la carte apparaît sous le champ, sans mise à jour de l'application ; thème, titre,
+      texte, « N idées d'origine », date « Mises à jour le … ».
+- [ ] Mode avion **après** une première lecture : les idées reformulées restent
+      affichées. Jamais lues et hors ligne : « Impossible de charger… » avec
+      **Réessayer**.
+- [ ] Mode local, ou backend antérieur à 1.2.0 : champ et bouton grisés, raison
+      affichée ; la liste des idées reformulées reste lisible.
 
 ## 8. Synchronisation et hors ligne
 

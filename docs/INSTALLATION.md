@@ -268,6 +268,17 @@ l'équipe, sur Drive, ne sont pas touchées ; les actions qui n'avaient pas enco
 
 ---
 
+## 4. Boîte à idées (facultatif)
+
+Le backend 1.2.0 accepte les dépôts d'idées dès son déploiement. Pour qu'elles soient
+publiées puis reformulées, il faut encore un secret de collecte (propriété du script
+`BRAINSTO_IDEAS_SECRET`) et deux secrets GitHub. Tout est dans
+[`BOITE_A_IDEES.md`](BOITE_A_IDEES.md), « Mise en place ». Sans cette étape, les idées
+s'accumulent sur le Drive, dans `brainsto-idees.json` : rien n'est perdu, rien n'est
+publié.
+
+---
+
 ## Vérifier que tout fonctionne
 
 - L'indicateur en haut à droite affiche **À jour**.
@@ -308,7 +319,9 @@ Dans **un seul fichier JSON**, sur le Google Drive du compte qui a déployé le
 script. Pour en faire une copie de sauvegarde : exécuter `backupNow()` (la copie
 `brainsto-data.json.manuel.<date>` est créée dans le même dossier), ou ouvrir le
 dossier créé par `setupProject` et dupliquer le fichier. Pour restaurer une copie,
-voir « Revenir en arrière ». Aucune donnée n'est stockée ailleurs,
+voir « Revenir en arrière ». Seule exception : les idées de la boîte à idées, gardées
+dans `brainsto-idees.json` (même dossier) jusqu'à leur collecte, puis publiées dans le
+dépôt ([`BOITE_A_IDEES.md`](BOITE_A_IDEES.md)). Aucune autre donnée n'est stockée ailleurs,
 hormis, sur chaque appareil, une copie locale de lecture (pour le hors-ligne) et
 le brouillon du message en cours d'écriture dans chaque sujet (avec son choix
 « anonyme » quand il a été écrit en anonyme) et le repère de ce que l'appareil a déjà

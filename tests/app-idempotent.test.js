@@ -329,6 +329,24 @@ const CASES = [
     }
   });
 
+  await check("boîte à idées : une idée part SANS auteur (acteur vide et « Anonyme »), avec un identifiant d'idée ; épingler envoie une affectation", async () => {
+    const w = makeWorld({ storage: NO_CODE, features: FEATURES_NEW, view: baseState() });
+    w.App.actions.submitIdea("Moins de réunions le lundi");
+    assert(w.dispatched.length === 1, "une action attendue, " + w.dispatched.length + " envoyée(s)");
+    const sent = w.dispatched[0];
+    assert(sent.type === "SUBMIT_IDEA" && sent.actorId === "" && sent.actorName === "Anonyme",
+      "l'idée doit partir sans auteur : " + JSON.stringify({ type: sent.type, actorId: sent.actorId, actorName: sent.actorName }));
+    assert(typeof sent.payload.ideaId === "string" && sent.payload.ideaId && sent.payload.text === "Moins de réunions le lundi",
+      "charge de l'idée : " + JSON.stringify(sent.payload));
+    /* Le texte de l'idée peut contenir n'importe quoi (« Moins » contient « Moi ») : on cherche l'identité partout SAUF
+     * dans le texte, et la charge ne porte que l'identifiant d'idée et le texte. */
+    const withoutText = JSON.stringify(Object.assign({}, sent, { payload: Object.assign({}, sent.payload, { text: "" }) }));
+    assert(withoutText.indexOf(ME.id) < 0 && withoutText.indexOf(ME.name) < 0, "une identité a fuité dans l'action : " + withoutText);
+    assert(JSON.stringify(Object.keys(sent.payload).sort()) === JSON.stringify(["ideaId", "text"]), "charge inattendue : " + JSON.stringify(sent.payload));
+    w.App.actions.setTopicPin("t1", true);
+    assert(JSON.stringify(w.dispatched[1].payload) === JSON.stringify({ topicId: "t1", pinned: true }), "épingle : " + JSON.stringify(w.dispatched[1].payload));
+  });
+
   await check("§5 garde de réaction intacte : rien n'est envoyé pour réagir à son propre message anonyme ; retirer une ancienne réaction reste permis", async () => {
     for (const mode of MODES) {
       const storage = Object.assign({}, NO_CODE, { [KEYS.ownItems]: ["m2"] });
