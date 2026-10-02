@@ -1160,6 +1160,53 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 .section-title .icon { opacity: 0.85; }
 
+/* ============================================================ Densité de la liste ==== */
+
+/* Accueil (refonte B, lot 1). Une carte de sujet se lit en une ligne de titre et une ligne de repères :
+   - le statut n'est plus répété sur la carte quand la section le dit déjà (seuls les Épinglés, qui mêlent les
+     statuts, le gardent) ;
+   - la description tient sur une ligne, le détail est dans le sujet ;
+   - « Ouvrir » ne garde que sa flèche : toute la carte est le bouton.
+   Tout est limité à la liste de l'accueil (`.topics-grid`) : les autres cartes et les contrats du pied de carte
+   (REC-UI-040) ne changent pas. */
+.topics-grid { gap: 10px; }
+.topics-grid .product-topic-group { gap: 8px; }
+.topics-grid .card { padding: 11px 14px; }
+.topics-grid .card .card-title { font-size: var(--fs-body); }
+.topics-grid .card .card-desc { -webkit-line-clamp: 1; margin-top: 2px; }
+.topics-grid .card .card-activity { margin-top: 2px; }
+.topics-grid .card .card-foot { margin-top: 6px; padding-top: 0; border-top: 0; }
+.topics-grid .card .legend-chip { padding: 1px 8px; }
+.topics-grid .product-topic-group:not([data-topic-status="pinned"]) > .card > .row > .badge { display: none; }
+.topics-grid .ux-card-action > span { display: none; }
+
+/* Propositions (refonte B, lot 1). La légende de vote devient une ligne de texte : chaque couleur reste nommée et
+   chiffrée (jamais la teinte seule), sans trois pastilles et deux lignes de taux empilées. Statut et actions
+   rares se replient sous « Statut et actions ». */
+.proposal-card { gap: 10px; }
+.proposal-card .vote-legend { gap: 2px 12px; margin-top: 8px; }
+.proposal-card .vote-legend .legend-chip { background: transparent; padding: 0; font-size: var(--fs-xs); }
+.proposal-more { border-top: 1px solid var(--line); padding-top: 4px; }
+.proposal-more-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--accord);
+  cursor: pointer;
+  border-radius: var(--radius-chip);
+}
+.proposal-more-summary::-webkit-details-marker { display: none; }
+.proposal-more-summary .icon { transition: transform 160ms var(--ease-out); }
+.proposal-more[open] > .proposal-more-summary .icon { transform: rotate(180deg); }
+.proposal-more-summary:focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; }
+.proposal-more > .card-foot { margin-top: 4px; padding-top: 0; border-top: 0; }
+@media (prefers-reduced-motion: reduce) { .proposal-more-summary .icon { transition: none; } }
+@media print { .proposal-more { display: none; } }
+
 /* ======================================================= Barre de navigation ==== */
 
 /* Quatre onglets fixés en bas des écrans de premier niveau (js/ui.js, tabBar). L'onglet courant se reconnaît par la

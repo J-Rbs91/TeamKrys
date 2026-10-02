@@ -2101,7 +2101,21 @@
       reading.participation ? el("span", { class: "legend-chip product-participation", text: reading.participation }) : null
     ]);
 
-    return el("article", { class: "card card-static stack" }, [
+    /* Statut, « Modifier » et « Retirer mon vote » se replient sous « Statut et actions » (refonte B) : on vote
+     * souvent, on change un statut rarement. Le volet ouvert le reste quand un vote d'un collègue redessine
+     * l'écran (rendu complet à chaque changement) : son état est retenu ici, par proposition. */
+    var more = el("details", {
+      class: "proposal-more", open: openProposalMore[proposal.id] === true,
+      ontoggle: function (e) { openProposalMore[proposal.id] = e.target.open === true; }
+    }, [
+      /* Un identifiant, pas une clé de repère : le focus posé ici survit au rendu (keyOf lit l'id), sans que le
+       * volet devienne l'ancre de repli de « Retirer mon vote » (BL-012 : le focus revient au dernier vote). */
+      el("summary", { class: "proposal-more-summary", id: "proposal-" + proposal.id + "-more" }, [
+        el("span", { text: "Statut et actions" }), icon("down", 15)
+      ])
+    ]);
+
+    return el("article", { class: "card card-static stack proposal-card" }, [
       el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
         el("div", { class: "card-title", style: { flex: "1" }, text: proposal.title }),
         toneBadge(Core.PROPOSAL_STATUS_LABELS[proposal.status], PROPOSAL_TONES[proposal.status])
@@ -2122,7 +2136,7 @@
         legend
       ]),
       voteButtons,
-      el("div", { class: "card-foot row-wrap" }, [
+      Utils.append(more, el("div", { class: "card-foot row-wrap" }, [
         myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "vote-" + proposal.id + "-remove",
           onclick: function () { App.actions.removeVote(topic.id, proposal.id); } },
         [icon("close", 15), el("span", { text: "Retirer mon vote" })]) : null,
@@ -2133,9 +2147,12 @@
           : null,
         el("div", { class: "spacer" }),
         selectWrap(statusSelect)
-      ])
+      ]))
     ]);
   }
+
+  /* Volets « Statut et actions » ouverts, par identifiant de proposition (voir proposalCard). */
+  var openProposalMore = {};
 
   function screenProposals(topicId) {
     var topic = Core.findTopic(Store.view, topicId);

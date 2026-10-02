@@ -801,6 +801,24 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   assert(/Impossible de charger la synthèse/.test(e.app().textContent) && e.app().querySelector('[data-key="pandore-retry"]'), "erreur muette");
 });
 
+/* ================================================ Propositions repliées ==== */
+
+check("propositions : statut, Modifier et Retirer mon vote repliés sous « Statut et actions » ; le volet ouvert le reste après un rendu", () => {
+  const t = boot();
+  t.go(proposalsRoute("t1"));
+  t.app().querySelector('[data-key="vote-p1-for"]').click();
+  const more = () => t.app().querySelector("details.proposal-more");
+  assert(more() && !more().hasAttribute("open"), "le volet doit être replié par défaut");
+  assert(more().querySelector("select") && more().querySelector('[data-key="vote-p1-remove"]'), "statut et retrait du vote dans le volet");
+  assert(more().querySelector("summary").textContent === "Statut et actions", "libellé du volet");
+  assert(!t.app().querySelector(".vote-actions").closest("details"), "les boutons de vote restent visibles, hors du volet");
+  const d = more();
+  d.open = true;
+  d.dispatchEvent({ type: "toggle", target: d });
+  t.app().querySelector('[data-key="vote-p1-against"]').click();   // un vote redessine tout l'écran
+  assert(more() !== d && more().hasAttribute("open"), "après un rendu, le volet ouvert doit le rester");
+});
+
 /* ================================================== Barre de navigation ==== */
 
 check("barre de navigation : quatre onglets sur les écrans de premier niveau, l'onglet courant signalé ; absente dans un sujet", () => {
