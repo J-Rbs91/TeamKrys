@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.0.0";
+var BACKEND_VERSION = "brainsto-backend-1.1.0";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -19,7 +19,9 @@ var PROP_FILE_ID = "BRAINSTO_FILE_ID";
 var PROP_BACKUP_VERSION = "BRAINSTO_BACKUP_VERSION";
 var MAX_PROCESSED = 5000;
 var MAX_BATCH = 20;
-var FEATURES = ["since", "batch", "lean"];
+/* "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
+ * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé. */
+var FEATURES = ["since", "batch", "lean", "idempotent"];
 
 var ANON_NAME = "Anonyme";
 var LIMITS = {
@@ -48,10 +50,23 @@ var ACTION_TYPES = [
 
 function str(value) { return value === null || value === undefined ? "" : String(value); }
 function trim(value) { return str(value).trim(); }
-function cut(value, max) { return trim(value).slice(0, max); }
+/* ⚠️ Jamais une moitié de paire UTF-16 en fin de coupe : demi-caractère haut final retiré. */
+function cut(value, max) {
+  var text = trim(value).slice(0, max);
+  var last = text.charCodeAt(text.length - 1);
+  return last >= 0xD800 && last <= 0xDBFF ? text.slice(0, -1) : text;
+}
 function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function arr(value) { return Array.isArray(value) ? value : []; }
 function oneOf(value, list, fallback) { return list.indexOf(value) >= 0 ? value : fallback; }
+function ownValue(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined; }
+/* ⚠️ Identifiant : 120 caractères au plus, jamais un nom hérité d'Object.prototype (clé de vote,
+ * réaction ou soutien ; journal de déduplication). Liste partagée avec js/state.js. */
+var ID_MAX_LENGTH = 120;
+var RESERVED_IDS = ["__proto__", "constructor", "prototype", "hasOwnProperty", "toString", "valueOf",
+  "toLocaleString", "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "__defineSetter__",
+  "__lookupGetter__", "__lookupSetter__"];
+function badId(value) { return str(value).length > ID_MAX_LENGTH || RESERVED_IDS.indexOf(trim(value)) >= 0; }
 
 function emptyState() {
   return {
@@ -121,7 +136,7 @@ function ensureShape(input) {
       });
     });
 
-    var messageIds = {};
+    var messageIds = Object.create(null);
     topic.messages.forEach(function (m) { messageIds[m.id] = true; });
     topic.messages.forEach(function (m) {
       if (m.quoteId && (!messageIds[m.quoteId] || m.quoteId === m.id)) { m.quoteId = null; }
@@ -161,7 +176,24 @@ function ensureShape(input) {
       });
     });
 
-    var conclusionIds = {};
+    /* TeamKrys v1/v2 (d1823d6, af0500a) : le texte unique « conclusion » devient UNE
+     * formulation sans auteur, d'id déterministe ; rien n'est écrasé, et relire ne
+     * l'ajoute pas deux fois (l'état normalisé ne garde pas « conclusion »). */
+    var legacyText = typeof t.conclusion === "string" ? cut(t.conclusion, LIMITS.conclusion) : "";
+    if (legacyText && !findConclusion(topic, "legacy-" + topic.id) &&
+      !topic.conclusions.some(function (c) { return c.text === legacyText; })) {
+      topic.conclusions.push({
+        id: "legacy-" + topic.id,
+        text: legacyText,
+        source: "manual",
+        authorId: "",
+        authorName: ANON_NAME,
+        createdAt: trim(t.conclusionUpdatedAt) || topic.createdAt,
+        updatedAt: trim(t.conclusionUpdatedAt) || topic.createdAt
+      });
+    }
+
+    var conclusionIds = Object.create(null);
     topic.conclusions.forEach(function (c) { conclusionIds[c.id] = true; });
     if (isObject(t.conclusionVotes)) {
       Object.keys(t.conclusionVotes).forEach(function (pid) {
@@ -210,6 +242,8 @@ function validateAction(state, action) {
   if (!trim(action.id)) { return fail("Action sans identifiant."); }
   var p = isObject(action.payload) ? action.payload : {};
   var topic = null;
+  if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
+    p.conclusionId, p.quoteId].some(badId)) { return fail("Identifiant invalide."); }
 
   function needTopic() {
     topic = findTopic(state, trim(p.topicId));
@@ -258,7 +292,10 @@ function validateAction(state, action) {
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!findMessage(topic, trim(p.messageId))) { return fail("Ce message n'existe plus."); }
       if (!trim(action.actorId)) { return fail("Réaction sans participant."); }
-      if (REACTIONS.indexOf(trim(p.emoji)) < 0) { return fail("Réaction non autorisée."); }
+      /* emoji "" = retrait, admis seulement dans une action marquée (set:true). */
+      if (REACTIONS.indexOf(trim(p.emoji)) < 0 && !(p.set === true && trim(p.emoji) === "")) {
+        return fail("Réaction non autorisée.");
+      }
       return OK;
     case "CREATE_PROPOSAL":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
@@ -289,22 +326,22 @@ function validateAction(state, action) {
       return OK;
     case "ADD_CONCLUSION":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!trim(p.conclusionId)) { return fail("Conclusion sans identifiant."); }
-      if (!trim(p.text)) { return fail("La conclusion est vide."); }
-      if (findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion existe déjà."); }
+      if (!trim(p.conclusionId)) { return fail("Formulation du consensus sans identifiant."); }
+      if (!trim(p.text)) { return fail("La formulation du consensus est vide."); }
+      if (findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus existe déjà."); }
       return OK;
     case "UPDATE_CONCLUSION_ITEM":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
-      if (!trim(p.text)) { return fail("La conclusion est vide."); }
+      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
+      if (!trim(p.text)) { return fail("La formulation du consensus est vide."); }
       return OK;
     case "DELETE_CONCLUSION":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
+      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
       return OK;
     case "SET_CONCLUSION_VOTE":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
-      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
+      if (!findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
       if (!trim(action.actorId)) { return fail("Vote sans participant."); }
       return OK;
     case "REMOVE_CONCLUSION_VOTE":
@@ -386,7 +423,12 @@ function applyAction(state, action, now) {
       var ms = findMessage(topic, trim(p.messageId));
       var anon = p.anon === true;
       ms.anon = anon;
-      if (anon) { ms.authorId = ""; ms.authorName = ANON_NAME; }
+      if (anon) {
+        /* L'anonymat efface aussi l'identité comme clé de réaction : auteur et acteur (§5). */
+        if (ms.authorId) { delete ms.reactions[ms.authorId]; }
+        if (trim(action.actorId)) { delete ms.reactions[trim(action.actorId)]; }
+        ms.authorId = ""; ms.authorName = ANON_NAME;
+      }
       else {
         var signed = author(action, false);
         ms.authorId = signed.id; ms.authorName = signed.name;
@@ -397,7 +439,14 @@ function applyAction(state, action, now) {
       var mr = findMessage(topic, trim(p.messageId));
       var actor = trim(action.actorId);
       var emoji = trim(p.emoji);
-      if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
+      /* ⚠️ set:true (FEATURES "idempotent") : AFFECTE, "" retire, rejouée = sans effet ;
+       * sans marqueur : bascule historique (anciens clients). */
+      if (p.set === true) {
+        var had = ownValue(mr.reactions, actor);
+        if (emoji) { mr.reactions[actor] = emoji; } else { delete mr.reactions[actor]; }
+        if (ownValue(mr.reactions, actor) === had) { return; }
+      }
+      else if (ownValue(mr.reactions, actor) === emoji) { delete mr.reactions[actor]; }
       else { mr.reactions[actor] = emoji; }
       touch(state, topic, now); return;
     }
@@ -424,7 +473,12 @@ function applyAction(state, action, now) {
       var pv = findProposal(topic, trim(p.proposalId));
       var voter = trim(action.actorId);
       var value = trim(p.value);
-      if (pv.votes[voter] === value) { delete pv.votes[voter]; }
+      if (p.set === true) {
+        var was = ownValue(pv.votes, voter);
+        pv.votes[voter] = value;
+        if (ownValue(pv.votes, voter) === was) { return; }
+      }
+      else if (ownValue(pv.votes, voter) === value) { delete pv.votes[voter]; }
       else { pv.votes[voter] = value; }
       touch(state, topic, now); return;
     }
@@ -455,7 +509,12 @@ function applyAction(state, action, now) {
     case "SET_CONCLUSION_VOTE": {
       var cv = trim(action.actorId);
       var target = trim(p.conclusionId);
-      if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
+      if (p.set === true) {
+        var prev = ownValue(topic.conclusionVotes, cv);
+        topic.conclusionVotes[cv] = target;
+        if (ownValue(topic.conclusionVotes, cv) === prev) { return; }
+      }
+      else if (ownValue(topic.conclusionVotes, cv) === target) { delete topic.conclusionVotes[cv]; }
       else { topic.conclusionVotes[cv] = target; }
       touch(state, topic, now); return;
     }
@@ -508,9 +567,42 @@ function configuredFileId() {
   return PropertiesService.getScriptProperties().getProperty(PROP_FILE_ID) || "";
 }
 
-function findExistingDataFile() {
+function folderNameOf(file) {
+  var parents = file.getParents();
+  return parents.hasNext() ? parents.next().getName() : "(aucun dossier)";
+}
+
+function describeFile(file) {
+  return file.getId() + " (dossier « " + folderNameOf(file) + " », " + file.getSize() +
+    " octets, modifié le " + file.getLastUpdated().toISOString() + ")";
+}
+
+/* Fichiers « brainsto-data.json » hors corbeille (la recherche par nom renvoie
+ * aussi la corbeille, dans un ordre que Google ne documente pas). */
+function activeDataFiles() {
   var files = DriveApp.getFilesByName(FILE_NAME);
-  return files.hasNext() ? files.next() : null;
+  var found = [];
+  while (files.hasNext()) {
+    var file = files.next();
+    if (!file.isTrashed()) { found.push(file); }
+  }
+  return found;
+}
+
+function homonymsMessage(files) {
+  return "Plusieurs fichiers « " + FILE_NAME + " » existent et aucun n'est rattaché : aucun n'a été choisi. " +
+    files.map(function (file, i) { return "Fichier " + (i + 1) + " : " + describeFile(file) + "."; }).join(" ") +
+    " Pour rattacher le bon : dans l'éditeur Apps Script, copiez son identifiant dans DATA_FILE_ID en haut du" +
+    " script, enregistrez, puis exécutez setupProject() (ou posez la propriété du script " + PROP_FILE_ID + ")." +
+    " diagnoseStorage() décrit chaque fichier.";
+}
+
+/* ⚠️ Sans rattachement, on ne choisit JAMAIS entre deux homonymes (§23) : erreur
+ * explicite, que doGet/doPost renvoient en code "retry" (les actions restent en file). */
+function findExistingDataFile() {
+  var found = activeDataFiles();
+  if (found.length > 1) { throw new Error(homonymsMessage(found)); }
+  return found.length ? found[0] : null;
 }
 
 function getDataFile() {
@@ -529,10 +621,12 @@ function setupProject() {
     props.setProperty(PROP_FILE_ID, configured.getId());
     return logResult("Fichier déjà configuré : " + configured.getName() + " (" + configured.getId() + ")");
   }
-  var found = findExistingDataFile();
-  if (found) {
-    props.setProperty(PROP_FILE_ID, found.getId());
-    return logResult("Fichier existant réutilisé : " + found.getId());
+  var existing = activeDataFiles();
+  /* Plusieurs homonymes : rien n'est rattaché, le journal dit lesquels et comment choisir. */
+  if (existing.length > 1) { return logResult(homonymsMessage(existing)); }
+  if (existing.length) {
+    props.setProperty(PROP_FILE_ID, existing[0].getId());
+    return logResult("Fichier existant réutilisé : " + describeFile(existing[0]));
   }
   var folder = getOrCreateFolder();
   var created = folder.createFile(FILE_NAME, JSON.stringify(emptyState(), null, 2), "application/json");
@@ -563,7 +657,9 @@ function createBackup(file, reason) {
   var name = FILE_NAME + "." + reason + "." + new Date().toISOString().replace(/[:.]/g, "-");
   var parents = file.getParents();
   var folder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
-  return folder.createFile(file.getBlob()).setName(name);
+  /* ⚠️ Le blob porte le nom du fichier source : on le renomme AVANT createFile.
+   * Créer puis renommer laissait un second « brainsto-data.json » si le renommage échouait. */
+  return folder.createFile(file.getBlob().setName(name));
 }
 
 function backupNow() {
@@ -571,23 +667,125 @@ function backupNow() {
   return logResult("Sauvegarde créée : " + backup.getName() + " (" + backup.getId() + ")");
 }
 
+/* Restauration d'une copie (§23), depuis l'éditeur : restoreFromBackup("identifiant de la copie").
+ * Le contenu de la copie est réécrit DANS le fichier rattaché (le rattachement ne change pas),
+ * l'état remplacé est d'abord sauvegardé, rien n'est supprimé.
+ * ⚠️ revision = max(courante, copie) + 1 : un numéro de révision ne se répète jamais, sinon un
+ * appareil resté sur ce numéro garderait l'ancien état sous « À jour » (§21). */
+function restoreFromBackup(backupFileId) {
+  var backupId = trim(backupFileId);
+  if (!backupId) { throw new Error("Indiquez l'identifiant de la copie : restoreFromBackup(\"identifiant\")."); }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(45000);
+  try {
+    var file = getDataFile();
+    var backup = DriveApp.getFileById(backupId);
+    if (backup.getId() === file.getId()) {
+      throw new Error("Ce fichier est déjà le fichier de données utilisé : indiquez une copie de sauvegarde.");
+    }
+    var copy = null;
+    try { copy = JSON.parse(backup.getBlob().getDataAsString("UTF-8")); } catch (unreadable) { copy = null; }
+    /* Une copie BrainstO porte au moins une liste de sujets (v1, v2 et 1.x compris, même vide) :
+     * « {} » ou le JSON d'une autre application viderait les données de l'équipe. */
+    if (!isObject(copy) || !Array.isArray(copy.topics)) {
+      throw new Error("La copie " + backup.getName() + " n'est pas un fichier de données lisible : rien n'a été modifié.");
+    }
+    var restored = ensureShape(copy);
+    var raw = file.getBlob().getDataAsString("UTF-8");
+    var current;
+    try { current = ensureShape(raw ? JSON.parse(raw) : emptyState()); }
+    catch (damaged) {
+      /* Fichier courant abîmé : on garde au moins son numéro de révision. */
+      var found = /"revision"\s*:\s*(\d+)/.exec(raw);
+      current = { revision: found ? Number(found[1]) : 0, processedActionIds: [] };
+    }
+    /* §5 : un message rendu anonyme APRÈS la copie reste anonyme une fois la copie restaurée. Le travail
+     * est celui du noyau (SET_MESSAGE_SIGNATURE) : mêmes champs vidés, mêmes clés de réaction retirées,
+     * même libellé. Fichier courant abîmé : current.topics est absent, rien à reporter. */
+    arr(current.topics).forEach(function (ct) {
+      var rt = findTopic(restored, ct.id);
+      arr(ct.messages).forEach(function (cm) {
+        var rm = cm.anon === true && rt ? findMessage(rt, cm.id) : null;
+        if (!rm || rm.anon === true) { return; }
+        applyAction(restored, {
+          type: "SET_MESSAGE_SIGNATURE", actorId: rm.authorId,
+          payload: { topicId: rt.id, messageId: rm.id, anon: true }
+        }, new Date().toISOString());
+      });
+    });
+    var safety = createBackup(file, "avant-restauration");
+    restored.revision = Math.max(current.revision, restored.revision) + 1;
+    restored.updatedAt = new Date().toISOString();
+    /* Journal de déduplication : union (copie puis courant), les plus récents gardés. */
+    var seen = Object.create(null);
+    var ids = [];
+    restored.processedActionIds.concat(current.processedActionIds).forEach(function (id) {
+      if (seen[id] !== true) { seen[id] = true; ids.push(id); }
+    });
+    restored.processedActionIds = ids.slice(-MAX_PROCESSED);
+    file.setContent(JSON.stringify(restored, null, 2));
+    return logResult("Copie " + backup.getName() + " (" + backup.getId() + ") restaurée dans " + file.getName() +
+      " (" + file.getId() + "), révision " + restored.revision + ". État remplacé sauvegardé : " +
+      safety.getName() + " (" + safety.getId() + "). Aucun fichier supprimé.");
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) { /* verrou non acquis */ }
+  }
+}
+
+function describeCandidate(f, usedId) {
+  var entry = {
+    id: f.getId(), name: f.getName(), used: f.getId() === usedId, folder: folderNameOf(f),
+    size: f.getSize(), trashed: f.isTrashed(), updatedAt: f.getLastUpdated().toISOString()
+  };
+  try {
+    var parsed = ensureShape(JSON.parse(f.getBlob().getDataAsString("UTF-8") || "{}"));
+    entry.revision = parsed.revision;
+    entry.topics = parsed.topics.length;
+    entry.participants = parsed.participants.length;
+    var messages = 0;
+    parsed.topics.forEach(function (topic) { messages += topic.messages.length; });
+    entry.messages = messages;
+  } catch (error) { entry.error = String(error); }
+  return entry;
+}
+
+/* N'écrit rien. Dit quel fichier le service utilise RÉELLEMENT (ou pourquoi aucun),
+ * décrit chaque candidat et alerte sur les homonymes (§23). */
 function diagnoseStorage() {
-  var result = { configuredId: configuredFileId() || null, candidates: [] };
+  var result = {
+    configuredId: configuredFileId() || null,
+    dataFileId: trim(DATA_FILE_ID) || null,
+    property: PropertiesService.getScriptProperties().getProperty(PROP_FILE_ID) || null,
+    used: null,
+    candidates: []
+  };
+  var usedFile = null;
+  try { usedFile = getDataFile(); }
+  catch (error) { result.usedError = String(error && error.message ? error.message : error); }
+  var usedId = usedFile ? usedFile.getId() : "";
+  var active = 0;
   var files = DriveApp.getFilesByName(FILE_NAME);
   while (files.hasNext()) {
-    var f = files.next();
-    var entry = { id: f.getId(), name: f.getName(), updatedAt: f.getLastUpdated().toISOString() };
-    try {
-      var parsed = ensureShape(JSON.parse(f.getBlob().getDataAsString("UTF-8") || "{}"));
-      entry.revision = parsed.revision;
-      entry.topics = parsed.topics.length;
-      entry.participants = parsed.participants.length;
-      var messages = 0;
-      parsed.topics.forEach(function (topic) { messages += topic.messages.length; });
-      entry.messages = messages;
-    } catch (error) { entry.error = String(error); }
+    var entry = describeCandidate(files.next(), usedId);
+    if (!entry.trashed) { active += 1; }
+    if (entry.used) { result.used = entry; }
     result.candidates.push(entry);
   }
+  /* Fichier rattaché sous un autre nom (copie restaurée par identifiant) : décrit aussi. */
+  if (usedFile && !result.used) {
+    result.used = describeCandidate(usedFile, usedId);
+    result.candidates.push(result.used);
+  }
+  var warnings = [];
+  if (result.usedError) { warnings.push(result.usedError); }
+  else if (active > 1) {
+    warnings.push(active + " fichiers « " + FILE_NAME + " » hors corbeille : le service utilise le fichier rattaché " +
+      usedId + ", les autres sont ignorés. Ne supprimez rien sans avoir vérifié leur contenu.");
+  }
+  if (result.used && result.used.trashed) {
+    warnings.push("Le fichier utilisé est dans la corbeille de Drive : restaurez-le avant qu'il soit effacé.");
+  }
+  if (warnings.length) { result.warning = warnings.join(" "); }
   Logger.log(JSON.stringify(result, null, 2));
   return result;
 }
@@ -603,6 +801,13 @@ function envelope(payload) {
 }
 
 function authFailure() { return { ok: false, code: "auth", error: "Accès refusé par le serveur." }; }
+
+/* Codes d'échec (additifs : un ancien client ignore `code`) :
+ *   "invalid" : action rejetée par la validation, DÉFINITIF (inutile de la renvoyer) ;
+ *   "retry"   : rien n'a été appliqué (verrou, Drive, corps illisible, exception) :
+ *               l'action doit rester en file et repartir plus tard.
+ * ⚠️ Jamais "invalid" pour une exception : le client retirerait une action non appliquée. */
+function retryFailure(message) { return { ok: false, code: "retry", error: message }; }
 
 function doGet(e) {
   try {
@@ -621,7 +826,7 @@ function doGet(e) {
     }
     return createJsonResponse(envelope({ revision: state.revision, state: leanState(state) }));
   } catch (error) {
-    return createJsonResponse({ ok: false, error: String(error && error.message ? error.message : error) });
+    return createJsonResponse(retryFailure(String(error && error.message ? error.message : error)));
   }
 }
 
@@ -631,7 +836,7 @@ function applyOne(state, action, now) {
     return { id: actionId, ok: true, duplicate: true };
   }
   var verdict = validateAction(state, action);
-  if (!verdict.ok) { return { id: actionId, ok: false, error: verdict.error }; }
+  if (!verdict.ok) { return { id: actionId, ok: false, code: "invalid", error: verdict.error }; }
   applyAction(state, action, now);
   state.revision += 1;
   state.updatedAt = now;
@@ -650,8 +855,9 @@ function doPost(e) {
     var parsed = JSON.parse(body || "null");
     var batched = Array.isArray(parsed);
     var actions = batched ? parsed : [parsed];
-    if (!actions.length) { return createJsonResponse({ ok: false, error: "Aucune action reçue." }); }
-    if (actions.length > MAX_BATCH) { return createJsonResponse({ ok: false, error: "Lot trop volumineux." }); }
+    /* Corps vide : rien de lisible, donc rien d'appliqué (retry, jamais invalid). */
+    if (!actions.length || parsed === null) { return createJsonResponse(retryFailure("Aucune action reçue.")); }
+    if (actions.length > MAX_BATCH) { return createJsonResponse(retryFailure("Lot trop volumineux.")); }
 
     lock.waitLock(45000);
     var state = readDataFile();
@@ -663,7 +869,7 @@ function doPost(e) {
       results.push(result);
       if (state.revision !== before) { changed = true; }
       if (!batched && !result.ok) {
-        return createJsonResponse({ ok: false, error: result.error });
+        return createJsonResponse({ ok: false, code: "invalid", error: result.error });
       }
     }
     if (changed) { writeDataFile(state); }
@@ -673,7 +879,10 @@ function doPost(e) {
     else if (results[0] && results[0].duplicate) { payload.duplicate = true; }
     return createJsonResponse(envelope(payload));
   } catch (error) {
-    return createJsonResponse({ ok: false, error: String(error && error.message ? error.message : "Requête invalide.") });
+    /* Verrou dépassé, Drive en lecture ou en écriture, corps illisible : l'écriture du
+     * fichier est la DERNIÈRE opération et porte l'état ET processedActionIds ensemble,
+     * donc rien n'est écrit à moitié et le client peut renvoyer sans risque (déduplication). */
+    return createJsonResponse(retryFailure(String(error && error.message ? error.message : "Requête invalide.")));
   } finally {
     try { lock.releaseLock(); } catch (ignore) { /* verrou non acquis */ }
   }

@@ -90,6 +90,21 @@ COUPLES = [
     ("--warning", "--surface", COMPOSANT, "pastille « en cours »"),
     ("--danger", "--surface", COMPOSANT, "pastille « en erreur »"),
     ("--faint", "--surface", COMPOSANT, "pastille « local »"),
+
+    # --- Lot CSS A : groupes sans opacité, composeur, pastille à libellé court ---
+    # « Clôturés » et « Archivés » ne passent plus par une opacité de groupe : leurs textes
+    # sont mesurés à leur encre réelle, sur la pastille neutre et sur la carte survolée.
+    ("--muted", ("--neutral-bg", "--surface"), TEXTE, "pastille neutre (« Archivé », « Clôturé »)"),
+    ("--faint", ("--neutral-bg", "--surface"), TEXTE, "initiale d'un auteur anonyme sur sa pastille"),
+    ("--muted", "--surface-soft", TEXTE, "titre d'un sujet clôturé ou archivé, carte survolée"),
+    # Le bord du composeur est le seul signe visible du champ (remplissage = surface élevée).
+    ("--line-field", "--surface-strong", COMPOSANT, "bord du champ du composeur"),
+    # La pastille d'état affiche un libellé court de 11 px : texte, puis gommette sur son fond.
+    ("--muted", "--surface-strong", TEXTE, "libellé court de la pastille d'état"),
+    ("--success", "--surface-strong", COMPOSANT, "gommette « à jour » sur sa pastille"),
+    ("--warning", "--surface-strong", COMPOSANT, "gommette « en cours » sur sa pastille"),
+    ("--danger", "--surface-strong", COMPOSANT, "gommette « en erreur » sur sa pastille"),
+    ("--faint", "--surface-strong", COMPOSANT, "gommette « local » et « hors ligne » sur sa pastille"),
 ]
 
 
@@ -117,7 +132,12 @@ def lire_themes(chemin):
     """Renvoie (clair, sombre). Le sombre est le clair surchargé par le média."""
     css = open(chemin, encoding="utf-8").read()
     clair = _jetons(_bloc_racine(css))
-    media = css.index("@media (prefers-color-scheme: dark)")
+    # Le bloc sombre est limité à l'écran (`@media screen and (prefers-color-scheme: dark)`, REC-UI-043) :
+    # on accepte aussi la forme sans `screen and`, et on prend le PREMIER bloc, celui des jetons.
+    debut = re.search(r"@media\s+(?:screen\s+and\s+)?\(prefers-color-scheme:\s*dark\)", css)
+    if debut is None:
+        raise ValueError("bloc des jetons sombres introuvable dans %s" % chemin)
+    media = debut.start()
     sombre = dict(clair)
     sombre.update(_jetons(_bloc_racine(css, media)))
     return clair, sombre

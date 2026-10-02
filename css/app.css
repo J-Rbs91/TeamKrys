@@ -306,7 +306,10 @@
    chroma des neutres y est donc plus basse qu'en clair, à teinte égale.
    Le clair reste le mode de conception : c'est lui qui est lu en magasin, en
    plein jour, et c'est là que les défauts de hiérarchie se voient. */
-@media (prefers-color-scheme: dark) {
+/* ⚠️ `screen and` : le sombre ne vaut QUE pour l'écran (REC-UI-043). À l'impression la palette claire reste
+   en vigueur, quel que soit le thème de l'appareil : sans cela la synthèse partait sur papier blanc avec
+   les textes clairs du sombre (54 textes sur 97 sous le seuil de contraste, badges à 1,94:1). */
+@media screen and (prefers-color-scheme: dark) {
   :root {
     --n-0: #1c1915;
     --n-25: #171410;
@@ -398,6 +401,15 @@ html, body {
   min-height: 100%;
   background: var(--canvas);
   color: var(--text);
+}
+
+/* Marge de défilement (BL-046) : la barre du haut est collante et le bouton flottant couvre le bas.
+   Sans cette marge, un élément déjà « visible » à l'écran, mais sous elles, reçoit le focus sans que
+   le navigateur le déplace : l'anneau de focus est caché (WCAG 2.4.11). 5rem couvre la barre (65 px
+   à 100 %, 86 px à 200 % de texte), 6rem le bouton (48 px et ses marges). */
+html {
+  scroll-padding-top: calc(var(--safe-top) + 5rem);
+  scroll-padding-bottom: calc(var(--safe-bottom) + 6rem);
 }
 
 body {
@@ -501,7 +513,11 @@ p { margin: 0; }
   text-overflow: ellipsis;
 }
 
-.topbar-sub .icon { opacity: 0.7; }
+.topbar-sub .icon { opacity: 0.7; flex: none; }
+
+/* `text-overflow` ne s'applique pas aux enfants d'un conteneur flex : à 320 px le sous-titre était coupé net. Seul son premier
+   texte rétrécit, avec des points de suspension ; l'icône et le repère « Détails » gardent leur place (REC-RUI-009). */
+.topbar-sub > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .topbar-actions { display: flex; align-items: center; gap: 6px; }
 
@@ -521,7 +537,10 @@ p { margin: 0; }
    valeur absolue — un espacement uniforme, même généreux, n'en crée aucun. */
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .stack-lg { display: flex; flex-direction: column; gap: 26px; }
-.row { display: flex; align-items: center; gap: 8px; }
+/* `wrap` (BL-044) : une rangée dont les éléments ne tiennent plus (pastille d'état, bouton, libellé
+   long à 200 % de texte ou sur 196 px de large) passe à la ligne au lieu de sortir de l'écran. Un
+   élément souple (`flex: 1`, base nulle) ne déclenche jamais le retour : à 100 %, rien ne bouge. */
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .row-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
 
@@ -793,6 +812,16 @@ p { margin: 0; }
 
 .btn-back:hover { background: var(--surface-sunken); }
 
+/* Sous 22rem (352 px à 100 %, 457 px à 130 %, 704 px à 200 % de police) le libellé de l'écran
+   parent ne tient plus à côté du titre : il pesait 77 px à 320 px, 89 px à 130 %, 117 px à 200 %, et
+   « Réunion » était coupé. Le bouton ne garde que sa flèche (44 x 44 px). Son nom accessible vient de
+   l'aria-label (« Retour vers Sujets »), posé par topbar() dans js/ui.js : ne pas le retirer. `rem`
+   suit le réglage de police de la personne, pas la largeur seule. */
+@media (max-width: 22rem) {
+  .btn-back { padding: 0; justify-content: center; }
+  .btn-back > span { display: none; }
+}
+
 /* Bouton d'action principal : étendu (icône + libellé) plutôt qu'un « + » nu.
    Sur un outil utilisé par toute une équipe, le libellé supprime l'hésitation. */
 .fab {
@@ -846,6 +875,13 @@ p { margin: 0; }
 
 .hint { font-size: var(--fs-xs); color: var(--muted); line-height: 1.55; }
 
+/* Message d'erreur relié à son champ (aria-describedby, BL-009) : le texte dit l'erreur,
+   la couleur la souligne sans jamais la porter seule. Contrastes couverts par tools/check-contrast.py
+   (--danger sur --surface, texte et composant). */
+.hint.field-error { color: var(--danger); font-weight: 600; }
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] { border-color: var(--danger); }
+
 /* Note contextuelle : une consigne qui doit être lue une fois, pas un statut.
    Pastille souple qui peut passer à la ligne, contrairement à .status-pill. */
 /* Un élément flexible garde `min-width: auto`, donc la largeur de son mot le plus
@@ -880,6 +916,9 @@ p { margin: 0; }
   background: var(--surface);
   color: var(--text);
   font-size: var(--fs-body);
+  /* Indication (placeholder) ou valeur trop longue pour le champ : points de suspension plutôt qu'une coupe
+     nette (REC-UI-042) ; sans effet sur un textarea. */
+  text-overflow: ellipsis;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -965,7 +1004,11 @@ p { margin: 0; }
 
 /* Une carte-formulaire respire un cran de plus qu'une liste : les champs et
    leur bouton d'action ne doivent jamais sembler collés. */
-.card.stack { gap: 15px; }
+.card.stack { display: flex; flex-direction: column; gap: 15px; }
+/* ⚠️ `.card { display: block }` (plus haut) et `.stack { display: flex }` ont la même
+   spécificité et `.card` vient APRÈS : sans `display` ici, la carte-formulaire restait un
+   bloc, le gap ne s'appliquait pas et « Votre vote » (marge basse de -4 px) chevauchait
+   les boutons de vote. Le sélecteur doublé (0,2,0) l'emporte quel que soit l'ordre. */
 
 /* Menu de statut logé dans un pied de carte : hauteur de bouton secondaire,
    pas de champ de saisie — c'est une action, pas une question posée. Ce qui le
@@ -990,7 +1033,18 @@ p { margin: 0; }
   font-weight: 650;
   letter-spacing: -0.025em;
   line-height: 1.3;
+  /* Un titre sans espace (adresse collée, mot de 150 caractères) ne doit ni pousser son
+     badge hors de la carte ni faire défiler la page : `min-width: 0` laisse le bloc
+     flexible rétrécir, `anywhere` coupe le mot là où il faut. */
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
+
+/* Dans une rangée titre + pastille, le titre garde au moins 5,5 em avant que la pastille ne passe
+   dessous. Sans cela, avec un grand texte, une pastille large lui laissait 29 px : une lettre par
+   ligne. À 100 %, titre et pastille tiennent côte à côte comme avant. */
+.row > .card-title { min-width: min(100%, 5.5em); }
 
 .card-meta {
   display: flex;
@@ -1000,6 +1054,11 @@ p { margin: 0; }
   margin-top: 6px;
   font-size: var(--fs-xs);
   color: var(--muted);
+  /* Dans un pied de carte, un nom d'auteur sans espace (41 caractères collés) poussait
+     « Ouvrir » hors de la carte : débord de 57 px à 320 px une fois les titres corrigés. */
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .card-desc {
@@ -1011,6 +1070,7 @@ p { margin: 0; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .card-foot {
@@ -1033,6 +1093,8 @@ p { margin: 0; }
   align-items: baseline;
   justify-content: space-between;
   gap: 14px;
+  /* La valeur passe sous son libellé quand les deux ne tiennent plus (200 % de texte, 320 px). */
+  flex-wrap: wrap;
   padding: 9px 0;
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-xs);
@@ -1040,7 +1102,7 @@ p { margin: 0; }
 
 .diag-row:last-child { border-bottom: 0; }
 .diag-label { color: var(--faint); font-weight: 650; letter-spacing: 0.01em; white-space: nowrap; }
-.diag-value { color: var(--text); text-align: right; word-break: break-word; }
+.diag-value { color: var(--text); text-align: right; word-break: break-word; margin-left: auto; }
 .diag-value.is-danger { color: var(--danger); }
 
 /* --- Pastilles ----------------------------------------------------------- */
@@ -1056,7 +1118,12 @@ p { margin: 0; }
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--muted);
-  white-space: nowrap;
+  /* `normal` (BL-044) : une pastille plus large que sa ligne (« Prêt pour la réunion » à 200 % de
+     texte, 292 px) passe sur deux lignes au lieu de pousser la page de 136 px. À 100 % elle tient
+     sur une ligne, comme avant. */
+  white-space: normal;
+  max-width: 100%;
+  text-align: center;
 }
 
 .badge-ink { background: var(--ink); color: var(--on-ink); }
@@ -1124,7 +1191,7 @@ p { margin: 0; }
 
 .empty-art .icon { opacity: 0.75; }
 
-.empty-title { font-size: var(--page-title); font-weight: 650; letter-spacing: -0.025em; }
+.empty-title { font-size: var(--page-title); font-weight: 650; letter-spacing: -0.025em; overflow-wrap: anywhere; }
 .empty-text { color: var(--muted); max-width: 34ch; font-size: var(--fs-sm); line-height: 1.55; }
 
 /* ============================================================= Accueil ==== */
@@ -1180,20 +1247,31 @@ p { margin: 0; }
   white-space: nowrap;
 }
 
+/* La gommette dit l'état par sa FORME autant que par sa teinte : sous 16rem le libellé
+   disparaît, et une couleur ne porte jamais seule une information. Six formes, une par
+   état de §12, distinctes aussi sous mouvement réduit (« Synchronisation » est un anneau
+   creux, « En attente » un losange plein) :
+     À jour : disque plein, vert          Hors ligne : tiret, gris
+     Synchronisation : anneau creux, ocre (il pulse si le mouvement est permis)
+     En attente : losange plein, ocre     Erreur : triangle plein, carmin
+     Mode local : carré plein, gris
+   L'anneau de « Synchronisation » est tracé avec une bordure, pas une ombre interne : elle
+   survit au mode contraste forcé. Les autres formes sont pleines, donc mesurables comme des
+   aplats (a11y/t04b-nontext.js ne lit pas les bordures des pastilles). */
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--faint);
   flex: 0 0 auto;
 }
 
 .status-idle .status-dot { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
-.status-syncing .status-dot { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
-.status-pending .status-dot { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
-.status-offline .status-dot { background: var(--faint); }
-.status-error .status-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-bg); }
-.status-local .status-dot { background: var(--faint); box-shadow: 0 0 0 3px var(--neutral-bg); }
+.status-syncing .status-dot { background: transparent; border: 2px solid var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
+.status-pending .status-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); transform: rotate(45deg); }
+.status-offline .status-dot { width: 10px; height: 4px; border-radius: 2px; background: var(--faint); }
+.status-error .status-dot { width: 11px; height: 10px; border-radius: 0; background: var(--danger); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.status-local .status-dot { width: 9px; height: 9px; border-radius: 2px; background: var(--faint); box-shadow: 0 0 0 3px var(--neutral-bg); }
 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
@@ -1201,18 +1279,26 @@ p { margin: 0; }
   .status-syncing .status-dot { animation: pulse-dot 1.1s var(--ease-in-out) infinite; }
 }
 
-/* Sur mobile, le libellé mange la place du titre. Le statut redevient une
-   simple gommette — indicateur d'ambiance, dont le détail vit dans Réglages.
-   On lui donne une forme franche (cercle plein) pour qu'il se lise comme un
-   voyant et non comme un reste de mise en page. */
+/* Deux libellés dans la pastille (voir statusPill dans js/ui.js) : le COURT (« Sync… »,
+   « Local ») tient sur un téléphone, le LONG porte les mots de §12 (« Synchronisation »,
+   « Mode local »). Jamais les deux ensemble : par défaut le court seul, le long seul dès
+   431 px, ni l'un ni l'autre sous 16rem. Le nom accessible n'est dans aucun des deux : un
+   troisième <span>, masqué par la classe `visually-hidden` (plus bas), le porte. Aucune
+   règle de ce fichier ne le cible, et aucune ne doit jamais le passer en `display: none`,
+   ce qui le retirerait de l'arbre d'accessibilité. */
+.status-pill .status-long { display: none; }
+.status-pill .status-short { display: inline; }
+
+@media (min-width: 431px) {
+  .status-pill .status-short { display: none; }
+  .status-pill .status-long { display: inline; }
+}
+
+/* Téléphone : le libellé court garde sa place dans la barre (le titre garde 87 px au moins
+   à 320 px, mesures de l'annexe E de responsive-touch). La pastille grandit avec lui au lieu
+   de rester une gommette de 30 px sans texte. */
 @media (max-width: 430px) {
-  .status-pill .status-label { display: none; }
-  .status-pill {
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    justify-content: center;
-  }
+  .status-pill { padding: 6px 10px; gap: 5px; }
 
   /* À 16 px, la pastille de statut ne peut plus rétrécir : à la largeur d'un
      téléphone elle prend sa propre ligne plutôt que de pousser les boutons du
@@ -1221,12 +1307,29 @@ p { margin: 0; }
   .card-foot .select-wrap { width: 100%; min-width: 0; }
 }
 
+/* Sous 16rem (256 px à 100 %, 333 px à 130 %, 512 px à 200 % de police) : plus de place pour
+   un mot, la gommette reste seule, en cercle de 30 px. La forme porte toujours l'état et le
+   nom accessible est intact. `rem` suit le réglage de police de la personne, pas la largeur
+   seule. Placée APRÈS la règle de 431 px : à 200 %, les deux s'appliquent et celle-ci gagne. */
+@media (max-width: 16rem) {
+  .status-pill .status-short,
+  .status-pill .status-long { display: none; }
+  .status-pill {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 /* ==================================================== Fil de discussion ==== */
 
 .thread {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Le fil défile sans entraîner la page quand on atteint son bord. */
+  overscroll-behavior: contain;
   padding: 14px calc(var(--safe-right) + 14px) 18px calc(var(--safe-left) + 14px);
   display: flex;
   flex-direction: column;
@@ -1319,6 +1422,7 @@ p { margin: 0; }
   letter-spacing: 0.02em;
   color: var(--faint);
   margin: 0 10px 4px;
+  overflow-wrap: anywhere;
 }
 
 .bubble {
@@ -1357,7 +1461,9 @@ p { margin: 0; }
 .bubble:active { background: var(--surface-sunken); }
 .msg-row.mine .bubble:active { background: var(--n-800); }
 
-.bubble-text { white-space: pre-wrap; font-size: 15.5px; line-height: 1.45; }
+/* En rem (BL-044) : 15,5 px et 10,5 px d'avant, identiques à la racine par défaut ; ils suivent
+   maintenant le réglage de police de la personne, comme le reste du texte. */
+.bubble-text { white-space: pre-wrap; font-size: 0.96875rem; line-height: 1.45; }
 
 .bubble-meta {
   display: flex;
@@ -1365,7 +1471,7 @@ p { margin: 0; }
   justify-content: flex-end;
   gap: 5px;
   margin-top: 4px;
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--faint);
@@ -1512,7 +1618,9 @@ p { margin: 0; }
   border-radius: 24px;
   padding: 12px 18px;
   background: var(--surface-strong);
-  border-color: var(--glass-line);
+  /* `--line-field` : le bord est le SEUL signe visible du champ (le remplissage vaut celui du
+     parent). `--glass-line` ne le donnait qu'à 1,40:1, le seuil des composants est 3:1. */
+  border-color: var(--line-field);
   resize: none;
   /* 16 px minimum : en dessous, iOS zoome toute la page au focus et le zoom ne
      se défait pas au retour — la barre du haut sort de l'écran et il faut
@@ -1592,7 +1700,14 @@ p { margin: 0; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .overlay.bottom { align-items: flex-end; }
-.overlay.center { align-items: center; justify-content: center; padding: 16px; }
+.overlay.center {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  /* Paysage avec encoche : la fenêtre ne passe pas sous les zones sûres latérales. */
+  padding-left: max(16px, var(--safe-left));
+  padding-right: max(16px, var(--safe-right));
+}
 
 /* Le `scale` est parti : une feuille qui grandit en montant se lit comme un
    zoom, alors que le geste doit dire « ceci vient du bas ». */
@@ -1601,11 +1716,28 @@ p { margin: 0; }
   to { transform: none; opacity: 1; }
 }
 
+/* Entrée du bandeau de mise à jour (REC-UI-046) : 12 px de course seulement, moins que sa marge basse (14 px),
+   pour que son rectangle ne sorte jamais de l'écran pendant l'animation. Le centrage ne passe pas par un
+   transform (voir .update-banner) : cette animation ne le décale donc plus d'une demi-largeur. */
+@keyframes banner-up {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 .sheet {
   width: 100%;
+  /* Repli vh AVANT dvh (BL-049) : avec une barre d'adresse rétractable, `vh` compte la fenêtre barre
+     rentrée et le bas de la feuille passait dessous. */
   max-height: 86vh;
+  max-height: 86dvh;
   overflow-y: auto;
+  /* Défiler la feuille jusqu'au bout n'entraîne pas la page derrière. */
+  overscroll-behavior: contain;
   padding: 10px 18px calc(var(--safe-bottom) + 18px);
+  /* Longhands après le raccourci, comme `.onboard` : en paysage avec encoche, les commandes
+     de la feuille ne passent pas dessous. */
+  padding-left: max(18px, var(--safe-left));
+  padding-right: max(18px, var(--safe-right));
   border-radius: var(--radius-card) var(--radius-card) 0 0;
   border-top: 1px solid var(--line);
   background: var(--surface-sheet);
@@ -1621,6 +1753,7 @@ p { margin: 0; }
   letter-spacing: -0.025em;
   line-height: 1.3;
   margin-bottom: 14px;
+  overflow-wrap: anywhere;
 }
 
 .sheet-eyebrow {
@@ -1661,6 +1794,13 @@ p { margin: 0; }
 .sheet-action.danger { color: var(--danger); }
 .sheet-action .icon { color: var(--muted); }
 .sheet-action.danger .icon { color: var(--danger); }
+/* Action indisponible (par exemple « Modifier » sur un message verrouillé) : le bouton natif
+   désactivé ne se distinguait pas des autres. L'encre passe au jeton discret `--faint`
+   (vérifié sur la feuille), sans opacité, et le survol ne la souligne plus. Placée après
+   `.danger` pour l'emporter sur lui. */
+.sheet-action:disabled { color: var(--faint); cursor: default; }
+.sheet-action:disabled .icon { color: var(--faint); }
+.sheet-action:disabled:hover { background: transparent; }
 
 /* Trois par rangée, largeur fixe. En grille, un nombre de réactions non
    multiple de 3 laisse un trou en bas à droite ; en flex centré, la dernière
@@ -1693,7 +1833,7 @@ p { margin: 0; }
 .emoji-btn .mark { color: var(--ink); }
 
 .emoji-label {
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--muted);
@@ -1718,7 +1858,9 @@ p { margin: 0; }
   width: 100%;
   max-width: 480px;
   max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -1732,10 +1874,17 @@ p { margin: 0; }
   font-weight: 650;
   letter-spacing: -0.025em;
   margin-bottom: 16px;
+  overflow-wrap: anywhere;
 }
 
 .modal-actions { display: flex; gap: 9px; margin-top: 20px; }
 .modal-actions .btn { flex: 1; }
+
+/* Une couche ouverte (feuille, fenêtre) verrouille le défilement du document : la page ne
+   bouge pas derrière. La classe `has-layer` est posée sur <html> par la gestion des couches
+   de js/ui.js ; tant qu'elle n'y est pas, cette règle est inerte. */
+html.has-layer,
+html.has-layer body { overflow: hidden; }
 
 /* =============================================================== Toasts ==== */
 
@@ -1776,21 +1925,27 @@ p { margin: 0; }
 
 .update-banner {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centré par left/right et marges automatiques, SANS transform (REC-UI-046) : l'animation d'entrée
+     `slide-up` pose son propre transform et écrasait `translateX(-50%)` ; le bandeau entrait décalé d'une
+     demi-largeur hors de l'écran puis sautait au centre. Sa largeur est définie plus bas : les marges
+     automatiques le centrent. */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   bottom: calc(var(--safe-bottom) + 14px);
   z-index: var(--z-banner);
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(94vw, 520px);
+  /* Jamais sous l'encoche : en paysage, la largeur se réduit des zones sûres latérales. */
+  width: min(94vw, 520px, calc(100vw - 2 * max(14px, var(--safe-left), var(--safe-right))));
   padding: 10px 10px 10px 16px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
   background: var(--surface-strong);
   box-shadow: var(--shadow-2);
   font-size: var(--fs-xs);
-  animation: slide-up var(--dur-slow) var(--ease-out);
+  animation: banner-up var(--dur-slow) var(--ease-out);
 }
 
 /* Réponse au « et ensuite ? » d'un état vide : un cran sous le texte principal,
@@ -1874,7 +2029,7 @@ p { margin: 0; }
 }
 
 /* Le centrage passe par `margin: 0 auto`, hérité de `.onboard`, et non par un
-   `translateX(-50%)` comme le bandeau de version : un transform au repos sur un
+   `translateX(-50%)` comme le faisait le bandeau de version (REC-UI-046) : un transform au repos sur un
    élément par ailleurs animé est exactement ce que le contrôle de repli interdit,
    et il n'apporte rien ici. */
 /* Sélecteur doublé : `.onboard--flat` ne battait `inset` de `.onboard` que par
@@ -2089,7 +2244,9 @@ p { margin: 0; }
 .legend-against .swatch { background: var(--vote-voix); }
 .legend-abstain .swatch { background: var(--vote-abstention); }
 
-.vote-actions { display: flex; gap: 7px; }
+/* `wrap` : à 320 px (ou à 130 % de police) les trois boutons ne tiennent plus côte à côte,
+   et la rangée sortait de sa carte. Le dernier passe dessous, sans réduire ni marges ni cibles. */
+.vote-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .vote-actions .btn { flex: 1; }
 /* Le bouton de vote choisi prend la couleur de CE QU'IL EXPRIME, pas une
    couleur de sélection. Un « contre » qui s'allumerait en bleu dirait la même
@@ -2115,7 +2272,9 @@ p { margin: 0; }
 
 /* ============================================================== Réunion ==== */
 
-.print-doc { max-width: var(--measure); margin: 0 auto; }
+/* Titres de sujets, propositions et formulations : un mot collé de 200 caractères ne fait
+   plus défiler la synthèse, ni à l'écran ni à l'impression (la propriété s'hérite). */
+.print-doc { max-width: var(--measure); margin: 0 auto; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
 
 .print-topic {
   padding: 20px;
@@ -2175,8 +2334,22 @@ p { margin: 0; }
    La seconde règle rétablit le comportement moderne — pas d'anneau au pointeur — et
    elle est elle-même rejetée sur le vieux moteur, où l'anneau apparaît alors aussi au
    doigt. Dégradation acceptable, et dans le bon sens. */
-:focus, :focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* TROIS règles, jamais un groupe `:focus, :focus-visible` (BL-047) : un sélecteur invalide invalide
+   tout son groupe. Sur un moteur qui ignore `:focus-visible`, la règle groupée disparaissait en
+   entier, `:focus` compris : il ne restait que l'anneau natif de 1 px, ou rien sur un <select>. */
+:focus { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
+:focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; border-radius: var(--radius-sm); }
 :focus:not(:focus-visible) { outline: none; }
+
+/* Feuilles et fenêtres : le conteneur reçoit le focus par programme à l'ouverture (tabindex="-1",
+   js/ui.js). Sur un moteur qui ignore :focus-visible (iOS 15.0 à 15.3), la règle :focus entourerait
+   toute la feuille après un toucher, et :focus:not(:focus-visible) y est rejetée. Ce repli, réservé
+   à ces moteurs-là, neutralise l'anneau du conteneur seul : les contrôles de la feuille gardent le
+   leur, et ailleurs l'anneau clavier du conteneur (:focus-visible) n'est pas touché. */
+@supports not selector(:focus-visible) {
+  .sheet[tabindex="-1"]:focus,
+  .modal[tabindex="-1"]:focus { outline: none; }
+}
 
 .visually-hidden {
   position: absolute;
@@ -2197,6 +2370,44 @@ p { margin: 0; }
   .topbar, .quickbar, .composer {
     background: var(--surface-opaque);
   }
+}
+
+/* ========================================================== Fenêtre basse ==== */
+
+/* Paysage sur téléphone, clavier ouvert (moteurs qui redimensionnent la fenêtre), zoom de page à
+   200 % : sous 480 px de hauteur, la barre du haut, le parcours et le composeur occupaient jusqu'à
+   72 % de la fenêtre, le fil gardait 0 à 99 px et le bouton d'envoi sortait de l'écran avec six
+   lignes saisies (BL-042, BL-045). Les marges se resserrent ; les cibles gardent leurs 44 px. */
+@media (max-height: 480px) {
+  /* Barres non collantes : sur les écrans qui défilent avec la page, la barre du haut part avec le
+     contenu. Dans la discussion, la page ne défile pas : la barre fait partie de la colonne fixe et
+     n'y gagne que ses marges. */
+  .topbar {
+    position: static;
+    padding-top: calc(var(--safe-top) + 4px);
+    padding-bottom: 4px;
+    min-height: var(--tap);
+  }
+
+  .quickbar { position: static; }
+
+  /* Plafond du CHAMP d'envoi, pas du composeur entier : un quart de la fenêtre (44 px au moins), avec
+     défilement interne du champ (autoGrow plafonne à 140 px, ce plafond-ci est plus bas). Un composeur
+     plafonné qui défile laissait le bouton d'envoi sous son propre défilement, à 160 px de haut.
+     Repli vh avant dvh. */
+  .composer {
+    padding-top: 6px;
+    padding-bottom: calc(var(--safe-bottom) + 6px);
+  }
+
+  .composer .textarea { max-height: 24vh; max-height: 24dvh; }
+  .signature-toggle { margin-bottom: 6px; padding-top: 2px; padding-bottom: 2px; }
+  .quote-preview { margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
+  .quote-preview .quote-text { -webkit-line-clamp: 1; }
+  .thread { padding-top: 8px; padding-bottom: 10px; }
+
+  /* La barre du haut ne colle plus : plus de marge de défilement à lui réserver. */
+  html { scroll-padding-top: var(--safe-top); }
 }
 
 /* Au-delà du mobile, la mise en page respire : deux colonnes pour les listes

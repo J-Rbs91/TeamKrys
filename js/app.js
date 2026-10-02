@@ -96,6 +96,17 @@
     return Date.now() - lastActivity > CONFIG.LOCK_IDLE_MS;
   }
 
+  /* ⚠️ Brouillons (BL-059) : écrits sur l'appareil juste avant tout ce qui peut détruire la page (arrière-plan,
+   * fermeture, rechargement d'une mise à jour) et effacés à la déconnexion. Les deux appels sont gardés : un
+   * ancien js/ui.js en cache n'a pas ces fonctions, et un stockage refusé ne doit jamais faire échouer ce qui suit. */
+  function saveDrafts() {
+    try { if (typeof UI.flushDrafts === "function") { UI.flushDrafts(); } } catch (e) { /* stockage refusé */ }
+  }
+
+  function discardDrafts() {
+    try { if (typeof UI.clearDrafts === "function") { UI.clearDrafts(); } } catch (e) { /* stockage refusé */ }
+  }
+
   /* ---------------------------------------------------------- Connexion --- */
 
   App.connectionConfigured = function () {
@@ -126,13 +137,34 @@
     if (unlocked) { startSession(); }
   }
 
+  /* ⚠️ Stockage de l'appareil refusé (WebView, cookies et données de site bloqués) :
+   * `Utils.storage.set` échoue en SILENCE. Connecté quand même, l'appareil oubliait tout au
+   * rechargement : retour muet à l'écran de connexion et identité NEUVE (un participant de
+   * plus pour l'équipe) à chaque ouverture. On sonde donc au démarrage (App.start), UN message
+   * honnête, et on n'enregistre pas la connexion plutôt que de dupliquer les identités. Le mode
+   * local, qui n'envoie rien à l'équipe, reste possible. */
+  var STORAGE_REFUSED = "Ce navigateur refuse d'enregistrer des données sur l'appareil : ouvrez BrainstO. dans votre navigateur habituel.";
+  var storageRefused = false;
+
+  /* Texte du refus de stockage pour l'écran de connexion (js/ui.js) : une ligne fixe, là où le
+   * toast du démarrage disparaît. Vide quand le stockage fonctionne. Le texte n'est écrit qu'ici. */
+  App.storageMessage = function () { return storageRefused ? STORAGE_REFUSED : ""; };
+
+  /* Saisie refusée : le message est aussi relié au champ (aria-invalid, aria-describedby : A11-017),
+   * pas seulement annoncé par un toast qui disparaît. Gardé pour un js/ui.js plus ancien en cache. */
+  function refuse(key, message) {
+    if (typeof UI.fieldError === "function") { UI.fieldError(key, message); }
+    UI.toast(message, "error");
+  }
+
   App.saveConnection = function (url, code) {
+    if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); return; }
     var clean = Utils.trim(url);
-    if (!clean) { UI.toast("Collez l'adresse du script de l'équipe.", "error"); return; }
+    if (!clean) { refuse("setup:url", "Collez l'adresse du script de l'équipe."); return; }
     /* https obligatoire, sauf pour un serveur local de test. */
     var isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(clean);
     if (clean.indexOf("https://") !== 0 && !isLocal) {
-      UI.toast("L'adresse doit commencer par https://", "error");
+      refuse("setup:url", "L'adresse doit commencer par https://");
       return;
     }
 
@@ -175,7 +207,7 @@
       UI.force();
     }).catch(function (error) {
       if (Api.isAuthError(error)) {
-        UI.toast("Code d'accès refusé par le serveur.", "error");
+        refuse("setup:code", "Code d'accès refusé par le serveur.");
       } else {
         UI.toast(error && error.message ? error.message : "Connexion impossible.", "error");
       }
@@ -217,11 +249,18 @@
    * doit donc annoncer ce qui est en attente AVANT d'arriver ici — effacer les
    * porteurs de droit sans le dire détruirait du travail non synchronisé. */
   App.logout = function () {
+    /* Un brouillon est un texte de la personne : il ne reste pas sur un appareil qu'elle quitte (BL-059). */
+    discardDrafts();
     Utils.storage.remove(CONFIG.KEYS.apiUrl);
     Utils.storage.remove(CONFIG.KEYS.lockVerifier);
     Utils.storage.remove(CONFIG.KEYS.localMode);
     Utils.storage.remove(CONFIG.KEYS.user);
     Utils.storage.remove(CONFIG.KEYS.ownItems);
+    /* §5 et §11 : le marqueur des nouveautés (js/product-ui.js, SEEN_KEY) porte un condensat de mon identifiant (`by`) et des
+     * comptes « sans moi » (`o`) : de quoi désigner l'auteur d'un message anonyme. Preuve locale DÉRIVÉE, effacée avec l'autre.
+     * ⚠️ Même chaîne que SEEN_KEY (tests/ui-review.test.js le vérifie) ; à passer dans CONFIG.KEYS avec js/config.js. Le
+     * reverrouillage d'inactivité (App.relock), lui, le garde : même personne après le code. */
+    Utils.storage.remove("brainsto.seenTopics.v1");
     ownItems = [];
     clearSession();
     lockVerifier = null;
@@ -246,18 +285,75 @@
 
   /* ------------------------------------------------------------- Verrou --- */
 
+  /* Sans vérificateur (appareil connecté sans code), seul App.relock verrouille : le
+   * serveur exige désormais un code. */
   App.needsUnlock = function () {
-    return !!lockVerifier && !unlocked;
+    return !unlocked && (!!lockVerifier || !!Sync.connection.url);
   };
+
+  /* ⚠️ Le code de l'équipe a pu CHANGER (§18 : c'est la seule révocation possible).
+   * Le vérificateur local reste alors celui de l'ancien code : le nouveau était refusé
+   * ici, l'ancien par le serveur, et la seule issue, « Se déconnecter », effaçait les
+   * actions en attente (§22). Un code qui ne correspond pas au vérificateur local est
+   * donc soumis au serveur, UNE fois par tentative, sous la forme de son jeton : le code
+   * en clair ne part pas et ne se stocke pas. Seule une réponse positive déverrouille,
+   * par les mêmes chemins que la connexion initiale ; la file n'est jamais touchée.
+   *
+   * ⚠️ Un serveur SANS code d'accès (ACCESS_CODE vide) accepte n'importe quel jeton : sa
+   * réponse positive ne prouve alors rien, et le verrou local deviendrait contournable
+   * en tapant n'importe quoi. On commence donc par lui présenter un jeton FABRIQUÉ : s'il
+   * l'accepte, l'accès est libre, le nouveau code ne peut pas être vérifié et le verrou
+   * local (ancien code) reste seul juge. */
+  function serverEnforcesCode(url) {
+    return Utils.sha256Hex("probe|" + Utils.uid()).then(function (probe) {
+      return Api.getRevision(url, probe).then(function (data) {
+        return data && data.ok === true ? "open" : "unknown";
+      }, function (error) {
+        return Api.isAuthError(error) ? "enforced" : "unknown";
+      });
+    });
+  }
+
+  function unlockWithNewCode(value, verifier) {
+    var url = Sync.connection.url;
+    if (!url || Sync.connection.localMode) {
+      refuse("lock:code", "Code d'accès incorrect.");
+      return null;
+    }
+    return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
+      return serverEnforcesCode(url).then(function (mode) {
+        if (mode !== "enforced") { return mode === "open" ? false : null; }
+        return Api.getRevision(url, token).then(function (data) {
+          return data && data.ok === true ? true : null;
+        }, function (error) {
+          return Api.isAuthError(error) ? false : null;
+        });
+      }).then(function (accepted) {
+        /* Réponse tardive : déconnexion, autre adresse ou déjà déverrouillé entre-temps. */
+        if (!App.needsUnlock() || Sync.connection.url !== url) { return; }
+        if (accepted !== true) {
+          refuse("lock:code", accepted === false ? "Code d'accès incorrect."
+            : "Code d'accès incorrect, ou nouveau code impossible à vérifier sans connexion.");
+          return;
+        }
+        Utils.storage.set(CONFIG.KEYS.lockVerifier, verifier);
+        lockVerifier = verifier;
+        unlocked = true;
+        Sync.setConnection({ token: token, unlocked: true });
+        startSession();
+        UI.toast("Nouveau code accepté.");
+        Sync.start();
+        Sync.now();
+        UI.force();
+      });
+    });
+  }
 
   App.unlock = function (code) {
     var value = String(code == null ? "" : code);
-    if (!value) { UI.toast("Saisissez le code d'accès.", "error"); return; }
+    if (!value) { refuse("lock:code", "Saisissez le code d'accès."); return; }
     Utils.sha256Hex(CONFIG.verifierInput(value)).then(function (verifier) {
-      if (verifier !== lockVerifier) {
-        UI.toast("Code d'accès incorrect.", "error");
-        return null;
-      }
+      if (verifier !== lockVerifier) { return unlockWithNewCode(value, verifier); }
       return Utils.sha256Hex(CONFIG.serverTokenInput(value)).then(function (token) {
         unlocked = true;
         Sync.setConnection({ token: token, unlocked: true });
@@ -266,11 +362,21 @@
         Sync.now();
         UI.force();
       });
+    }).catch(function (error) {
+      /* ⚠️ Sans crypto.subtle (contexte non sécurisé, WebView), Utils.sha256Hex rejette avec une
+       * erreur typée : on le dit au lieu de laisser le bouton muet. L'appareil reste verrouillé. */
+      UI.toast(Utils.isCryptoUnavailable(error) ? error.message : "Déverrouillage impossible.", "error");
     });
   };
 
+  /* ⚠️ Appareil connecté SANS code (aucun vérificateur) : s'il est refusé, c'est que le
+   * serveur exige désormais un code. Sortir sans rien faire laissait la synchronisation
+   * essuyer un refus toutes les trois secondes, avec un message à chaque fois, sans aucun
+   * endroit où saisir le code. On verrouille donc aussi : l'écran demande le code, que le
+   * serveur valide (unlockWithNewCode, dont la sonde écarte un serveur ouvert). La file
+   * d'actions n'est pas touchée. Mode local : rien à verrouiller. */
   App.relock = function () {
-    if (!lockVerifier) { return; }
+    if (!lockVerifier && (!Sync.connection.url || Sync.connection.localMode)) { return; }
     unlocked = false;
     clearSession();
     Sync.setConnection({ token: "", unlocked: false });
@@ -290,7 +396,7 @@
 
   App.saveName = function (name, silent) {
     var clean = Utils.limit(name, Core.LIMITS.name);
-    if (!clean) { UI.toast("Le nom est obligatoire.", "error"); return; }
+    if (!clean) { refuse(silent ? "settings:name" : "setup:name", "Le nom est obligatoire."); return; }
     App.user.name = clean;
     Utils.storage.set(CONFIG.KEYS.user, App.user);
     Sync.dispatch(Sync.makeAction("REGISTER_PARTICIPANT", {
@@ -320,12 +426,12 @@
   }
 
   function onboardingDecide() {
-    /* Chargement mixte : la navigation est servie en network-first et les
-     * sous-ressources en cache-first, donc un `index.html` neuf peut cohabiter avec
-     * un `js/config.js` de cache ancien. Sans cette garde, l'appel lèverait une
-     * exception ICI — c'est-à-dire AVANT `Sync.boot()`, donc avant que la file
-     * d'actions ne soit relue et rejouée. Un onboarding raté ne doit jamais coûter
-     * une file d'actions. */
+    /* Chargement mixte : un appareil encore servi par un ancien service worker (réseau
+     * d'abord, jusqu'à la 1.12.0) peut charger une dernière fois un `index.html` neuf avec
+     * un `js/config.js` de cache ancien ; depuis, la page et les scripts viennent du même
+     * cache versionné. Sans cette garde, l'appel lèverait une exception ICI, c'est-à-dire
+     * AVANT `Sync.boot()`, donc avant que la file d'actions ne soit relue et rejouée. Un
+     * onboarding raté ne doit jamais coûter une file d'actions. */
     if (typeof CONFIG.onboardingDue !== "function") { return null; }
     return CONFIG.onboardingDue(
       Utils.storage.get(CONFIG.KEYS.onboarding, null),
@@ -557,20 +663,29 @@
    * retenir la personne sur le premier écran serait un défaut, pas une
    * protection. */
   function entreesSousNous() {
-    var etat = window.history.state;
-    return (etat && typeof etat.tkIndex === "number") ? etat.tkIndex : 0;
+    try {
+      var etat = window.history.state;
+      return (etat && typeof etat.tkIndex === "number") ? etat.tkIndex : 0;
+    } catch (e) { return 0; }   // historique refusé : voir empiler
   }
 
   var traverseesAIgnorer = 0;   // provoquées par nous, donc déjà appliquées
   var cibleAttendue = null;     // adresse visée par la traversée en cours
   var resynchronisation = false;
 
+  /* ⚠️ WebView en bac à sable, document d'origine opaque : l'historique est refusé et
+   * `pushState` / `replaceState` LÈVENT (SecurityError). Sans garde, l'exception sortait de
+   * `UI.set` (la feuille ne s'ouvrait pas) ou d'`App.start` (écran vide). L'écran suit
+   * `App.route`, jamais l'adresse : la navigation interne continue donc SANS historique.
+   * Seule dégradation : le geste retour du système sort alors de l'application. */
   function empiler(hash) {
-    window.history.pushState({ tkIndex: entreesSousNous() + 1 }, "", hash);
+    try { window.history.pushState({ tkIndex: entreesSousNous() + 1 }, "", hash); }
+    catch (e) { /* historique refusé : navigation sans historique */ }
   }
 
   function remplacer(hash) {
-    window.history.replaceState({ tkIndex: entreesSousNous() }, "", hash);
+    try { window.history.replaceState({ tkIndex: entreesSousNous() }, "", hash); }
+    catch (e) { /* historique refusé : navigation sans historique */ }
   }
 
   /* Remontée. On dépile ce que la pile contient réellement ; s'il en manque —
@@ -678,6 +793,26 @@
     return Sync.dispatch(Sync.makeAction(type, payload, actorOverride || App.user));
   }
 
+  /* ⚠️ §4, §7, §9, §19, §22 : sans marqueur, SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE
+   * sont des BASCULES. Rejouées (réponse perdue, file rejouée sur un état qui les contient
+   * déjà, identifiant sorti du journal de 5 000), elles retirent ce que la personne voulait
+   * fixer. Quand le serveur annonce le marqueur (FEATURES "idempotent"), l'appui décide
+   * donc d'après ce qui est AFFICHÉ (Store.view, la vue optimiste) : bouton non enfoncé,
+   * on AFFECTE (`set:true`) ; bouton enfoncé, on RETIRE explicitement. Sinon (ancien
+   * serveur, ou aucune réponse reçue : liste vide), l'envoi reste exactement l'ancien. */
+  function idempotent() { return Sync.supports("idempotent"); }
+
+  function shownTopic(topicId) {
+    return Store.view ? Core.findTopic(Store.view, topicId) : null;
+  }
+
+  /* ⚠️ Une fenêtre d'édition ne se ferme QUE si l'action est acceptée (REC-RUI-005) : sur un refus local (message verrouillé par
+   * une réaction, sujet supprimé), Sync.dispatch affiche déjà le message d'erreur et rend {ok:false} ; la fenêtre reste ouverte
+   * avec le texte rédigé (à corriger ou à copier) et le focus dedans. Résultat inconnu : comportement d'avant, elle se ferme. */
+  function closeIfAccepted(result) {
+    if (!result || result.ok !== false) { UI.set({ modal: null }); }
+  }
+
   App.actions = {
     createTopic: function (title, description, authorName) {
       var topicId = Utils.uid();
@@ -698,7 +833,7 @@
 
     updateTopic: function (topicId, title, description) {
       dispatch("UPDATE_TOPIC", { topicId: topicId, title: title, description: description })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     changeTopicStatus: function (topicId, status) {
@@ -709,22 +844,43 @@
       var messageId = Utils.uid();
       var actor = anon ? { id: "", name: Core.ANON_NAME } : App.user;
       remember(messageId);
-      dispatch("CREATE_MESSAGE", {
+      /* ⚠️ Le résultat est rendu à l'appelant (BL-059) : un refus local de validation ne doit pas vider le composeur. */
+      var sent = dispatch("CREATE_MESSAGE", {
         topicId: topicId, messageId: messageId, text: text, quoteId: quoteId || null, anon: !!anon
       }, actor);
       UI.set({ quote: null });
+      return sent;
     },
 
     updateMessage: function (topicId, messageId, text) {
       dispatch("UPDATE_MESSAGE", { topicId: topicId, messageId: messageId, text: text })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     setMessageSignature: function (topicId, messageId, anon) {
+      /* ⚠️ §5 : une fois anonyme, le message n'a plus d'authorId ; seule la preuve locale
+       * permet encore de le modifier ou de le signer. Un message signé absent de cette
+       * liste (plafond de 2000, par exemple) n'était reconnu que par son authorId : on
+       * l'inscrit AVANT l'envoi, sinon l'appareil en perd la maîtrise. */
+      if (anon) { remember(messageId); }
       dispatch("SET_MESSAGE_SIGNATURE", { topicId: topicId, messageId: messageId, anon: !!anon });
     },
 
     setReaction: function (topicId, messageId, emoji) {
+      /* ⚠️ §5 : réagir à son PROPRE message anonyme écrirait son identifiant comme clé de
+       * `reactions`, dans les données partagées. Retirer une réaction déjà posée (données
+       * antérieures) reste permis : cela ôte l'identifiant au lieu de l'ajouter. */
+      var message = Core.findMessage(Store.view ? Core.findTopic(Store.view, topicId) : null, messageId);
+      if (message && message.anon && App.ownsMessage(message) && emoji &&
+          emoji !== (message.reactions || {})[App.user.id]) {
+        UI.toast("Vous ne pouvez pas réagir à votre propre message anonyme.", "error");
+        return;
+      }
+      if (idempotent()) {
+        var mine = message ? (message.reactions || {})[App.user.id] : undefined;
+        dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: mine === emoji ? "" : emoji, set: true });
+        return;
+      }
       dispatch("SET_REACTION", { topicId: topicId, messageId: messageId, emoji: emoji });
     },
 
@@ -741,7 +897,7 @@
 
     updateProposal: function (topicId, proposalId, title, description) {
       dispatch("UPDATE_PROPOSAL", { topicId: topicId, proposalId: proposalId, title: title, description: description })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     changeProposalStatus: function (topicId, proposalId, status) {
@@ -749,6 +905,15 @@
     },
 
     setVote: function (topicId, proposalId, value) {
+      if (idempotent()) {
+        var proposal = Core.findProposal(shownTopic(topicId), proposalId);
+        if (proposal && (proposal.votes || {})[App.user.id] === value) {
+          dispatch("REMOVE_VOTE", { topicId: topicId, proposalId: proposalId });
+        } else {
+          dispatch("SET_VOTE", { topicId: topicId, proposalId: proposalId, value: value, set: true });
+        }
+        return;
+      }
       dispatch("SET_VOTE", { topicId: topicId, proposalId: proposalId, value: value });
     },
 
@@ -764,7 +929,7 @@
 
     updateConclusion: function (topicId, conclusionId, text) {
       dispatch("UPDATE_CONCLUSION_ITEM", { topicId: topicId, conclusionId: conclusionId, text: text })
-        .then(function () { UI.set({ modal: null }); });
+        .then(closeIfAccepted);
     },
 
     deleteConclusion: function (topicId, conclusionId) {
@@ -773,24 +938,74 @@
     },
 
     setConclusionVote: function (topicId, conclusionId) {
+      if (idempotent()) {
+        var topic = shownTopic(topicId);
+        if (topic && (topic.conclusionVotes || {})[App.user.id] === conclusionId) {
+          dispatch("REMOVE_CONCLUSION_VOTE", { topicId: topicId });
+        } else {
+          dispatch("SET_CONCLUSION_VOTE", { topicId: topicId, conclusionId: conclusionId, set: true });
+        }
+        return;
+      }
       dispatch("SET_CONCLUSION_VOTE", { topicId: topicId, conclusionId: conclusionId });
     }
   };
 
   /* ---------------------------------------------------- Service worker --- */
 
+  /* ⚠️ `navigator.serviceWorker` se lit UNE fois, sous try/catch, et c'est sa VALEUR qu'on teste :
+   * `"serviceWorker" in navigator` reste vrai quand elle vaut undefined (fenêtre privée de Firefox
+   * avant la 139, Focus, Tor) et le getter peut lever (SecurityError : cookies bloqués, bac à
+   * sable). Sans ce garde, l'exception sortait d'App.start, après l'affichage, sans un mot.
+   * L'application fonctionne sans service worker : on ne propose alors aucune mise à jour. */
+  function serviceWorkerContainer() {
+    try {
+      var found = navigator.serviceWorker;
+      return found && typeof found.register === "function" && typeof found.addEventListener === "function"
+        ? found : null;
+    } catch (e) { return null; }
+  }
+
   function registerServiceWorker() {
-    if (!("serviceWorker" in navigator)) { return; }
-    navigator.serviceWorker.register("service-worker.js").then(function (registration) {
+    var container = serviceWorkerContainer();
+    if (!container) { return; }
+
+    /* ⚠️ Le bandeau n'est posé qu'UNE fois (UI.showUpdateBanner ignore un second appel tant que
+     * le premier est affiché) : son rappel ne doit donc JAMAIS retenir un worker. Au clic, on
+     * relit l'enregistrement COURANT. Un autre onglet a pu appliquer la mise à jour entre-temps
+     * (plus rien n'attend : on recharge simplement), ou une version plus récente a remplacé celle
+     * qui attendait (l'ancienne est obsolète : un message qui lui serait envoyé n'aurait aucun
+     * effet, et le bouton resterait muet). */
+    function applyUpdate(known) {
+      updateRequested = true;
+      function conclude(registration) {
+        /* Le rechargement, ou le changement de worker qui le provoque, détruit la page : les brouillons d'abord. */
+        saveDrafts();
+        var waiting = registration && registration.waiting;
+        if (waiting) {
+          try { waiting.postMessage({ type: "SKIP_WAITING" }); return; }
+          catch (e) { /* devenu obsolète entre la lecture et l'envoi : on recharge */ }
+        }
+        window.location.reload();
+      }
+      var asking = null;
+      try { asking = typeof container.getRegistration === "function" ? container.getRegistration() : null; }
+      catch (e) { asking = null; }
+      if (!asking || typeof asking.then !== "function") { conclude(known); return; }
+      asking.then(function (found) { conclude(found || known); }, function () { conclude(known); });
+    }
+
+    var registering;
+    try { registering = Promise.resolve(container.register("service-worker.js")); }
+    catch (e) { return; }
+    registering.then(function (registration) {
+      function offer() {
+        UI.showUpdateBanner(function () { applyUpdate(registration); });
+      }
       function watch(worker) {
         if (!worker) { return; }
         worker.addEventListener("statechange", function () {
-          if (worker.state === "installed" && navigator.serviceWorker.controller) {
-            UI.showUpdateBanner(function () {
-              updateRequested = true;
-              worker.postMessage({ type: "SKIP_WAITING" });
-            });
-          }
+          if (worker.state === "installed" && container.controller) { offer(); }
         });
       }
       /* Un worker peut être DÉJÀ en cours d'installation quand `register()` résout :
@@ -798,19 +1013,14 @@
        * encore nul — sans cette ligne, cette mise à jour n'a aucun bandeau, et il faut
        * attendre le chargement suivant pour en proposer un. */
       watch(registration.installing);
-      if (registration.waiting && navigator.serviceWorker.controller) {
-        UI.showUpdateBanner(function () {
-          updateRequested = true;
-          registration.waiting.postMessage({ type: "SKIP_WAITING" });
-        });
-      }
+      if (registration.waiting && container.controller) { offer(); }
       registration.addEventListener("updatefound", function () { watch(registration.installing); });
     }).catch(function () { /* hors ligne ou contexte non sécurisé */ });
 
-    navigator.serviceWorker.addEventListener("controllerchange", function () {
+    container.addEventListener("controllerchange", function () {
       /* ⚠️ On ne recharge QUE si l'utilisateur a demandé la mise à jour :
        * sinon le tout premier chargement partirait en boucle. */
-      if (updateRequested) { window.location.reload(); }
+      if (updateRequested) { saveDrafts(); window.location.reload(); }
     });
   }
 
@@ -837,6 +1047,7 @@
          * l'application sans prévenir, et c'est cette valeur qui décidera au
          * retour s'il faut redemander le code. */
         writeSession(lastActivity);
+        saveDrafts();
         /* ⚠️ Et on POSTE ce qui reste en file avant de disparaître. Passer en
          * arrière-plan sur un téléphone, c'est très souvent mourir : le système
          * gèle la page, puis la tue sans prévenir et sans redonner la main. Un
@@ -853,6 +1064,7 @@
     /* iOS ne garantit pas visibilitychange à la fermeture ; pagehide, si. */
     window.addEventListener("pagehide", function () {
       writeSession(lastActivity);
+      saveDrafts();
       Sync.flush();
     });
 
@@ -878,6 +1090,9 @@
 
   App.start = function () {
     UI.init();
+    /* Sonde d'écriture, UNE fois, avant toute lecture : voir STORAGE_REFUSED. */
+    storageRefused = !Utils.storage.available();
+    if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); }
     loadUser();
     loadOwnItems();
     loadConnection();
@@ -897,7 +1112,7 @@
       onChange: function () { UI.render(); UI.refreshStatus(); },
       onMessage: function (text, kind) { UI.toast(text, kind); },
       onAuthError: function () {
-        UI.toast("Code d'accès refusé : espace reverrouillé.", "error");
+        UI.toast("Code d'accès refusé par le serveur : saisissez le nouveau code de l'équipe.", "error");
         App.relock();
       }
     });

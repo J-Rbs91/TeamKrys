@@ -15,7 +15,9 @@
  * repli mémoire. C'est délibéré — c'est exactement ce chemin qui était cassé,
  * et c'est celui qu'empruntent en vrai les fenêtres in-app des messageries et
  * la navigation privée. La branche IndexedDB elle-même, faute de moteur ici,
- * reste couverte par la recette manuelle (docs/CHECKLIST_TEST.md).
+ * reste couverte par la recette manuelle (docs/CHECKLIST_TEST.md) ; ses PANNES
+ * (ouverture muette ou refusée, connexion fermée, quota, base partagée par deux
+ * onglets) sont jouées sur une fausse IndexedDB minimale (makeIDB).
  */
 "use strict";
 
@@ -53,11 +55,19 @@ function makeServer(options) {
   const srv = {
     data: Core.emptyState(), features,
     calls: { revision: 0, state: 0, post: 0, actionsPosted: 0 },
-    down: false
+    down: false,
+    /* Pannes injectées au niveau HTTP (client « realApi » seulement, voir makeFetch). */
+    faults: [], http: { GET: 0, POST: 0 }, beacons: []
   };
 
   function envelope(payload) {
     return Object.assign({ ok: true, features }, payload);
+  }
+
+  /* Contrat de Code.gs (WP-01) : un rejet de validation porte code « invalid »,
+   * définitif. options.legacy : backend d'AVANT, qui refusait sans aucun code. */
+  function refusal(id, error) {
+    return options.legacy ? { id, ok: false, error } : { id, ok: false, code: "invalid", error };
   }
 
   function applyOne(action) {
@@ -65,13 +75,13 @@ function makeServer(options) {
      * optimiste du client passe (sa vue est encore à jour) mais où l'état
      * serveur a changé entre-temps. */
     if (srv.rejectWhen && srv.rejectWhen(action)) {
-      return { id: action.id, ok: false, error: "Refus simulé côté serveur." };
+      return refusal(action.id, "Refus simulé côté serveur.");
     }
     if (srv.data.processedActionIds.indexOf(action.id) >= 0) {
       return { id: action.id, ok: true, duplicate: true };
     }
     const verdict = Core.validateAction(srv.data, action);
-    if (!verdict.ok) { return { id: action.id, ok: false, error: verdict.error }; }
+    if (!verdict.ok) { return refusal(action.id, verdict.error); }
     Core.applyAction(srv.data, action, new Date().toISOString());
     srv.data.revision += 1;
     srv.data.processedActionIds.push(action.id);
@@ -87,7 +97,7 @@ function makeServer(options) {
     if (!Array.isArray(body)) {
       /* Chemin d'origine : un refus métier est une erreur de la requête. */
       const result = applyOne(body);
-      if (result.ok === false) { const e = new Error(result.error); e.kind = "server"; throw e; }
+      if (result.ok === false) { const e = new Error(result.error); e.kind = "server"; e.code = result.code || null; throw e; }
       return envelope({ revision: srv.data.revision, state: lean(srv.data), duplicate: !!result.duplicate });
     }
 
@@ -127,6 +137,100 @@ const MODERN = ["since", "batch", "lean"];
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
+/* Faux `fetch` devant le faux backend : le VRAI js/api.js lit ses réponses
+ * (statut, corps, JSON). Une panne de srv.faults ({ method, kind, times }) vaut
+ * pour la prochaine requête de cette méthode :
+ *   html200    page d'erreur HTML en 200, rien d'exécuté
+ *   garbage    JSON tronqué en 200, rien d'exécuté
+ *   lateGarbage  exécutée, puis réponse illisible (le verdict se perd)
+ *   lock, drive  exception de Code.gs : { ok:false, code:"retry" }, rien d'exécuté
+ *   legacyFail exception d'un backend d'AVANT : { ok:false } sans code
+ *   oddCode    code inconnu de ce client
+ *   status500  statut 500
+ *   hang       en-têtes reçus, corps qui n'arrive jamais
+ *   noResults  lot : seule la 1re action exécutée, réponse ok SANS results
+ *   holes      lot : 2e action en retry (non exécutée), verdict de la 3e absent
+ *   auth       refus d'authentification : { ok:false, code:"auth" }, rien d'exécuté */
+function makeFetch(srv) {
+  return function (url, init) {
+    const method = (init && init.method) || "GET";
+    srv.http[method] = (srv.http[method] || 0) + 1;
+    const i = srv.faults.findIndex((f) => f.method === method && f.times > 0);
+    const kind = i >= 0 ? srv.faults[i].kind : null;
+    if (i >= 0) { srv.faults[i].times -= 1; }
+    const reply = (status, text) => Promise.resolve({
+      ok: status >= 200 && status < 300, status,
+      text: () => (kind === "hang" ? new Promise(() => {}) : Promise.resolve(text))
+    });
+    const failure = { lock: "Lock timeout: another process was holding the lock for too long.",
+      drive: "Service error: Drive" };
+    if (kind === "html200") { return reply(200, "<!DOCTYPE html><html><body>Erreur du script</body></html>"); }
+    if (kind === "garbage") { return reply(200, "{\"ok\":true,\"revision\":"); }
+    if (kind === "status500") { return reply(500, "<html>500</html>"); }
+    if (kind === "hang") { return reply(200, ""); }
+    if (failure[kind]) { return reply(200, JSON.stringify({ ok: false, code: "retry", error: failure[kind] })); }
+    if (kind === "legacyFail") { return reply(200, JSON.stringify({ ok: false, error: "Service error: Drive" })); }
+    if (kind === "oddCode") { return reply(200, JSON.stringify({ ok: false, code: "quota", error: "Quota dépassé." })); }
+    if (kind === "auth") { return reply(200, JSON.stringify({ ok: false, code: "auth", error: "Code d'accès refusé." })); }
+
+    const query = new URL(url).searchParams;
+    let body = init && init.body ? JSON.parse(init.body) : null;
+    let payload;
+    try {
+      if (method === "POST" && kind === "noResults") {
+        srv.post(body[0]);
+        payload = { ok: true, features: srv.features, revision: srv.data.revision, state: lean(srv.data) };
+      } else if (method === "POST" && kind === "holes") {
+        payload = srv.post([body[0]]);
+        srv.post([body[2]]);
+        payload = Object.assign({}, payload, { revision: srv.data.revision, state: lean(srv.data), results: [
+          payload.results[0], { id: body[1].id, ok: false, code: "retry", error: "Service error: Drive" }] });
+      } else if (method === "POST") {
+        payload = srv.post(body);
+      } else if (query.get("mode") === "revision") {
+        payload = srv.revision();
+      } else {
+        payload = srv.state(query.get("since"));
+      }
+    } catch (e) {
+      if (e.kind === "network") { return Promise.reject(new TypeError("Failed to fetch")); }
+      payload = { ok: false, error: e.message, code: e.code || undefined };
+    }
+    if (kind === "lateGarbage") { return reply(200, "{\"ok\":tr"); }
+    return reply(200, JSON.stringify(payload));
+  };
+}
+
+/* Horloge VIRTUELLE : les délais ne s'écoulent que lorsqu'on les fait avancer, dans
+ * l'ordre, les promesses se déroulant entre deux échéances. Cinq minutes de boucle
+ * se jouent ainsi en une fraction de seconde, et de façon déterministe. */
+function makeClock() {
+  let now = 0;
+  let seq = 0;
+  const waiting = new Map();
+  const turn = () => new Promise((resolve) => setTimeout(resolve, 1));
+  return {
+    now: () => now,
+    setTimeout(fn, ms) { seq += 1; waiting.set(seq, { at: now + (ms || 0), fn }); return seq; },
+    clearTimeout(handle) { waiting.delete(handle); },
+    async advance(ms) {
+      const end = now + ms;
+      for (let guard = 0; guard < 20000; guard++) {
+        await turn();
+        let next = null;
+        waiting.forEach((timer, handle) => {
+          if (timer.at <= end && (!next || timer.at < next.timer.at)) { next = { handle, timer }; }
+        });
+        if (!next) { now = end; await turn(); return; }
+        waiting.delete(next.handle);
+        now = Math.max(now, next.timer.at);
+        next.timer.fn();
+      }
+      throw new Error("horloge virtuelle : trop d'échéances");
+    }
+  };
+}
+
 /* ------------------------------------------- Un client complet, isolé --- */
 
 /* options.indexedDB === false : le module database.js ne trouve aucun
@@ -142,6 +246,14 @@ function makeClient(name, server, options) {
   const ctx = vm.createContext(sandbox);
   sandbox.globalThis = sandbox;
   if (options.indexedDB !== false) { sandbox.indexedDB = options.indexedDB; }
+  /* options.timers : horloge accélérée. Chaque délai demandé est noté, puis
+   * écoulé cent fois plus vite : on vérifie un délai de plusieurs secondes sans
+   * l'attendre. */
+  if (options.timers) {
+    sandbox.setTimeout = (fn, ms) => { options.timers.push(ms || 0); return setTimeout(fn, (ms || 0) / 100); };
+  }
+  /* options.clock : horloge virtuelle (makeClock), pour jouer des minutes sans les attendre. */
+  if (options.clock) { sandbox.setTimeout = options.clock.setTimeout; sandbox.clearTimeout = options.clock.clearTimeout; }
 
   const messages = [];
   sandbox.Api = {
@@ -171,12 +283,22 @@ function makeClient(name, server, options) {
      * On reproduit les deux traits : appliqué côté serveur, muet côté client. */
     beacon: (url, token, body) => {
       if (server.refuseBeacon) { return false; }
+      server.beacons.push(body);
       try { server.post(body); } catch (e) { /* muet, par construction */ }
       return true;
     }
   };
 
-  ["js/state.js", "js/database.js", "js/sync.js"].forEach(function (file) {
+  /* options.realApi : le VRAI js/api.js (classement des réponses, délais) sur le
+   * faux fetch de makeFetch, au lieu de la doublure ci-dessus. */
+  const files = ["js/state.js", "js/database.js", "js/sync.js"];
+  if (options.realApi) {
+    delete sandbox.Api;
+    sandbox.fetch = makeFetch(server);
+    sandbox.AbortController = AbortController;
+    files.unshift("js/api.js");
+  }
+  files.forEach(function (file) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   });
 
@@ -184,12 +306,111 @@ function makeClient(name, server, options) {
   Sync.setHooks({ onMessage: (text, kind) => messages.push(kind + ": " + text) });
   Sync.setConnection({ url: "https://exemple/exec", token: "", localMode: false, unlocked: true });
 
-  return { name, Sync, Store: ctx.Store, DB: ctx.DB, messages,
+  return { name, Sync, Store: ctx.Store, DB: ctx.DB, Api: ctx.Api, messages,
     user: { id: "u-" + name, name: name } };
 }
 
 /* Laisse les promesses et les micro-tâches se dérouler. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
+
+/* ---------------------------------------------- Fausse IndexedDB --- */
+
+/* Juste ce qu'emploie database.js, avec ce qui compte ici : clé auto-incrémentée
+ * acquise à la fin de la transaction, données partagées par plusieurs clients
+ * (deux onglets du même appareil, ou deux lancements successifs), et pannes à
+ * la demande : ouverture muette ou refusée, connexion fermée par le système
+ * (transaction() lève InvalidStateError), quota dépassé à l'écriture. */
+function makeIDB() {
+  const data = {};
+  const conns = [];
+  const faults = { openHang: 0, openFail: 0, txThrow: 0, addQuota: 0 };
+  const later = (fn) => setTimeout(fn, 0);
+  const fault = (name) => { const e = new Error(name); e.name = name; return e; };
+  const request = () => ({ result: undefined, onsuccess: null });
+
+  function transaction() {
+    const tx = { oncomplete: null, onerror: null, onabort: null, error: null };
+    const steps = [];              // appliquées à la validation, dans l'ordre
+    tx.objectStore = (name) => {
+      const s = data[name];
+      return {
+        add(value) {
+          if (faults.addQuota > 0) { faults.addQuota -= 1; throw fault("QuotaExceededError"); }
+          const r = request();
+          steps.push(() => {
+            s.auto += 1;
+            s.rows.set(s.auto, Object.assign({}, value, { [s.keyPath]: s.auto }));
+            r.result = s.auto; if (r.onsuccess) { r.onsuccess(); }
+          });
+          return r;
+        },
+        put(value) { steps.push(() => { s.rows.set(value[s.keyPath], value); }); return request(); },
+        get(key) {
+          const r = request();
+          steps.push(() => { r.result = s.rows.get(key); if (r.onsuccess) { r.onsuccess(); } });
+          return r;
+        },
+        delete(key) { steps.push(() => { s.rows.delete(key); }); return request(); },
+        clear() { steps.push(() => { s.rows.clear(); }); return request(); },
+        openCursor() {
+          const r = request();
+          steps.push(() => new Promise((done) => {
+            const keys = [...s.rows.keys()].sort((a, b) => a - b);
+            let i = 0;
+            const next = () => {
+              if (i >= keys.length) { r.result = null; if (r.onsuccess) { r.onsuccess(); } done(); return; }
+              const key = keys[i++];
+              r.result = { key, value: s.rows.get(key), continue: () => later(next) };
+              if (r.onsuccess) { r.onsuccess(); }
+            };
+            next();
+          }));
+          return r;
+        }
+      };
+    };
+    later(async () => {
+      for (const step of steps) { await step(); }
+      if (tx.oncomplete) { tx.oncomplete(); }
+    });
+    return tx;
+  }
+
+  return {
+    faults,
+    open() {
+      const req = { result: null, error: null, onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null };
+      if (faults.openHang > 0) { faults.openHang -= 1; return req; }      // muette, pour toujours
+      later(() => {
+        if (faults.openFail > 0) {
+          faults.openFail -= 1; req.error = fault("UnknownError");
+          if (req.onerror) { req.onerror(); }
+          return;
+        }
+        const db = {
+          closed: false, onclose: null, onversionchange: null,
+          objectStoreNames: { contains: (n) => !!data[n] },
+          createObjectStore(n, o) { data[n] = { keyPath: o.keyPath, auto: 0, rows: new Map() }; },
+          close() { db.closed = true; },
+          transaction() {
+            if (db.closed) { throw fault("InvalidStateError"); }
+            if (faults.txThrow > 0) { faults.txThrow -= 1; throw fault("InvalidStateError"); }
+            return transaction();
+          }
+        };
+        conns.push(db);
+        req.result = db;
+        if (!data.queue && req.onupgradeneeded) { req.onupgradeneeded(); }
+        if (req.onsuccess) { req.onsuccess(); }
+      });
+      return req;
+    },
+    /* Ce que fait le système (iOS au retour d'arrière-plan) : fermer les
+     * connexions sous les pieds de l'application, sans prévenir. */
+    closeAll() { conns.forEach((db) => { db.closed = true; }); },
+    rows(name) { return data[name] ? [...data[name].rows.values()] : []; }
+  };
+}
 
 async function say(client, payload, type) {
   await client.Sync.dispatch(client.Sync.makeAction(type || "CREATE_MESSAGE", payload, client.user));
@@ -655,6 +876,537 @@ async function run() {
     assert(A.Store.base.processedActionIds.length === 0,
       "le client reçoit encore les identifiants de déduplication");
     assert(Core.findTopic(A.Store.view, "t1"), "l'allègement a fait perdre le sujet");
+  });
+
+  /* --------------------------------------- Pannes d'IndexedDB (§22) --- */
+
+  /* ⚠️ RÉGRESSION (BL-002). Quand la base refusait d'écrire (connexion fermée par
+   * le système, quota), l'action était RETIRÉE de la file et jamais envoyée,
+   * réseau sain : le message disparaissait, composeur déjà vidé. */
+  await check("base qui refuse d'écrire (connexion perdue, puis quota) : l'action reste en file et part", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    srv.down = true;                       // l'envoi traîne : on voit ce que garde la file
+    idb.faults.txThrow = 2;                // connexion perdue, et encore après la réouverture
+    const r1 = await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "base fermée" }, A.user));
+    idb.faults.addQuota = 1;               // puis disque plein
+    const r2 = await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m2", text: "quota" }, A.user));
+    await settle();
+
+    assert(r1.ok && r2.ok, "l'action est refusée pour un échec du stockage local");
+    assert(A.Sync.pendingCount() === 2, "action retirée de la file : " + A.Sync.pendingCount() + " en attente au lieu de 2");
+    assert(A.Store.queue.every((e) => e.seq !== null), "l'action gardée en mémoire n'est pas envoyable");
+    const shown = Core.findTopic(A.Store.view, "t1");
+    assert(Core.findMessage(shown, "m1") && Core.findMessage(shown, "m2"), "le message a disparu de l'écran");
+    const warnings = A.messages.filter((m) => m.indexOf("Enregistrement sur cet appareil impossible") >= 0);
+    assert(warnings.length === 1, warnings.length + " avertissement(s) au lieu d'un seul");
+
+    srv.down = false;
+    await A.Sync.now(); await settle(); await A.Sync.now(); await settle();
+    const texts = Core.findTopic(srv.data, "t1").messages.map((m) => m.text).join(" | ");
+    assert(texts === "base fermée | quota", "le serveur a reçu : [" + texts + "]");
+    assert(A.Sync.pendingCount() === 0, "la file ne se vide pas après l'acquittement");
+    assert(idb.rows("queue").length === 0, "une action acquittée reste en base");
+  });
+
+  await check("connexion fermée par le système : la base est rouverte, l'action suivante y est écrite", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    srv.down = true;
+    idb.closeAll();
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "après fermeture" }, A.user));
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m2", text: "la suivante" }, A.user));
+    await settle();
+
+    const saved = idb.rows("queue").map((r) => r.action.payload.messageId).join(",");
+    assert(saved === "m1,m2", "file en base après la fermeture : [" + saved + "] au lieu de [m1,m2]");
+    assert(A.messages.every((m) => m.indexOf("appareil") < 0), "avertissement de stockage affiché alors que la base a été rouverte");
+
+    srv.down = false;
+    await A.Sync.now(); await settle();
+    assert(Core.findMessage(Core.findTopic(srv.data, "t1"), "m2"), "l'action suivante n'est pas arrivée");
+    assert(A.Sync.pendingCount() === 0 && idb.rows("queue").length === 0, "la file ne se vide pas");
+  });
+
+  /* BL-021 : une ouverture qui ne répond jamais (iOS 14.6, vues intégrées)
+   * laissait l'écran blanc indéfiniment, Sync.boot n'aboutissant jamais. */
+  await check("ouverture de la base muette : le démarrage aboutit en 5 s au plus, en repli mémoire", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    idb.faults.openHang = 1;
+    const timers = [];
+    const A = makeClient("A", srv, { indexedDB: idb, timers });
+    const booted = await Promise.race([
+      A.Sync.boot().then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 1500))
+    ]);
+    assert(booted, "le démarrage attend indéfiniment une base qui ne répond pas (écran blanc)");
+    assert(timers.length > 0 && Math.max(...timers) <= 5000, "délai d'ouverture demandé : " + Math.max(...timers) + " ms");
+    assert(A.DB.isPersistent() === false, "le repli mémoire n'est pas actif");
+    assert(A.messages.some((m) => m.indexOf("Stockage") >= 0), "aucun message honnête sur le stockage");
+
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    assert(Core.findTopic(srv.data, "t1"), "rien ne part après une ouverture muette");
+  });
+
+  /* ⚠️ BL-021 (SYN-018) : après une ouverture ratée, la file d'hier restait
+   * invisible pour la session et partait PLUS TARD, après la décision du jour,
+   * qu'elle écrasait. */
+  await check("ouverture ratée puis rétablie : la décision d'hier part AVANT celle d'aujourd'hui", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const vote = (client, value) => client.Sync.dispatch(client.Sync.makeAction("SET_VOTE",
+      { topicId: "t1", proposalId: "p1", value }, client.user));
+
+    /* Hier, hors ligne : « pour », écrit en base, puis l'application est fermée. */
+    const A1 = makeClient("A", srv, { indexedDB: idb });
+    await A1.Sync.boot(); await settle();
+    await say(A1, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(A1, { topicId: "t1", proposalId: "p1", title: "Proposition" }, "CREATE_PROPOSAL");
+    srv.down = true;
+    await vote(A1, "for"); await settle();
+    A1.Sync.stop();
+    assert(idb.rows("queue").length === 1, "le scénario ne teste rien : le vote d'hier n'est pas en base");
+
+    /* Aujourd'hui : l'ouverture échoue une fois, et l'on vote « contre » aussitôt. */
+    srv.down = false;
+    idb.faults.openFail = 1;
+    const A2 = makeClient("A", srv, { indexedDB: idb });
+    await A2.Sync.boot(); await settle();
+    A2.Store.setBase(lean(srv.data));
+    await vote(A2, "against");
+    await settle(); await A2.Sync.now(); await settle(); await A2.Sync.now(); await settle();
+    A2.Sync.stop();
+
+    /* Plus tard, la base répond normalement. */
+    const A3 = makeClient("A", srv, { indexedDB: idb });
+    await A3.Sync.boot(); await settle(); await A3.Sync.now(); await settle();
+
+    const final = Core.findTopic(srv.data, "t1").proposals[0].votes["u-A"];
+    assert(final === "against", "vote final = " + final + " (voulu : against) : la décision d'hier a écrasé celle du jour");
+    assert(A3.Sync.pendingCount() === 0 && idb.rows("queue").length === 0, "la file ne se vide pas");
+  });
+
+  /* BL-006 : un onglet resté ouvert ne relisait jamais la base, et affichait
+   * « À jour » au-dessus d'une action laissée par un autre onglet. */
+  await check("une action laissée en base par un autre onglet part au cycle suivant", async () => {
+    const srv = makeServer();
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });     // l'onglet qui sera fermé
+    const B = makeClient("B", srv, { indexedDB: idb });     // l'onglet resté ouvert
+    await A.Sync.boot(); await B.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await B.Sync.now(); await settle();
+
+    srv.down = true;
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "m1", text: "laissé par A" }, A.user));
+    await settle();
+    A.Sync.stop();
+    assert(idb.rows("queue").length === 1, "le scénario ne teste rien : rien en base");
+
+    await B.Sync.now(); await settle();
+    const label = B.Sync.status().label;
+    assert(B.Sync.pendingCount() === 1 && label === "En attente (1)",
+      "B ignore l'action laissée en base : indicateur « " + label + " »");
+
+    srv.down = false;
+    await B.Sync.now(); await settle();
+    assert(Core.findMessage(Core.findTopic(srv.data, "t1"), "m1"), "B n'envoie pas l'action de l'autre onglet");
+    assert(B.Sync.pendingCount() === 0 && B.Sync.status().label === "À jour", "B ne revient pas à « À jour »");
+    assert(idb.rows("queue").length === 0, "l'entrée acquittée reste en base");
+  });
+
+  /* BL-001 (WP-08) : une action ne quitte la file que sur un verdict CERTAIN
+   * (appliquée, doublon reconnu, refus « invalid »). Ces tests passent par le
+   * VRAI js/api.js (client « realApi ») : c'est son classement des réponses qui
+   * jetait l'action (page HTML, JSON tronqué, exception de Code.gs). */
+  const copies = (srv, id) => {
+    const topic = Core.findTopic(srv.data, "t1");
+    return topic ? topic.messages.filter((m) => m.id === id).length : 0;
+  };
+  const refusedMsg = (client) => client.messages.filter((m) => /refus/i.test(m));
+  async function connected(srv) {
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    return A;
+  }
+  const write = (A, id, text) => A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+    { topicId: "t1", messageId: id, text: text || "Bonjour l'équipe" }, A.user));
+
+  await check("api.js : page HTML, JSON illisible, retry ou code inconnu ne sont jamais un refus", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true });
+    const got = {};
+    for (const kind of ["html200", "garbage", "lock", "oddCode", "legacyFail", "status500"]) {
+      srv.faults.push({ method: "POST", kind, times: 1 });
+      got[kind] = await A.Api.postAction("https://exemple/exec", "", { id: "x" })
+        .then(() => "ok", (e) => e.kind + "/" + e.code);
+    }
+    srv.rejectWhen = () => true;
+    got.invalid = await A.Api.postAction("https://exemple/exec", "", A.Sync.makeAction("CREATE_TOPIC",
+      { topicId: "t9", title: "Refusé" }, A.user)).then(() => "ok", (e) => e.kind + "/" + e.code);
+    const want = { html200: "unknown/null", garbage: "unknown/null", lock: "unknown/retry", oddCode: "unknown/quota",
+      legacyFail: "server/null", status500: "unknown/null", invalid: "server/invalid" };
+    const wrong = Object.keys(want).filter((k) => got[k] !== want[k]).map((k) => k + "=" + got[k] + " (voulu " + want[k] + ")");
+    assert(!wrong.length, "classement : " + wrong.join(", "));
+  });
+
+  await check("réponse sans verdict (HTML, JSON tronqué, verrou, Drive, code inconnu, 500) : action gardée, puis appliquée une fois", async () => {
+    const problems = [];
+    for (const kind of ["html200", "garbage", "lock", "drive", "oddCode", "status500", "lateGarbage"]) {
+      const srv = makeServer();
+      const A = await connected(srv);
+      srv.faults.push({ method: "POST", kind, times: 1 });
+      await write(A, "m1"); await settle();
+      const kept = A.Sync.pendingCount() === 1;
+      await A.Sync.now(); await settle();
+      const n = copies(srv, "m1");
+      if (!kept) { problems.push(kind + " : retirée de la file après la 1re réponse"); }
+      if (n !== 1) { problems.push(kind + " : appliquée " + n + " fois"); }
+      if (A.Sync.pendingCount() !== 0) { problems.push(kind + " : file non vidée après la reprise"); }
+      if (refusedMsg(A).length) { problems.push(kind + " : annoncée refusée (" + refusedMsg(A)[0] + ")"); }
+    }
+    assert(!problems.length, problems.join(" ; "));
+  });
+
+  await check("panne serveur répétée : « Erreur (n) » dès le 2e échec, message unique, recul, jamais « À jour » avant l'application", async () => {
+    const srv = makeServer();
+    const A = await connected(srv);
+    const seen = [];
+    A.Sync.subscribe((s) => seen.push({ code: s.code, label: s.label, applied: copies(srv, "m1") > 0 }));
+    srv.faults.push({ method: "POST", kind: "lock", times: 1 }, { method: "POST", kind: "status500", times: 1 },
+      { method: "POST", kind: "drive", times: 2 });
+    await write(A, "m1"); await settle();
+    let st = A.Sync.status();
+    assert(st.pending === 1 && st.label === "En attente (1)", "1er échec : « " + st.label + " », file " + st.pending);
+    await A.Sync.now(); await settle();
+    st = A.Sync.status();
+    assert(st.code === "error" && st.label === "Erreur (1)" && st.pending === 1,
+      "2e échec : indicateur « " + st.label + " » (" + st.code + "), file " + st.pending);
+    assert(A.Sync.diagnostics().intervalMs > CONFIG.POLL_ACTIVE_MS, "aucun recul après des échecs serveur");
+    await A.Sync.now(); await settle();
+    await A.Sync.now(); await settle();
+    assert(A.Sync.status().label === "Erreur (1)", "4e échec : « " + A.Sync.status().label + " »");
+    const warn = A.messages.filter((m) => m.indexOf("Le serveur ne répond pas correctement : vos actions sont gardées et repartiront") >= 0);
+    assert(warn.length === 1, "message de panne affiché " + warn.length + " fois (voulu : 1)");
+    assert(!refusedMsg(A).length, "une panne annoncée comme un refus : " + refusedMsg(A)[0]);
+    await A.Sync.now(); await settle();
+    assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0 && A.Sync.status().label === "À jour",
+      "après la panne : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount() + ", « " + A.Sync.status().label + " »");
+    assert(!seen.some((s) => s.code === "idle" && !s.applied), "« À jour » affiché avant l'application serveur");
+  });
+
+  await check("backend d'avant (refus sans code) : 3 tentatives espacées, puis retrait avec le texte saisi", async () => {
+    const srv = makeServer({ legacy: true });
+    const A = await connected(srv);
+    srv.rejectWhen = (action) => action.payload && action.payload.text === "perdu à moitié";
+    const posts0 = srv.http.POST;
+    await write(A, "m1", "perdu à moitié"); await settle();
+    assert(A.Sync.pendingCount() === 1, "retirée dès le 1er refus sans code");
+    assert(A.Sync.diagnostics().intervalMs > CONFIG.POLL_ACTIVE_MS, "tentatives non espacées : aucun recul");
+    await A.Sync.now(); await settle();
+    assert(A.Sync.pendingCount() === 1, "retirée au 2e refus sans code");
+    await A.Sync.now(); await settle();
+    assert(A.Sync.pendingCount() === 0, "toujours en file après 3 refus sans code");
+    assert(srv.http.POST - posts0 === 3, (srv.http.POST - posts0) + " envois (voulu : 3)");
+    const said = refusedMsg(A);
+    assert(said.length === 1 && said[0].indexOf("Action refusée : Refus simulé côté serveur. Texte : « perdu à moitié »") >= 0,
+      "message de retrait : " + JSON.stringify(said));
+    assert(A.Sync.status().label === "À jour", "indicateur après retrait : « " + A.Sync.status().label + " »");
+  });
+
+  await check("refus définitif (invalid) : retrait au 1er envoi, le message reprend le texte saisi", async () => {
+    const srv = makeServer();
+    const A = await connected(srv);
+    srv.rejectWhen = (action) => action.payload && action.payload.text === "Texte refusé";
+    const posts0 = srv.http.POST;
+    await write(A, "m1", "Texte refusé"); await settle();
+    const said = refusedMsg(A);
+    assert(A.Sync.pendingCount() === 0 && srv.http.POST - posts0 === 1, "refus définitif gardé en file");
+    assert(said.length === 1 && said[0] === "error: Action refusée : Refus simulé côté serveur. Texte : « Texte refusé »",
+      "message : " + JSON.stringify(said));
+  });
+
+  await check("lot sans results, lot à trous, lot refusé en bloc : rien n'est retiré sans verdict, chaque action appliquée une fois", async () => {
+    const problems = [];
+    for (const [kind, times] of [["noResults", 1], ["holes", 1], ["html200", 4]]) {
+      const srv = makeServer({ features: MODERN });
+      const A = await connected(srv);
+      srv.faults.push({ method: "POST", kind, times });
+      ["m1", "m2", "m3"].forEach((id) => { write(A, id, "texte " + id); });
+      await settle(); await A.Sync.now(); await settle();
+      const left = A.Store.queue.map((e) => e.action.payload.messageId).join(",");
+      if (kind === "holes" && left !== "m2,m3") { problems.push("lot à trous : file après réponse = [" + left + "] (voulu m2,m3)"); }
+      for (let i = 0; i < 5 && A.Sync.pendingCount(); i++) { await A.Sync.now(); await settle(); }
+      const n = ["m1", "m2", "m3"].map((id) => copies(srv, id));
+      if (n.join() !== "1,1,1") { problems.push(kind + " : applications " + n.join("/")); }
+      if (A.Sync.pendingCount()) { problems.push(kind + " : file " + A.Sync.pendingCount()); }
+      if (refusedMsg(A).length) { problems.push(kind + " : « " + refusedMsg(A)[0] + " »"); }
+      A.Sync.stop();
+    }
+    assert(!problems.length, problems.join(" ; "));
+  });
+
+  /* BL-022 : le délai couvrait fetch mais pas la lecture du corps. */
+  await check("corps de réponse qui ne finit jamais : cycle libéré après le délai, envoi et sondage suivants partent", async () => {
+    const srv = makeServer();
+    const timers = [];
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true, timers });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    const within = (p, ms) => Promise.race([p.then(() => "libéré"), new Promise((r) => setTimeout(() => r("bloqué"), ms))]);
+
+    srv.faults.push({ method: "GET", kind: "hang", times: 1 });
+    const gets = srv.http.GET;
+    assert(await within(A.Sync.now(), 3000) === "libéré", "lecture : le cycle reste bloqué (« " + A.Sync.status().label + " »)");
+    await A.Sync.now(); await settle();
+    assert(srv.http.GET >= gets + 2 && A.Sync.status().code === "idle",
+      "lecture : sondages " + (srv.http.GET - gets) + ", indicateur « " + A.Sync.status().label + " »");
+
+    srv.faults.push({ method: "POST", kind: "hang", times: 1 });
+    await write(A, "m1"); await settle();
+    await new Promise((r) => setTimeout(r, 900));      // 55 s d'écriture, à l'horloge accélérée
+    await within(A.Sync.now(), 3000); await settle();
+    assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0,
+      "écriture : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount() + ", « " + A.Sync.status().label + " »");
+  });
+
+  /* BL-023 : au-delà de 64 Kio, le navigateur refuse l'envoi de secours en bloc. */
+  await check("envoi de secours : plus long début de file sous 60 000 octets, rien de trop gros, rien retiré", async () => {
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    const text = "é".repeat(1000) + "a".repeat(1250);            // 3 250 octets en UTF-8
+    for (let i = 0; i < 20; i++) { write(A, "g" + i, text); }
+    await settle();
+    srv.beacons.length = 0;
+    const handed = A.Sync.flush();
+    const sent = srv.beacons[0] || [];
+    const all = A.Store.queue.map((e) => e.action);
+    const size = (list) => Buffer.byteLength(JSON.stringify(list), "utf8");
+    assert(A.Sync.pendingCount() === 20, "l'envoi de secours a retiré des actions de la file");
+    A.Sync.stop();
+    assert(handed === true && srv.beacons.length === 1 && Array.isArray(sent), "aucun envoi de secours parti");
+    assert(sent.length >= 15 && sent.length < 20 && size(sent) <= 60000 && size(all.slice(0, sent.length + 1)) > 60000,
+      sent.length + " actions, " + size(sent) + " octets : pas le plus long début de file sous 60 000 octets");
+    assert(sent.every((a, i) => a.id === all[i].id), "ordre de la file non respecté");
+
+    const srv2 = makeServer({ features: MODERN });
+    const B = makeClient("B", srv2, { indexedDB: false });
+    await B.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    srv2.down = true;
+    write(B, "big", "é".repeat(36000)); await settle();         // 72 000 octets
+    srv2.beacons.length = 0;
+    const big = B.Sync.flush();
+    B.Sync.stop();
+    assert(big === false && srv2.beacons.length === 0 && B.Sync.pendingCount() === 1,
+      "action de 72 000 octets : flush=" + big + ", envois=" + srv2.beacons.length + ", file=" + B.Sync.pendingCount());
+  });
+
+  /* ------------------------ Refus d'authentification, actions anciennes (WP-13) --- */
+
+  const MINUTE = 60 * 1000;
+  const DAY = 24 * 60 * MINUTE;
+  const refuseAuth = (srv) => srv.faults.push(
+    { method: "GET", kind: "auth", times: Infinity }, { method: "POST", kind: "auth", times: Infinity });
+  const requests = (srv) => srv.http.GET + srv.http.POST;
+
+  /* BL-024 : le serveur se met à exiger un code que cet appareil n'a pas. Rien n'est
+   * reverrouillé, mais la boucle martelait le serveur (1 140 requêtes refusées par
+   * heure) et prévenait l'utilisateur à chaque tour (un message toutes les 3 s). */
+  await check("refus d'authentification pendant 5 min : au plus 10 requêtes, une seule notification, reprise au succès", async () => {
+    const srv = makeServer({ features: MODERN });
+    const clock = makeClock();
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true, clock });
+    let alerts = 0;
+    A.Sync.setHooks({ onAuthError: () => { alerts += 1; } });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    refuseAuth(srv);
+    const before = requests(srv);
+    A.Sync.start();
+    await clock.advance(5 * MINUTE);
+    const sent = requests(srv) - before;
+    assert(sent <= 10, sent + " requêtes refusées en 5 min (" + sent * 12 + " par heure) : voulu 10 au plus");
+    assert(alerts === 1, alerts + " notifications d'accès refusé (voulu : 1 pour toute la série)");
+    const wait = A.Sync.diagnostics().intervalMs;
+    assert(wait >= 30000 && wait <= CONFIG.POLL_BACKOFF_MAX_MS, "recul de " + wait + " ms après 5 min de refus (voulu : jusqu'à 60 s)");
+
+    /* Le serveur accepte de nouveau : la boucle reprend d'elle-même, au rythme normal. */
+    srv.faults.length = 0;
+    await clock.advance(CONFIG.POLL_BACKOFF_MAX_MS + 1000);
+    assert(A.Sync.status().code === "idle", "pas de reprise au succès : « " + A.Sync.status().label + " »");
+    assert(A.Sync.diagnostics().intervalMs <= CONFIG.POLL_IDLE_MS, "rythme encore reculé après le succès : " + A.Sync.diagnostics().intervalMs + " ms");
+
+    /* Un NOUVEAU refus est une nouvelle transition : une nouvelle notification, et une seule. */
+    refuseAuth(srv);
+    await clock.advance(10000);
+    assert(alerts === 2, alerts + " notifications après un second refus (voulu : 2 en tout)");
+    await clock.advance(2 * MINUTE);
+    assert(alerts === 2, "notification répétée pendant la même série (" + alerts + ")");
+
+    /* Un nouveau jeton (Sync.setConnection) remet la série à zéro, rythme compris. */
+    A.Sync.setConnection({ token: "autre-jeton" });
+    assert(A.Sync.diagnostics().intervalMs <= CONFIG.POLL_IDLE_MS, "le recul survit à un nouveau jeton");
+    await A.Sync.now();
+    assert(alerts === 3, alerts + " notifications après un nouveau jeton refusé (voulu : 3 en tout)");
+    A.Sync.stop();
+  });
+
+  await check("refus d'authentification avec une action en file : elle reste, au plus 10 requêtes, partie une fois l'accès rétabli", async () => {
+    const srv = makeServer({ features: MODERN });
+    const clock = makeClock();
+    const A = makeClient("A", srv, { indexedDB: false, realApi: true, clock });
+    let alerts = 0;
+    A.Sync.setHooks({ onAuthError: () => { alerts += 1; } });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    refuseAuth(srv);
+    const before = requests(srv);
+    await write(A, "m1");
+    A.Sync.start();
+    await clock.advance(5 * MINUTE);
+    const sent = requests(srv) - before;
+    assert(sent <= 10, sent + " requêtes refusées en 5 min avec une action en file (voulu : 10 au plus)");
+    assert(alerts === 1, alerts + " notifications (voulu : 1)");
+    assert(A.Sync.pendingCount() === 1 && copies(srv, "m1") === 0, "l'action refusée pour l'authentification a quitté la file");
+
+    srv.faults.length = 0;
+    await clock.advance(CONFIG.POLL_BACKOFF_MAX_MS + 1000);
+    assert(copies(srv, "m1") === 1 && A.Sync.pendingCount() === 0,
+      "après le retour de l'accès : serveur " + copies(srv, "m1") + ", file " + A.Sync.pendingCount());
+    A.Sync.stop();
+  });
+
+  /* BL-004, complément (D7) : le serveur ne garde que 5 000 identifiants d'actions
+   * traitées. Une action restée en file plus de 30 jours ne repart donc jamais en
+   * silence : elle reste en file (rien n'est perdu), compte dans l'indicateur, et ne
+   * part que sur « Envoyer quand même ». */
+  const aged = (A, id, days) => {
+    const action = A.Sync.makeAction("CREATE_MESSAGE", { topicId: "t1", messageId: id, text: "texte " + id }, A.user);
+    if (days === null) { delete action.ts; } else { action.ts = new Date(Date.now() - days * DAY).toISOString(); }
+    return A.Sync.dispatch(action);
+  };
+  const order = (srv) => Core.findTopic(srv.data, "t1").messages.map((m) => m.id).join(",");
+  const staleNotes = (client) => client.messages.filter((m) => m.indexOf("de plus de 30 jours") >= 0);
+
+  await check("action en file depuis plus de 30 jours : retenue, comptée, envoyée après releaseStale ; récente ou non datée : envoyée normalement", async () => {
+    assert(CONFIG.STALE_ACTION_MS === 30 * DAY, "seuil des actions retenues : " + CONFIG.STALE_ACTION_MS + " ms (voulu : 30 jours)");
+    const srv = makeServer({ features: MODERN });
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+
+    /* 29 jours, ou sans date : rien d'ancien, tout part. */
+    await aged(A, "r29", 29); await aged(A, "n0", null); await settle();
+    await A.Sync.now(); await settle();
+    assert(order(srv) === "r29,n0" && A.Sync.pendingCount() === 0,
+      "actions récentes ou non datées : serveur [" + order(srv) + "], file " + A.Sync.pendingCount());
+    assert(A.Sync.staleCount() === 0 && !staleNotes(A).length, "une action récente est tenue pour ancienne");
+
+    /* 31 jours, et une récente derrière : l'ordre de la file fait foi, les deux attendent. */
+    const posted = srv.calls.actionsPosted;
+    await aged(A, "v31", 31); await aged(A, "r0", 0); await settle();
+    await A.Sync.now(); await settle(); await A.Sync.now(); await settle();
+    assert(srv.calls.actionsPosted === posted, "une action de 31 jours est partie toute seule");
+    assert(A.Sync.pendingCount() === 2 && A.Sync.staleCount() === 1,
+      "file " + A.Sync.pendingCount() + ", retenues " + A.Sync.staleCount() + " (voulu 2 et 1)");
+    const status = A.Sync.status();
+    assert(status.code === "pending" && status.label === "En attente (2)", "indicateur : « " + status.label + " » (" + status.code + ")");
+    assert(A.Sync.flush() === false && srv.beacons.length === 0, "l'envoi de secours emporte une action retenue");
+    assert(Core.findMessage(Core.findTopic(A.Store.view, "t1"), "v31"), "l'action retenue a disparu de l'écran de son auteur");
+    const told = staleNotes(A);
+    assert(told.length === 1 && told[0] === "error: 1 action de plus de 30 jours attend : ouvrez Réglages pour l'envoyer.",
+      "message : " + JSON.stringify(told));
+
+    /* « Envoyer quand même » : libérées, envoyées dans l'ordre, une seule fois. */
+    const freed = await A.Sync.releaseStale(); await settle();
+    assert(freed === 1, "releaseStale a libéré " + freed + " action(s) (voulu 1)");
+    assert(order(srv) === "r29,n0,v31,r0" && A.Sync.pendingCount() === 0 && A.Sync.staleCount() === 0,
+      "après libération : serveur [" + order(srv) + "], file " + A.Sync.pendingCount());
+    assert(await A.Sync.releaseStale() === 0, "releaseStale libère encore quelque chose sur une file vide");
+  });
+
+  await check("redémarrage : une action ancienne relue en base reste retenue, le message n'est dit qu'une fois, la base la garde", async () => {
+    const srv = makeServer({ features: MODERN });
+    const idb = makeIDB();
+    const A1 = makeClient("A", srv, { indexedDB: idb });
+    await A1.Sync.boot(); await settle();
+    await say(A1, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    srv.down = true;
+    await aged(A1, "v40", 40); await settle();
+    A1.Sync.stop();
+    assert(idb.rows("queue").length === 1, "le scénario ne teste rien : l'action ancienne n'est pas en base");
+
+    srv.down = false;
+    const A2 = makeClient("A", srv, { indexedDB: idb });
+    await A2.Sync.boot(); await settle();
+    await A2.Sync.now(); await settle(); await A2.Sync.now(); await settle();
+    assert(A2.Sync.pendingCount() === 1 && A2.Sync.staleCount() === 1 && copies(srv, "v40") === 0,
+      "après redémarrage : file " + A2.Sync.pendingCount() + ", retenues " + A2.Sync.staleCount() + ", serveur " + copies(srv, "v40"));
+    assert(A2.Sync.status().label === "En attente (1)", "indicateur : « " + A2.Sync.status().label + " »");
+    assert(staleNotes(A2).length === 1, "message dit " + staleNotes(A2).length + " fois (voulu : 1)");
+    assert(idb.rows("queue").length === 1, "l'entrée retenue a quitté la base");
+
+    await A2.Sync.releaseStale(); await settle();
+    assert(copies(srv, "v40") === 1 && A2.Sync.pendingCount() === 0 && idb.rows("queue").length === 0,
+      "après libération : serveur " + copies(srv, "v40") + ", file " + A2.Sync.pendingCount() + ", base " + idb.rows("queue").length);
+    A2.Sync.stop();
+  });
+
+  /* Le serveur attend le verrou 45 s (waitLock de Code.gs) : s'il est dépassé, sa réponse
+   * « retry » doit arriver AVANT que le client ne coupe, sinon la panne se lit comme une coupure. */
+  await check("le délai d'écriture dépasse l'attente du verrou serveur (45 s)", () => {
+    assert(CONFIG.WRITE_TIMEOUT_MS > 45000, "délai d'écriture " + CONFIG.WRITE_TIMEOUT_MS + " ms : la réponse d'un verrou dépassé arrive après la coupure");
+  });
+
+  /* REC-SYNC-005 (§12) : au démarrage connecté, la relecture de la file (réouverture de la base,
+   * jusqu'à 5 s si elle ne répond pas) fait partie de la synchronisation. L'indicateur ne peut pas
+   * rester sur « À jour » pendant ce temps : il n'y a eu aucun contact réussi. */
+  await check("démarrage connecté : « Sync… » dès l'ouverture du cycle, jamais « À jour » avant le premier contact", async () => {
+    const srv = makeServer();
+    const A = makeClient("A", srv, { indexedDB: makeIDB() });
+    await A.Sync.boot(); await settle();
+    assert(A.Sync.status().code === "idle", "préambule : appareil au repos attendu, obtenu « " + A.Sync.status().label + " »");
+
+    const seen = [];
+    A.Sync.subscribe((status) => seen.push(status.code));
+    A.Sync.start();
+    assert(A.Sync.status().code === "syncing",
+      "au démarrage du cycle (même tâche) l'indicateur dit « " + A.Sync.status().label + " » au lieu de « Sync… »");
+    await settle();
+    assert(seen.indexOf("syncing") >= 0, "aucun abonné n'a été prévenu de la synchronisation : " + seen.join(","));
+    assert(A.Sync.status().code === "idle", "après le contact réussi : « " + A.Sync.status().label + " » au lieu de « À jour »");
+    A.Sync.stop();
+
+    /* Même départ avec une action en attente et un serveur muet : jamais « À jour », puis « En attente ». */
+    srv.down = true;
+    const B = makeClient("B", srv, { indexedDB: makeIDB() });
+    await B.Sync.boot(); await settle();
+    await B.Sync.dispatch(B.Sync.makeAction("CREATE_TOPIC", { topicId: "t9", title: "Sujet" }, B.user));
+    B.Sync.start();
+    assert(B.Sync.status().code === "syncing", "avec une action en attente : « " + B.Sync.status().label + " » au démarrage du cycle");
+    await settle();
+    assert(B.Sync.status().label === "En attente (1)", "serveur muet : « " + B.Sync.status().label + " » au lieu de « En attente (1) »");
+    B.Sync.stop();
   });
 
   console.log(failures.length

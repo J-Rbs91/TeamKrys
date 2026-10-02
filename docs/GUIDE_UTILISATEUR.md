@@ -12,10 +12,34 @@ après la réunion.
 
 ## Démarrer
 
-1. Ouvrir l'adresse communiquée par l'équipe.
-2. Coller l'**adresse du script** et saisir le **code d'accès** s'il y en a un.
-3. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
-4. Il est recommandé d'ajouter BrainstO. à l'écran d'accueil du téléphone.
+1. Ouvrir l'adresse communiquée par l'équipe **dans le navigateur** (Safari sur
+   iPhone ; Chrome, Samsung Internet ou Firefox sur Android). Si le lien arrive
+   dans WhatsApp, Instagram, Messenger, Gmail ou Teams, il s'ouvre dans une
+   fenêtre intégrée à cette application, où l'on ne peut rien installer : en
+   sortir avec le menu de la fenêtre (« Ouvrir dans le navigateur »).
+2. Ajouter BrainstO. à l'**écran d'accueil** du téléphone (recommandé), puis
+   ouvrir l'application depuis son icône. Les étapes, navigateur par navigateur,
+   sont dans [`INSTALLATION.md`](INSTALLATION.md).
+3. **Dans l'application installée**, coller l'**adresse du script** et saisir le
+   **code d'accès** s'il y en a un.
+4. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
+
+Pourquoi dans cet ordre ? Une application installée garde ses données à part de
+celles du navigateur : ce qu'on a saisi dans Safari ou Chrome avant d'installer n'y
+est pas retrouvé. Sur iPhone, Safari peut en plus effacer ce qu'un site a
+enregistré après sept jours d'utilisation de Safari sans visite de ce site ;
+d'après WebKit, l'application installée n'est pas concernée par ce délai. Si
+cela arrive quand même, l'écran de connexion revient : ressaisissez l'adresse, le code et le nom.
+Les données de l'équipe ne sont pas touchées, mais les actions qui n'avaient pas
+encore été envoyées sont perdues.
+
+Si l'application répond « Ce navigateur refuse d'enregistrer des données sur
+l'appareil : ouvrez BrainstO. dans votre navigateur habituel. » ou « Ce navigateur ne
+permet pas la connexion. Ouvrez BrainstO. dans Chrome ou Safari. », ouvrez
+l'adresse (en `https`) dans Chrome ou Safari. Dans le premier cas, la connexion à
+l'équipe est bloquée tant que le navigateur ne peut rien enregistrer ; dans le
+second, le code d'accès ne peut pas être vérifié. Le détail est dans
+[`INSTALLATION.md`](INSTALLATION.md), « Problèmes fréquents ».
 
 Le code n'est pas redemandé à chaque ouverture. Il redevient nécessaire après une
 heure sans activité. Le code lui-même n'est jamais enregistré sur le téléphone.
@@ -39,6 +63,12 @@ L'accueil les regroupe par état :
 
 Dans chaque groupe, les sujets les plus récemment actifs apparaissent en premier.
 
+Le classement suit l'heure réelle de la dernière activité, et les sujets dont la
+date est absente ou illisible passent en dernier. La carte d'un sujet dit quand il
+a été actif pour la dernière fois : « Actif à l'instant », « Actif il y a 5 min »,
+« Actif il y a 2 h », « Actif il y a 1 jour » ou « Actif il y a 3 jours », puis la
+date (« Actif le 12/09/2026 ») à partir de sept jours.
+
 Un sujet possède un titre obligatoire et une description facultative. Il peut être
 proposé sans signature : aucune identité n'est alors enregistrée dans les données
 partagées pour son auteur.
@@ -50,8 +80,19 @@ Les statuts sont :
 - **Clôturé** : le travail préparatoire est terminé ;
 - **Archivé** : le sujet quitte la vue courante sans être supprimé.
 
+Appuyer sur le titre d'un sujet, dans sa discussion, ouvre ses informations :
+l'auteur (« Anonyme » pour un sujet proposé sans signature), « Créé le » et
+« Dernière activité le », chacun avec la date et l'heure.
+
 Au-delà de six sujets, la recherche apparaît. Les archives restent masquées par
 défaut.
+
+La recherche porte sur le titre et la description des sujets. Elle ignore les
+majuscules, les accents et les espaces en trop : « reunion » trouve « Réunion », et
+« oeuvre » trouve « œuvre » (idem pour « æ » et « ae »). Elle cherche le morceau
+de texte saisi, pas ses variantes : « réunions » ne trouve pas « réunion ». Quand
+rien ne correspond, l'écran rappelle le terme cherché et propose « Effacer la
+recherche ».
 
 ### Nouveautés
 
@@ -65,9 +106,13 @@ l'accueil peut donc signaler :
 - un Consensus mis à jour.
 
 Ces marqueurs restent sur l'appareil. Ils ne créent aucun compte et ne sont pas
-synchronisés entre téléphones. Lors de la première activation de cette fonction,
-les sujets déjà présents servent de point de départ afin de ne pas produire de
-fausses nouveautés.
+synchronisés entre téléphones. Vos propres actions (vos sujets, vos messages, vos
+propositions, vos votes, vos réactions et vos soutiens à un Consensus) ne sont
+pas signalées comme des nouveautés sur votre appareil : seules celles des autres le
+sont. Après une déconnexion, vos anciens messages anonymes ne sont plus reconnus
+comme les vôtres : ils peuvent être signalés une fois. À la toute première
+synchronisation d'un appareil, les sujets déjà présents servent de point de
+départ, en silence : seul ce qui arrive ensuite est signalé.
 
 ---
 
@@ -83,11 +128,11 @@ Appuyer sur un message donne accès aux actions suivantes :
 
 | Action | Effet |
 |---|---|
-| 👌 | D'accord |
-| 💪 | Je m'engage |
-| 🤏 | Mitigé |
-| 👎 | Pas d'accord |
-| 💩 | À écarter |
+| Coche | D'accord |
+| Éclair | Je m'engage |
+| Vague | Mitigé |
+| Croix | Pas d'accord |
+| Cercle barré | À écarter |
 | **Citer** | Répondre en conservant le contexte |
 | **Créer une proposition** | Transformer l'idée en option structurée |
 | **Modifier** | Corriger votre message tant qu'il n'est pas verrouillé |
@@ -95,6 +140,48 @@ Appuyer sur un message donne accès aux actions suivantes :
 
 Une personne ne peut avoir qu'une réaction par message. Appuyer à nouveau sur la
 même réaction la retire.
+
+Les cinq réactions sont dessinées par l'application sous forme de pictogrammes,
+et non en emoji. Le nom de chacune est celui de la colonne « Effet » ci-dessus.
+
+**Créer une proposition** à partir d'un message en reprend le texte : le titre est le
+début du message, coupé à la fin d'un mot et terminé par « … » quand il dépasse 200
+caractères, et la description reprend le message en entier dès que le titre en est
+une version raccourcie. Seul le texte est repris, jamais son auteur. Les fenêtres
+**Modifier** (message, sujet, formulation du consensus) s'ouvrent avec le texte
+actuel, prêt à être corrigé. Si l'enregistrement est refusé (par exemple parce
+qu'une autre personne vient de réagir à votre message), la fenêtre reste **ouverte**,
+avec le texte que vous avez rédigé, et un message vous explique pourquoi : corrigez,
+ou copiez votre texte avant d'appuyer sur **Annuler**. Cela vaut aussi pour la
+fenêtre **Modifier la proposition**.
+
+### Message en cours d'écriture
+
+Ce que vous tapez dans le champ de message d'un sujet est gardé **sur votre
+téléphone**, sans rien envoyer à personne. Le texte revient tout seul si
+l'application se recharge (« Mettre à jour »), si le système la ferme en arrière-plan
+puis la rouvre, ou si l'onglet est restauré. Chaque sujet a son propre brouillon.
+Après un verrouillage par inactivité, il est toujours là une fois le code saisi ; il
+n'est jamais affiché sur l'écran de verrouillage.
+
+Le brouillon est effacé quand le message est accepté dans la file d'envoi, quand
+vous videz le champ, et quand vous vous déconnectez de l'équipe. Si le téléphone
+refuse l'envoi, le texte revient dans le champ et la citation est remise.
+
+**Brouillon écrit en anonyme.** Si vous écriviez en **Anonyme**, ce choix est gardé
+avec le brouillon, sur votre téléphone seulement. Au retour, le brouillon revient en
+anonyme, avec la note « Brouillon retrouvé sur cet appareil. Il sera publié en
+anonyme : vérifiez avant d'envoyer. » : il n'est jamais republié sous votre nom à
+votre insu. Comme ce choix vaut pour tout l'écran de discussion, retrouver un
+brouillon anonyme met aussi les autres sujets en anonyme, jusqu'à ce que vous
+appuyiez sur **Signer**. Un brouillon écrit en **Signé** n'a aucun indicateur : il
+revient signé, avec la note « Brouillon retrouvé sur cet appareil. Vérifiez « Signé »
+ou « Anonyme » avant d'envoyer. ». Un appui sur la bascule fait disparaître la note.
+
+Ne sont jamais gardés : votre nom, les champs de connexion et de code, le texte des
+fenêtres « Modifier » et de création. Tant qu'il n'est pas envoyé, le brouillon est
+écrit en clair sur l'appareil : l'écran de verrouillage protège l'application, pas le
+stockage du téléphone.
 
 ### Anonymat
 
@@ -107,11 +194,28 @@ plus tard.
 La déconnexion efface cette preuve locale. Le message reste anonyme dans l'espace
 de l'équipe, mais ce téléphone ne pourra plus prouver qu'il vous appartenait.
 
+Vous ne pouvez pas réagir à votre propre message anonyme : la réaction inscrirait
+votre identifiant dans les données partagées et lèverait l'anonymat. La feuille de
+ce message ne propose donc aucune réaction.
+
+Cette garantie est celle de l'interface. Le serveur ne garde aucune identité d'un
+message anonyme : il ne peut pas vérifier qui en est l'auteur. L'application ne
+propose de modifier ou de signer qu'à l'appareil qui a créé le message, mais
+quelqu'un qui enverrait des requêtes directement au serveur, avec le code de
+l'équipe, pourrait le faire aussi. C'est la limite d'un outil d'équipe protégé par
+un code partagé, sans compte individuel.
+
 ### Verrou de modification
 
 Dès qu'une **autre personne** a réagi à votre message, son texte n'est plus
 modifiable. Cela évite qu'un avis ou un désaccord reste attaché à un texte qui a
 changé après coup. La signature peut toujours être modifiée.
+
+Dans la feuille du message, le bouton **Modifier** est alors grisé et son libellé
+donne la raison : « Modifier (verrouillé : quelqu'un y a déjà réagi) ». Votre
+message signé verrouillé porte aussi un petit cadenas dans la discussion. Un
+message anonyme verrouillé n'en porte pas : le cadenas le distinguerait des autres
+messages anonymes.
 
 ---
 
@@ -132,11 +236,17 @@ retiré.
 BrainstO. affiche à la fois la répartition des avis et la participation. Par
 exemple :
 
-`3 pour · 1 contre · 2 abstentions · 6 / 8 participants ont voté`
+`3 pour · 1 contre · 2 abstentions · 75 % favorables sur 4 avis exprimés · 6 participants sur 8 ont voté`
 
 Le pourcentage favorable est calculé uniquement parmi les avis exprimés, donc hors
-abstentions. La participation reste affichée séparément pour éviter qu'un résultat
-obtenu avec peu de votants ressemble à une position forte de toute l'équipe.
+abstentions, et il est toujours suivi du nombre d'avis exprimés : il ne se lit
+jamais seul. Si tout le monde s'est abstenu, l'écran dit « Aucun avis exprimé » et
+n'affiche pas de pourcentage. La participation reste affichée séparément pour
+éviter qu'un résultat obtenu avec peu de votants ressemble à une position forte de
+toute l'équipe : « 6 participants sur 8 ont voté », « 1 participant sur 8 a voté »,
+« 0 participant sur 8 a voté ». Le total (le « 8 ») est le nombre de personnes
+connues de l'espace, augmenté de celles qui ont voté sans y figurer : il n'est
+jamais inférieur au nombre de votants. Aucun quorum n'est appliqué.
 
 Le mot **Consensus** n'est pas utilisé pour qualifier automatiquement un vote de
 proposition. Il est réservé à l'étape collective suivante.
@@ -181,6 +291,23 @@ leurs propositions, les résultats de vote et les Consensus.
 Cette page sert de support de préparation à projeter ou imprimer. Elle ne constitue
 pas un ordre du jour formel, un compte rendu ou un historique de réunions.
 
+Les sujets y suivent l'ordre de l'accueil (prêts pour la réunion, en discussion,
+clôturés), les plus récemment actifs d'abord dans chaque groupe. En tête de la
+synthèse, alignée à droite, la pastille d'état (**À jour**, **Hors ligne (n)**,
+etc.) dit si l'appareil est synchronisé ; elle n'est pas imprimée, comme les barres
+et les boutons.
+
+**Imprimer** ouvre l'impression du navigateur. Si le navigateur ne peut pas
+imprimer (certaines fenêtres intégrées à une application), le message « Impression
+indisponible ici : affichez la synthèse à l'écran ou ouvrez-la dans votre
+navigateur. » s'affiche et la synthèse reste à l'écran. Si l'impression se lance
+mais ne produit rien, l'application ne peut pas le savoir et ne dit rien : ouvrez
+alors la synthèse dans le navigateur.
+
+À l'impression, la synthèse reprend toujours les couleurs claires sur fond blanc, même
+si votre appareil est en thème sombre : l'écran reste sombre, le papier ou le PDF ne
+l'est jamais.
+
 ---
 
 ## Hors connexion
@@ -191,8 +318,49 @@ BrainstO. reste utilisable lorsque le réseau disparaît :
 - les nouvelles actions sont conservées dans l'ordre sur l'appareil ;
 - elles sont envoyées automatiquement lorsque la connexion revient.
 
-L'indicateur de synchronisation distingue notamment : **À jour**, **Sync…**,
-**En attente**, **Hors ligne**, **Erreur** et **Local**.
+L'indicateur de synchronisation distingue six états : **À jour**,
+**Synchronisation**, **En attente (n)**, **Hors ligne (n)**, **Erreur (n)** et
+**Mode local**. Le nombre n est celui des actions qui attendent d'être envoyées
+(**Hors ligne** et **Erreur** l'omettent quand rien n'attend). Sur un écran étroit
+(430 px et moins), l'indicateur affiche une forme courte (« Sync… », « Local ») ;
+son nom complet reste toujours lu par le lecteur d'écran, qui n'annonce que les
+changements utiles.
+
+- **En attente (n)** : des actions n'ont pas encore été envoyées ;
+- **Hors ligne (n)** : le téléphone n'a plus de réseau ;
+- **Erreur (n)** : le serveur répond mal plusieurs fois de suite (par exemple un
+  verrou dépassé côté Google). Un message le dit : « Le serveur ne répond pas
+  correctement : vos actions sont gardées et repartiront. » Ne vous déconnectez
+  pas : la déconnexion efface les actions en attente.
+
+Au démarrage, dès que le cycle de synchronisation s'ouvre (la file d'actions est
+alors relue sur l'appareil, ce qui peut prendre quelques secondes), l'indicateur
+affiche **Synchronisation**, jamais **À jour**. Avec des actions en attente et un
+serveur qui ne répond pas, il affiche **En attente (n)**, jamais **À jour**.
+
+Une action ne quitte la file que lorsque le serveur l'a prise en compte, ou l'a
+refusée de façon définitive. Dans ce dernier cas, le message « Action refusée : … »
+reprend le texte saisi, pour que vous puissiez le recopier.
+
+Une action restée en file plus de 30 jours (écrite hors ligne, ou avec une horloge
+déréglée) n'est jamais renvoyée en silence : elle est **retenue**, et celles que
+vous avez écrites après elle attendent derrière, pour garder l'ordre. Un message le
+dit une fois par session : « 1 action de plus de 30 jours attend : ouvrez Réglages
+pour l'envoyer. » Dans **Réglages**, un bloc dit « 1 action de plus de 30 jours
+attend sur cet appareil. » (« 2 actions de plus de 30 jours attendent sur cet
+appareil. » au pluriel) et propose le bouton **Envoyer quand même**. Un appui
+libère les actions retenues : elles partent dans l'ordre de la file, et un message
+le confirme (« 1 action va partir. », « 2 actions vont partir. »). Le bloc n'existe
+que lorsqu'au moins une action est retenue. Si l'envoi ne peut pas être lancé,
+« L'envoi n'a pas pu être lancé : vos actions restent sur cet appareil. » s'affiche
+et rien n'est perdu. Si l'application se ferme avant l'envoi, ces actions sont
+retenues de nouveau au démarrage suivant.
+
+Sur un appareil connecté qui n'a pas encore reçu les données de l'équipe (juste
+après la connexion, avant le premier échange réussi), un lien vers un sujet affiche
+« Contenu pas encore disponible sur cet appareil » et « Il s'affichera à la
+prochaine connexion. », au lieu d'« Introuvable ». Dès que l'appareil a reçu les
+données une fois, un sujet qui n'existe plus affiche « Introuvable ».
 
 Tant qu'une action est en attente, BrainstO. ne prétend jamais qu'elle est déjà
 synchronisée.
@@ -203,14 +371,77 @@ synchronisée.
 
 Les réglages permettent de modifier votre nom, la connexion, de revoir la
 présentation initiale, d'ouvrir la synthèse et de consulter le diagnostic de
-synchronisation.
+synchronisation. Quand des actions de plus de 30 jours attendent sur l'appareil, le
+bouton **Envoyer quand même** s'y ajoute (voir « Hors connexion »).
+
+**Si l'équipe change de code**, ou en pose un alors qu'elle travaillait sans code,
+l'espace se verrouille avec le message « Code d'accès refusé par le serveur :
+saisissez le nouveau code de l'équipe. ». Saisissez le nouveau code sur l'écran de
+verrouillage : vos actions en attente sont conservées. Ne vous déconnectez pas, la
+déconnexion les efface. Sans réseau, le nouveau code ne peut pas être vérifié
+(« Code d'accès incorrect, ou nouveau code impossible à vérifier sans
+connexion. ») : l'appareil reste verrouillé et rien n'est perdu.
 
 **Se déconnecter de l'équipe** oublie sur cet appareil l'adresse du script, le
 verrouillage, votre identité locale et la preuve de propriété de vos contenus
-anonymes. Les données partagées de l'équipe restent intactes.
+anonymes, ainsi que vos brouillons de messages (avec leur choix « anonyme ») et le
+repère de ce que l'appareil avait déjà consulté : la personne qui se connecte ensuite
+voit les nouveautés comme neuves. Le verrouillage d'inactivité d'une heure, lui, garde
+ce repère et vos brouillons : c'est la même personne après le code. Les données
+partagées de l'équipe restent intactes.
 
 Si des actions sont encore en attente, elles seraient perdues lors de la
 déconnexion. Attendez **À jour** avant de vous déconnecter.
+
+---
+
+## Lecteur d'écran, clavier et confort d'affichage
+
+- **Titre d'écran.** Chaque écran a un titre, lu par le lecteur d'écran et repris
+  dans l'onglet du navigateur : « Sujets - BrainstO. », « *titre du sujet* -
+  BrainstO. », « Propositions : *titre du sujet* - BrainstO. », « Consensus : *titre
+  du sujet* - BrainstO. », « Réglages - BrainstO. », « Synthèse de réunion -
+  BrainstO. ». Avant la connexion : « Connexion - BrainstO. » et « Votre nom -
+  BrainstO. ». Quand l'espace est verrouillé : « Espace verrouillé - BrainstO. » (le
+  titre d'un sujet ne reste pas dans l'onglet).
+- **Champs.** Chaque champ de saisie a un nom lu par le lecteur d'écran, avec son
+  indication : « Votre nom », dans « Nouveau sujet », annonce « Laissez vide pour
+  publier ce sujet en anonyme : aucune identité ne sera enregistrée. »
+- **Erreurs de saisie.** Quand une saisie est refusée (titre de sujet vide, code
+  d'accès incorrect, adresse manquante), un message apparaît sous le champ, lu avec
+  lui, et le curseur y revient. Le message passager habituel reste affiché et
+  annoncé. Le message sous le champ disparaît dès la première frappe.
+- **Clavier.** Tab reste dans une feuille ou une fenêtre ouverte : après la dernière
+  commande, il revient à la première ; Maj + Tab fait l'inverse. Échap la ferme et
+  rend le focus au bouton qui l'avait ouverte. Le fond ne défile pas et ne reçoit pas
+  le focus tant qu'elle est ouverte.
+- **Animations réduites.** Quand le système demande de réduire les animations,
+  « Aller au message cité » défile instantanément au lieu de glisser.
+- **Écran étroit ou grand texte.** Sous 22 rem de large (352 px à la taille de texte
+  normale, plus quand le texte est agrandi), le bouton retour se réduit à sa flèche ;
+  son nom (« Retour vers Sujets ») reste lu par le lecteur d'écran. À 440 px de large
+  et moins, les icônes des étapes du parcours (Discussion, Propositions, Consensus)
+  sont masquées : le mot et le compteur restent, et le compteur disparaît à son tour
+  à 350 px et moins. Les mots du parcours ne sont jamais coupés, ni par des points de
+  suspension ni en plein mot : quand le texte est agrandi (130 % et 200 %) ou que
+  l'écran est très étroit (320 px), une étape qui ne tient plus passe à la ligne et le
+  parcours prend **deux lignes**, ce qui laisse un peu moins de place au fil.
+- **Écran bas** (téléphone en paysage, clavier ouvert). Sous 480 px de hauteur, les
+  barres du haut ne restent plus collées en haut de l'écran, et le champ d'envoi ne
+  grandit que jusqu'à environ un quart de la hauteur, puis défile : le bouton d'envoi
+  reste visible. Sous 300 px de hauteur, le parcours est masqué. À fort zoom, les
+  barres occupent encore une bonne part de l'écran de discussion.
+- **Grand écran.** Sur l'accueil, à partir de 900 px de large, les groupes de sujets
+  s'empilent sur toute la largeur et leurs cartes se répartissent en colonnes.
+- **Noms et compteurs lus.** Le bouton flottant de l'accueil est nommé « Nouveau
+  sujet » pour le lecteur d'écran, comme à l'écran. Sur une carte de sujet, chaque
+  compteur est lu avec son unité : « 1 message », « 2 propositions », « 3
+  formulations », et non « 1 2 3 ».
+- **Nouvelle version.** Quand une nouvelle version est prête, le bandeau « Une
+  nouvelle version est disponible. » propose **Mettre à jour**, ou une croix nommée
+  « Plus tard ». Son apparition est annoncée une seule fois au lecteur d'écran, par la
+  zone d'annonces de l'écran, sans fenêtre ni message en plus ; il reste atteignable au
+  clavier.
 
 ---
 

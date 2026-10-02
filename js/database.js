@@ -14,19 +14,53 @@
   var DB_VERSION = 1;
   var STORE_QUEUE = "queue";
   var STORE_META = "meta";
+  /* ⚠️ Une ouverture peut ne JAMAIS répondre (iOS 14.6 au premier chargement,
+   * certaines vues intégrées) : sans borne, le démarrage l'attendait et l'écran
+   * restait blanc. Passé ce délai : repli mémoire, et Sync retente à chaque cycle. */
+  var OPEN_TIMEOUT_MS = 5000;
 
   var DB = {};
   var dbPromise = null;
+  var current = null;        // connexion vivante tenue par dbPromise
+  var stalled = null;        // ouverture partie hors délai, peut-être encore en cours
+  var reopening = null;
 
   /* Repli mémoire si IndexedDB est indisponible (navigation privée, fenêtre
    * in-app d'une messagerie, protection renforcée contre le pistage…). */
   var memory = { available: true, reason: null, seq: 0, queue: [], meta: {} };
 
-  function openDatabase() {
-    if (dbPromise) { return dbPromise; }
-    dbPromise = new Promise(function (resolve, reject) {
-      if (!root.indexedDB) { reject(new Error("IndexedDB indisponible")); return; }
-      var request = root.indexedDB.open(DB_NAME, DB_VERSION);
+  function hasIndexedDB() {
+    try { return !!root.indexedDB; } catch (e) { return false; }
+  }
+
+  /* Le système peut fermer la connexion (arrière-plan iOS, stockage effacé), ou
+   * une autre version la réclamer : on la ferme et on l'oublie. La prochaine
+   * opération en rouvre une au lieu de buter indéfiniment sur une morte. */
+  function forget(db) {
+    try { db.close(); } catch (e) { /* déjà fermée */ }
+    if (current === db) { current = null; dbPromise = null; }
+  }
+
+  /* UN essai d'ouverture, borné dans le temps. Ne rejette jamais : rend la
+   * connexion, ou null (repli mémoire, raison notée). */
+  function attempt() {
+    return new Promise(function (resolve, reject) {
+      if (!hasIndexedDB()) { reject(new Error("IndexedDB indisponible")); return; }
+      var settled = false;
+      var request = null;
+      var timer = setTimeout(function () {
+        settled = true;
+        stalled = request;
+        reject(new Error("IndexedDB ne répond pas"));
+      }, OPEN_TIMEOUT_MS);
+      function fail(error) {
+        if (stalled === request) { stalled = null; }
+        if (settled) { return; }
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      }
+      try { request = root.indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { fail(e); return; }
       request.onupgradeneeded = function () {
         var db = request.result;
         if (!db.objectStoreNames.contains(STORE_QUEUE)) {
@@ -36,18 +70,57 @@
           db.createObjectStore(STORE_META, { keyPath: "key" });
         }
       };
-      request.onsuccess = function () { resolve(request.result); };
-      request.onerror = function () { reject(request.error || new Error("Ouverture IndexedDB refusée")); };
-      request.onblocked = function () { reject(new Error("IndexedDB bloquée par un autre onglet")); };
-    }).catch(function (error) {
+      request.onsuccess = function () {
+        var db = request.result;
+        if (stalled === request) { stalled = null; }
+        /* ⚠️ Arrivée hors délai : on la referme au lieu de l'adopter en douce. La
+         * session tourne sur le repli sans avoir lu la base ; y écrire l'état de
+         * la session (mode local) écraserait les données qu'elle contient. Le
+         * prochain essai de Sync en ouvrira une neuve, en relisant tout. */
+        if (settled) { try { db.close(); } catch (e) { /* déjà fermée */ } return; }
+        settled = true;
+        clearTimeout(timer);
+        db.onclose = function () { forget(db); };
+        db.onversionchange = function () { forget(db); };
+        resolve(db);
+      };
+      request.onerror = function () { fail(request.error || new Error("Ouverture IndexedDB refusée")); };
+      request.onblocked = function () { fail(new Error("IndexedDB bloquée par un autre onglet")); };
+    }).then(function (db) {
+      memory.available = true;
+      memory.reason = null;
+      return db;
+    }, function (error) {
       memory.available = false;
       memory.reason = (error && error.message) || "IndexedDB indisponible";
       return null;
     });
+  }
+
+  function openDatabase() {
+    if (!dbPromise) {
+      dbPromise = attempt().then(function (db) { current = db; return db; });
+    }
     return dbPromise;
   }
 
   DB.open = function () { return openDatabase(); };
+
+  /* Nouvel essai après un échec d'ouverture : Sync l'appelle à chaque cycle tant
+   * que la base manque. Pendant l'essai, les autres opérations restent sur le
+   * repli sans l'attendre, et une ouverture restée muette n'est pas doublée. */
+  DB.reopen = function () {
+    if (memory.available || !hasIndexedDB()) { return openDatabase(); }
+    if (stalled) { return Promise.resolve(null); }
+    if (!reopening) {
+      reopening = attempt().then(function (db) {
+        reopening = null;
+        if (db) { current = db; dbPromise = Promise.resolve(db); }
+        return db;
+      });
+    }
+    return reopening;
+  };
 
   DB.isPersistent = function () { return memory.available; };
 
@@ -108,7 +181,11 @@
     return result && result.value !== undefined ? result.value : result;
   }
 
-  function withStore(storeName, mode, work) {
+  /* ⚠️ Une connexion peut mourir en cours de session : transaction() lève alors
+   * InvalidStateError (iOS au retour d'arrière-plan, WebKit 273827). On rouvre
+   * UNE fois et on rejoue l'opération ; au second échec, l'appelant le sait (rejet)
+   * au lieu de buter jusqu'au rechargement sur une connexion morte. */
+  function withStore(storeName, mode, work, replay) {
     return openDatabase().then(function (db) {
       /* ⚠️ Le déballage vaut AUSSI pour le repli mémoire. Sans lui, DB.enqueue
        * rendait { value: { seq, action } } au lieu de { seq, action } : « saved.seq »
@@ -127,8 +204,22 @@
         tx.oncomplete = function () { resolve(unwrap(result)); };
         tx.onerror = function () { reject(tx.error || new Error("Transaction IndexedDB échouée")); };
         tx.onabort = function () { reject(tx.error || new Error("Transaction IndexedDB annulée")); };
+      }).catch(function (error) {
+        var name = error && error.name;
+        var lost = db !== current || name === "InvalidStateError" || name === "UnknownError";
+        if (replay || !lost) { throw error; }
+        forget(db);
+        return withStore(storeName, mode, work, true);
       });
     });
+  }
+
+  /* ⚠️ Le repli mémoire de la FILE est réservé au cas où IndexedDB n'existe pas du
+   * tout. Si elle existe mais ne répond pas (panne passagère), des clés mémoire se
+   * mêleraient ensuite aux clés de la base : on refuse, et Sync garde l'action en
+   * mémoire sous une clé à part jusqu'à ce que la base réponde de nouveau. */
+  function queueFallback() {
+    if (hasIndexedDB()) { throw new Error(memory.reason || "IndexedDB indisponible"); }
   }
 
   /* --------------------------------------------------------- File d'actions --- */
@@ -140,6 +231,7 @@
     DB.requestPersistence();
     return withStore(STORE_QUEUE, "readwrite", function (store) {
       if (!store) {
+        queueFallback();
         memory.seq += 1;
         var entry = { seq: memory.seq, action: action };
         memory.queue.push(entry);
@@ -154,7 +246,7 @@
 
   DB.queued = function () {
     return withStore(STORE_QUEUE, "readonly", function (store) {
-      if (!store) { return { value: memory.queue.slice() }; }
+      if (!store) { queueFallback(); return { value: memory.queue.slice() }; }
       var box = { value: [] };
       var request = store.openCursor();
       request.onsuccess = function () {

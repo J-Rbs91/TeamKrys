@@ -80,14 +80,19 @@
 
   /* Logotype. Il monte d'un seul tenant (cf. app.css) : c'est du texte, pas une
    * suite de <span> — inutile d'en fabriquer neuf pour animer un bloc. */
-  function wordmark(text) {
-    return el("div", { class: "wordmark", text: text });
+  function wordmark(text, asTitle) {
+    return el("div", {
+      class: "wordmark", text: text,
+      role: asTitle ? "heading" : null, "aria-level": asTitle ? "1" : null
+    });
   }
 
-  function heroBlock(tagline) {
+  /* `asTitle` : l'écran n'a pas de barre du haut (première connexion, verrou) ; le nom de
+   * l'application y tient lieu de titre de niveau 1 (A11-015). */
+  function heroBlock(tagline, asTitle) {
     return el("div", { class: "hero" }, [
       Utils.logoMark(52),
-      wordmark(CONFIG.APP_NAME),
+      wordmark(CONFIG.APP_NAME, asTitle),
       el("div", { class: "tagline", text: tagline })
     ]);
   }
@@ -157,6 +162,9 @@
     overlayRoot = document.getElementById("overlay-root");
     toastRoot = document.getElementById("toast-root");
     onboardRoot = document.getElementById("onboarding-root");
+    /* Zone principale : index.html (coquille précachée) n'a pas de <main> ; le rôle donne le même
+     * repère au lecteur d'écran, sans toucher à la mise en page (A11-015). */
+    if (appRoot && appRoot.setAttribute) { appRoot.setAttribute("role", "main"); }
 
     /* En capture, sur le document : les champs sont détruits et recréés à chaque rendu,
      * un écouteur par champ ne survivrait pas. `input` seulement — `change` arrive trop
@@ -166,19 +174,191 @@
       if (!node || !node.getAttribute) { return; }
       var key = node.getAttribute("data-draft");
       if (key) { touchedDrafts[key] = true; }
+      if (storedDraft(key)) { stageDraft(key, node.value); }
     }, true);
+    /* Brouillons durables : relus de l'appareil, restaurés au premier rendu du composeur (BL-059). */
+    composerDrafts = readStoredDrafts();
+    anonDrafts = readStoredAnon(composerDrafts);
+    draftNote = {};
+    Object.keys(composerDrafts).forEach(function (key) { draftNote[key] = anonDrafts[key] ? "anon" : "check"; });
 
     bindViewport();
   };
 
   /* ------------------------------------------------------------ Brouillons --- */
 
-  /* Les brouillons ne vivent que dans le DOM, et l'instantané ne franchit pas un
-   * rendu : au reverrouillage (3 minutes en arrière-plan), l'écran de verrou ne
+  /* Avant ce relais, les brouillons ne vivaient que dans le DOM, et l'instantané ne franchit pas un
+   * rendu : au reverrouillage (une heure sans interaction, CONFIG.LOCK_IDLE_MS), l'écran de verrou ne
    * contient aucun champ « composer:… », la valeur est donc jetée et le message
    * en cours d'écriture est perdu — ce que la recette annonce pourtant intact.
    * Ce relais garde les seuls brouillons de composeur d'un rendu à l'autre. */
   var composerDrafts = {};
+
+  /* ⚠️ Choix Anonyme/Signé d'un brouillon (REC-RUI-001, arbitrage WP-22 : il REMPLACE l'ancienne règle « jamais stocké »).
+   * Le choix est global et en mémoire (UI.local.composerAnon), les brouillons sont par sujet et durables : le texte voulu
+   * anonyme revenait après un rechargement prêt à partir SIGNÉ, nom publié, irrattrapable. Règle asymétrique : on ne
+   * convertit JAMAIS implicitement l'anonyme en signé. Un brouillon rédigé en anonyme garde ce choix sur l'appareil
+   * (clé dans la liste `anon` de DRAFTS_KEY, écrite seulement s'il y en a ; absence = signé, donc les brouillons d'avant
+   * restent lisibles) et revient anonyme. Rien d'autre d'identitaire n'y entre. Un brouillon retrouvé s'accompagne d'une
+   * note près du composeur ; l'envoi, la bascule ou le champ vidé la retirent. */
+  var DRAFTS_ANON = "anon";
+  var anonDrafts = {};   // clé -> true : brouillon rédigé en mode anonyme (absent = signé)
+  var draftNote = {};    // clé -> "anon" | "check" : brouillon retrouvé sur l'appareil, note à garder près du composeur
+  var noteSaid = {};     // clés dont la note a déjà été annoncée (role=status) : pas de ré-annonce à chaque rendu
+
+  /* ⚠️ Brouillons DURABLES (BL-059). Le relais ci-dessus mourait avec la page : « Mettre à jour » (rechargement),
+   * l'éviction de la page par iOS ou la restauration d'un onglet Android emportaient le message en cours
+   * d'écriture. Il est donc relu de l'appareil au démarrage (UI.init) et recopié dans localStorage à chaque
+   * saisie, après un court silence, puis tout de suite avant ce qui peut tuer la page (UI.flushDrafts, appelée
+   * par js/app.js). Il n'existe QUE sur cet appareil : aucune requête ne le porte, et la clé n'est pas dans
+   * config.js. Seul le composeur de chaque sujet est conservé (clé « composer:<sujet> », donc jamais restauré
+   * dans un autre sujet) : ni champ de connexion, de code ou de nom, ni fenêtre « Modifier » (un texte
+   * d'édition abandonné ne doit pas ressurgir, et le préremplissage doit toujours l'emporter à l'ouverture),
+   * ni aucune identité. Le choix ANONYME (et lui seul) suit le brouillon : voir `anonDrafts` (REC-RUI-001). */
+  var DRAFTS_KEY = "brainsto.drafts.v1";
+  var DRAFTS_MAX_ENTRIES = 50;      // un brouillon par sujet
+  var DRAFTS_MAX_CHARS = 20000;     // taille totale écrite : les plus anciens partent d'abord
+  var DRAFTS_MAX_VALUE = 4000;      // un seul brouillon (le champ est déjà limité à Core.LIMITS.message)
+  var DRAFTS_DELAY_MS = 500;        // silence avant l'écriture
+  var draftsPending = {};           // saisies pas encore écrites : clé -> texte ("" = à retirer)
+  var draftsTimer = 0;
+
+  /* Seul le composeur d'un sujet est conservé sur l'appareil. */
+  function storedDraft(key) {
+    return typeof key === "string" && key.indexOf("composer:") === 0 && key.length > 9;
+  }
+
+  function clipDraft(value) {
+    var text = value === null || value === undefined ? "" : String(value);
+    return text.length > DRAFTS_MAX_VALUE ? Utils.limit(text, DRAFTS_MAX_VALUE) : text;
+  }
+
+  /* Lecture tolérante : stockage refusé, JSON abîmé, forme inattendue ou clé étrangère = rien. */
+  function readStoredDrafts() {
+    var found = Utils.storage.get(DRAFTS_KEY, null);
+    var out = {};
+    if (!found || typeof found !== "object" || Array.isArray(found)) { return out; }
+    var keys = Object.keys(found);
+    for (var i = 0; i < keys.length; i++) {
+      var value = found[keys[i]];
+      if (storedDraft(keys[i]) && typeof value === "string" && value) { out[keys[i]] = clipDraft(value); }
+    }
+    return out;
+  }
+
+  /* Brouillons rédigés en anonyme : liste de clés « composer:<sujet> » sous la propriété réservée `anon` (jamais un nom ni
+   * un identifiant). Lecture tolérante comme la précédente : forme inattendue, clé étrangère ou sans texte = ignorée. */
+  function readStoredAnon(texts) {
+    var found = Utils.storage.get(DRAFTS_KEY, null);
+    var list = found && typeof found === "object" && !Array.isArray(found) ? found[DRAFTS_ANON] : null;
+    var out = {};
+    if (!Array.isArray(list)) { return out; }
+    for (var i = 0; i < list.length; i++) {
+      if (typeof list[i] === "string" && storedDraft(list[i]) && texts[list[i]]) { out[list[i]] = true; }
+    }
+    return out;
+  }
+
+  /* Écriture bornée : au plus DRAFTS_MAX_ENTRIES brouillons et DRAFTS_MAX_CHARS caractères, les plus anciens
+   * (les premiers de l'objet) partent d'abord. Stockage refusé : comportement d'avant, sans erreur. */
+  function writeStoredDrafts(drafts, anon) {
+    var keys = Object.keys(drafts);
+    /* Les textes, puis (seulement s'il y en a) la liste des brouillons anonymes : un indicateur ne survit jamais à son texte. */
+    function payload() {
+      var out = {};
+      var flagged = [];
+      for (var i = 0; i < keys.length; i++) {
+        out[keys[i]] = drafts[keys[i]];
+        if (anon && anon[keys[i]] === true) { flagged.push(keys[i]); }
+      }
+      if (flagged.length) { out[DRAFTS_ANON] = flagged; }
+      return out;
+    }
+    while (keys.length > DRAFTS_MAX_ENTRIES || (keys.length && JSON.stringify(payload()).length > DRAFTS_MAX_CHARS)) {
+      delete drafts[keys.shift()];
+    }
+    if (keys.length) { Utils.storage.set(DRAFTS_KEY, payload()); }
+    else { Utils.storage.remove(DRAFTS_KEY); }
+  }
+
+  /* Saisie : relais tout de suite, écriture après un court silence. */
+  function stageDraft(key, value, anon) {
+    if (value) { composerDrafts[key] = value; } else { delete composerDrafts[key]; dismissNote(key); }
+    /* Le choix suit le texte : noté « anonyme » seulement si c'est le choix au moment de la frappe (ou du geste explicite). */
+    if (value && (anon === undefined ? UI.local.composerAnon === true : anon === true)) { anonDrafts[key] = true; }
+    else { delete anonDrafts[key]; }
+    draftsPending[key] = clipDraft(value);
+    if (draftsTimer) { clearTimeout(draftsTimer); }
+    draftsTimer = setTimeout(flushDrafts, DRAFTS_DELAY_MS);
+  }
+
+  function flushDrafts() {
+    if (draftsTimer) { clearTimeout(draftsTimer); draftsTimer = 0; }
+    var keys = Object.keys(draftsPending);
+    if (!keys.length) { return; }
+    var stored = readStoredDrafts();
+    var storedAnon = readStoredAnon(stored);
+    for (var i = 0; i < keys.length; i++) {
+      delete stored[keys[i]];                  // la clé repasse en dernier : c'est la plus récente
+      delete storedAnon[keys[i]];
+      if (draftsPending[keys[i]]) {
+        stored[keys[i]] = draftsPending[keys[i]];
+        if (anonDrafts[keys[i]]) { storedAnon[keys[i]] = true; }
+      }
+    }
+    draftsPending = {};
+    writeStoredDrafts(stored, storedAnon);
+  }
+
+  /* La publication est partie en file : son brouillon disparaît, sauf si un texte PLUS RÉCENT a été saisi depuis. */
+  function dropDraft(key, sent) {
+    var latest = Object.prototype.hasOwnProperty.call(draftsPending, key) ? draftsPending[key] : readStoredDrafts()[key];
+    if (latest && latest !== clipDraft(sent)) { return; }
+    delete anonDrafts[key];
+    draftsPending[key] = "";
+    flushDrafts();
+  }
+
+  /* Refus local de la publication : le message d'erreur est déjà à l'écran (Sync.dispatch) ; le texte revient dans
+   * le champ et, tout de suite, dans le brouillon durable. Jamais par-dessus une saisie plus récente. */
+  function keepRefused(key, text) {
+    var node = findDraftNode(key);
+    touchedDrafts[key] = true;
+    if (node && !node.value) { node.value = text; autoGrow(node); }
+    stageDraft(key, node && node.value ? node.value : text);
+    flushDrafts();
+  }
+
+  /* La note « brouillon retrouvé » s'en va : envoi, appui sur la bascule, champ vidé (REC-RUI-001). */
+  function dismissNote(key) {
+    if (!draftNote[key]) { return; }
+    delete draftNote[key];
+    delete noteSaid[key];
+    var note = document.getElementById("composer-restored");
+    if (note && note.parentNode) { note.parentNode.removeChild(note); }
+    var field = findDraftNode(key);
+    if (field && field.removeAttribute) { field.removeAttribute("aria-describedby"); }
+  }
+
+  /* Appelés par js/app.js : écriture immédiate avant ce qui peut tuer la page (pagehide, arrière-plan, rechargement
+   * d'une mise à jour) et effacement complet à la déconnexion (relais, champs à l'écran et appareil). */
+  UI.flushDrafts = function () { flushDrafts(); };
+
+  UI.clearDrafts = function () {
+    if (draftsTimer) { clearTimeout(draftsTimer); draftsTimer = 0; }
+    Object.keys(draftNote).forEach(dismissNote);
+    draftsPending = {};
+    composerDrafts = {};
+    anonDrafts = {};
+    draftNote = {};
+    noteSaid = {};
+    touchedDrafts = {};
+    var nodes = document.querySelectorAll("[data-draft]");
+    for (var i = 0; i < nodes.length; i++) {
+      if (storedDraft(nodes[i].getAttribute("data-draft")) && nodes[i].value) { nodes[i].value = ""; autoGrow(nodes[i]); }
+    }
+    Utils.storage.remove(DRAFTS_KEY);
+  };
 
   /* ⚠️ Champs ÉDITÉS depuis leur dernière alimentation par le rendu.
    *
@@ -227,6 +407,17 @@
     return null;
   }
 
+  /* Le champ garde son texte au rendu, mais son compteur est recréé à « 0 / max » : on le recale (REC-RUI-008). */
+  function refreshCounter(key, node) {
+    /* Comparaison d'attribut, pas de sélecteur construit avec la clé : une clé étrange ne doit jamais casser le rendu. */
+    var counters = document.querySelectorAll("[data-counter]");
+    for (var i = 0; i < counters.length; i++) {
+      if (counters[i].getAttribute("data-counter") !== key) { continue; }
+      var max = counters[i].textContent.split(" / ")[1];
+      if (max) { counters[i].textContent = node.value.length + " / " + max; }
+    }
+  }
+
   function restoreDrafts(snapshot) {
     var nodes = document.querySelectorAll("[data-draft]");
     for (var i = 0; i < nodes.length; i++) {
@@ -243,6 +434,7 @@
       if (touchedDrafts[key] && saved !== undefined) { node.value = saved; }
       else if (saved !== undefined && saved !== "" && !node.value) { node.value = saved; }
       autoGrow(node);
+      refreshCounter(key, node);
     }
     if (snapshot.active) {
       var target = findDraftNode(snapshot.active.key);
@@ -254,6 +446,150 @@
           }
         } catch (e) { /* champ non focalisable */ }
       }
+    }
+  }
+
+  /* ------------------------------------------------------------- Focus --- */
+
+  /* ⚠️ Le rendu DÉTRUIT et reconstruit #app et le calque : l'élément qui avait le
+   * focus disparaissait avec eux, et le focus retombait sur <body> après chaque
+   * vote, réaction ou message reçu. Le clavier repartait du haut de la page et
+   * le lecteur d'écran perdait sa place. Les commandes portent donc une clé
+   * stable (`data-key` ; la bulle garde son `data-message-id`), relevée avant le
+   * rendu et retrouvée après. Les champs de saisie restent l'affaire des
+   * brouillons : une saisie en cours n'est jamais dérangée. */
+  var KEYED = "[data-key], [data-message-id]";
+
+  function keyOf(node) {
+    if (!node || !node.getAttribute) { return null; }
+    var key = node.getAttribute("data-key");
+    if (key) { return key; }
+    var messageId = node.getAttribute("data-message-id");
+    if (messageId) { return "msg-" + messageId; }
+    return node.id ? "#" + node.id : null;
+  }
+
+  /* Relevé AVANT le rendu. Une clé peut se répéter (« reaction-… » existe sous
+   * chaque bulle) : `anchor` et `limit`, les plus proches clés UNIQUES avant et
+   * après l'élément, la situent. `anchor` sert aussi de repli quand l'élément
+   * disparaît : une réaction retirée rend le focus à sa bulle, « Retirer mon
+   * vote » au dernier bouton de vote. */
+  function captureFocus() {
+    var node = document.activeElement;
+    var inLayer = !!node && overlayRoot.contains(node);
+    if (!node || !(inLayer || appRoot.contains(node)) || node.hasAttribute("data-draft")) { return null; }
+    var key = keyOf(node);
+    var saved = { key: key, unique: true, anchor: null, limit: null, inLayer: inLayer };
+    if (!key || key.charAt(0) === "#") { return saved; }
+    var nodes = (inLayer ? overlayRoot : appRoot).querySelectorAll(KEYED);
+    var count = {};
+    var i;
+    for (i = 0; i < nodes.length; i++) { count["k" + keyOf(nodes[i])] = (count["k" + keyOf(nodes[i])] || 0) + 1; }
+    saved.unique = count["k" + key] === 1;
+    var after = false;
+    for (i = 0; i < nodes.length; i++) {
+      if (nodes[i] === node) { after = true; continue; }
+      if (count["k" + keyOf(nodes[i])] !== 1) { continue; }
+      if (!after) { saved.anchor = keyOf(nodes[i]); } else { saved.limit = keyOf(nodes[i]); break; }
+    }
+    return saved;
+  }
+
+  function findFocus(saved) {
+    if (!saved || !saved.key) { return null; }
+    if (saved.key.charAt(0) === "#") { return document.getElementById(saved.key.slice(1)); }
+    var nodes = (saved.inLayer ? overlayRoot : appRoot).querySelectorAll(KEYED);
+    var anchor = null;
+    for (var i = 0; i < nodes.length; i++) {
+      var key = keyOf(nodes[i]);
+      if (saved.unique ? key === saved.key : (anchor && key === saved.key)) { return nodes[i]; }
+      if (anchor && !saved.unique && key === saved.limit) { break; }
+      if (!anchor && key === saved.anchor) { anchor = nodes[i]; }
+    }
+    return anchor;
+  }
+
+  function focusNode(node, scroll) {
+    try { node.focus(scroll ? undefined : { preventScroll: true }); } catch (e) { /* non focalisable */ }
+  }
+
+  /* Feuilles et fenêtres. Le calque est rendu comme le reste, son focus se règle
+   * donc ici, APRÈS le rendu : à l'ouverture on retient le déclencheur et on
+   * entre dans le calque (le dialogue lui-même, nommé par son titre) ; tant
+   * qu'il est ouvert, le fond est inerte (`inert`, à défaut `aria-hidden`) et le
+   * document ne défile plus (classe `has-layer`, cf. app.css) ; à la fermeture,
+   * quel que soit le geste (Fermer, Échap, fond, retour du système : tous passent
+   * par UI.set), le focus revient au déclencheur. Pas de <dialog> : sa fermeture
+   * native divergerait du contrat du geste retour (tête de js/app.js). */
+  var INERT = typeof HTMLElement !== "undefined" && "inert" in HTMLElement.prototype;
+  var inertNodes = [];      // nœuds rendus inertes ICI, et seulement eux
+  var layerSpec = null;     // calque à l'écran au rendu précédent
+  var layerReturn = null;   // relevé du déclencheur, rendu à la fermeture
+
+  function setBackground(open) {
+    var html = document.documentElement;
+    if (!open) {
+      html.classList.remove("has-layer");
+      inertNodes.forEach(function (node) {
+        if (INERT) { node.inert = false; } else { node.removeAttribute("aria-hidden"); }
+      });
+      inertNodes = [];
+      return;
+    }
+    html.classList.add("has-layer");
+    /* Les frères du calque, sauf les toasts (leur région doit encore annoncer) et
+     * la présentation, qui tient elle-même son calque. */
+    var siblings = document.body.children;
+    for (var i = 0; i < siblings.length; i++) {
+      var node = siblings[i];
+      if (node === overlayRoot || node === toastRoot || node === onboardRoot || inertNodes.indexOf(node) >= 0 ||
+          /^(SCRIPT|NOSCRIPT|STYLE|TEMPLATE)$/.test(node.tagName)) { continue; }
+      if (INERT ? node.inert : node.getAttribute("aria-hidden") === "true") { continue; }
+      if (INERT) { node.inert = true; } else { node.setAttribute("aria-hidden", "true"); }
+      inertNodes.push(node);
+    }
+  }
+
+  function settleFocus(saved, samePlace) {
+    var dialog = overlayRoot.querySelector("[role=dialog]");
+    var spec = dialog ? (UI.local.sheet || UI.local.modal) : null;
+    var opened = !!spec && spec !== layerSpec;
+    if (spec && !layerSpec) { layerReturn = saved; }
+    if (!spec && layerSpec) { saved = layerReturn; layerReturn = null; samePlace = true; }
+    layerSpec = spec;
+    setBackground(!!spec);
+    var active = document.activeElement;
+    if (opened) {
+      if (!dialog.contains(active)) { focusNode(dialog); }
+      return;
+    }
+    /* Un focus resté en place (saisie restaurée par les brouillons, focus posé
+     * ailleurs) ne se déplace jamais ; un changement d'écran non plus. */
+    if (active && active !== document.body && active !== document.documentElement) { return; }
+    if (!spec && !samePlace) { return; }
+    var target = findFocus(saved);
+    if (spec && (!target || !dialog.contains(target))) { target = dialog; }
+    if (target) { focusNode(target); }
+  }
+
+  /* Tab ne sort pas du calque : après sa dernière commande il revient à la
+   * première, et l'inverse. Le fond inerte ne suffit pas : au-delà de la
+   * dernière commande, le navigateur sortirait de la page. */
+  function keepTabInside(event) {
+    if (event.key !== "Tab") { return; }
+    var dialog = overlayRoot.querySelector("[role=dialog]");
+    if (!dialog) { return; }
+    var all = dialog.querySelectorAll("button, input, select, textarea, a[href], [tabindex]");
+    var items = [];
+    for (var i = 0; i < all.length; i++) {
+      if (!all[i].disabled && all[i].getAttribute("tabindex") !== "-1") { items.push(all[i]); }
+    }
+    var active = document.activeElement;
+    if (!items.length) { event.preventDefault(); return; }
+    if (event.shiftKey && (active === items[0] || active === dialog)) {
+      event.preventDefault(); focusNode(items[items.length - 1], true);
+    } else if (!event.shiftKey && active === items[items.length - 1]) {
+      event.preventDefault(); focusNode(items[0], true);
     }
   }
 
@@ -376,7 +712,51 @@
 
   /* ------------------------------------------------------ Blocs réutilisables --- */
 
-  function statusPill() {
+  /* Libellé LONG de la pastille : les six mots de §12, suivis du nombre d'actions
+   * en attente quand il y en a. Le libellé COURT reste Sync.status().label
+   * (« Sync… », « Local ») : c'est lui qui tient sur un téléphone (cf. app.css).
+   * Un code inconnu (sync.js plus récent que ce fichier) garde le libellé court. */
+  function statusLongLabel(status) {
+    var count = status.pending ? " (" + status.pending + ")" : "";
+    if (status.code === "idle") { return "À jour"; }
+    if (status.code === "syncing") { return "Synchronisation"; }
+    if (status.code === "pending") { return "En attente" + count; }
+    if (status.code === "offline") { return "Hors ligne" + count; }
+    if (status.code === "error") { return "Erreur" + count; }
+    if (status.code === "local") { return "Mode local"; }
+    return status.label;
+  }
+
+  /* ⚠️ La région d'annonce dit le libellé long du dernier état UTILE, pas l'état
+   * courant. Les sondages font alterner « À jour » et « Synchronisation » toutes
+   * les deux secondes : les annoncer, c'était 22 interruptions en 20 s pour le
+   * lecteur d'écran. L'annonce ne change donc qu'en entrant en attente, hors
+   * ligne, en erreur ou en mode local (ou quand leur nombre d'actions change), et
+   * au retour à « À jour » après l'un d'eux ; la toute première synchronisation
+   * dit aussi sa fin, une fois. L'état vit ici, hors du DOM : la pastille est
+   * recréée à chaque rendu d'écran, l'annonce ne doit pas repartir de zéro. */
+  var announcedCode = null;
+  var announcedText = "";
+
+  function statusAnnouncement(status) {
+    var text = statusLongLabel(status);
+    if (announcedCode === null) {
+      announcedCode = status.code; announcedText = text;
+    } else if (status.code === "idle") {
+      if (announcedCode !== "idle") { announcedCode = "idle"; announcedText = text; }
+    } else if (status.code !== "syncing" && text !== announcedText) {
+      announcedCode = status.code; announcedText = text;
+    }
+    return announcedText;
+  }
+
+  /* Réécrire un texte identique n'est pas neutre : un lecteur d'écran peut relire
+   * une région dont le nœud texte a été remplacé. */
+  function setStatusText(node, text) {
+    if (node && node.textContent !== text) { node.textContent = text; }
+  }
+
+  function statusPill(secondary) {
     var status = Sync.status();
     /* `role="status"` : « En attente (3) » devenait « À jour » sans que rien ne le
      * dise. C'est la seule information de l'écran qui change SEULE, sans geste — donc
@@ -384,24 +764,35 @@
      * c'est ce qu'il faut : la synchronisation n'a pas à couper la lecture en cours.
      * La pastille est mise à jour en place par UI.refreshStatus, jamais recréée : la
      * région préexiste donc à son contenu, condition pour qu'elle annonce. */
+    /* Libellés visibles (court et long, l'un ou l'autre selon la largeur) en
+     * aria-hidden : le lecteur d'écran n'entend que `.status-announce`.
+     * `secondary` : seconde pastille d'un même écran (Réglages). Une seule région
+     * role=status par écran : celle-ci n'a ni rôle ni annonce, et ses libellés se
+     * lisent comme un texte ordinaire (aucun n'y est aria-hidden : à 430 px et
+     * moins le long est masqué par app.css, le court est alors son seul texte). */
     var pill = el("div", {
       class: "status-pill status-" + status.code, title: status.error || "",
-      role: "status"
+      role: secondary ? null : "status"
     }, [
       el("span", { class: "status-dot", "aria-hidden": "true" }),
-      el("span", { class: "status-label", text: status.label })
+      el("span", { class: "status-short", "aria-hidden": secondary ? null : "true", text: status.label }),
+      el("span", { class: "status-label status-long", "aria-hidden": secondary ? null : "true", text: statusLongLabel(status) }),
+      secondary ? null : el("span", { class: "visually-hidden status-announce", text: statusAnnouncement(status) })
     ]);
     return pill;
   }
 
   UI.refreshStatus = function () {
     var status = Sync.status();
+    var long = statusLongLabel(status);
+    var said = statusAnnouncement(status);
     var nodes = document.querySelectorAll(".status-pill");
     for (var i = 0; i < nodes.length; i++) {
       nodes[i].className = "status-pill status-" + status.code;
       nodes[i].setAttribute("title", status.error || "");
-      var label = nodes[i].querySelector(".status-label");
-      if (label) { label.textContent = status.label; }
+      setStatusText(nodes[i].querySelector(".status-short"), status.label);
+      setStatusText(nodes[i].querySelector(".status-long"), long);
+      setStatusText(nodes[i].querySelector(".status-announce"), said);
     }
   };
 
@@ -411,17 +802,24 @@
       /* Bouton retour visible sur CHAQUE écran secondaire (iPhone sans retour matériel). */
       var backLabel = options.backLabel || "Retour";
       left.push(el("button", {
-        class: "btn-back", type: "button",
+        class: "btn-back", type: "button", "data-key": "back",
         "aria-label": backLabel === "Retour" ? "Retour" : "Retour vers " + backLabel,
         onclick: options.back
       }, [icon("back", 20), el("span", { text: backLabel })]));
     }
-    var titles = el("div", { class: "topbar-titles" });
+    /* Titre d'écran, niveau 1. Le rôle est posé sur le conteneur et non sur un <h1> : sur l'écran
+     * de discussion le titre vit dans un bouton (un titre ne peut pas s'y loger), et la mise en
+     * forme existante reste intacte. `heading: false` quand l'écran porte déjà son propre h1. */
+    var titles = el("div", {
+      class: "topbar-titles",
+      role: options.heading === false ? null : "heading",
+      "aria-level": options.heading === false ? null : "1"
+    });
     if (options.onTitle) {
       var titleBtn = el("button", {
         class: "btn-ghost", type: "button",
         style: { padding: "0", textAlign: "left", width: "100%", minHeight: "auto", background: "transparent", border: "0", cursor: "pointer" },
-        onclick: options.onTitle
+        "data-key": "topic-info", "aria-describedby": "topic-info-description", onclick: options.onTitle
       }, [
         el("div", { class: "topbar-title", text: options.title }),
         el("div", { class: "topbar-sub" }, [el("span", { text: options.sub || "" }), icon("info", 13)])
@@ -433,14 +831,47 @@
         titles.appendChild(el("div", { class: "topbar-sub" }, [el("span", { text: options.sub })]));
       }
     }
-    return el("header", { class: "topbar" }, [left, titles, el("div", { class: "topbar-actions" }, options.actions || [])]);
+    /* La consigne du bouton-titre est sa description, pas son nom : le nom reste le texte visible
+     * (le titre du sujet), et la description est posée HORS du titre pour ne pas s'y ajouter. */
+    return el("header", { class: "topbar" }, [
+      left, titles, el("div", { class: "topbar-actions" }, options.actions || []),
+      options.onTitle ? el("span", { class: "visually-hidden", id: "topic-info-description", text: "Voir les détails du sujet" }) : null
+    ]);
+  }
+
+  /* ⚠️ Un libellé qui n'est pas RELIÉ à son champ ne le nomme pas : le champ restait sans nom,
+   * ou nommé par son seul placeholder, qui disparaît dès la première frappe. Chaque champ reçoit
+   * donc un identifiant et son libellé un `for`. L'indication devient la description du champ :
+   * « Votre nom » annonce ainsi son effet (publier en anonyme, §5) à qui ne voit pas l'écran.
+   * L'identifiant dérive de la clé de brouillon : stable d'un rendu à l'autre et unique par
+   * écran ; à défaut de clé, un compteur. */
+  var fieldSeq = 0;
+
+  function controlIn(node) {
+    if (!node) { return null; }
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(node.tagName)) { return node; }
+    return node.querySelector ? node.querySelector("input, select, textarea") : null;
+  }
+
+  function fieldId(control) {
+    var id = control.getAttribute("id");
+    if (id) { return id; }
+    var key = control.getAttribute("data-draft") || control.getAttribute("data-key");
+    if (key) { return "f-" + String(key).replace(/[^A-Za-z0-9_-]/g, "-"); }
+    fieldSeq += 1;
+    return "f-" + fieldSeq;
   }
 
   function field(label, control, hint) {
+    var target = controlIn(control);
+    var id = target ? fieldId(target) : null;
+    if (target) { target.setAttribute("id", id); }
+    var hintNode = hint ? el("div", { class: "hint", text: hint, id: id ? id + "-hint" : null }) : null;
+    if (target && hintNode) { target.setAttribute("aria-describedby", id + "-hint"); }
     return el("div", { class: "field" }, [
-      label ? el("label", { class: "label", text: label }) : null,
+      label ? el("label", { class: "label", text: label, "for": id }) : null,
       control,
-      hint ? el("div", { class: "hint", text: hint }) : null
+      hintNode
     ]);
   }
 
@@ -450,6 +881,40 @@
   }
 
   UI.draftValue = draftValue;
+
+  /* Erreur de saisie reliée au champ (A11-017). Un toast seul disparaît en quelques secondes et
+   * ne dit pas QUEL champ est en cause : le champ reçoit aria-invalid et une description (message
+   * visible sous lui, lu avec son nom) jusqu'à la frappe suivante, et le focus l'y conduit. Le
+   * message n'existe que dans le DOM : un rendu l'efface avec l'état du champ. */
+  function clearInvalid(node) {
+    var errorId = (node.getAttribute("id") || "") + "-error";
+    var message = document.getElementById(errorId);
+    if (message && message.parentNode) { message.parentNode.removeChild(message); }
+    node.removeAttribute("aria-invalid");
+    var rest = (node.getAttribute("aria-describedby") || "").split(" ").filter(function (part) {
+      return part && part !== errorId;
+    }).join(" ");
+    if (rest) { node.setAttribute("aria-describedby", rest); } else { node.removeAttribute("aria-describedby"); }
+  }
+
+  function markInvalid(node, text) {
+    if (!node || !node.parentNode) { return; }
+    var id = node.getAttribute("id");
+    if (!id) { id = fieldId(node); node.setAttribute("id", id); }
+    clearInvalid(node);
+    node.parentNode.insertBefore(el("div", { class: "hint field-error", id: id + "-error", text: text }), node.nextSibling);
+    node.setAttribute("aria-invalid", "true");
+    node.setAttribute("aria-describedby", ((node.getAttribute("aria-describedby") || "") + " " + id + "-error").trim());
+    var onInput = function () { clearInvalid(node); node.removeEventListener("input", onInput); };
+    node.addEventListener("input", onInput);
+    try { node.focus(); } catch (e) { /* champ non focalisable */ }
+  }
+
+  /* Refus de saisie dans ce fichier : message relié au champ ET toast (annonce immédiate). */
+  function invalid(node, text) { markInvalid(node, text); UI.toast(text, "error"); }
+
+  /* Pour js/app.js, qui valide l'adresse, le code et le nom : la clé est celle du brouillon. */
+  UI.fieldError = function (key, text) { markInvalid(findDraftNode(key), text); };
 
   function closeOverlay() { UI.set({ sheet: null, modal: null }); }
 
@@ -477,7 +942,7 @@
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
       el("div", {
-        class: "sheet", role: "dialog", "aria-modal": "true",
+        class: "sheet", role: "dialog", "aria-modal": "true", tabindex: "-1",
         /* Pointer un nœud absent vaut moins que ne rien pointer. */
         "aria-labelledby": titleNode ? OVERLAY_TITLE_ID : null
       }, [
@@ -495,7 +960,7 @@
       onclick: function (e) { if (e.target === e.currentTarget) { closeOverlay(); } }
     }, [
       el("div", {
-        class: "modal", role: "dialog", "aria-modal": "true",
+        class: "modal", role: "dialog", "aria-modal": "true", tabindex: "-1",
         "aria-labelledby": title ? OVERLAY_TITLE_ID : null
       }, [
         overlayTitle(title, "modal-title"),
@@ -508,7 +973,7 @@
   function sheetAction(iconName, label, onclick, options) {
     options = options || {};
     return el("button", {
-      class: "sheet-action" + (options.danger ? " danger" : ""),
+      class: "sheet-action" + (options.danger ? " danger" : ""), "data-key": "action-" + iconName,
       type: "button",
       disabled: options.disabled,
       onclick: onclick
@@ -533,11 +998,20 @@
 
   /* ---------------------------------------------------- Accueil : connexion --- */
 
+  /* Stockage refusé par le navigateur (js/app.js, STORAGE_REFUSED) : le toast du démarrage
+   * disparaît, cette ligne reste tant que l'écran de connexion est là. Le texte vient d'App et
+   * n'est jamais recopié ici ; un js/app.js plus ancien en cache n'exporte rien : aucune ligne. */
+  function storageNote() {
+    var text = typeof App.storageMessage === "function" ? App.storageMessage() : "";
+    if (typeof text !== "string" || !text) { return null; }
+    return el("div", { class: "note" }, [icon("info", 14), el("span", { text: text })]);
+  }
+
   function screenConnection() {
     var urlInput = el("input", {
       class: "input", type: "url", inputmode: "url", autocomplete: "off",
       autocapitalize: "off", spellcheck: "false",
-      placeholder: "Collez ici l'URL du script (…/exec)",
+      placeholder: "Collez ici l'URL du script (…/exec)", "aria-required": "true",
       "data-draft": "setup:url",
       value: Sync.connection.url || ""
     });
@@ -559,9 +1033,10 @@
         backLabel: "Retour"
       }) : null,
       el("div", { class: "content stack-lg" }, [
-        heroBlock("Préparer les réunions de l'équipe, ensemble."),
+        heroBlock("Préparer les réunions de l'équipe, ensemble.", !App.connectionConfigured()),
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("link", "Rejoindre l'espace de l'équipe"),
+          storageNote(),
           field("Adresse du script de l'équipe", urlInput,
             "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
           field("Code d'accès", codeInput,
@@ -583,7 +1058,8 @@
   function screenName() {
     var nameInput = bindCounter(el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.name,
-      autocomplete: "name", placeholder: "Votre prénom",
+      autocomplete: "name", placeholder: "Votre prénom", "aria-required": "true",
+      "aria-labelledby": "setup-name-question", "aria-describedby": "setup-name-hint",
       "data-draft": "setup:name",
       value: App.user.name || ""
     }), "setup:name", Core.LIMITS.name);
@@ -597,8 +1073,8 @@
       el("div", { class: "content stack-lg" }, [
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("user", "Votre identité"),
-          el("h2", { text: "Comment vous appelez-vous ?" }),
-          el("p", { class: "hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
+          el("h2", { id: "setup-name-question", text: "Comment vous appelez-vous ?" }),
+          el("p", { class: "hint", id: "setup-name-hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
           nameInput,
           counterFor("setup:name", Core.LIMITS.name),
           el("button", {
@@ -615,13 +1091,13 @@
   function screenLock() {
     var codeInput = el("input", {
       class: "input", type: "password", inputmode: "text", autocomplete: "off",
-      placeholder: "Code d'accès", "data-draft": "lock:code",
+      placeholder: "Code d'accès", "aria-required": "true", "data-draft": "lock:code",
       onkeydown: function (e) { if (e.key === "Enter") { App.unlock(codeInput.value); } }
     });
 
     return el("div", { class: "screen" }, [
       el("div", { class: "content stack-lg" }, [
-        heroBlock("Espace de l'équipe verrouillé"),
+        heroBlock("Espace de l'équipe verrouillé", true),
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("lock", "Verrou de l'équipe"),
           field("Code d'accès", codeInput,
@@ -634,7 +1110,7 @@
           }, [icon("unlock", 18), el("span", { text: "Déverrouiller" })])
         ]), 1),
         reveal(el("button", {
-          class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe",
+          class: "btn btn-ghost btn-block", type: "button", text: "Se déconnecter de l'équipe", "data-key": "logout",
           onclick: function () { UI.set({ modal: { type: "logout" } }); }
         }), 2)
       ])
@@ -648,8 +1124,33 @@
   function countChip(iconName, count, label) {
     return el("span", { class: "legend-chip", title: Utils.plural(count, label, label + "s") }, [
       icon(iconName, 13),
-      el("span", { text: String(count) })
+      el("span", { text: String(count) }),
+      /* Lu avec le nombre : « 1 message », pas « 1 1 1 » (le `title` n'entre pas dans le nom d'un bouton) (REC-RUI-007). */
+      el("span", { class: "visually-hidden", text: " " + (count > 1 ? label + "s" : label) })
     ]);
+  }
+
+  /* Dernière activité du sujet (§3), en relatif court : « Actif il y a 2 h ». La date exacte est
+   * dans la feuille d'informations (« Dernière activité le … »). Une date illisible ne dit rien ;
+   * une date dans le futur (horloges décalées) se lit « à l'instant ». */
+  function activityText(iso) {
+    if (!iso) { return ""; }
+    var time = new Date(iso).getTime();
+    if (isNaN(time)) { return ""; }
+    var elapsed = Date.now() - time;
+    if (elapsed < 60000) { return "Actif à l'instant"; }
+    if (elapsed < 3600000) { return "Actif il y a " + Math.floor(elapsed / 60000) + " min"; }
+    if (elapsed < 86400000) { return "Actif il y a " + Math.floor(elapsed / 3600000) + " h"; }
+    var days = Math.floor(elapsed / 86400000);
+    if (days < 7) { return "Actif il y a " + (days === 1 ? "1 jour" : days + " jours"); }
+    var date = new Date(time);
+    return "Actif le " + ("0" + date.getDate()).slice(-2) + "/" + ("0" + (date.getMonth() + 1)).slice(-2) +
+      "/" + date.getFullYear();
+  }
+
+  function activityNote(topic) {
+    var text = activityText(topic.updatedAt);
+    return text ? el("div", { class: "card-meta card-activity", text: text }) : null;
   }
 
   function topicCard(topic) {
@@ -658,14 +1159,14 @@
     var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
       topic.messages.length ? countChip("message", topic.messages.length, "message") : null,
       topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
-      topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "conclusion") : null
+      topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "formulation") : null
     ]);
     if (!counts.childNodes.length) {
       counts.appendChild(el("span", { class: "legend-chip", text: "Rien encore" }));
     }
 
     return el("button", {
-      class: "card", type: "button",
+      class: "card", type: "button", "data-key": "topic-" + topic.id,
       onclick: function () { App.go("#/topic/" + topic.id); }
     }, [
       el("div", { class: "row", style: { gap: "10px", alignItems: "flex-start" } }, [
@@ -673,6 +1174,7 @@
         toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status])
       ]),
       topic.description ? el("div", { class: "card-desc", text: topic.description }) : null,
+      activityNote(topic),
       el("div", { class: "card-foot" }, [
         counts,
         el("div", { class: "spacer" }),
@@ -684,34 +1186,41 @@
 
   function screenTopics() {
     var state = Store.view;
-    var all = state.topics.slice().sort(function (a, b) {
-      return String(b.updatedAt).localeCompare(String(a.updatedAt));
-    });
-    var visible = all.filter(function (t) { return UI.local.showArchived || t.status !== "archived"; });
+    /* ⚠️ Ordre et recherche viennent de ProductView.visibleTopics : js/product-ui.js appelle la
+     * MÊME fonction pour ranger les cartes par groupe (une carte par sujet, dans cet ordre). Deux
+     * règles copiées finiraient par diverger, et le regroupement serait alors abandonné. Les
+     * comptes ci-dessous ne dépendent pas de l'ordre (BL-060, BL-061). Sans ProductView (contexte
+     * isolé, jamais en production : index.html le charge avant ce fichier), ni tri ni recherche. */
+    var all = state.topics;
+    var visible = typeof ProductView !== "undefined"
+      ? ProductView.visibleTopics(state.topics, UI.local.search, UI.local.showArchived)
+      : state.topics.filter(function (t) { return UI.local.showArchived || t.status !== "archived"; });
     var archivedCount = all.length - all.filter(function (t) { return t.status !== "archived"; }).length;
 
-    var query = Utils.trim(UI.local.search).toLowerCase();
-    if (query) {
-      visible = visible.filter(function (t) {
-        return (t.title + " " + t.description).toLowerCase().indexOf(query) >= 0;
-      });
-    }
+    var query = Utils.trim(UI.local.search);
 
     var body;
-    if (!all.length) {
+    /* Rien reçu encore en mode connecté (révision 0, aucun échange réussi depuis
+     * l'ouverture) : l'équipe a peut-être cinquante sujets, inviter à créer « un
+     * premier sujet » serait faux. Une équipe vide confirmée par le serveur
+     * (échange réussi) et le mode local gardent l'invitation. */
+    if (!all.length && awaitingFirstData()) {
+      body = emptyState("sparkle", "Pas encore de données sur cet appareil",
+        "Elles s'afficheront à la prochaine connexion.");
+    } else if (!all.length) {
       body = emptyState("sparkle", "Aucun sujet pour l'instant",
         "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet.",
         el("button", {
-          class: "btn btn-primary", type: "button",
+          class: "btn btn-primary", type: "button", "data-key": "create-topic-first",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
         }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]),
-        "Ensuite : on en discute, on en tire des propositions, on vote, et on retient une conclusion.");
+        "Ensuite : on en discute, on en tire des propositions, on vote, et on dégage un consensus.");
     } else {
       var list = el("div", { class: "stack topics-grid" });
       var index = 0;
       if (all.length > CONFIG.SEARCH_THRESHOLD) {
         var search = el("input", {
-          class: "input", type: "search", placeholder: "Rechercher un sujet",
+          class: "input", type: "search", placeholder: "Rechercher un sujet", "aria-label": "Rechercher un sujet",
           "data-draft": "topics:search", value: UI.local.search,
           oninput: Utils.debounce(function (e) { UI.set({ search: e.target.value }); }, 180)
         });
@@ -758,7 +1267,7 @@
       visible.forEach(function (topic) { list.appendChild(reveal(topicCard(topic), index++)); });
       if (archivedCount > 0) {
         list.appendChild(el("button", {
-          class: "btn btn-ghost btn-block", type: "button",
+          class: "btn btn-ghost btn-block", type: "button", "data-key": "show-archived",
           onclick: function () {
             Utils.storage.set(CONFIG.KEYS.showArchived, !UI.local.showArchived);
             UI.set({ showArchived: !UI.local.showArchived });
@@ -790,7 +1299,7 @@
 
     if (all.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter un sujet",
+        class: "fab", type: "button", "data-key": "create-topic",
         onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
       }, [icon("plus", 20), el("span", { text: "Nouveau sujet" })]));
     }
@@ -842,7 +1351,7 @@
       if (!info) { return; }
       var label = Utils.reactionLabel(emoji);
       row.appendChild(el("button", {
-        class: "reaction" + (info.mine ? " mine" : ""), type: "button",
+        class: "reaction" + (info.mine ? " mine" : ""), type: "button", "data-key": "reaction-" + emoji,
         title: label + " · " + Utils.plural(info.count, "personne", "personnes"),
         "aria-label": label + " (" + Utils.plural(info.count, "personne", "personnes") + ")",
         "aria-pressed": info.mine ? "true" : "false",
@@ -883,7 +1392,10 @@
       col.appendChild(el("div", { class: "msg-author", "aria-hidden": "true", text: message.authorName }));
     }
 
-    var locked = owns && Core.isMessageLocked(message, App.user.id);
+    /* Cadenas sur un message SIGNÉ seulement : sur un anonyme il ne paraîtrait
+     * que chez son auteur, et le désignerait à qui regarde l'écran (§5). Le
+     * verrou d'un anonyme s'explique dans sa feuille (« Modifier » désactivé). */
+    var locked = mine && Core.isMessageLocked(message, App.user.id);
 
     /* Un message encore en file n'existe que sur cet appareil. Afficher son
      * heure serait deux fois trompeur : elle laisse croire qu'il est parti, et
@@ -936,11 +1448,18 @@
     return el("div", { class: classes }, children);
   }
 
+  /* Mouvement réduit : `behavior: "smooth"` passé à scrollIntoView l'emporte sur `scroll-behavior`
+   * du CSS (A11-014). "auto" rend la main à la feuille de style, qui défile sans animation. */
+  function motionReduced() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    catch (e) { return false; }
+  }
+
   UI.scrollToMessage = function (messageId) {
     var nodes = document.querySelectorAll("[data-message-id]");
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i].getAttribute("data-message-id") === messageId) {
-        nodes[i].scrollIntoView({ block: "center", behavior: "smooth" });
+        nodes[i].scrollIntoView({ block: "center", behavior: motionReduced() ? "auto" : "smooth" });
         /* Le clignotement ne dit rien à qui ne voit pas l'écran : sans
          * déplacement du focus, le lecteur d'écran reste là où la feuille s'est
          * fermée et rien n'indique qu'on a été emmené ailleurs dans le fil. */
@@ -957,7 +1476,7 @@
   function composer(topic) {
     var draftKey = "composer:" + topic.id;
     var textarea = el("textarea", {
-      class: "textarea grow", rows: "1", placeholder: "Votre message…",
+      class: "textarea grow", rows: "1", placeholder: "Votre message…", "aria-label": "Votre message",
       maxlength: Core.LIMITS.message, "data-draft": draftKey,
       oninput: function (e) { autoGrow(e.target); },
       onkeydown: function (e) {
@@ -966,9 +1485,12 @@
     });
 
     function send() {
-      var text = Utils.trim(textarea.value);
+      var typed = textarea.value;
+      var text = Utils.trim(typed);
       if (!text) { return; }
-      var quoteId = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote.messageId : null;
+      dismissNote(draftKey);
+      var quote = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote : null;
+      var quoteId = quote ? quote.messageId : null;
       /* ⚠️ On vide le champ AVANT de déclencher l'action : le dispatch provoque
        * un rendu synchrone et la restauration des brouillons réinjecterait le
        * message déjà publié. */
@@ -980,12 +1502,34 @@
       autoGrow(textarea);
       UI.local.quote = null;
       UI.local.scrollToBottom = true;
-      App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon);
+      /* Le champ est vidé tout de suite (ci-dessus), mais le texte lui revient si la publication est refusée EN LOCAL
+       * (sujet supprimé entre-temps, texte refusé par le noyau) : le message d'erreur est déjà à l'écran, le texte
+       * reste dans le champ et dans le brouillon durable. Une publication acceptée en file efface ce brouillon.
+       * Issue inconnue (js/app.js d'avant, en cache, qui ne rend rien) : comportement d'avant, le texte est parti. */
+      var sent = App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon);
+      if (!sent || typeof sent.then !== "function") { dropDraft(draftKey, typed); return; }
+      sent.then(function (result) {
+        if (result && result.ok === false) {
+          keepRefused(draftKey, typed);
+          if (quote && !UI.local.quote) { UI.set({ quote: quote }); }
+        } else {
+          dropDraft(draftKey, typed);
+        }
+      }, function () { /* issue inconnue : le brouillon durable reste, rien ne se perd */ });
     }
 
     var sendBtn = el("button", {
-      class: "send-btn", type: "button", "aria-label": "Envoyer", onclick: send
+      class: "send-btn", type: "button", "aria-label": "Envoyer", "data-key": "send", onclick: send
     }, [icon("send", 20)]);
+
+    /* ⚠️ Un brouillon rédigé en anonyme n'est jamais affiché « Signé » par déduction (REC-RUI-001) : le choix est global, le
+     * brouillon est par sujet. Le geste explicite de la personne (la bascule) retire l'indicateur AVANT ce rendu. */
+    var note = draftNote[draftKey];
+    if (note && !composerDrafts[draftKey]) { delete draftNote[draftKey]; delete noteSaid[draftKey]; note = undefined; }
+    if (composerDrafts[draftKey] && anonDrafts[draftKey] && !UI.local.composerAnon) {
+      UI.local.composerAnon = true;
+      if (!note) { note = draftNote[draftKey] = "anon"; }
+    }
 
     var parts = [];
     if (UI.local.quote && UI.local.quote.topicId === topic.id) {
@@ -1002,14 +1546,39 @@
       }
     }
 
+    if (note) {
+      var said = !noteSaid[draftKey];
+      noteSaid[draftKey] = true;
+      var noteNode = el("div", { class: "note", id: "composer-restored" }, [
+        icon("info", 14),
+        el("span", { class: "note-body", text: note === "anon"
+          ? "Brouillon retrouvé sur cet appareil. Il sera publié en anonyme : vérifiez avant d'envoyer."
+          : "Brouillon retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant d'envoyer." })
+      ]);
+      /* Annoncée une seule fois (role=status) : un rendu de plus ne la relit pas ; le champ la porte en description. */
+      if (said) { noteNode.setAttribute("role", "status"); }
+      textarea.setAttribute("aria-describedby", "composer-restored");
+      parts.push(noteNode);
+    }
+
     parts.push(el("div", { class: "signature-toggle" }, [
       el("span", { class: "who" }, [
         icon(UI.local.composerAnon ? "mask" : "user", 15),
-        el("span", { text: UI.local.composerAnon ? "Publié en anonyme" : "Signé : " + (App.user.name || "moi") })
+        el("span", { id: "composer-who", text: UI.local.composerAnon ? "Publié en anonyme" : "Signé : " + (App.user.name || "moi") })
       ]),
+      /* Le libellé dit l'action (« Signer »), la description dit ce que sera le
+       * prochain message (« Publié en anonyme ») : après la bascule, le focus
+       * revient sur elle (même clé) et le lecteur d'écran annonce le nouvel état. */
       el("button", {
         class: "btn btn-sm btn-outline", type: "button",
-        onclick: function () { UI.set({ composerAnon: !UI.local.composerAnon }); }
+        "data-key": "composer-anon", "aria-describedby": "composer-who",
+        onclick: function () {
+          var next = !UI.local.composerAnon;
+          dismissNote(draftKey);
+          /* Geste explicite : le choix du brouillon suit (sinon un rechargement le rétablirait ou le perdrait). */
+          if (composerDrafts[draftKey]) { stageDraft(draftKey, composerDrafts[draftKey], next); }
+          UI.set({ composerAnon: next });
+        }
       }, [
         icon(UI.local.composerAnon ? "user" : "mask", 15),
         el("span", { text: UI.local.composerAnon ? "Signer" : "Anonyme" })
@@ -1079,14 +1648,26 @@
     ]);
   }
 
+  /* ⚠️ Appareil connecté qui n'a encore rien reçu (révision 0, aucun échange réussi depuis
+   * l'ouverture) : après un rechargement sans copie locale, le contenu n'est pas « supprimé », il
+   * n'est simplement pas encore là. Même règle pour l'accueil, l'écran manquant et le titre. */
+  function awaitingFirstData() {
+    var status = Sync.status();
+    return !!status && status.code !== "local" && !status.revision && !status.lastSyncAt;
+  }
+
   function screenMissing() {
+    var waiting = awaitingFirstData();
+    var back = el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets",
+      onclick: function () { App.go("#/"); } });
     return el("div", { class: "screen" }, [
-      topbar({ title: "Introuvable", back: App.remonter, backLabel: "Sujets" }),
+      topbar({ title: waiting ? "Pas encore disponible" : "Introuvable", back: App.remonter, backLabel: "Sujets" }),
       el("div", { class: "content" }, [
-        emptyState("warning", "Ce contenu n'existe plus",
-          "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.",
-          el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets",
-            onclick: function () { App.go("#/"); } }))
+        waiting
+          ? emptyState("sparkle", "Contenu pas encore disponible sur cet appareil",
+            "Il s'affichera à la prochaine connexion.", back)
+          : emptyState("warning", "Ce contenu n'existe plus",
+            "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.", back)
       ])
     ]);
   }
@@ -1095,6 +1676,8 @@
 
   function proposalCard(topic, proposal) {
     var summary = Core.voteSummary(proposal);
+    /* Textes de vote (§8) : le même calcul que la synthèse et le nom de la barre. */
+    var reading = ProductView.voteReading(proposal, Store.view.participants);
     var myVote = proposal.votes[App.user.id] || null;
     var total = summary.total || 1;
 
@@ -1104,7 +1687,7 @@
      * toute l'équipe sans confirmation : il doit au moins être annoncé — le
      * libellé est lu AVANT l'envoi, qui provoque un rendu détruisant ce nœud. */
     var statusSelect = el("select", {
-      class: "select", "aria-label": "Statut de la proposition : " + proposal.title,
+      class: "select", "aria-label": "Statut de la proposition : " + proposal.title, "data-key": "proposal-" + proposal.id + "-status",
       onchange: function (e) {
         var label = Core.PROPOSAL_STATUS_LABELS[e.target.value];
         App.actions.changeProposalStatus(topic.id, proposal.id, e.target.value);
@@ -1122,7 +1705,7 @@
         class: "btn btn-sm btn-outline" + (myVote === value ? " active" : ""), type: "button",
         /* Le bouton porte la valeur qu'il exprime : c'est elle qui décide de sa
          * couleur une fois choisi (cf. app.css, .vote-actions .btn.active). */
-        "data-vote": value,
+        "data-vote": value, "data-key": "vote-" + proposal.id + "-" + value,
         "aria-pressed": myVote === value ? "true" : "false",
         onclick: function () { App.actions.setVote(topic.id, proposal.id, value); }
       }, [icon(VOTE_ICONS[value], 15), el("span", { text: Core.VOTE_LABELS[value] })]));
@@ -1132,13 +1715,11 @@
      * seule oblige à deviner ce que veut dire le chaud, et la teinte ne doit
      * jamais porter l'information toute seule. */
     var legend = el("div", { class: "vote-legend" }, [
-      el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.for + " pour" })]),
-      el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: summary.counts.against + " contre" })]),
-      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }),
-        el("span", { text: summary.counts.abstain + " abstention" + (summary.counts.abstain > 1 ? "s" : "") })]),
-      summary.expressed
-        ? el("span", { class: "legend-chip", text: summary.favorablePercent + " % favorables" })
-        : null
+      el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[0] })]),
+      el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[1] })]),
+      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[2] })]),
+      reading.favorable ? el("span", { class: "legend-chip", text: reading.favorable }) : null,
+      reading.participation ? el("span", { class: "legend-chip product-participation", text: reading.participation }) : null
     ]);
 
     return el("article", { class: "card card-static stack" }, [
@@ -1154,7 +1735,7 @@
         el("span", { text: Utils.formatDateTime(proposal.createdAt) })
       ]),
       el("div", {}, [
-        el("div", { class: "vote-bar", role: "img", "aria-label": summary.label }, [
+        el("div", { class: "vote-bar", role: "img", "aria-label": reading.aria }, [
           el("span", { class: "vote-for", style: { width: (summary.counts.for / total * 100) + "%" } }),
           el("span", { class: "vote-against", style: { width: (summary.counts.against / total * 100) + "%" } }),
           el("span", { class: "vote-abstain", style: { width: (summary.counts.abstain / total * 100) + "%" } })
@@ -1163,12 +1744,12 @@
       ]),
       voteButtons,
       el("div", { class: "card-foot row-wrap" }, [
-        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button",
+        myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "vote-" + proposal.id + "-remove",
           onclick: function () { App.actions.removeVote(topic.id, proposal.id); } },
         [icon("close", 15), el("span", { text: "Retirer mon vote" })]) : null,
         App.ownsItem(proposal.id, proposal.authorId)
           ? el("button", { class: "btn btn-sm btn-ghost", type: "button",
-            onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } },
+            "data-key": "proposal-" + proposal.id + "-edit", onclick: function () { UI.set({ modal: { type: "editProposal", topicId: topic.id, proposalId: proposal.id } }); } },
           [icon("edit", 15), el("span", { text: "Modifier" })])
           : null,
         el("div", { class: "spacer" }),
@@ -1186,7 +1767,7 @@
       list.appendChild(emptyState("idea", "Aucune proposition",
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
-          onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
+          "data-key": "create-proposal-first", onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
         [icon("plus", 18), el("span", { text: "Ajouter une proposition" })]),
         "Ensuite : chacun vote pour, contre ou abstention, un vote par personne."));
     } else {
@@ -1206,7 +1787,7 @@
 
     if (topic.proposals.length) {
       screen.appendChild(el("button", {
-        class: "fab", type: "button", "aria-label": "Ajouter une proposition",
+        class: "fab", type: "button", "aria-label": "Ajouter une proposition", "data-key": "create-proposal",
         onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); }
       }, [icon("plus", 20), el("span", { text: "Proposition" })]));
     }
@@ -1246,14 +1827,14 @@
           el("button", {
             class: "btn btn-sm " + (chosen ? "btn-primary" : "btn-outline"), type: "button",
             "aria-pressed": chosen ? "true" : "false",
-            onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
+            "data-key": "conclusion-" + conclusion.id + "-choose", onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
           }, [icon("check", 15), el("span", { text: chosen ? "Mon choix" : "Choisir" })]),
           el("div", { class: "spacer" }),
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la conclusion",
-            onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la formulation du consensus",
+            "data-key": "conclusion-" + conclusion.id + "-edit", onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
           [icon("edit", 15), el("span", { text: "Modifier" })]) : null,
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la conclusion",
-            onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
+          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la formulation du consensus",
+            "data-key": "conclusion-" + conclusion.id + "-delete", onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
           [icon("trash", 15)]) : null
         ])
       ]), i));
@@ -1268,6 +1849,7 @@
 
     var textarea = bindCounter(el("textarea", {
       class: "textarea", placeholder: "Nouvelle conclusion…", maxlength: Core.LIMITS.conclusion,
+      "aria-label": "Nouvelle formulation du consensus", "aria-required": "true",
       "data-draft": "conclusion:" + topic.id
     }), "conclusion:" + topic.id, Core.LIMITS.conclusion);
 
@@ -1276,10 +1858,10 @@
       textarea,
       counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
       el("button", {
-        class: "btn btn-primary btn-block", type: "button", text: "Ajouter",
+        class: "btn btn-primary btn-block", type: "button", text: "Ajouter", "data-key": "conclusion-add",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("La conclusion est vide.", "error"); return; }
+          if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
           textarea.value = "";
           App.actions.addConclusion(topic.id, text);
         }
@@ -1307,9 +1889,24 @@
 
   /* ------------------------------------------------------------ Réunion --- */
 
+  var PRINT_UNAVAILABLE = "Impression indisponible ici : affichez la synthèse à l'écran ou ouvrez-la dans votre navigateur.";
+
+  /* ⚠️ Une WebView peut ne pas fournir window.print, ou le refuser : sans garde, l'appui ne faisait
+   * rien, ou levait une erreur que personne ne voyait (BL-064). Une impression lancée mais sans
+   * effet, sans erreur ni événement, ne se distingue pas d'une impression réussie : elle n'est pas
+   * annoncée (un faux message sur un navigateur qui imprime serait pire). */
+  function printMeeting() {
+    var printed = false;
+    try {
+      if (typeof window.print === "function") { window.print(); printed = true; }
+    } catch (error) { printed = false; }
+    if (!printed) { UI.toast(PRINT_UNAVAILABLE, "error"); }
+  }
+
   function screenMeeting() {
     var state = Store.view;
-    var topics = state.topics.filter(function (t) { return t.status !== "archived"; });
+    /* Même ordre de maturité que l'accueil (prêts, en discussion, clôturés), archivés exclus. */
+    var topics = ProductView.meetingTopics(state.topics);
 
     var doc = el("div", { class: "print-doc stack" }, [
       el("div", { class: "stack", style: { gap: "6px", marginBottom: "10px" } }, [
@@ -1341,11 +1938,11 @@
         block.appendChild(el("h3", { class: "print-h3", text: "Propositions" }));
         var pl = el("ul", { class: "print-list" });
         topic.proposals.forEach(function (proposal) {
-          var summary = Core.voteSummary(proposal);
+          /* Lecture de la carte (§8) : positions, pourcentage avec ses avis exprimés et participation. */
+          var reading = ProductView.voteReading(proposal, state.participants);
           pl.appendChild(el("li", {}, [
             el("strong", { text: proposal.title }),
-            el("span", { text: " : " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + summary.label +
-              " (" + summary.counts.for + " pour / " + summary.counts.against + " contre / " + summary.counts.abstain + " abst.)" }),
+            el("span", { text: " : " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + reading.line }),
             proposal.description ? el("div", { class: "hint pre-wrap", text: proposal.description }) : null
           ]));
         });
@@ -1375,13 +1972,20 @@
     return el("div", { class: "screen" }, [
       topbar({
         title: "Réunion",
+        heading: false,   // le h1 de la synthèse est celui du document imprimable
         sub: "Synthèse imprimable",
         back: App.remonter,
         backLabel: "Réglages",
         actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button",
-          onclick: function () { window.print(); } }, [icon("print", 16), el("span", { text: "Imprimer" })])]
+          onclick: printMeeting }, [icon("print", 16), el("span", { text: "Imprimer" })])]
       }),
-      el("div", { class: "content" }, [doc])
+      el("div", { class: "content" }, [
+        /* ⚠️ La pastille d'état (BL-066) est dans le contenu et non dans la barre : celle-ci porte déjà
+         * « Imprimer », et mesurée à 390 px une pastille de plus réduisait le titre à « Ré… ».
+         * `no-print` la retire de la page imprimée, comme la barre. */
+        el("div", { class: "no-print", style: { display: "flex", justifyContent: "flex-end", marginBottom: "6px" } }, [statusPill()]),
+        doc
+      ])
     ]);
   }
 
@@ -1408,6 +2012,7 @@
 
     var nameInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.name,
+      "aria-label": "Votre nom", "aria-required": "true",
       value: App.user.name || "", "data-draft": "settings:name"
     });
 
@@ -1426,7 +2031,7 @@
         onclick: function () { App.editConnection(); } },
       [icon("edit", 16), el("span", { text: "Modifier l'adresse ou le code" })]),
       el("button", { class: "btn btn-danger btn-block", type: "button",
-        onclick: function () { UI.set({ modal: { type: "logout" } }); } },
+        "data-key": "logout", onclick: function () { UI.set({ modal: { type: "logout" } }); } },
       [icon("logout", 16), el("span", { text: "Se déconnecter de l'équipe" })])
     ]);
 
@@ -1437,15 +2042,54 @@
       ]);
     }
 
+    /* Actions de plus de 30 jours en file (BL-004) : sync.js les retient au lieu de les renvoyer en
+     * silence (un rejeu tardif pourrait défaire un choix plus récent) et le message de démarrage
+     * renvoie ici. Bloc absent à zéro ; jamais de contenu d'action ni d'auteur, seulement le
+     * compte. Gardé pour un ancien sync.js en cache, qui n'a pas staleCount. */
+    var staleCount = typeof Sync.staleCount === "function" ? Number(Sync.staleCount()) || 0 : 0;
+    var staleBlock = null;
+
+    function releaseStale() {
+      var say = function (text, kind) { UI.toast(text, kind); UI.force(); };
+      var refused = "L'envoi n'a pas pu être lancé : vos actions restent sur cet appareil.";
+      var pending;
+      try { pending = Sync.releaseStale(); } catch (error) { pending = null; }
+      if (!pending || typeof pending.then !== "function") { say(refused, "error"); return; }
+      pending.then(function (count) {
+        count = Number(count) || 0;
+        say(count === 0 ? "Plus aucune action n'attend."
+          : count === 1 ? "1 action va partir." : count + " actions vont partir.");
+      }, function () { say(refused, "error"); });
+    }
+
+    if (staleCount > 0 && typeof Sync.releaseStale === "function") {
+      var oneStale = staleCount === 1;
+      staleBlock = el("div", { class: "stack" }, [
+        el("div", { class: "note" }, [
+          icon("info", 14),
+          el("span", { text: oneStale
+            ? "1 action de plus de 30 jours attend sur cet appareil."
+            : staleCount + " actions de plus de 30 jours attendent sur cet appareil." })
+        ]),
+        el("button", {
+          class: "btn btn-outline btn-block", type: "button", "data-key": "release-stale",
+          "aria-label": oneStale ? "Envoyer quand même l'action de plus de 30 jours"
+            : "Envoyer quand même les actions de plus de 30 jours",
+          onclick: releaseStale
+        }, [icon("send", 16), el("span", { text: "Envoyer quand même" })])
+      ]);
+    }
+
     var diagRows = el("div", { class: "card card-static stack" }, [
       el("div", { class: "row" }, [
         sectionTitle("sync", "Synchronisation"),
         el("div", { class: "spacer" }),
-        statusPill()
+        statusPill(true)
       ]),
       el("button", { class: "btn btn-outline btn-block", type: "button",
-        onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
+        "data-key": "sync-now", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
       [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
+      staleBlock,
       el("div", { class: "diag" }, [
         /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux
          * codes différents = deux scripts différents, et c'est la première
@@ -1486,7 +2130,7 @@
           sectionTitle("user", "Votre nom"),
           nameInput,
           el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
-            onclick: function () { App.saveName(nameInput.value, true); } })
+            "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
         ]), 0),
         reveal(connectionRows, 1),
         reveal(el("div", { class: "card card-static stack" }, [
@@ -1528,13 +2172,16 @@
 
     /* Le sélecteur de réaction nomme chaque marque : dessinée, elle n'est pas
      * toujours devinable au premier passage, et l'apprentissage se fait une
-     * seule fois. */
-    var emojiRow = el("div", { class: "emoji-row" });
-    Core.REACTIONS.forEach(function (emoji) {
+     * seule fois.
+     * Aucune réaction sur MON message anonyme : la clé d'une réaction est
+     * l'identifiant de qui réagit, elle relierait le message à son auteur dans
+     * les données partagées (§5). La liste reste la même pour tous les anonymes. */
+    var emojiRow = mine && message.anon ? null : el("div", { class: "emoji-row" });
+    (emojiRow ? Core.REACTIONS : []).forEach(function (emoji) {
       var isMine = message.reactions[App.user.id] === emoji;
       var label = Utils.reactionLabel(emoji);
       emojiRow.appendChild(el("button", {
-        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button",
+        class: "emoji-btn" + (isMine ? " mine" : ""), type: "button", "data-key": "emoji-" + emoji,
         "aria-label": label, "aria-pressed": isMine ? "true" : "false",
         onclick: function () {
           App.actions.setReaction(topic.id, message.id, emoji);
@@ -1563,10 +2210,12 @@
       sheetAction("idea", "Créer une proposition", function () {
         UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
       }),
-      mine ? sheetAction(locked ? "lock" : "edit", locked ? "Modifier (verrouillé)" : "Modifier", function () {
+      /* Verrouillé : désactivé, la raison dans le libellé (le toast reste en
+       * garde, mais un bouton désactivé ne le déclenche plus). */
+      mine ? sheetAction(locked ? "lock" : "edit", locked ? "Modifier (verrouillé : quelqu'un y a déjà réagi)" : "Modifier", function () {
         if (locked) { UI.toast("Message verrouillé : quelqu'un y a déjà réagi.", "error"); return; }
         UI.set({ sheet: null, modal: { type: "editMessage", topicId: topic.id, messageId: message.id } });
-      }, { disabled: false }) : null,
+      }, { disabled: locked }) : null,
       mine ? sheetAction(message.anon ? "user" : "mask", message.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
         App.actions.setMessageSignature(topic.id, message.id, !message.anon);
         UI.set({ sheet: null });
@@ -1592,7 +2241,7 @@
     var topic = Core.findTopic(Store.view, spec.topicId);
     if (!topic) { return null; }
 
-    var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet",
+    var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet", "data-key": "topic-status",
       onchange: function (e) {
         var label = Core.TOPIC_STATUS_LABELS[e.target.value];
         App.actions.changeTopicStatus(topic.id, e.target.value);
@@ -1607,9 +2256,11 @@
       el("div", { class: "card-meta" }, [
         toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status]),
         icon("user", 13),
-        el("span", { text: topic.createdBy.name }),
-        el("span", { class: "meta-dot" }),
-        el("span", { text: Utils.formatDateTime(topic.createdAt) })
+        el("span", { text: topic.createdBy.name })
+      ]),
+      el("div", { class: "hint" }, [
+        topic.createdAt && Utils.formatDateTime(topic.createdAt) ? el("div", { text: "Créé le " + Utils.formatDateTime(topic.createdAt) }) : null,
+        topic.updatedAt && Utils.formatDateTime(topic.updatedAt) ? el("div", { text: "Dernière activité le " + Utils.formatDateTime(topic.updatedAt) }) : null
       ]),
       topic.description
         ? el("div", { class: "pre-wrap", style: { fontSize: "var(--fs-sm)" }, text: topic.description })
@@ -1624,7 +2275,7 @@
   function createTopicModal() {
     var titleInput = bindCounter(el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
-      placeholder: "Titre du sujet", "data-draft": "newTopic:title"
+      placeholder: "Titre du sujet", "aria-required": "true", "data-draft": "newTopic:title"
     }), "newTopic:title", Core.LIMITS.topicTitle);
 
     var descInput = el("textarea", {
@@ -1648,7 +2299,7 @@
         class: "btn btn-primary", type: "button", text: "Créer",
         onclick: function () {
           var title = Utils.trim(titleInput.value);
-          if (!title) { UI.toast("Le titre du sujet est obligatoire.", "error"); return; }
+          if (!title) { invalid(titleInput, "Le titre du sujet est obligatoire."); return; }
           App.actions.createTopic(title, descInput.value, Utils.trim(nameInput.value));
         }
       })
@@ -1660,7 +2311,7 @@
     if (!topic) { return null; }
     var titleInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
-      value: topic.title, "data-draft": "editTopic:title:" + topic.id
+      "aria-required": "true", value: topic.title, "data-draft": "editTopic:title:" + topic.id
     });
     var descInput = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.topicDescription,
@@ -1675,7 +2326,7 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var title = Utils.trim(titleInput.value);
-          if (!title) { UI.toast("Le titre du sujet est obligatoire.", "error"); return; }
+          if (!title) { invalid(titleInput, "Le titre du sujet est obligatoire."); return; }
           App.actions.updateTopic(topic.id, title, descInput.value);
         }
       })
@@ -1688,6 +2339,7 @@
     if (!message) { return null; }
     var textarea = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.message,
+      "aria-label": "Texte du message", "aria-required": "true",
       value: message.text, "data-draft": "editMessage:" + message.id
     });
     return modal("Modifier le message", el("div", { class: "stack" }, [textarea]), [
@@ -1696,11 +2348,28 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("Le message est vide.", "error"); return; }
+          if (!text) { invalid(textarea, "Le message est vide."); return; }
           App.actions.updateMessage(topic.id, message.id, text);
         }
       })
     ]);
+  }
+
+  /* Titre d'une proposition tirée d'un message (BL-062). Le titre tient sur une ligne : sauts de
+   * ligne et espaces multiples deviennent une espace. Trop long, il est coupé à la dernière
+   * frontière de mot qui laisse la place de « … » (200 caractères au plus, « … » compris) ; un
+   * seul mot géant est coupé net. Quand le titre ne reprend pas tout le message, la description
+   * garde le texte COMPLET : rien n'est perdu. */
+  function titleFromText(text, max) {
+    var full = Utils.trim(text);
+    var flat = full.replace(/\s+/g, " ");
+    var title = flat;
+    if (flat.length > max) {
+      var room = max - 1;
+      var space = flat.charAt(room) === " " ? room : flat.lastIndexOf(" ", room - 1);
+      title = Utils.limit(space > 0 ? flat.slice(0, space) : flat, room).replace(/[\s,;:]+$/, "") + "…";
+    }
+    return { title: title, description: title === full ? "" : Utils.limit(full, Core.LIMITS.proposalDescription) };
   }
 
   function proposalModal(spec) {
@@ -1709,17 +2378,21 @@
     var existing = spec.proposalId ? Core.findProposal(topic, spec.proposalId) : null;
     var keyBase = existing ? "editProposal:" + existing.id : "newProposal:" + topic.id;
 
-    var initialTitle = existing ? existing.title : Utils.limit(spec.fromText || "", Core.LIMITS.proposalTitle);
-    var initialDesc = existing ? existing.description : "";
+    var fromMessage = existing ? null : titleFromText(spec.fromText || "", Core.LIMITS.proposalTitle);
+    var initialTitle = existing ? existing.title : fromMessage.title;
+    var initialDesc = existing ? existing.description : fromMessage.description;
 
     var titleInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.proposalTitle,
-      placeholder: "Titre de la proposition", value: initialTitle, "data-draft": keyBase + ":title"
+      placeholder: "Titre de la proposition", "aria-required": "true", value: initialTitle, "data-draft": keyBase + ":title"
     });
     var descInput = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.proposalDescription,
-      placeholder: "Description (facultative)", value: initialDesc, "data-draft": keyBase + ":desc"
+      placeholder: "Description (facultative)", "data-draft": keyBase + ":desc"
     });
+    /* ⚠️ Un textarea n'a pas d'attribut `value` : poser `value:` à la création laissait le champ vide
+     * dans un vrai navigateur (la description complète d'un message citée ci-dessus s'y perdait). */
+    descInput.value = initialDesc;
 
     return modal(existing ? "Modifier la proposition" : "Nouvelle proposition", el("div", { class: "stack" }, [
       field("Titre", titleInput),
@@ -1730,7 +2403,7 @@
         class: "btn btn-primary", type: "button", text: existing ? "Enregistrer" : "Créer",
         onclick: function () {
           var title = Utils.trim(titleInput.value);
-          if (!title) { UI.toast("Le titre de la proposition est obligatoire.", "error"); return; }
+          if (!title) { invalid(titleInput, "Le titre de la proposition est obligatoire."); return; }
           if (existing) { App.actions.updateProposal(topic.id, existing.id, title, descInput.value); }
           else { App.actions.createProposal(topic.id, title, descInput.value); }
         }
@@ -1744,6 +2417,7 @@
     if (!conclusion) { return null; }
     var textarea = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.conclusion,
+      "aria-label": "Texte de la formulation du consensus", "aria-required": "true",
       value: conclusion.text, "data-draft": "editConclusion:" + conclusion.id
     });
     return modal("Modifier la conclusion", el("div", { class: "stack" }, [textarea]), [
@@ -1752,7 +2426,7 @@
         class: "btn btn-primary", type: "button", text: "Enregistrer",
         onclick: function () {
           var text = Utils.trim(textarea.value);
-          if (!text) { UI.toast("La conclusion est vide.", "error"); return; }
+          if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
           App.actions.updateConclusion(topic.id, conclusion.id, text);
         }
       })
@@ -1796,7 +2470,7 @@
           + "téléphone : c'est ce qui les rend anonymes."
           + (waiting
             ? " ⚠️ " + waiting + (waiting > 1 ? " actions attendent" : " action attend")
-              + " d'être envoyée" + (waiting > 1 ? "s" : "") + " et sera" + (waiting > 1 ? "nt" : "")
+              + " d'être envoyée" + (waiting > 1 ? "s" : "") + (waiting > 1 ? " et seront" : " et sera")
               + " perdue" + (waiting > 1 ? "s" : "") + "."
             : "")
           + " Les données de l'équipe restent sur Google Drive.",
@@ -1804,7 +2478,10 @@
       }
     }
 
-    if (node) { overlayRoot.appendChild(node); }
+    if (node) {
+      node.addEventListener("keydown", keepTabInside);
+      overlayRoot.appendChild(node);
+    }
   }
 
   /* ============================================================ RENDU ==== */
@@ -1837,6 +2514,32 @@
     ].join("|");
   }
 
+  /* Titre du document, un par écran : « Titre du sujet - BrainstO. ». Il est annoncé à chaque
+   * changement de page et tient lieu d'intitulé d'onglet et d'historique (A11-015). Le focus, lui,
+   * ne bouge pas à la navigation (ORCH A11-008). */
+  function pageTitle() {
+    var tail = " - " + CONFIG.APP_NAME;
+    var gate = App.gate();
+    if (gate === "connection") { return "Connexion" + tail; }
+    if (gate === "name") { return "Votre nom" + tail; }
+    if (gate === "lock") { return "Espace verrouillé" + tail; }
+    var route = App.route;
+    var topic = route.topicId ? Core.findTopic(Store.view, route.topicId) : null;
+    if (route.name === "topic") {
+      return (topic ? topic.title : (awaitingFirstData() ? "Pas encore disponible" : "Introuvable")) + tail;
+    }
+    if (route.name === "proposals") { return "Propositions" + (topic ? " : " + topic.title : "") + tail; }
+    if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
+    if (route.name === "settings") { return "Réglages" + tail; }
+    if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
+    return "Sujets" + tail;
+  }
+
+  function setPageTitle() {
+    var title = pageTitle();
+    if (document.title !== title) { document.title = title; }
+  }
+
   UI.render = function () {
     if (!appRoot) { return; }
     var sig = signature();
@@ -1865,6 +2568,7 @@
      * disparaître — ce qui était le défaut. */
     var place = (App.gate() || "") + "|" + App.route.raw;
     var entering = place !== lastPlace;
+    var samePlace = !entering;
     /* Changer d'écran clôt le contexte d'édition : sans cette remise à zéro, un
      * brouillon abandonné battrait indéfiniment une valeur légitimement mise à jour. */
     if (entering) { touchedDrafts = {}; }
@@ -1879,6 +2583,7 @@
     }
 
     var drafts = captureDrafts();
+    var focus = captureFocus();
 
     /* Position de défilement du fil de discussion. */
     var thread = document.querySelector(".thread");
@@ -1895,6 +2600,7 @@
     appRoot.appendChild(screen);
     renderOverlay();
     restoreDrafts(drafts);
+    setPageTitle();
 
     var newThread = document.querySelector(".thread");
     if (newThread) {
@@ -1912,6 +2618,7 @@
       lastThreadHeight = 0;
     }
 
+    settleFocus(focus, samePlace);
     UI.refreshStatus();
 
     /* La présentation est décidée APRÈS le rendu, et depuis l'extérieur de son
@@ -2409,6 +3116,26 @@
 
   /* -------------------------------------------------- Bandeau nouvelle version --- */
 
+  var UPDATE_BANNER_TEXT = "Une nouvelle version est disponible.";
+  var bannerSaid = false;   // le bandeau posé a déjà été annoncé : une seule annonce par apparition
+
+  /* ⚠️ REC-UI-052 (WCAG 4.1.3) : le bandeau est un bloc posé sur <body>, sans rôle ni aria-live ; aucun
+   * lecteur d'écran n'apprenait donc qu'une mise à jour attendait. Son apparition est ANNONCÉE UNE FOIS par la
+   * région vive qui existe déjà, #toast-root (role="status", aria-live="polite", présente dès le chargement :
+   * une région insérée avec son contenu n'annonce rien), dans un nœud masqué à l'écran : aucun toast visible
+   * en doublon du bandeau. Jamais de second role="status" ni d'aria-live sur le bandeau lui-même : une seule
+   * région d'état par écran (WP-03). Le nœud est retiré au bout de quelques secondes, comme un toast ; le
+   * bandeau, lui, reste atteignable au clavier (« Mettre à jour », « Plus tard »). */
+  function announceUpdateBanner() {
+    if (bannerSaid || !toastRoot) { return; }
+    bannerSaid = true;
+    var said = el("div", { class: "visually-hidden", text: UPDATE_BANNER_TEXT });
+    toastRoot.appendChild(said);
+    setTimeout(function () {
+      if (said.parentNode) { said.parentNode.removeChild(said); }
+    }, 5200);
+  }
+
   UI.showUpdateBanner = function (onUpdate) {
     /* Ajourné pendant la présentation : son bouton est focusable, il vit sur
      * document.body — donc hors du piège de focus — et il se poserait exactement
@@ -2418,15 +3145,16 @@
     bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
       icon("sparkle", 17),
-      el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
+      el("span", { style: { flex: "1" }, text: UPDATE_BANNER_TEXT }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",
-        onclick: function () { bannerUpdate = null; banner.remove(); onUpdate(); }
+        onclick: function () { bannerUpdate = null; bannerSaid = false; banner.remove(); onUpdate(); }
       }),
       el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard",
-        onclick: function () { bannerUpdate = null; banner.remove(); } }, [icon("close", 18)])
+        onclick: function () { bannerUpdate = null; bannerSaid = false; banner.remove(); } }, [icon("close", 18)])
     ]);
     document.body.appendChild(banner);
+    announceUpdateBanner();
   };
 
   root.UI = UI;

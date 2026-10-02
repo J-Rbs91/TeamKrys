@@ -45,9 +45,16 @@ check("PWA : toute la couche produit fait partie de la coquille critique", () =>
   assert(sw.includes('"js/product-ui.js"'), "product-ui absent du précache");
 });
 
-check("Version : application et cache annoncent ensemble la 1.12.0", () => {
-  assert(config.includes('APP_VERSION: "1.12.0"'), "APP_VERSION non alignée");
-  assert(sw.includes('CACHE_VERSION = "brainsto-v1.12.0"'), "CACHE_VERSION non alignée");
+check("Version : application et cache annoncent ensemble le même numéro", () => {
+  /* On compare l'ÉGALITÉ, pas une valeur figée : un test qui épingle « 1.12.0 »
+   * casse à chaque montée de version sans prouver ce qui compte, à savoir que
+   * les deux numéros évoluent ensemble (sinon le cache ne se renouvelle pas). */
+  const app = /APP_VERSION:\s*"([^"]+)"/.exec(config);
+  const cache = /CACHE_VERSION\s*=\s*"([^"]+)"/.exec(sw);
+  assert(app, "APP_VERSION introuvable dans js/config.js");
+  assert(cache, "CACHE_VERSION introuvable dans service-worker.js");
+  assert(cache[1] === "brainsto-v" + app[1],
+    "CACHE_VERSION (" + cache[1] + ") doit valoir brainsto-v + APP_VERSION (" + app[1] + ")");
 });
 
 check("Consensus : aucun renommage global aveugle du contenu utilisateur", () => {
@@ -81,6 +88,21 @@ check("Statuts : les valeurs historiques restent internes mais ne sont plus prop
 check("Nouveautés : une baseline vide est persistée", () => {
   assert(ui.includes("record = { v: 1, initialized: true, topics: {} };"),
     "la consultation d'un espace vide n'établit pas de baseline");
+});
+
+check("Nouveautés : la signature ignore ce qui vient de cet appareil (preuve locale lue, jamais écrite)", () => {
+  assert(/topicFingerprint\(topic, mine\)/.test(ui), "l'empreinte du sujet ne reçoit pas la preuve locale de l'appareil");
+  assert(/topicActivity\([^)]*mine\)/.test(ui), "le signalement ne reçoit pas la preuve locale de l'appareil");
+  assert(ui.includes("ownsItem"), "la preuve locale d'app.js (ownsItem) n'est pas lue");
+});
+
+check("Nouveautés : strictement local, la couche produit n'envoie rien au serveur (§11)", () => {
+  assert(!/fetch\s*\(|XMLHttpRequest|sendBeacon|Sync\.dispatch|Sync\.makeAction/.test(ui),
+    "product-ui.js ne doit jamais rien envoyer");
+});
+
+check("Nouveautés : un appareil connecté sans état reçu n'enregistre pas l'état vide comme baseline", () => {
+  assert(ui.includes("awaitingFirstSync(state)"), "la baseline du premier démarrage connecté n'attend pas l'état réel");
 });
 
 if (failures.length) {

@@ -26,6 +26,10 @@ application (PWA) sur iPhone et Android.
 > ce que la séparation empêchait : `tests/parity.test.js` charge maintenant
 > `apps-script/Code.gs` et lui fait passer les mêmes vecteurs qu'au frontend.
 > La parité client/serveur n'est plus une relecture à l'œil, c'est un test.
+>
+> Le `.gitignore` ne masque plus ces deux fichiers (`apps-script/Code.gs` et
+> `apps-script/appsscript.json`). Tout autre fichier posé dans `apps-script/` reste
+> ignoré par défaut : c'est un garde-fou contre un secret ajouté par mégarde.
 
 Règles tenues par ce dépôt :
 
@@ -36,6 +40,12 @@ Règles tenues par ce dépôt :
   (typographie 100 % système, donc zéro requête réseau pour l'affichage) ;
 - aucune image distante non plus : les icônes sont des SVG construits en
   JavaScript et le grain est un data-URI (voir « Direction artistique »).
+- **cibles tactiles** : la règle tenue est WCAG 2.2, critère
+  [2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+  (taille de cible, minimum : **24 px**). La plupart des commandes atteignent 44 px
+  (`--tap`), mais les plus petites (pastilles de réaction, boutons `.btn-sm`)
+  mesurent de 24 à 36 px de haut, délibérément (`min-height: 24px`). Ne pas
+  promettre « 44 px partout » dans la documentation.
 
 L'adresse du script et le code d'accès sont saisis **par chaque utilisateur dans
 l'application**. L'adresse reste dans le `localStorage` de son appareil ; le code
@@ -215,11 +225,16 @@ python3 tools/check-contrast.py
 
 Le script lit les jetons de `css/app.css` — il ne les recopie pas, sans quoi il y
 aurait deux vérités —, résout les `var(--…)` et les `rgba()` posés sur leur fond
-réel, et **échoue sous le seuil**. Trente-huit couples par mode, soixante-seize
+réel, et **échoue sous le seuil**. Quarante-neuf couples par mode, quatre-vingt-dix-huit
 au total : texte courant, texte secondaire, horodatages, encres posées sur un
 aplat, pastilles sur leur fond pâle, bords de champ, contours de focus, segments
 de vote, pastilles de synchronisation. Bibliothèque standard uniquement, et la CI
 l'exécute à chaque poussée.
+
+Le bloc des jetons sombres que le script lit est `@media screen and
+(prefers-color-scheme: dark)` (il accepte aussi la forme sans `screen and`) : le thème
+sombre ne vaut que pour l'écran. La synthèse imprimée garde donc toujours la palette
+claire, même depuis un appareil en thème sombre.
 
 C'est ce qui manquait : la phrase « tous les couples ont été vérifiés au ratio »
 vieillissait à chaque modification de jeton, parce qu'elle reposait sur une
@@ -506,15 +521,15 @@ Le rythme d'interrogation n'est pas fixe : il suit l'activité réelle
 | Régime | Cadence | Quand |
 |---|---|---|
 | Nerveux | 1,8 s | pendant les 90 s qui suivent une écriture — la sienne ou celle d'un autre |
-| Repos | jusqu'à 6 s | personne n'écrit ; relâchement progressif, pas un saut |
+| Repos | 6 s | personne n'écrit ; passage direct de 1,8 s à 6 s quand la fenêtre de 90 s se ferme, sans rampe |
 | Arrière-plan | 60 s | onglet masqué |
 | Recul | ×2 par échec, plafond 60 s | le réseau ou le serveur ne répond pas |
 
 Une cadence fixe de 3 s était le pire des deux mondes : 1 200 requêtes par
-heure et par personne sur un backend Apps Script qui sérialise tout derrière un
-`LockService` — donc contention, latence et erreurs dès que plusieurs
-téléphones interrogent ensemble — et malgré ce coût une réception toujours en
-retard d'un tour de boucle.
+heure et par personne, chacune relisant le fichier Drive côté Apps Script (les
+écritures, elles, sont sérialisées derrière un `LockService` ; les lectures ne
+prennent pas le verrou), et malgré ce coût une réception toujours en retard d'un
+tour de boucle.
 
 Le repos reste volontairement **court** (6 s) : c'est lui qui plafonne l'attente
 du *premier* message après un silence, le seul cas où la nouvelle cadence peut
@@ -532,12 +547,17 @@ déjà traités, `revision` incrémentée à chaque écriture.
 
 Côté application : application optimiste immédiate, file d'actions persistée
 dans **IndexedDB** (ordre garanti par une clé auto-incrémentée), rejeu au retour
-du réseau. Une erreur **réseau** conserve la file ; une erreur **métier**
-(action devenue impossible) retire l'action et l'explique à l'utilisateur. Un
-échec du **stockage local** est une troisième catégorie, à ne confondre avec
-aucune des deux : l'action quitte quand même la file en mémoire — sinon elle
-serait repostée sans fin — et l'éventuel doublon au redémarrage est absorbé par
-la déduplication serveur.
+du réseau. Une action ne quitte la file que sur confirmation (voir « Une action ne
+quitte la file que sur confirmation » plus bas) : une erreur **réseau** ou une
+réponse **sans verdict** (page d'erreur, JSON illisible, exception du serveur) la
+conserve ; seul un refus **définitif** (`code: "invalid"`) la retire, en rendant le
+texte saisi. Un échec du **stockage local** est une troisième catégorie, à ne
+confondre avec aucune des deux : l'action RESTE dans la file en mémoire (sous une clé
+`local-<n>`, qui ne peut pas se confondre avec une clé de la base), part quand même au
+serveur, et une nouvelle écriture dans IndexedDB est tentée à chaque cycle ;
+l'application prévient une seule fois (« Enregistrement sur cet appareil impossible :
+l'envoi continue, gardez l'application ouverte. »). Un doublon éventuel au
+redémarrage est absorbé par la déduplication du serveur.
 
 Là où IndexedDB est refusée (fenêtre in-app d'une messagerie, navigation privée,
 protection renforcée contre le pistage), `js/database.js` bascule sur un repli
@@ -545,6 +565,28 @@ protection renforcée contre le pistage), `js/database.js` bascule sur un repli
 IndexedDB — c'est le rôle du déballage commun de `withStore`. L'application le
 signale à l'utilisateur, car ce mode n'a pas la même garantie : une action
 écrite hors ligne n'y survit pas à la fermeture de la page.
+
+**Brouillons.** Le texte en cours d'écriture dans le composeur de chaque sujet est
+gardé dans le `localStorage`, sous la clé `brainsto.drafts.v1` (définie dans
+`js/ui.js` et nulle part ailleurs), à raison d'une entrée `composer:<sujet>` par
+sujet. Il survit à « Mettre à jour », à l'éviction de la page par le système et à la
+restauration d'un onglet : l'écriture suit la frappe après 500 ms de silence, et
+`js/app.js` la force tout de suite avant le rechargement d'une mise à jour, au
+passage en arrière-plan et au `pagehide`. Bornes : 50 brouillons, 20 000 caractères
+en tout, 4 000 par brouillon. Un brouillon écrit en mode **anonyme** garde ce choix,
+sur l'appareil seulement : la clé contient alors aussi une liste `anon` de clés de
+brouillons (`{ "composer:<sujet>": "texte", "anon": ["composer:<sujet>"] }`), jamais
+un nom ni un identifiant, écrite seulement s'il existe un brouillon anonyme (un
+brouillon signé n'a aucun indicateur). Au retour, le brouillon est rétabli en
+anonyme, avec une note près du composeur ; il n'est **jamais** converti en signé. Le
+brouillon et son indicateur sont effacés quand le message est accepté en file, quand
+le champ est vidé et par `App.logout`, jamais par le reverrouillage d'inactivité ; un
+refus local rend le texte au champ. Il ne quitte jamais l'appareil (aucune requête
+ne le porte) et reste en clair dans le stockage. `App.logout` efface les clés
+`apiUrl`, `lockVerifier`, `localMode`, `user`, `ownItems`, `session`,
+`brainsto.drafts.v1` et `brainsto.seenTopics.v1` (le repère des nouveautés, qui porte
+un condensat de l'identifiant) ; `showArchived` et `onboarding` restent. Détail :
+[`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md), « Données gardées sur l'appareil ».
 
 > Le POST part volontairement en `Content-Type: text/plain;charset=utf-8` :
 > c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
@@ -557,8 +599,9 @@ d'interrogation — qui **meurt avec la page**. Écrire un message puis ranger s
 téléphone dans la seconde suffisait donc à ce que l'action reste en file, sans
 que rien ne la rejoue avant la prochaine **ouverture** de l'application : des
 heures, ou des jours. Et l'échec du premier envoi n'a rien d'exceptionnel ici,
-puisque Apps Script sérialise tout derrière un `LockService` : un envoi attend
-son tour derrière les lectures des autres appareils.
+puisque Apps Script sérialise les écritures derrière un `LockService` : un envoi
+attend son tour derrière les écritures des autres appareils (les lectures ne
+prennent pas le verrou).
 
 Trois règles répondent à ça, dans cet ordre :
 
@@ -568,10 +611,11 @@ Trois règles répondent à ça, dans cet ordre :
    l'action **reste en file** et repart au démarrage suivant ; le doublon est
    absorbé par la déduplication serveur. Perdre un message coûte cher, le poster
    deux fois ne coûte rien.
-2. **Une écriture a plus de temps qu'une lecture** (`WRITE_TIMEOUT_MS`, 45 s,
-   contre 20 s). Couper une écriture ne l'annule pas côté serveur : ça ne fait
-   que nous en cacher l'issue, et fabriquer un doublon. Une lecture, elle, est
-   rejouée au tour suivant sans rien risquer.
+2. **Une écriture a plus de temps qu'une lecture** (`WRITE_TIMEOUT_MS`, 55 s,
+   contre 20 s, au-delà des 45 s d'attente du verrou côté serveur : un verrou
+   dépassé répond « retry » avant la coupure). Couper une écriture ne l'annule pas
+   côté serveur : ça ne fait que nous en cacher l'issue, et fabriquer un doublon.
+   Une lecture, elle, est rejouée au tour suivant sans rien risquer.
 3. **Une lecture périmée n'écrase jamais un état plus frais.** Une réponse de
    lecture décrit le serveur au moment où elle a été *calculée* : partie avant
    une écriture et revenue après elle, l'appliquer remettrait l'état d'avant, et
@@ -584,14 +628,51 @@ d'une heure : celle du serveur n'existe pas encore, et celle de l'appareil n'est
 pas celle que les autres verront. C'est un **état**, pas une alerte — il dure le
 temps d'un aller-retour.
 
+### Une action ne quitte la file que sur confirmation
+
+Une action sort de la file dans trois cas seulement : le serveur l'a appliquée, il
+la reconnaît comme déjà appliquée (`duplicate`), ou il la refuse de façon
+**définitive** (`code: "invalid"`, un rejet de validation). Tout le reste la laisse
+en file : coupure réseau, délai dépassé (il couvre aussi la lecture du corps de la
+réponse), et toute réponse sans verdict (page HTML, JSON illisible ou tronqué,
+statut 5xx, `code: "retry"` pour une exception, un verrou dépassé ou une panne
+Drive, code inconnu).
+
+- Le recul est progressif (×2 par échec, plafond 60 s) et l'indicateur passe à
+  **Erreur (n)** dès le deuxième échec consécutif où le serveur a répondu, avec un
+  message unique : « Le serveur ne répond pas correctement : vos actions sont
+  gardées et repartiront. » Il ne dit jamais **À jour** tant qu'une action attend.
+- Un refus définitif retire l'action et affiche « Action refusée : `raison`. Texte :
+  « … » » : le texte saisi est repris (coupé à 200 caractères) pour être recopié.
+- Un backend d'avant, qui ne renvoie pas de code, refuse sans dire si c'est
+  définitif : un `ok: false` sans code est réessayé trois fois, espacées, puis
+  retiré avec le même message.
+- Dans un lot, chaque action est jugée sur son entrée de `results` ; un lot sans
+  `results` ne retire rien.
+- L'envoi de secours au `pagehide` (`sendBeacon`) est borné à 60 000 octets : il
+  emporte le plus long début de file qui tient (20 actions au plus) et ne retire
+  rien.
+- Un refus d'authentification fait reculer le rythme jusqu'à 60 s et n'est notifié
+  qu'**une fois** par série ; l'application se reverrouille.
+- Une action en file depuis plus de 30 jours (`CONFIG.STALE_ACTION_MS`) n'est
+  jamais renvoyée en silence : elle est **retenue**. Elle reste en file et en base,
+  l'indicateur la compte, un message le dit une fois par session. Celles qui la
+  suivent attendent aussi, pour garder l'ordre. Le bloc « Envoyer quand même » des
+  Réglages (`js/ui.js`), affiché seulement quand `Sync.staleCount()` n'est pas nul,
+  appelle `Sync.releaseStale()` (dans `js/sync.js`) : les actions retenues sont
+  libérées et repartent dans l'ordre de la file. La libération est gardée en
+  mémoire : si la page se ferme avant l'envoi, elles sont retenues de nouveau au
+  démarrage suivant.
+
 ---
 
 ### Le précache échoue plutôt que de mentir
 
 La coquille est précachée en **deux listes**, et la différence n'est pas cosmétique.
 
-Ce dont dépend un démarrage à froid — le document, la feuille de style, les huit
-scripts — part dans un `addAll` unique passé à `waitUntil`, **sans `catch`**. Une
+Ce dont dépend un démarrage à froid (le document, les trois feuilles de style et
+les onze scripts : 16 entrées avec `./` et `index.html`) part dans un `addAll`
+unique passé à `waitUntil`, **sans `catch`**. Une
 ressource manquante fait donc échouer l'installation : l'ancien service worker reste
 actif avec son cache **complet**, et l'équipe garde une version qui fonctionne.
 
@@ -644,7 +725,20 @@ une garantie qui n'était pas faite.
   application fermée, en arrière-plan ou laissée ouverte à l'écran, c'est le
   même compteur. En deçà, rouvrir l'application entre directement.
 - Si le serveur refuse le jeton en cours de session, l'application se
-  reverrouille immédiatement.
+  reverrouille immédiatement et demande le **nouveau code** (« saisissez le
+  nouveau code de l'équipe »). Un code qui ne correspond pas au vérificateur local
+  est alors vérifié auprès du serveur, par une requête de lecture avec le jeton
+  dérivé : accepté, il remplace le vérificateur et le jeton, déverrouille, et la
+  file d'actions est conservée ; refusé, ou impossible à vérifier hors ligne, rien
+  ne change. Le même chemin sert à un appareil resté en accès libre quand l'équipe
+  pose un code : il se verrouille et demande ce code.
+- Le jeton voyage dans l'adresse des lectures (paramètre `auth` des requêtes
+  `GET`) : c'est inhérent à Apps Script, un `GET` n'a que des paramètres
+  d'adresse. Il peut donc figurer dans les journaux d'exécution du propriétaire du
+  script. Deux mesures limitent l'exposition : `<meta name="referrer"
+  content="no-referrer">` (la page n'envoie son adresse à aucun autre site : aucun
+  en-tête `Referer` sur les requêtes vers le script) et une
+  `Content-Security-Policy` en `meta`. Sortir le jeton de l'adresse n'est pas fait.
 
 Ce que la session pose sur l'appareil, et le compromis assumé :
 
@@ -690,7 +784,9 @@ Au premier lancement, l'application demande :
 Un lien « Continuer sans connexion (mode local) » permet d'essayer
 l'application sans backend : les données restent alors sur l'appareil.
 Réglages → « Modifier l'adresse ou le code » permet d'y revenir, et
-« Se déconnecter de l'équipe » oublie l'adresse et le vérificateur.
+« Se déconnecter de l'équipe » oublie l'adresse, le vérificateur, l'identité locale,
+la preuve de propriété des contenus anonymes, les brouillons et le repère des
+nouveautés (liste des clés dans « Brouillons », plus haut).
 
 ---
 
@@ -701,9 +797,17 @@ Incrémenter **ensemble** :
 - `CONFIG.APP_VERSION` dans `js/config.js` ;
 - `CACHE_VERSION` dans `service-worker.js`.
 
-Sans quoi les appareils garderont l'ancienne coquille en cache. Au chargement
-suivant, un bandeau « nouvelle version disponible » propose la mise à jour ;
-le rechargement n'a lieu que si l'utilisateur l'a demandé.
+Sans quoi les appareils déjà installés garderont l'ancienne coquille en cache :
+la navigation vers l'application est servie par la coquille du cache versionné
+(comme les scripts, pour que HTML et scripts soient toujours de la même version),
+donc une publication **sans** montée de `CACHE_VERSION` n'atteint plus ces
+appareils. Une fois la version montée, au chargement suivant, un bandeau
+« nouvelle version disponible » propose la mise à jour ; le rechargement n'a lieu
+que si l'utilisateur l'a demandé. L'apparition du bandeau (« Une nouvelle version
+est disponible. ») est annoncée une fois aux lecteurs d'écran par la région d'état
+`#toast-root`, qui existe déjà : `announceUpdateBanner()` (`js/ui.js`) y ajoute un
+nœud masqué, retiré au bout de quelques secondes, sans toast visible ni second
+`role="status"`.
 
 ---
 
@@ -716,6 +820,16 @@ node tests/session.test.js
 node tests/onboarding.test.js
 node tests/navigation.test.js
 node tests/qa/compat-scan.js
+```
+
+Les autres fichiers de `tests/` (backend, démarrage robuste, focus, champs nommés,
+actions retenues, recherche et synthèse, brouillons, revue de l'interface, bandeau de
+mise à jour, contrat CSS) se lancent de la
+même façon. Cette boucle les exécute tous ; aucune ligne « ÉCHEC » ne doit
+apparaître :
+
+```bash
+for f in tests/*.test.js; do node "$f" >/dev/null || echo "ÉCHEC $f"; done
 ```
 
 `sync.test.js` monte **deux clients complets** (`state.js` + `database.js` +
@@ -774,6 +888,7 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion
+- [`docs/AUDIT_QA.md`](docs/AUDIT_QA.md) : rapport d'audit final du run QA (ce qui a été corrigé, conformité à la spécification, ce qui reste, ce qui n'a pas été observé)
 
 ---
 

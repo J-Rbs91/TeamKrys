@@ -3,11 +3,12 @@
  * ⚠️ Incrémenter CACHE_VERSION EN MÊME TEMPS que CONFIG.APP_VERSION (js/config.js).
  * Règles :
  *  - la coquille statique est précachée puis servie en cache-first ;
- *  - la navigation est servie en network-first (repli sur la coquille) ;
+ *  - la navigation vers l'application est servie par la coquille du cache
+ *    VERSIONNÉ, comme les scripts (réseau seulement si elle manque) ;
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.12.0";
+var CACHE_VERSION = "brainsto-v1.13.0";
 
 var SHELL_CRITICAL = [
   "./",
@@ -60,7 +61,9 @@ self.addEventListener("activate", function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(keys.map(function (key) {
-        return key === CACHE_VERSION ? null : caches.delete(key);
+        /* ⚠️ Seulement NOS anciens caches : sur GitHub Pages, les sites d'un même
+         * compte partagent l'origine, donc le CacheStorage. */
+        return key.indexOf("brainsto-") === 0 && key !== CACHE_VERSION ? caches.delete(key) : null;
       }));
     }).then(function () { return self.clients.claim(); })
   );
@@ -74,6 +77,13 @@ function isShellRequest(url) {
   return url.origin === self.location.origin;
 }
 
+/* La page de l'application : racine de la portée ou index.html, avec ou sans
+ * paramètres (un lien partagé en porte parfois, p. ex. ?fbclid=). */
+function isAppPage(url) {
+  var root = new URL("./", self.location.href).pathname;
+  return url.pathname === root || url.pathname === root + "index.html";
+}
+
 self.addEventListener("fetch", function (event) {
   var request = event.request;
   if (request.method !== "GET") { return; }
@@ -83,6 +93,26 @@ self.addEventListener("fetch", function (event) {
 
   if (!isShellRequest(url)) { return; }
 
+  if (request.mode === "navigate" && isAppPage(url)) {
+    /* ⚠️ Coquille d'abord, et depuis le cache VERSIONNÉ (SPEC §24) : l'application
+     * démarre tout de suite sur un réseau connecté mais muet ou une page d'erreur
+     * (503), et son HTML vient toujours du même cache que ses scripts (jamais un
+     * index.html neuf avec des scripts anciens). Une nouvelle version arrive par
+     * le cycle de mise à jour du service worker (bandeau « Mettre à jour »).
+     * Réseau seulement si la coquille manque ; rien n'est mis en cache ici. */
+    event.respondWith(
+      caches.open(CACHE_VERSION).then(function (cache) {
+        return cache.match("index.html").then(function (cached) {
+          return cached || cache.match("./");
+        });
+      }).then(function (cached) {
+        return cached || fetch(request);
+      })
+    );
+    return;
+  }
+
+  /* Autre page de la portée (un document du dépôt) : réseau d'abord, comme avant. */
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(function () {
@@ -94,8 +124,9 @@ self.addEventListener("fetch", function (event) {
     return;
   }
 
+  /* Même cache versionné que la coquille : jamais un script d'une autre version. */
   event.respondWith(
-    caches.match(request).then(function (cached) {
+    caches.open(CACHE_VERSION).then(function (cache) { return cache.match(request); }).then(function (cached) {
       if (cached) { return cached; }
       return fetch(request).then(function (response) {
         if (response && response.status === 200 && response.type === "basic") {

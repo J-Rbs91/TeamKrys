@@ -23,19 +23,28 @@
   color: var(--accord);
 }
 
-.product-topic-group[data-topic-status="closed"] {
-  opacity: 0.88;
-}
-
-.product-topic-group[data-topic-status="archived"] {
-  opacity: 0.76;
+/* « Clôturés » et « Archivés » s'effacent par l'ENCRE, jamais par une opacité de groupe : à
+   0,88 puis 0,76, les petits textes de ces groupes tombaient à 4,17:1 puis 3,29:1 (seuil
+   4,5:1). Le titre de chaque carte passe au jeton secondaire `--muted`, que
+   tools/check-contrast.py mesure sur tous ses fonds. */
+.product-topic-group[data-topic-status="closed"] .card-title,
+.product-topic-group[data-topic-status="archived"] .card-title {
+  color: var(--muted);
 }
 
 .product-unread {
+  /* Bloc, et non le `inline-flex` de `.badge` (REC-UI-042) : `text-overflow` ne s'applique pas au texte d'un
+     conteneur flex, et à 200 % de texte « Consensus mis à jour » était coupé net (« mis à jo »). Ce repère ne
+     contient que du texte : en bloc, son ellipse fonctionne. */
+  display: inline-block;
   flex: 0 1 auto;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* `.badge` passe à `white-space: normal` (BL-044) ; ce repère garde sa ligne unique et son ellipse.
+     Sécable en mots, sa largeur minimale tomberait à celle d'un mot, le pied de carte le rétrécirait
+     et les compteurs se replieraient sur plusieurs lignes à 320 px (mesuré : +43 px sur l'accueil). */
+  white-space: nowrap;
 }
 
 .product-participation {
@@ -50,6 +59,22 @@
   .product-unread {
     max-width: min(58vw, 220px);
   }
+}
+
+/* Accueil de bureau (BL-050) : les groupes s'empilent, ils ne deviennent plus des colonnes de
+   tableau façon Kanban. Chaque groupe prend toute la largeur, sous son titre ; ce sont ses CARTES
+   qui se répartissent en colonnes, comme avant (320 px au moins). Lecture de haut en bas : prêts pour
+   la réunion, en discussion, puis clôturés et archivés en dernier, donc secondaires. */
+@media (min-width: 900px) {
+  .topics-grid > .product-topic-group {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    align-items: start;
+    gap: 16px;
+  }
+
+  .product-topic-group > .product-topic-group-title { grid-column: 1 / -1; }
 }
 
 @media print {

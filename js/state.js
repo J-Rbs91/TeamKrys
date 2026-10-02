@@ -63,10 +63,29 @@
 
   function str(value) { return value === null || value === undefined ? "" : String(value); }
   function trim(value) { return str(value).trim(); }
-  function cut(value, max) { return trim(value).slice(0, max); }
+  /* ⚠️ Une coupe ne laisse jamais une moitié de paire UTF-16 (emoji tranché, « � » à
+   * l'écran) : un demi-caractère haut final est retiré. Utils.limit doit suivre la même règle. */
+  function cut(value, max) {
+    var text = trim(value).slice(0, max);
+    var last = text.charCodeAt(text.length - 1);
+    return last >= 0xD800 && last <= 0xDBFF ? text.slice(0, -1) : text;
+  }
   function isObject(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
   function arr(value) { return Array.isArray(value) ? value : []; }
   function oneOf(value, list, fallback) { return list.indexOf(value) >= 0 ? value : fallback; }
+  /* Valeur PROPRE d'une clé (jamais celle héritée d'Object.prototype : « toString »…). */
+  function ownValue(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined; }
+
+  /* ⚠️ Un identifiant devient une clé (votes, réactions, soutiens) ou reste dans le journal
+   * de déduplication : 120 caractères au plus, et jamais un nom hérité d'Object.prototype
+   * (perdu, compté faux ou pris pour existant). Liste partagée avec le backend. */
+  Core.ID_MAX_LENGTH = 120;
+  Core.RESERVED_IDS = ["__proto__", "constructor", "prototype", "hasOwnProperty", "toString", "valueOf",
+    "toLocaleString", "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "__defineSetter__",
+    "__lookupGetter__", "__lookupSetter__"];
+  function badId(value) {
+    return str(value).length > Core.ID_MAX_LENGTH || Core.RESERVED_IDS.indexOf(trim(value)) >= 0;
+  }
 
   Core.cut = cut;
   Core.trim = trim;
@@ -143,8 +162,9 @@
         });
       });
 
-      /* Une citation qui pointe vers un message disparu est neutralisée. */
-      var messageIds = {};
+      /* Une citation qui pointe vers un message disparu est neutralisée. Tables sans
+       * prototype : « constructor » ou « toString » n'y existent que s'ils sont réels. */
+      var messageIds = Object.create(null);
       topic.messages.forEach(function (m) { messageIds[m.id] = true; });
       topic.messages.forEach(function (m) {
         if (m.quoteId && (!messageIds[m.quoteId] || m.quoteId === m.id)) { m.quoteId = null; }
@@ -184,7 +204,24 @@
         });
       });
 
-      var conclusionIds = {};
+      /* TeamKrys v1/v2 (d1823d6, af0500a) : le texte unique « conclusion » devient UNE
+       * formulation sans auteur, d'id déterministe ; rien n'est écrasé, et relire ne
+       * l'ajoute pas deux fois (l'état normalisé ne garde pas « conclusion »). */
+      var legacyText = typeof t.conclusion === "string" ? cut(t.conclusion, Core.LIMITS.conclusion) : "";
+      if (legacyText && !Core.findConclusion(topic, "legacy-" + topic.id) &&
+        !topic.conclusions.some(function (c) { return c.text === legacyText; })) {
+        topic.conclusions.push({
+          id: "legacy-" + topic.id,
+          text: legacyText,
+          source: "manual",
+          authorId: "",
+          authorName: Core.ANON_NAME,
+          createdAt: trim(t.conclusionUpdatedAt) || topic.createdAt,
+          updatedAt: trim(t.conclusionUpdatedAt) || topic.createdAt
+        });
+      }
+
+      var conclusionIds = Object.create(null);
       topic.conclusions.forEach(function (c) { conclusionIds[c.id] = true; });
       if (isObject(t.conclusionVotes)) {
         Object.keys(t.conclusionVotes).forEach(function (pid) {
@@ -257,7 +294,8 @@
   };
 
   Core.conclusionScores = function (topic) {
-    var scores = {};
+    /* Table sans prototype : « toString » n'y est jamais compté, « __proto__ » réel l'est. */
+    var scores = Object.create(null);
     arr(topic && topic.conclusions).forEach(function (c) { scores[c.id] = 0; });
     var votes = topic && isObject(topic.conclusionVotes) ? topic.conclusionVotes : {};
     Object.keys(votes).forEach(function (pid) {
@@ -283,6 +321,8 @@
     if (!trim(action.id)) { return fail("Action sans identifiant."); }
     var p = isObject(action.payload) ? action.payload : {};
     var topic = null;
+    if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
+      p.conclusionId, p.quoteId].some(badId)) { return fail("Identifiant invalide."); }
 
     function needTopic() {
       topic = Core.findTopic(state, trim(p.topicId));
@@ -346,7 +386,10 @@
         var e6 = needTopic(); if (e6) { return e6; }
         if (!Core.findMessage(topic, trim(p.messageId))) { return fail("Ce message n'existe plus."); }
         if (!trim(action.actorId)) { return fail("Réaction sans participant."); }
-        if (Core.REACTIONS.indexOf(trim(p.emoji)) < 0) { return fail("Réaction non autorisée."); }
+        /* emoji "" = retrait, admis seulement dans une action marquée (set:true). */
+        if (Core.REACTIONS.indexOf(trim(p.emoji)) < 0 && !(p.set === true && trim(p.emoji) === "")) {
+          return fail("Réaction non autorisée.");
+        }
         return OK;
       }
 
@@ -389,28 +432,28 @@
 
       case "ADD_CONCLUSION": {
         var e12 = needTopic(); if (e12) { return e12; }
-        if (!trim(p.conclusionId)) { return fail("Conclusion sans identifiant."); }
-        if (!trim(p.text)) { return fail("La conclusion est vide."); }
-        if (Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion existe déjà."); }
+        if (!trim(p.conclusionId)) { return fail("Formulation du consensus sans identifiant."); }
+        if (!trim(p.text)) { return fail("La formulation du consensus est vide."); }
+        if (Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus existe déjà."); }
         return OK;
       }
 
       case "UPDATE_CONCLUSION_ITEM": {
         var e13 = needTopic(); if (e13) { return e13; }
-        if (!Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
-        if (!trim(p.text)) { return fail("La conclusion est vide."); }
+        if (!Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
+        if (!trim(p.text)) { return fail("La formulation du consensus est vide."); }
         return OK;
       }
 
       case "DELETE_CONCLUSION": {
         var e14 = needTopic(); if (e14) { return e14; }
-        if (!Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
+        if (!Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
         return OK;
       }
 
       case "SET_CONCLUSION_VOTE": {
         var e15 = needTopic(); if (e15) { return e15; }
-        if (!Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette conclusion n'existe plus."); }
+        if (!Core.findConclusion(topic, trim(p.conclusionId))) { return fail("Cette formulation du consensus n'existe plus."); }
         if (!trim(action.actorId)) { return fail("Vote sans participant."); }
         return OK;
       }
@@ -533,7 +576,10 @@
         var anon = p.anon === true;
         ms.anon = anon;
         if (anon) {
-          /* L'anonymat EFFACE l'identité du JSON partagé. */
+          /* L'anonymat EFFACE l'identité du JSON partagé, y compris comme clé de
+           * réaction : celle de l'auteur et celle de qui anonymise (§5). */
+          if (ms.authorId) { delete ms.reactions[ms.authorId]; }
+          if (trim(action.actorId)) { delete ms.reactions[trim(action.actorId)]; }
           ms.authorId = "";
           ms.authorName = Core.ANON_NAME;
         } else {
@@ -550,7 +596,15 @@
         var mr = Core.findMessage(topic, trim(p.messageId));
         var actor = trim(action.actorId);
         var emoji = trim(p.emoji);
-        if (mr.reactions[actor] === emoji) { delete mr.reactions[actor]; }
+        /* ⚠️ Action marquée set:true (FEATURES "idempotent") : elle AFFECTE, "" retire ;
+         * rejouée, elle ne change rien, pas même la date d'activité. Sans marqueur :
+         * bascule historique, gardée pour les appareils restés sur l'ancienne version. */
+        if (p.set === true) {
+          var had = ownValue(mr.reactions, actor);
+          if (emoji) { mr.reactions[actor] = emoji; } else { delete mr.reactions[actor]; }
+          if (ownValue(mr.reactions, actor) === had) { return; }
+        }
+        else if (ownValue(mr.reactions, actor) === emoji) { delete mr.reactions[actor]; }
         else { mr.reactions[actor] = emoji; }
         touch(state, topic, now);
         return;
@@ -589,8 +643,14 @@
         var pv = Core.findProposal(topic, trim(p.proposalId));
         var voter = trim(action.actorId);
         var value = trim(p.value);
+        if (p.set === true) {
+          /* Action marquée : AFFECTE ; rejouée, elle ne change rien. */
+          var was = ownValue(pv.votes, voter);
+          pv.votes[voter] = value;
+          if (ownValue(pv.votes, voter) === was) { return; }
+        }
         /* Un vote par personne ; re-cliquer le même vote le retire. */
-        if (pv.votes[voter] === value) { delete pv.votes[voter]; }
+        else if (ownValue(pv.votes, voter) === value) { delete pv.votes[voter]; }
         else { pv.votes[voter] = value; }
         touch(state, topic, now);
         return;
@@ -638,8 +698,14 @@
       case "SET_CONCLUSION_VOTE": {
         var cv = trim(action.actorId);
         var target = trim(p.conclusionId);
+        if (p.set === true) {
+          /* Action marquée : AFFECTE (déplace le choix) ; rejouée, elle ne change rien. */
+          var prev = ownValue(topic.conclusionVotes, cv);
+          topic.conclusionVotes[cv] = target;
+          if (ownValue(topic.conclusionVotes, cv) === prev) { return; }
+        }
         /* Choix unique : re-cliquer retire, voter ailleurs déplace le vote. */
-        if (topic.conclusionVotes[cv] === target) { delete topic.conclusionVotes[cv]; }
+        else if (ownValue(topic.conclusionVotes, cv) === target) { delete topic.conclusionVotes[cv]; }
         else { topic.conclusionVotes[cv] = target; }
         touch(state, topic, now);
         return;

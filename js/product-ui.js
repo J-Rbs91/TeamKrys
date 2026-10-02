@@ -41,17 +41,43 @@
     } catch (error) { return false; }
   }
 
+  /* Cet appareil vu de la couche produit : son identifiant et la preuve locale de ses
+   * éléments, lus par l'API existante d'app.js (ownsItem). Lecture seule, rien n'en est
+   * envoyé (§11). Sans elle, tout se compte comme avant. */
+  function mineFor() {
+    var currentApp = app();
+    if (!currentApp || typeof currentApp.ownsItem !== "function" || !currentApp.user) { return null; }
+    return {
+      id: String(currentApp.user.id || ""),
+      owns: function (id, authorId) { return currentApp.ownsItem(id, authorId) === true; }
+    };
+  }
+
+  /* ⚠️ Appareil connecté qui n'a encore rien reçu du serveur (révision 0) : la vue n'est
+   * que l'état vide de départ, pas l'espace de l'équipe. */
+  function awaitingFirstSync(state) {
+    var sync = root.Sync;
+    var connection = sync && sync.connection;
+    return !!(connection && connection.url && !connection.localMode && state && !state.revision);
+  }
+
   /* Au déploiement de la fonctionnalité, l'état déjà visible devient la baseline,
    * y compris quand l'espace est vide. Ainsi le premier sujet créé plus tard par
    * un collègue est bien détecté comme nouveau, sans transformer le déploiement
-   * lui-même en avalanche de fausses nouveautés. */
+   * lui-même en avalanche de fausses nouveautés.
+   * Exception : un appareil connecté qui n'a encore rien reçu du serveur n'a pas de
+   * baseline à prendre (null). Sinon l'état vide de départ deviendrait la référence et
+   * tous les sujets de l'équipe s'afficheraient « Nouveau sujet » au premier rapatriement :
+   * la baseline est prise sur l'état réel, en silence, dès qu'il est là. */
   function seenRecord(state) {
     var record = loadSeen();
     if (record) { return record; }
+    if (awaitingFirstSync(state)) { return null; }
     var topics = state && Array.isArray(state.topics) ? state.topics : [];
+    var mine = mineFor();
     record = { v: 1, initialized: true, topics: {} };
     topics.forEach(function (topic) {
-      record.topics[topic.id] = ProductView.topicFingerprint(topic);
+      record.topics[topic.id] = ProductView.topicFingerprint(topic, mine);
     });
     saveSeen(record);
     return record;
@@ -60,7 +86,11 @@
   function markTopicSeen(topic, state) {
     if (!topic) { return; }
     var record = seenRecord(state);
-    record.topics[topic.id] = ProductView.topicFingerprint(topic);
+    if (!record) { return; }
+    var fingerprint = ProductView.topicFingerprint(topic, mineFor());
+    /* Chaque rendu et chaque sondage repassent ici : sans changement, aucune écriture (BL-068). */
+    if (JSON.stringify(record.topics[topic.id]) === JSON.stringify(fingerprint)) { return; }
+    record.topics[topic.id] = fingerprint;
     saveSeen(record);
   }
 
@@ -98,11 +128,11 @@
 
     /* La consultation de l'accueil établit la baseline AVANT de regarder le DOM.
      * Quand l'espace est vide, screenTopics ne crée pas `.topics-grid` du tout. */
-    var seen = seenRecord(state);
+    var seen = seenRecord(state) || { v: 1, initialized: false, topics: {} };
     var container = document.querySelector(".topics-grid");
     if (!container || container.querySelector(".product-topic-group")) { return; }
 
-    var currentApp = app();
+    var mine = mineFor();
     var visible = ProductView.visibleTopics(
       state.topics,
       UI.local && UI.local.search,
@@ -139,13 +169,13 @@
 
         /* Un élément créé sur cet appareil vient d'être vu au moment de sa création.
          * ownItems couvre aussi le cas anonyme où createdBy.id est volontairement vide. */
-        if (!seen.topics[topic.id] && seen.initialized && currentApp &&
-            typeof currentApp.ownsItem === "function" && currentApp.ownsItem(topic.id, topic.createdBy && topic.createdBy.id)) {
-          seen.topics[topic.id] = ProductView.topicFingerprint(topic);
+        if (!seen.topics[topic.id] && seen.initialized && mine &&
+            mine.owns(topic.id, topic.createdBy && topic.createdBy.id)) {
+          seen.topics[topic.id] = ProductView.topicFingerprint(topic, mine);
           seenDirty = true;
         }
 
-        var activity = ProductView.topicActivity(topic, seen.topics[topic.id], seen.initialized === true);
+        var activity = ProductView.topicActivity(topic, seen.topics[topic.id], seen.initialized === true, mine);
         if (activity.changed && !card.querySelector(".product-unread")) {
           var counts = card.querySelector(".card-foot .row-wrap");
           if (counts) { counts.insertBefore(unreadBadge(activity.label), counts.firstChild); }
@@ -157,13 +187,6 @@
     });
 
     if (seenDirty) { saveSeen(seen); }
-  }
-
-  function participationLabel(participation) {
-    if (!participation.total) { return null; }
-    return participation.voters + " / " + participation.total + " participant" +
-      (participation.total > 1 ? "s" : "") + " " +
-      (participation.voters > 1 ? "ont" : "a") + " voté";
   }
 
   function enhanceProposalStatus(select, proposal) {
@@ -194,19 +217,20 @@
     for (var i = 0; i < cards.length; i++) {
       var card = cards[i];
       var proposal = topic.proposals[i];
-      var participation = ProductView.voteParticipation(proposal, state.participants || []);
-      var label = participationLabel(participation);
+      /* Même lecture (§8) que la carte de ui.js, qui pose déjà la participation : ce
+       * complément ne sert que si elle manque, et ne compose aucun texte lui-même. */
+      var reading = ProductView.voteReading(proposal, state.participants || []);
       var legend = card.querySelector(".vote-legend");
-      if (legend && label && !legend.querySelector(".product-participation")) {
+      if (legend && reading.participation && !legend.querySelector(".product-participation")) {
         var chip = document.createElement("span");
         chip.className = "legend-chip product-participation";
-        chip.textContent = label;
+        chip.textContent = reading.participation;
         legend.appendChild(chip);
       }
 
       var voteBar = card.querySelector('.vote-bar[role="img"]');
       if (voteBar) {
-        voteBar.setAttribute("aria-label", ProductView.voteAriaLabel(proposal, state.participants || []));
+        voteBar.setAttribute("aria-label", reading.aria);
       }
 
       enhanceProposalStatus(card.querySelector("select"), proposal);
@@ -314,6 +338,18 @@
     if (topic) { markTopicSeen(topic, state); }
   }
 
+  /* ⚠️ Un élément qui a le focus et que l'on DÉPLACE dans le DOM le perd : le focus retombe sur <body>. js/ui.js venait de le
+   * rendre (settleFocus, BL-012) ; cette couche range ensuite des nœuds dans de nouveaux conteneurs. Elle rend donc le focus au
+   * nœud qu'elle a déplacé, et à lui seul : jamais quand le focus était déjà sur <body> (changement d'écran), jamais par-dessus
+   * un autre champ en cours de saisie (REC-RUI-003, REC-RUI-004). */
+  function restoreFocus(focused) {
+    var now = document.activeElement;
+    if (!focused || focused === document.body || focused === document.documentElement || focused === now) { return; }
+    if (now && now !== document.body && now !== document.documentElement) { return; }
+    if (!document.documentElement.contains(focused)) { return; }
+    try { focused.focus({ preventScroll: true }); } catch (error) { /* non focalisable */ }
+  }
+
   function enhance() {
     var currentApp = app();
     var currentStore = store();
@@ -323,6 +359,7 @@
       return;
     }
 
+    var focused = document.activeElement;
     var state = currentStore.view;
     var route = currentApp.route || {};
     markCurrentTopic(state, route);
@@ -333,6 +370,7 @@
     renameConsensusOverlay();
     renameMeeting(route);
     renameOnboarding();
+    restoreFocus(focused);
   }
 
   UI.render = function () {

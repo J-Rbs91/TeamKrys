@@ -4,8 +4,8 @@ Ce document dit ce que doit faire le bouton retour d'Android, le bouton retour
 de l'en-tête et le glissement latéral d'iOS, comment c'est tenu dans le code, et
 comment le vérifier.
 
-Il applique à BrainstO. le contrat de navigation arrière de la méthode UXER
-(`references/back-navigation-contract.md`).
+Il applique à BrainstO. le contrat de navigation arrière de la méthode UXER ; les
+règles utiles ici sont reprises dans ce document.
 
 ---
 
@@ -128,6 +128,11 @@ C'est exact ici parce que chaque écran a un seul parent. Le jour où un écran 
 aura plusieurs, un libellé figé mentirait deux fois sur trois : il faudra alors
 nommer le nœud réellement atteint, ou retomber sur « Retour » — jamais annoncer
 un parent statique quand le geste mène ailleurs.
+
+Sous 22 rem de large, le libellé disparaît et le bouton se réduit à sa flèche : le
+titre de l'écran garde la place. Le seuil suit la taille de police de l'appareil
+(352 px à 100 %, 457 px à 130 %, 704 px à 200 %). Le nom accessible ne change pas :
+« Retour vers Sujets », posé par `aria-label` dans `topbar()` (`js/ui.js`).
 
 ## 5. Comment le vérifier
 

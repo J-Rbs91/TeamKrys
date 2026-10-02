@@ -28,8 +28,11 @@
 /* =================================================== Parcours du sujet ==== */
 
 .ux-flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  /* Rangée qui passe à la ligne ENTRE les étapes (REC-UI-041). À 100 % les trois étapes se partagent la
+     largeur à parts égales, comme avant ; à texte agrandi (130 %, 200 %) ou sur 320 px, une étape qui
+     ne tient plus passe sur la ligne suivante au lieu de voir son mot coupé au milieu. */
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px max(14px, var(--safe-right)) 9px max(14px, var(--safe-left));
   border-bottom: 1px solid var(--line);
@@ -42,7 +45,9 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-width: 0;
+  /* Parts égales (base 0), et surtout PAS de `min-width: 0` : la largeur minimale de l'étape est celle de
+     son mot le plus long, qui ne rétrécit donc jamais ; c'est l'étape entière qui passe à la ligne. */
+  flex: 1 1 0%;
   min-height: var(--tap);
   padding: 7px 9px;
   border: 1px solid var(--line);
@@ -74,7 +79,11 @@
 }
 
 .ux-flow-step .icon { flex: 0 0 auto; }
-.ux-flow-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Jamais de points de suspension (BL-043) ni de mot coupé au milieu (REC-UI-041) sur Discussion,
+   Propositions, Consensus : ces trois mots nomment l'étape. Le libellé reste ENTIER : ni `anywhere` ni
+   `break-word` (ils ramènent la largeur minimale du mot à une lettre, et la colonne le coupe n'importe
+   où), ni `min-width: 0`, ni césure. Quand la place manque, l'étape entière passe à la ligne (.ux-flow). */
+.ux-flow-label { overflow-wrap: normal; word-break: normal; -webkit-hyphens: manual; hyphens: manual; text-align: center; }
 
 .ux-flow-count {
   display: inline-grid;
@@ -144,18 +153,25 @@
   line-height: 1;
 }
 
+/* À 320 px (22rem), « Détails » n'a plus la place et était coupé : l'icône d'information et la description « Voir les détails du
+   sujet » gardent l'indication (REC-RUI-009). */
+@media (max-width: 22rem) { .ux-title-hint { display: none; } }
+
 .ux-bubble-cue {
   display: inline-block;
   min-width: 18px;
   margin-left: 2px;
-  color: currentColor;
+  /* Jeton, pas opacité : à 0,78 le repère tombait à 3,68:1 sur 11 px. Seul signe visible que
+     la bulle ouvre des actions, il garde au moins 4,5:1 (couples de tools/check-contrast.py). */
+  color: var(--muted);
   font-size: 0.6875rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  opacity: 0.78;
   line-height: 1;
   text-align: center;
 }
+
+.msg-row.mine .ux-bubble-cue { color: var(--on-ink-soft); }
 
 .bubble {
   transition:
@@ -374,11 +390,55 @@ html.ux-route-fallback .screen--enter .reveal {
 
 /* ============================================================ Responsive ==== */
 
-@media (max-width: 430px) {
+/* Le parcours se resserre jusqu'à 480 px (et non 430) et l'icône cède sa place au mot jusqu'à 440 px :
+   avec l'icône et le compteur, « Propositions » (73 px) ne tenait plus dans sa colonne entre 351 et
+   431 px, ni dès 431 px (mesures de responsive-touch/probe-label-flow.js). */
+@media (max-width: 480px) {
   .ux-flow { gap: 5px; padding-left: 10px; padding-right: 10px; }
-  .ux-flow-step { gap: 5px; padding-left: 6px; padding-right: 6px; }
-  .ux-flow-count { min-width: 18px; height: 18px; padding: 0 4px; }
+  .ux-flow-step { gap: 4px; padding-left: 4px; padding-right: 4px; }
+  .ux-flow-count { min-width: 18px; height: 18px; padding: 0 3px; }
+}
+
+@media (max-width: 440px) {
+  .ux-flow-step .icon { display: none; }
+}
+
+@media (max-width: 430px) {
   .ux-status-control { width: 100%; justify-content: space-between; }
+}
+
+/* Pied de carte de l'accueil, étroit (360 px et moins) ou grand texte (BL-044, REC-UI-040) : le pied passe
+   à la ligne. Sans cela le nom de l'auteur se retrouvait dans une colonne de 29 à 46 px (« Amélie »,
+   « Anonyme » coupés au milieu) ; à la ligne il garde sa largeur de texte, ou prend sa ligne entière
+   quand elle manque. « Ouvrir » reste à droite. 24rem = 384 px à 100 % : rien ne change dès 390 px. */
+@media (max-width: 24rem) {
+  .card-foot { flex-wrap: wrap; row-gap: 6px; }
+  .ux-card-action { margin-left: auto; }
+}
+
+/* Fenêtre basse (BL-045) : le parcours resserre ses marges ; sous 300 px de hauteur (clavier ouvert en
+   paysage) il s'efface pour laisser la place au champ d'envoi, et revient à la fermeture du clavier. */
+@media (max-height: 480px) {
+  .ux-flow { padding-top: 4px; padding-bottom: 4px; }
+}
+
+@media (max-height: 300px) {
+  .ux-flow { display: none; }
+}
+
+/* Fenêtre très étroite (page zoomée à 200 % sur un téléphone : 196 px, REC-UI-041) : le parcours passe à la ligne,
+   ses marges latérales se resserrent pour que Discussion et Propositions tiennent ensemble sur la première
+   ligne, même avec un ascenseur classique (deux lignes au lieu de trois). */
+@media (max-width: 240px) {
+  .ux-flow { padding-left: 6px; padding-right: 6px; }
+}
+
+/* Très étroite ET basse (196 x 425) : à deux ou trois lignes de 44 px le parcours ramenait le fil de discussion
+   de 159 à 61 px (BL-045). Les étapes passent à 32 px de haut (WCAG 2.5.8 demande 24 px), marges de 2 à 3 px.
+   Les mots restent entiers ; les paysages et les claviers ouverts (320 px et plus de large) ne changent pas. */
+@media (max-width: 240px) and (max-height: 480px) {
+  .ux-flow { gap: 3px; padding-top: 3px; padding-bottom: 3px; }
+  .ux-flow-step { min-height: 32px; padding-top: 2px; padding-bottom: 2px; }
 }
 
 @media (max-width: 350px) {

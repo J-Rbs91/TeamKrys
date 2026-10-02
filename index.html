@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- CSP : 'unsafe-inline' ne sert qu'aux navigateurs qui ignorent les empreintes
+     (CSP 1) ; les autres l'ignorent puisqu'une empreinte est présente. connect-src
+     laisse libre l'adresse https du backend et les serveurs locaux de test. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UacpFeIRd1IIVO8FnZoW0bHVKshiCSWE+m9tMWhYYjQ=' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:* http://127.0.0.1:* http://127.0.0.2:*; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>BrainstO.</title>
 <meta name="description" content="BrainstO. : préparer les réunions de l'équipe, ensemble.">
 <meta name="color-scheme" content="light dark">
@@ -25,7 +30,7 @@
 <style>html{background:#f2ede4}@media(prefers-color-scheme:dark){html{background:#0f0d0b}}</style>
 </head>
 <body>
-  <noscript>BrainstO. a besoin de JavaScript pour fonctionner.</noscript>
+  <noscript>BrainstO. a besoin de JavaScript. Activez-le ou ouvrez l'adresse dans un navigateur récent.</noscript>
   <div id="app" class="app"></div>
   <div id="overlay-root"></div>
   <!-- La présentation initiale a sa propre racine : #overlay-root est
@@ -34,6 +39,28 @@
   <div id="onboarding-root"></div>
   <div id="toast-root" class="toast-root" role="status" aria-live="polite"></div>
 
+  <!-- Garde de démarrage : un navigateur trop ancien reçoit un message clair au
+       lieu d'un écran vide. Elle ne teste que ce que le code exige SANS repli
+       (jamais indexedDB, localStorage, crypto ni serviceWorker, qui en ont un).
+       ⚠️ Toute retouche de ce script change son empreinte sha256 : la reporter
+       dans la Content-Security-Policy ci-dessus (tests/service-worker.test.js). -->
+  <script>
+  (function () {
+    var ok = false;
+    try {
+      ok = typeof Promise === "function" && typeof JSON === "object" &&
+        typeof Object.keys === "function" && typeof Object.assign === "function" &&
+        typeof [].forEach === "function" && typeof document.querySelector === "function" &&
+        typeof window.addEventListener === "function";
+    } catch (e) { ok = false; }
+    if (ok) { return; }
+    var box = document.createElement("div");
+    box.setAttribute("role", "alert");
+    box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;overflow:auto;padding:24px;background:#f2ede4;color:#1a1714;font:18px/1.5 sans-serif";
+    box.appendChild(document.createTextNode("Ce navigateur est trop ancien pour BrainstO. Ouvrez l'adresse dans un navigateur récent (Chrome, Safari, Firefox ou Samsung Internet)."));
+    document.body.appendChild(box);
+  })();
+  </script>
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/state.js"></script>

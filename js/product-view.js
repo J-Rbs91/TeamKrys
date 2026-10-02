@@ -13,8 +13,25 @@
   function arr(value) { return Array.isArray(value) ? value : []; }
   function obj(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
 
+  /* ⚠️ Tri par INSTANTS, pas par chaînes (BL-061) : comparer des chaînes classait « pas une date »
+   * avant toute date ISO, et 10:00+02:00 (= 08:00 UTC) avant 09:00Z. Une activité absente ou
+   * illisible passe en dernier ; à instants égaux l'ordre d'entrée est conservé (tri stable).
+   * Seules les dates de forme ISO sont lues : Date.parse accepte tout texte qui contient un
+   * nombre. UNE règle pour l'accueil, le regroupement et la synthèse. */
+  function instantOf(item) {
+    var value = item && item.updatedAt;
+    return typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? Date.parse(value) : NaN;
+  }
+
   function recentFirst(a, b) {
-    return String((b && b.updatedAt) || "").localeCompare(String((a && a.updatedAt) || ""));
+    var ta = instantOf(a);
+    var tb = instantOf(b);
+    var okA = !isNaN(ta);
+    var okB = !isNaN(tb);
+    if (okA && okB) { return tb === ta ? 0 : (tb > ta ? 1 : -1); }
+    if (okA) { return -1; }
+    if (okB) { return 1; }
+    return 0;
   }
 
   ProductView.TOPIC_GROUP_ORDER = ["ready", "open", "closed", "archived"];
@@ -42,26 +59,66 @@
     return groups;
   };
 
+  /* Recherche (BL-060) : la casse, les accents, les ligatures œ et æ et les espaces multiples sont
+   * ignorés, des deux côtés. ⚠️ L'accueil (js/ui.js) et js/product-ui.js appellent tous deux
+   * visibleTopics : c'est ce qui garde la liste des cartes et celle du regroupement strictement
+   * identiques (ordre compris). */
+  ProductView.normalizeSearch = function (value) {
+    var text = String(value == null ? "" : value);
+    if (typeof text.normalize === "function") { text = text.normalize("NFD"); }
+    return text
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/œ/g, "oe")
+      .replace(/æ/g, "ae")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
   ProductView.visibleTopics = function (topics, query, showArchived) {
-    var normalized = String(query || "").trim().toLowerCase();
+    var normalized = ProductView.normalizeSearch(query);
     return arr(topics)
       .slice()
       .sort(recentFirst)
       .filter(function (topic) { return showArchived || topic.status !== "archived"; })
       .filter(function (topic) {
         if (!normalized) { return true; }
-        return String((topic.title || "") + " " + (topic.description || ""))
-          .toLowerCase().indexOf(normalized) >= 0;
+        return ProductView.normalizeSearch((topic.title || "") + " " + (topic.description || ""))
+          .indexOf(normalized) >= 0;
       });
   };
 
+  /* Synthèse de réunion (§10) : les sujets non archivés dans l'ordre de maturité de
+   * l'accueil (prêts, en discussion, clôturés), les plus actifs d'abord dans chaque groupe. */
+  ProductView.meetingTopics = function (topics) {
+    var groups = ProductView.groupTopics(topics);
+    var ordered = [];
+    ProductView.TOPIC_GROUP_ORDER.forEach(function (status) {
+      if (status !== "archived") { ordered = ordered.concat(groups[status]); }
+    });
+    return ordered;
+  };
+
+  /* Dénominateur T = |participants connus ∪ votants| : un votant absent du registre (son
+   * inscription n'est jamais arrivée) agrandit T, qui n'est jamais inférieur au nombre de
+   * votants (PRO-016). Un nombre reste un effectif ; 0 = effectif inconnu. */
   ProductView.voteParticipation = function (proposal, participants) {
     var votes = proposal && proposal.votes && typeof proposal.votes === "object"
       ? proposal.votes : {};
-    var voters = Object.keys(votes).length;
-    var total = Array.isArray(participants)
-      ? participants.length
-      : (typeof participants === "number" && isFinite(participants) ? Math.max(0, Math.floor(participants)) : 0);
+    var voterIds = Object.keys(votes);
+    var voters = voterIds.length;
+    var total = 0;
+    if (Array.isArray(participants)) {
+      /* ⚠️ Clés préfixées : un identifiant comme « __proto__ » ne doit pas fausser le compte. */
+      var known = {};
+      participants.forEach(function (participant) {
+        if (participant && participant.id != null) { known["id:" + participant.id] = true; }
+      });
+      total = participants.length;
+      voterIds.forEach(function (id) { if (!known["id:" + id]) { total += 1; } });
+    } else if (typeof participants === "number" && isFinite(participants) && participants >= 1) {
+      total = Math.max(Math.floor(participants), voters);
+    }
 
     return {
       voters: voters,
@@ -97,30 +154,133 @@
     return "Avis exprimés plutôt défavorables";
   };
 
-  ProductView.voteAriaLabel = function (proposal, participants) {
+  /* Lecture d'un vote (§8), seule source des textes de vote de la carte, de la synthèse
+   * (§10) et des noms accessibles. Deux informations distinctes : le rapport des positions
+   * (« 3 pour · 1 contre · 2 abstentions ») et la participation (« 6 participants sur 8
+   * ont voté »). Le pourcentage favorable exclut les abstentions, qui comptent dans la
+   * participation, et ne se lit jamais seul : « 75 % favorables sur 4 avis exprimés » ;
+   * sans avis exprimé, « Aucun avis exprimé » et pas de pourcentage. Aucun quorum. */
+  ProductView.voteReading = function (proposal, participants) {
     var counts = ProductView.voteCounts(proposal);
-    var participation = ProductView.voteParticipation(proposal, participants);
-    var bits = [
+    var turnout = ProductView.voteParticipation(proposal, participants);
+    var positions = [
       counts.for + " pour",
       counts.against + " contre",
       counts.abstain + " abstention" + (counts.abstain > 1 ? "s" : "")
     ];
-    if (participation.total > 0) {
-      bits.push(participation.voters + " sur " + participation.total + " participants ont voté");
+    var favorable = null;
+    if (counts.expressed) {
+      favorable = counts.favorablePercent + " % favorables sur " + counts.expressed +
+        " avis exprimé" + (counts.expressed > 1 ? "s" : "");
+    } else if (counts.total) {
+      favorable = "Aucun avis exprimé";
     }
-    if (counts.expressed > 0) {
-      bits.push(counts.favorablePercent + " % des avis exprimés favorables");
-    }
-    return ProductView.voteLabel(proposal) + ". " + bits.join(". ") + ".";
+    var participation = turnout.total
+      ? turnout.voters + " participant" + (turnout.voters > 1 ? "s" : "") + " sur " + turnout.total +
+        " " + (turnout.voters > 1 ? "ont" : "a") + " voté"
+      : null;
+    var parts = positions.concat([favorable, participation].filter(function (part) { return !!part; }));
+    var label = ProductView.voteLabel(proposal);
+    return {
+      counts: counts,
+      voters: turnout.voters,
+      total: turnout.total,
+      label: label,
+      positions: positions,
+      favorable: favorable,
+      participation: participation,
+      text: parts.join(" · "),
+      line: label + " · " + parts.join(" · "),
+      aria: label + ". " + parts.join(". ") + "."
+    };
   };
 
-  ProductView.topicFingerprint = function (topic) {
+  ProductView.voteAriaLabel = function (proposal, participants) {
+    return ProductView.voteReading(proposal, participants).aria;
+  };
+
+  /* Empreinte courte (32 bits) : le marqueur local garde de quoi voir qu'une chose a
+   * changé, jamais un texte de message, un nom ni un identifiant d'auteur. */
+  function shortHash(text) {
+    var h = 5381;
+    for (var i = 0; i < text.length; i++) { h = ((h << 5) + h + text.charCodeAt(i)) | 0; }
+    return (h >>> 0).toString(36);
+  }
+
+  function txt(value) { return String(value == null ? "" : value); }
+
+  /* Ce que LES AUTRES ont fait dans le sujet : les mêmes compteurs que l'empreinte
+   * historique, plus une signature de tout le reste (valeur des votes, réactions,
+   * modifications, statut des propositions, titre). Rien de ce qui vient de cet appareil
+   * n'y entre : ni mes messages, propositions et formulations (auteur == moi, ou
+   * identifiant dans la preuve locale pour un contenu anonyme), ni mes votes, réactions
+   * et soutiens (clé == mon identifiant). Les horodatages que le serveur pose à la
+   * confirmation de mes actions ne comptent donc jamais (§11, ROADMAP P3.1). */
+  function withoutMine(topic, mine) {
+    var me = txt(mine.id);
+    function mineItem(item) {
+      var authorId = item && item.authorId;
+      return authorId ? authorId === me : mine.owns(item && item.id, "") === true;
+    }
+    function others(map) {
+      var out = [];
+      Object.keys(obj(map)).sort().forEach(function (key) {
+        if (key !== me) { out.push(key + "=" + map[key]); }
+      });
+      return out;
+    }
+
+    var counts = { messages: 0, proposals: 0, proposalVotes: 0, consensus: 0, consensusVotes: 0 };
+    var parts = [txt(topic && topic.title), txt(topic && topic.description)];
+
+    arr(topic && topic.messages).forEach(function (message) {
+      if (!mineItem(message)) {
+        counts.messages += 1;
+        parts.push("m" + txt(message && message.id) + "@" + txt(message && message.updatedAt));
+      }
+      var reacted = others(message && message.reactions);
+      if (reacted.length) { parts.push("r" + txt(message && message.id) + ":" + reacted.join(",")); }
+    });
+    arr(topic && topic.proposals).forEach(function (proposal) {
+      var votes = others(proposal && proposal.votes);
+      var status = txt(proposal && proposal.status);
+      var own = mineItem(proposal);
+      counts.proposalVotes += votes.length;
+      if (!own) {
+        counts.proposals += 1;
+        parts.push("p" + txt(proposal && proposal.id) + ":" + txt(proposal && proposal.title) + "\n" + txt(proposal && proposal.description));
+      }
+      /* Ma proposition ne laisse de trace que si d'autres la font évoluer (votes, statut) :
+       * la voir apparaître ne doit pas changer la signature. */
+      if (!own || votes.length || status !== "voting") {
+        parts.push("v" + txt(proposal && proposal.id) + ":" + status + ":" + votes.join(","));
+      }
+    });
+    arr(topic && topic.conclusions).forEach(function (conclusion) {
+      if (!mineItem(conclusion)) {
+        counts.consensus += 1;
+        parts.push("c" + txt(conclusion && conclusion.id) + "@" + txt(conclusion && conclusion.updatedAt));
+      }
+    });
+    var supports = others(topic && topic.conclusionVotes);
+    counts.consensusVotes = supports.length;
+    parts.push("s" + supports.join(","));
+
+    counts.sig = shortHash(parts.join("|"));
+    return counts;
+  }
+
+  /* `mine` (facultatif) = { id, owns(id, authorId) } : la preuve locale de cet appareil,
+   * lue dans app.js et strictement locale (§11). Avec lui l'empreinte porte aussi `o`, le
+   * point de vue « sans moi », et `by`, l'identité qui l'a calculé. Sans lui : la forme
+   * historique, inchangée. */
+  ProductView.topicFingerprint = function (topic, mine) {
     var proposals = arr(topic && topic.proposals);
     var proposalVotes = 0;
     proposals.forEach(function (proposal) {
       proposalVotes += Object.keys(obj(proposal && proposal.votes)).length;
     });
-    return {
+    var fingerprint = {
       updatedAt: String((topic && topic.updatedAt) || ""),
       status: String((topic && topic.status) || ""),
       messages: arr(topic && topic.messages).length,
@@ -129,12 +289,17 @@
       consensus: arr(topic && topic.conclusions).length,
       consensusVotes: Object.keys(obj(topic && topic.conclusionVotes)).length
     };
+    if (mine && typeof mine.owns === "function") {
+      fingerprint.by = shortHash(txt(mine.id));
+      fingerprint.o = withoutMine(topic, mine);
+    }
+    return fingerprint;
   };
 
   /* `baselineExists` distingue un appareil qui vient d'activer la fonctionnalité
    * d'un appareil déjà initialisé sur lequel un collègue crée ensuite un nouveau sujet. */
-  ProductView.topicActivity = function (topic, seen, baselineExists) {
-    var current = ProductView.topicFingerprint(topic);
+  ProductView.topicActivity = function (topic, seen, baselineExists, mine) {
+    var current = ProductView.topicFingerprint(topic, mine);
     var previous = seen && typeof seen === "object" ? seen : null;
     if (!previous) {
       return baselineExists
@@ -142,12 +307,21 @@
         : { changed: false, label: null, current: current };
     }
 
-    var messageDelta = current.messages - (Number(previous.messages) || 0);
-    var proposalDelta = current.proposals - (Number(previous.proposals) || 0);
-    var consensusDelta = current.consensus - (Number(previous.consensus) || 0);
-    var votesChanged = current.proposalVotes !== (Number(previous.proposalVotes) || 0);
-    var consensusVotesChanged = current.consensusVotes !== (Number(previous.consensusVotes) || 0);
-    var updated = current.updatedAt !== String(previous.updatedAt || "") || current.status !== String(previous.status || "");
+    /* Point de vue « sans moi » des deux côtés (même appareil, même identité) : seules les
+     * actions des autres comptent, et la signature remplace l'horodatage du sujet, que mes
+     * propres actions font changer à la confirmation du serveur. Un marqueur plus ancien,
+     * ou pris sous une autre identité (reconnexion), se lit comme avant. */
+    var scoped = !!(current.o && previous.o && previous.by === current.by);
+    var now = scoped ? current.o : current;
+    var then = scoped ? previous.o : previous;
+
+    var messageDelta = now.messages - (Number(then.messages) || 0);
+    var proposalDelta = now.proposals - (Number(then.proposals) || 0);
+    var consensusDelta = now.consensus - (Number(then.consensus) || 0);
+    var votesChanged = now.proposalVotes !== (Number(then.proposalVotes) || 0);
+    var consensusVotesChanged = now.consensusVotes !== (Number(then.consensusVotes) || 0);
+    var updated = (scoped ? now.sig !== then.sig : current.updatedAt !== String(previous.updatedAt || "")) ||
+      current.status !== String(previous.status || "");
 
     if (messageDelta > 0) {
       return { changed: true, label: "+" + messageDelta + " message" + (messageDelta > 1 ? "s" : ""), current: current };

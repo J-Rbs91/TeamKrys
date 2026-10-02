@@ -11,19 +11,21 @@ permissions:
 jobs:
   node:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Syntaxe modules produit et UXER
+      - name: Syntaxe de tous les scripts de l'application
         run: |
-          node --check js/product-view.js
-          node --check js/product-ui.js
-          node --check js/uxer-ui.js
+          for f in js/*.js service-worker.js tests/*.js tests/qa/*.js; do
+            node --check "$f"
+          done
       - name: Parité frontend / Apps Script
         run: node tests/parity.test.js
+      - name: Enveloppe Apps Script (réponses, restauration, diagnostic)
+        run: node tests/backend-shell.test.js
       - name: Synchronisation
         run: node tests/sync.test.js
       - name: Session
@@ -38,6 +40,32 @@ jobs:
         run: node tests/product-integration.test.js
       - name: Contrats UXER
         run: node tests/uxer-integration.test.js
+      - name: Verrou, indicateur d'état, focus, formulaires, actions anciennes, produit, champs préremplis, brouillons, anonymat, nouveautés, envois idempotents
+        run: |
+          node tests/app-unlock.test.js
+          node tests/app-idempotent.test.js
+          node tests/ui-status-anon.test.js
+          node tests/ui-focus.test.js
+          node tests/ui-a11y-forms.test.js
+          node tests/ui-stale-release.test.js
+          node tests/ui-product.test.js
+          node tests/utils-el.test.js
+          node tests/drafts.test.js
+          node tests/ui-review.test.js
+          node tests/ui-banner.test.js
+          node tests/news-own-activity.test.js
+      - name: Coquille hors ligne (service worker, CSP, démarrage)
+        run: |
+          node tests/service-worker.test.js
+          node tests/startup-robust.test.js
+      - name: Contrat CSS (lisibilité à 320 px, pastille d'état)
+        run: node tests/css-contract.test.js
+      - name: Tout test du dépôt est câblé dans ce fichier
+        run: |
+          # Un test ajouté sans être lancé ici ne protégerait rien : on échoue.
+          for f in tests/*.test.js; do
+            grep -q "$f" .github/workflows/test.yml || { echo "Test non câblé en CI : $f"; exit 1; }
+          done
       - name: Compatibilité navigateurs
         run: node tests/qa/compat-scan.js
       - name: Contrastes du thème
