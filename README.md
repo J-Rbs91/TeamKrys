@@ -1,12 +1,63 @@
 # BrainstO.
 
-Outil interne de préparation de réunion pour l'équipe d'un magasin : chaque sujet
-devient une conversation de groupe, on en tire des propositions, on vote, et on
-arrive en réunion avec une conclusion partagée. Il remplace le tableur partagé.
+**Préparer les réunions de l'équipe, ensemble.**
 
-Ce dépôt contient **uniquement le frontend** : un site statique (HTML + CSS +
-JavaScript, sans framework ni build) publié par GitHub Pages, installable comme
-application (PWA) sur iPhone et Android.
+BrainstO. est l'outil interne de préparation de réunion d'une équipe de magasin.
+Chaque point à traiter devient une conversation de groupe ; on en tire des
+propositions, on vote, et on arrive en réunion avec un consensus déjà formé. Il
+remplace le tableur partagé.
+
+Une application web installable sur iPhone et Android, sans compte à créer, sans
+publicité ni service payant : les données restent sur le Google Drive de l'équipe.
+
+| Accueil | Discussion | Propositions | Pandore | Invitation |
+|---|---|---|---|---|
+| ![Accueil : sujets épinglés, prêts pour la réunion, en discussion](docs/captures/accueil.jpg) | ![Discussion d'un sujet, avec citation et interrupteur d'anonymat](docs/captures/discussion.jpg) | ![Propositions et barres de vote](docs/captures/propositions.jpg) | ![Synthèse automatique de Pandore, classée par l'IA](docs/captures/pandore.jpg) | ![Arrivée par un lien d'invitation : seulement le code d'accès](docs/captures/invitation.jpg) |
+
+<sub>Captures faites avec des données fictives.</sub>
+
+---
+
+## Ce que fait l'application
+
+| | |
+|---|---|
+| **Sujets** | Un sujet par point à traiter, classé par avancement : prêt pour la réunion, en discussion, clôturé. Les plus importants s'**épinglent** en tête, pour toute l'équipe. |
+| **Discussion** | Un fil de messages par sujet. **Appui long** sur un message pour réagir, copier ou en faire une proposition ; **glisser vers la droite** pour le citer. |
+| **Anonymat** | Un interrupteur dans la zone d'écriture : le message part signé ou « Anonyme ». Un sujet peut aussi être proposé sans signature. |
+| **Propositions** | Pour, contre ou abstention, un vote par personne, modifiable. La barre montre où en est l'équipe. |
+| **Consensus** | Chaque sujet se referme sur un consensus ; celui qui arrive en tête sert de repère pour la réunion. |
+| **Réunion** | Une synthèse de tous les sujets, prête à projeter ou à imprimer. |
+| **Pandore** | L'espace anonyme où l'on dépose ce qui ne se dit pas en réunion : idées, plaintes, questions. Une IA en écrit une **synthèse automatique**, lisible par tous. |
+| **Invitation** | Depuis les Réglages, un lien envoyé par SMS, mail ou WhatsApp ouvre l'application déjà réglée sur l'équipe : il ne reste qu'à saisir le code d'accès. |
+| **Hors connexion** | L'application s'ouvre sans réseau ; ce qu'on écrit part tout seul au retour de la connexion. |
+
+## Démarrer
+
+**Vous rejoignez une équipe :** ouvrez le lien d'invitation reçu dans Safari (iPhone) ou
+Chrome (Android), saisissez le code d'accès écrit dans le message, puis votre prénom.
+L'écran explique comment installer l'application. Le détail est dans le
+[guide de l'équipe](docs/GUIDE_UTILISATEUR.md).
+
+**Vous installez BrainstO. pour votre équipe :** trois étapes, décrites dans
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md).
+1. Le serveur, dans Google Apps Script, sur votre compte Google.
+2. Le site, publié par GitHub Pages.
+3. L'invitation des collaborateurs, depuis les Réglages.
+
+Pandore demande en plus deux secrets : voir [`docs/PANDORE.md`](docs/PANDORE.md).
+
+---
+
+## Pour les contributeurs
+
+Ce dépôt contient le **frontend** et le **backend**.
+- Le frontend est un site statique (HTML, CSS, JavaScript, sans framework ni build),
+  publié par GitHub Pages et installable comme application (PWA).
+- Le backend est un script Google Apps Script : `apps-script/Code.gs`, à copier dans
+  l'éditeur.
+
+Tout ce qui suit décrit le fonctionnement interne.
 
 ---
 
@@ -79,6 +130,7 @@ manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/IDENTITE_VISUELLE.md  le noyau d'identité : pourquoi le produit est ainsi
 docs/                      installation, guide utilisateur, checklist de test
+docs/captures/             captures du README (données fictives)
 tools/check-contrast.py    relit les jetons du thème et échoue sous le seuil
 tools/build-icons.py       régénère les icônes depuis une source unique
 tools/pandore-collect.js   collecte quotidienne de Pandore (GitHub Actions)
@@ -840,7 +892,7 @@ node tests/qa/compat-scan.js
 
 Les autres fichiers de `tests/` (backend, démarrage robuste, focus, champs nommés,
 actions retenues, recherche et synthèse, brouillons, revue de l'interface, bandeau de
-mise à jour, contrat CSS) se lancent de la
+mise à jour, contrat CSS, lien d'invitation, Pandore) se lancent de la
 même façon. Cette boucle les exécute tous ; aucune ligne « ÉCHEC » ne doit
 apparaître :
 
