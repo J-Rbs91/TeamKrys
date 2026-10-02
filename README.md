@@ -22,13 +22,14 @@ publicité ni service payant : les données restent sur le Google Drive de l'éq
 
 | | |
 |---|---|
+| **Navigation** | Quatre onglets en bas de l'écran : Sujets, Réunion, Pandore, Réglages. |
 | **Sujets** | Un sujet par point à traiter, classé par avancement : prêt pour la réunion, en discussion, clôturé. Les plus importants s'**épinglent** en tête, pour toute l'équipe. |
 | **Discussion** | Un fil de messages par sujet. **Appui long** sur un message pour réagir, copier ou en faire une proposition ; **glisser vers la droite** pour le citer. |
 | **Anonymat** | Un interrupteur dans la zone d'écriture : le message part signé ou « Anonyme ». Un sujet peut aussi être proposé sans signature. |
 | **Propositions** | Pour, contre ou abstention, un vote par personne, modifiable. La barre montre où en est l'équipe. |
 | **Consensus** | Chaque sujet se referme sur un consensus ; celui qui arrive en tête sert de repère pour la réunion. |
 | **Réunion** | Une synthèse de tous les sujets, prête à projeter ou à imprimer. |
-| **Pandore** | L'espace anonyme où l'on dépose ce qui ne se dit pas en réunion : idées, plaintes, questions. Une IA en écrit une **synthèse automatique**, lisible par tous. |
+| **Pandore** | Une section à part : la zone d'**expression libre et anonyme**, où l'on dépose ce qui ne se dit pas en réunion (idées, plaintes, questions). Ce n'est pas une discussion : une IA en écrit une **synthèse automatique**, lisible par tous. |
 | **Invitation** | Depuis les Réglages, un lien envoyé par SMS, mail ou WhatsApp ouvre l'application déjà réglée sur l'équipe : il ne reste qu'à saisir le code d'accès. |
 | **Hors connexion** | L'application s'ouvre sans réseau ; ce qu'on écrit part tout seul au retour de la connexion. |
 
