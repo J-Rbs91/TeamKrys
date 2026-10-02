@@ -9,6 +9,7 @@ const os = require("os");
 const path = require("path");
 const collect = require("../tools/collect-ideas.js");
 const checker = require("../tools/check-ideas.js");
+const reset = require("../tools/reset-ideas.js");
 
 let passed = 0;
 const failures = [];
@@ -86,23 +87,94 @@ check("publication IA : format de reformulees.json, HTML refusé, sources obliga
   assert(checker.checkBox("b.md", "<!-- autre -->\n> ok").length === 1, "seuls les commentaires de référence sont admis dans la boîte");
 });
 
-check("publication IA : aucune source inventée, idées en attente listées, écartées seulement pour un motif admis", () => {
+/* Un dépôt jouet : une collecte de trois idées (boîte + registre), et une reformulation à écrire. */
+function sandbox(ideas) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "idees-"));
-  fs.mkdirSync(path.join(root, "idees", "boite"), { recursive: true });
-  fs.writeFileSync(path.join(root, "idees", "boite", "2026-10-03.md"),
-    collect.render("2026-10-03", [{ ref: "aaaaaa111111", text: "A" }, { ref: "bbbbbb222222", text: "B" }, { ref: "cccccc333333", text: "C" }], ""));
-  const write = (data) => fs.writeFileSync(path.join(root, "idees", "reformulees.json"), JSON.stringify(data));
-  const idea = (sources) => ({ id: "r-1", titre: "T", texte: "X", date: "2026-10-04", sources });
+  const dir = path.join(root, "idees");
+  fs.mkdirSync(path.join(dir, "boite"), { recursive: true });
+  const list = ideas || [{ ref: "aaaaaa111111", text: "A" }, { ref: "bbbbbb222222", text: "B" }, { ref: "cccccc333333", text: "C" }];
+  fs.writeFileSync(path.join(dir, "boite", "2026-10-03.md"), collect.render("2026-10-03", list, ""));
+  collect.appendRegistry(path.join(dir, "references.txt"), list.map((i) => i.ref));
+  return {
+    root, dir,
+    write: (data) => fs.writeFileSync(path.join(dir, "reformulees.json"), JSON.stringify(data)),
+    read: () => JSON.parse(fs.readFileSync(path.join(dir, "reformulees.json"), "utf8")),
+    box: () => fs.readdirSync(path.join(dir, "boite")).sort(),
+    boxRefs: () => [...checker.boxRefs(path.join(dir, "boite")).keys()].sort()
+  };
+}
+const idea = (sources, id) => ({ id: id || "r-1", titre: "T", texte: "X", date: "2026-10-04", sources });
+
+check("publication IA : aucune source inventée, idées en attente listées, écartées seulement pour un motif admis", () => {
+  const box = sandbox();
   const data = { version: 1, misAJour: "2026-10-04", idees: [idea(["aaaaaa111111"])], ecartees: [{ ref: "bbbbbb222222", motif: "personne-visee" }] };
-  write(data);
-  equal(checker.run(root), [], "état valide");
-  equal(checker.pending(data, checker.boxRefs(path.join(root, "idees", "boite"))), ["cccccc333333"], "en attente");
-  write(Object.assign({}, data, { idees: [idea(["aaaaaa111111", "dddddd444444"])] }));
-  assert(checker.run(root).some((e) => /dddddd444444 introuvable/.test(e)), "une source inventée doit être refusée");
+  box.write(data);
+  equal(checker.run(box.root), [], "état valide");
+  equal(checker.pending(data, checker.boxRefs(path.join(box.dir, "boite"))), ["cccccc333333"], "en attente");
+  box.write(Object.assign({}, data, { idees: [idea(["aaaaaa111111", "dddddd444444"])] }));
+  assert(checker.run(box.root).some((e) => /dddddd444444 absente de idees\/boite/.test(e)), "une source inventée doit être refusée");
   const motif = checker.checkReformulated(Object.assign({}, data, { ecartees: [{ ref: "cccccc333333", motif: "hors-sujet" }] }));
   assert(motif.some((e) => /motif/.test(e)), "motif non admis accepté");
   const both = checker.checkReformulated(Object.assign({}, data, { ecartees: [{ ref: "aaaaaa111111", motif: "inexploitable" }] }));
   assert(both.some((e) => /à la fois écartée et source/.test(e)), "une idée ne peut être à la fois écartée et reformulée");
+  fs.writeFileSync(path.join(box.dir, "references.txt"), collect.REGISTRY_HEADER + "\naaaaaa111111\n");
+  assert(checker.run(box.root).some((e) => /bbbbbb222222 absente du registre/.test(e)), "une idée de la boîte doit figurer au registre");
+});
+
+check("réinitialisation : retire seulement les idées traitées, garde celles arrivées après, le rapport reste affiché", () => {
+  const box = sandbox();
+  const data = { version: 1, misAJour: "2026-10-04", idees: [idea(["aaaaaa111111"])], ecartees: [{ ref: "bbbbbb222222", motif: "inexploitable" }] };
+  box.write(data);
+  const dry = reset.reset(box.root, { simulation: true, day: "2026-10-05" });
+  equal([dry.ok, dry.removed.sort(), dry.kept], [true, ["aaaaaa111111", "bbbbbb222222"], ["cccccc333333"]], "simulation");
+  equal(box.boxRefs(), ["aaaaaa111111", "bbbbbb222222", "cccccc333333"], "la simulation ne doit rien écrire");
+  const r = reset.reset(box.root, { day: "2026-10-05" });
+  assert(r.ok, "réinitialisation refusée : " + r.error);
+  equal(box.boxRefs(), ["cccccc333333"], "seule l'idée non traitée reste");
+  const after = box.read();
+  equal([after.boiteReinitialisee, after.idees.length, after.idees[0].titre], ["2026-10-05", 1, "T"], "le rapport reste intact et daté");
+  equal(collect.registryRefs(path.join(box.dir, "references.txt")).sort(), ["aaaaaa111111", "bbbbbb222222", "cccccc333333"], "le registre n'est jamais réduit");
+  equal(checker.run(box.root), [], "état valide après réinitialisation");
+  equal(checker.pending(after, checker.boxRefs(path.join(box.dir, "boite"))), ["cccccc333333"], "l'idée gardée attend la prochaine reformulation");
+  assert(collect.knownRefs(path.join(box.dir, "boite"), path.join(box.dir, "references.txt")).has("aaaaaa111111"),
+    "une idée retirée reste connue : la collecte ne la republiera pas");
+  const again = reset.reset(box.root, { day: "2026-10-06" });
+  assert(!again.ok && /déjà réinitialisée/.test(again.error), "seconde réinitialisation sans nouvelle reformulation : " + JSON.stringify(again));
+});
+
+check("réinitialisation : fichier vidé supprimé ; refus sans reformulation, sur un rapport invalide, ou sans idée couverte", () => {
+  const box = sandbox([{ ref: "aaaaaa111111", text: "Seule" }]);
+  box.write({ version: 1, misAJour: "", idees: [] });
+  assert(/aucune reformulation/.test(reset.reset(box.root, { day: "2026-10-05" }).error), "sans reformulation publiée");
+  box.write({ version: 1, misAJour: "2026-10-04", idees: [idea(["aaaaaa111111", "eeeeee555555"])] });
+  assert(/ne passe pas le contrôle/.test(reset.reset(box.root, { day: "2026-10-05" }).error), "rapport invalide");
+  equal(box.box(), ["2026-10-03.md"], "rien n'est retiré d'un état invalide");
+  box.write({ version: 1, misAJour: "2026-10-04", idees: [idea(["aaaaaa111111"])] });
+  const r = reset.reset(box.root, { day: "2026-10-03" });     // horloge UTC encore « la veille » du rapport
+  assert(r.ok && r.deletedFiles.length === 1, "le fichier vidé doit être supprimé : " + JSON.stringify(r));
+  equal(box.box(), [], "boîte vide");
+  equal(box.read().boiteReinitialisee, "2026-10-04", "la date de réinitialisation ne précède jamais celle du rapport");
+  equal(checker.run(box.root), [], "état valide");
+  const empty = sandbox([{ ref: "aaaaaa111111", text: "A" }]);
+  empty.write({ version: 1, misAJour: "2026-10-04", idees: [] });
+  assert(/ne couvre aucune idée/.test(reset.reset(empty.root, { day: "2026-10-05" }).error), "rien à retirer");
+});
+
+check("après réinitialisation : un rapport incomplet, inventé ou daté à l'envers est refusé ; la reformulation suivante repart de la boîte", () => {
+  const box = sandbox();
+  box.write({ version: 1, misAJour: "2026-10-04", idees: [idea(["aaaaaa111111", "bbbbbb222222", "cccccc333333"])] });
+  assert(reset.reset(box.root, { day: "2026-10-05" }).ok, "réinitialisation");
+  const data = box.read();
+  box.write(Object.assign({}, data, { idees: [idea(["aaaaaa111111", "ffffff666666"])] }));
+  assert(checker.run(box.root).some((e) => /ffffff666666 absente du registre/.test(e)), "source inventée après réinitialisation");
+  assert(checker.checkReformulated(Object.assign({}, data, { boiteReinitialisee: "2026-10-01" })).some((e) => /ne peut précéder/.test(e)), "date à l'envers");
+  /* Une collecte arrive, puis une nouvelle reformulation qui oublierait de remplacer l'ancien rapport. */
+  fs.writeFileSync(path.join(box.dir, "boite", "2026-10-06.md"), collect.render("2026-10-06", [{ ref: "999999aaaaaa", text: "Nouvelle" }], ""));
+  collect.appendRegistry(path.join(box.dir, "references.txt"), ["999999aaaaaa"]);
+  box.write({ version: 1, misAJour: "2026-10-07", boiteReinitialisee: "", idees: [idea(["aaaaaa111111"]), idea(["999999aaaaaa"], "r-2")] });
+  assert(checker.run(box.root).some((e) => /aaaaaa111111 absente de idees\/boite/.test(e)), "l'ancien rapport doit être remplacé, pas prolongé");
+  box.write({ version: 1, misAJour: "2026-10-07", boiteReinitialisee: "", idees: [idea(["999999aaaaaa"], "r-2")] });
+  equal(checker.run(box.root), [], "nouveau rapport valide");
 });
 
 check("dépôt : idees/reformulees.json est conforme, et la collecte est câblée chaque jour", () => {

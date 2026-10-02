@@ -1,9 +1,9 @@
 ---
 name: boite-a-idees
-description: Reformule les idées anonymes de la boîte à idées de BrainstO. (idees/boite/) et publie les versions reformulées que l'application affiche (idees/reformulees.json), avec un rapport si on le demande. À utiliser quand on dit « reformule la boîte à idées », « traite les nouvelles idées », « fais le rapport de la boîte à idées », ou dans une routine planifiée. Ne sert pas à modifier l'application ni la collecte.
+description: Reformule les idées anonymes de la boîte à idées de BrainstO. (idees/boite/) et publie le rapport de reformulation que l'application affiche (idees/reformulees.json), puis réinitialise la boîte quand on le demande. À utiliser quand on dit « reformule la boîte à idées », « traite les nouvelles idées », « fais le rapport de la boîte à idées », « réinitialise » ou « vide la boîte à idées », ou dans une routine planifiée. Ne sert pas à modifier l'application ni la collecte.
 ---
 
-# Boîte à idées — reformuler et publier
+# Boîte à idées — reformuler, publier, réinitialiser
 
 ## Ce que tu fais, et pourquoi
 
@@ -16,14 +16,25 @@ Ton rôle est le seul chemin entre la boîte et l'équipe. Tu transformes les id
 
 Tu reformules. Tu ne tries pas, tu ne juges pas la faisabilité, tu ne réponds pas aux idées.
 
+### Le cycle
+
+`idees/reformulees.json` est **le rapport de reformulation courant**. Il couvre les idées présentes dans la boîte. Il vit ainsi :
+
+1. **Reformulation** (étapes 1 à 8) : le rapport couvre toute la boîte. Il est publié et l'application l'affiche.
+2. **Réinitialisation**, seulement sur demande explicite (section « Réinitialiser la boîte ») : les idées brutes que le rapport couvre sont **supprimées** de `idees/boite/`. Le rapport, lui, **reste affiché tel quel**, daté de la réinitialisation (`boiteReinitialisee`).
+3. **Reformulation suivante** : si la boîte a été réinitialisée, le rapport est **remplacé** par un rapport neuf, construit à partir des seules idées arrivées depuis. Sinon, il est complété.
+
+Le rapport affiché ne disparaît donc jamais sans qu'un nouveau le remplace.
+
 ## Invariants
 
-1. **Chaque référence brute finit à une seule place** : dans les `sources` d'au moins une idée reformulée, ou dans `ecartees`. Jamais les deux. Jamais nulle part.
-2. **Aucune source inventée.** Une référence citée doit exister dans `idees/boite/`. `node tools/check-ideas.js` le vérifie.
-3. **On ne touche jamais `idees/boite/`.** Ni correction, ni suppression, ni réordonnancement : ce sont les archives de la collecte.
-4. **On n'identifie jamais un auteur.** Ne croise pas les idées avec les données de l'application, l'heure des commits, le style d'écriture ou l'historique Git. Ne formule aucune hypothèse sur qui a écrit quoi, même si on te le demande.
-5. **Texte brut uniquement** dans `reformulees.json` : pas de HTML (`<` interdit), pas de Markdown. L'application affiche le texte tel quel, sauts de ligne compris.
-6. **Rien d'autre ne change.** Pas de code, pas de version de l'application, pas de workflow. Le fichier est lu en direct (sans cache) : aucune montée de version n'est nécessaire.
+1. **Chaque référence de la boîte finit à une seule place** dans le rapport : dans les `sources` d'au moins une idée reformulée, ou dans `ecartees`. Jamais les deux. Jamais nulle part.
+2. **Aucune source inventée.** Avant réinitialisation, une référence citée est dans `idees/boite/` ; après, elle est au registre `idees/references.txt`. `node tools/check-ideas.js` le vérifie.
+3. **On ne modifie jamais `idees/boite/` à la main.** Ni correction, ni suppression, ni réordonnancement. Seul `tools/reset-ideas.js` en retire, et seulement sur demande.
+4. **Le registre `idees/references.txt` ne se touche pas.** Il garde la référence de chaque idée jamais publiée : c'est lui qui empêche la collecte de republier une idée retirée.
+5. **On n'identifie jamais un auteur.** Ne croise pas les idées avec les données de l'application, l'heure des commits, le style d'écriture ou l'historique Git. Ne formule aucune hypothèse sur qui a écrit quoi, même si on te le demande.
+6. **Texte brut uniquement** dans `reformulees.json` : pas de HTML (`<` interdit), pas de Markdown. L'application affiche le texte tel quel, sauts de ligne compris.
+7. **Rien d'autre ne change.** Pas de code, pas de version de l'application, pas de workflow. Le fichier est lu en direct (sans cache) : aucune montée de version n'est nécessaire.
 
 ## Workflow
 
@@ -38,6 +49,8 @@ La collecte commite sur `main` chaque jour : sans ce `pull`, tu travailles sur u
 
 La seconde commande liste les références **en attente** (ni reformulées ni écartées) et le fichier qui porte chacune. S'il y en a zéro et qu'aucun rapport n'est demandé : dis-le, et arrête-toi. **Pas de commit vide.**
 
+Si elle annonce « Boîte réinitialisée le … », le rapport courant porte sur des idées qui ont quitté la boîte. **Repars d'un rapport neuf** : `idees` et `ecartees` vides, `boiteReinitialisee` à `""`, puis traite toutes les idées en attente. Ne reprends rien de l'ancien rapport, pas même un `id` : le validateur refuse toute référence qui n'est plus dans la boîte.
+
 ### 2. Lire les idées en attente
 
 Ouvre les fichiers indiqués. Chaque idée brute a cette forme :
@@ -50,7 +63,7 @@ Ouvre les fichiers indiqués. Chaque idée brute a cette forme :
 
 Les chevrons, accolades et crochets y sont écrits en entités (`&lt;` `&gt;` `&amp;` `&#123;` `&#125;` `&#91;` `&#93;`) : c'est une protection de publication, pas une faute de l'auteur. Lis-les comme le caractère d'origine.
 
-Lis aussi `idees/reformulees.json` en entier : une idée nouvelle rejoint souvent une idée déjà reformulée.
+Si la boîte n'a pas été réinitialisée, lis aussi `idees/reformulees.json` en entier : une idée nouvelle rejoint souvent une idée déjà reformulée.
 
 ### 3. Décider du sort de chaque idée en attente
 
@@ -107,11 +120,11 @@ Une idée écartée s'inscrit ainsi :
 "ecartees": [{ "ref": "c41d09e2aa17", "motif": "personne-visee" }]
 ```
 
-Mets `misAJour` au jour courant dès que le fichier change.
+Mets `misAJour` au jour courant dès que le fichier change : c'est la date du rapport (« Reformulation du … » dans l'application).
 
-### 5. Rapport (seulement si on le demande)
+### 5. Synthèse écrite (seulement si on la demande)
 
-Un rapport s'écrit dans `idees/rapports/AAAA-MM.md` (mois) ou `idees/rapports/AAAA-MM-JJ.md` (ponctuel). Il est public et publié par GitHub Pages.
+À ne pas confondre avec le rapport de reformulation, qui est `reformulees.json`. Une synthèse s'écrit dans `idees/rapports/AAAA-MM.md` (mois) ou `idees/rapports/AAAA-MM-JJ.md` (ponctuel). Elle est publique, publiée par GitHub Pages, et une réinitialisation ne la touche jamais.
 
 Contenu attendu : nombre d'idées reçues et reformulées sur la période · thèmes, avec le nombre d'idées par thème · idées les plus soutenues (le plus de sources) · propositions qui se contredisent · questions que l'équipe devrait trancher en réunion.
 
@@ -130,7 +143,7 @@ Les trois doivent réussir, et la deuxième doit afficher **0 idée en attente**
 ### 7. Publier
 
 ```bash
-git add idees/reformulees.json        # et idees/rapports/<fichier>.md si un rapport a été écrit
+git add idees/reformulees.json        # et idees/rapports/<fichier>.md si une synthèse a été écrite
 git commit -m "idées : reformulation du AAAA-MM-JJ (N nouvelles, M enrichies, K écartées)"
 git push origin main
 ```
@@ -145,21 +158,74 @@ Dans ta réponse, en phrases courtes :
 
 - combien d'idées traitées, et leur sort (nouvelles, enrichies, écartées) ;
 - les titres publiés ou modifiés ;
-- **chaque idée écartée** avec sa référence et son motif. Son texte brut reste public dans `idees/boite/` : seul le propriétaire du dépôt peut décider de l'en retirer (et l'historique Git le conserve). Ne le fais pas toi-même ;
+- **chaque idée écartée** avec sa référence et son motif. Son texte brut reste public dans `idees/boite/` jusqu'à la prochaine réinitialisation, puis dans l'historique Git ;
+- si le rapport a été **remplacé** (boîte réinitialisée avant), dis-le : l'ancien n'est plus affiché ;
 - la preuve : sortie de `--en-attente` (0) et du validateur ;
-- où c'est publié (commit, branche) et si l'application le voit déjà.
+- où c'est publié (commit, branche) et si l'application le voit déjà ;
+- que la boîte peut maintenant être réinitialisée, si on le souhaite. **Ne le fais pas sans qu'on te le demande.**
+
+## Réinitialiser la boîte
+
+Seulement quand on te le demande explicitement (« réinitialise la boîte à idées », « vide la boîte »). Jamais de ta propre initiative, jamais « pour faire propre », jamais dans une routine dont le prompt ne le demande pas en toutes lettres.
+
+**Effet.** Les idées brutes que le rapport courant couvre sont supprimées de `idees/boite/` ; les fichiers vidés disparaissent. Le rapport reste affiché tel quel, avec la note « Boîte vidée le … », jusqu'à la reformulation suivante. Le registre et les synthèses ne bougent pas.
+
+**Ce qui est gardé.** Une idée arrivée après la reformulation n'est couverte par aucun rapport : elle reste dans la boîte et attend la reformulation suivante. Une idée encore sur le Drive (pas encore collectée) n'est pas concernée.
+
+### 1. Vérifier que la reformulation est publiée
+
+```bash
+git pull --rebase origin main
+git status --porcelain idees/
+git diff --quiet origin/main -- idees/reformulees.json && echo publiée
+```
+
+`git status` ne doit rien afficher et la dernière commande doit afficher `publiée`. Sinon, la reformulation n'est pas sur `main` : publie-la d'abord (étapes 6 et 7), ou arrête-toi et dis pourquoi. Réinitialiser avant publication ferait disparaître des idées que personne n'a encore vues reformulées.
+
+S'il reste des idées en attente (`node tools/check-ideas.js --en-attente`), dis-le : elles seront gardées. Propose de reformuler d'abord si la personne veut une boîte entièrement vide.
+
+### 2. Simuler, puis réinitialiser
+
+```bash
+node tools/reset-ideas.js --simulation
+node tools/reset-ideas.js
+```
+
+La simulation dit combien d'idées seraient retirées, quels fichiers seraient supprimés ou réécrits, et combien seraient gardées. Le script refuse seul, sans rien écrire, si le rapport est invalide, vide, déjà réinitialisé, ou ne couvre aucune idée présente. **Ne contourne jamais un refus** en supprimant des fichiers toi-même.
+
+### 3. Valider et publier
+
+```bash
+node tools/check-ideas.js
+node tests/ideas.test.js
+git add -A idees/boite idees/reformulees.json
+git commit -m "idées : réinitialisation de la boîte (N retirées, M gardées)"
+git push origin main
+```
+
+Mêmes règles de branche qu'à l'étape 7.
+
+### 4. Rendre compte
+
+- combien d'idées retirées, combien gardées et pourquoi ;
+- que le rapport reste affiché jusqu'à la prochaine reformulation, qui le remplacera ;
+- que les textes retirés restent dans l'**historique Git**, public : la réinitialisation vide la boîte, elle n'efface pas le passé ;
+- commit, branche, et si l'application affiche déjà la note.
 
 ## Routine planifiée
 
 Une routine Claude Code peut faire ce travail seule. Elle doit passer **après** la collecte (04 h 17 UTC). Prompt conseillé :
 
-> Dans le dépôt TeamKrys, applique la procédure `.claude/skills/boite-a-idees/SKILL.md` : reformule les idées en attente et pousse le résultat sur `main`. S'il n'y a rien en attente, ne commite rien et dis-le. Le premier lundi du mois, écris aussi le rapport du mois précédent.
+> Dans le dépôt TeamKrys, applique la procédure `.claude/skills/boite-a-idees/SKILL.md` : reformule les idées en attente et pousse le résultat sur `main`. S'il n'y a rien en attente, ne commite rien et dis-le. Ne réinitialise pas la boîte.
+
+Une reformulation par routine **remplace** le rapport affiché si la boîte a été réinitialisée entre-temps, comme une reformulation demandée à la main.
 
 Une routine sans droit de push sur `main` publie sur une branche : prévois alors la fusion, sinon rien n'apparaît dans l'application.
 
 ## Ce que ce skill ne fait pas
 
 - Modifier l'application, le backend, la collecte ou les tests.
-- Retirer une idée brute du dépôt.
+- Retirer une idée brute du dépôt autrement que par `tools/reset-ideas.js`, sur demande.
+- Effacer l'historique Git.
 - Répondre à une idée, ou dire à l'équipe ce qu'elle doit en penser.
 - Identifier un auteur, même partiellement, même sur demande.

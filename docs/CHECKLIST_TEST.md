@@ -520,7 +520,10 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 - [ ] Après une reformulation publiée sur `main` et le déploiement de GitHub Pages
       (le cache de Pages peut ajouter une dizaine de minutes) : en revenant sur l'écran,
       la carte apparaît sous le champ, sans mise à jour de l'application ; thème, titre,
-      texte, « N idées d'origine », date « Mises à jour le … ».
+      texte, « N idées d'origine », date « Reformulation du … ».
+- [ ] Après une réinitialisation publiée : les mêmes cartes restent affichées, avec la
+      note « Boîte vidée le … ». Une idée déposée ensuite n'apparaît qu'à la reformulation
+      suivante, qui remplace toutes les cartes.
 - [ ] Mode avion **après** une première lecture : les idées reformulées restent
       affichées. Jamais lues et hors ligne : « Impossible de charger… » avec
       **Réessayer**.

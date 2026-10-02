@@ -370,6 +370,10 @@ personne ne relit l'idée dans l'application, pas même vous, et elle ne se reti
 Une idée déposée n'apparaît donc pas tout de suite : il faut la collecte du jour, puis
 le passage de l'IA.
 
+Ce qui s'affiche est **le dernier rapport de reformulation**, daté (« Reformulation du
+… »). Quand la boîte a été vidée après ce rapport, une note le dit : le rapport reste
+affiché, et les idées déposées depuis figureront dans le suivant, qui le remplacera.
+
 En mode local, ou si le serveur de l'équipe n'a pas été mis à jour (backend 1.2.0), le
 dépôt est grisé et l'écran dit pourquoi. La lecture des idées reformulées fonctionne
 quand même.

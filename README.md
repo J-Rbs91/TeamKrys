@@ -83,6 +83,7 @@ tools/check-contrast.py    relit les jetons du thème et échoue sous le seuil
 tools/build-icons.py       régénère les icônes depuis une source unique
 tools/collect-ideas.js     collecte quotidienne de la boîte à idées (GitHub Actions)
 tools/check-ideas.js       contrôle de ce que l'IA publie dans idees/
+tools/reset-ideas.js       réinitialisation de la boîte à idées, sur demande
 idees/                     boîte à idées : idées brutes, reformulées, rapports
 .claude/skills/boite-a-idees/  procédure de reformulation pour Claude Code
 .github/workflows/         tests (test.yml) et collecte des idées (boite-a-idees.yml)

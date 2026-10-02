@@ -4,11 +4,15 @@
  *     BRAINSTO_SCRIPT_URL=… BRAINSTO_IDEAS_SECRET=… node tools/collect-ideas.js
  *
  * 1. demande au backend Apps Script les idées en attente (POST ?op=ideas-export, avec le secret de collecte) ;
- * 2. écrit celles qui ne sont pas déjà dans le dépôt dans idees/boite/<jour de collecte>.md, dans un ordre ALÉATOIRE
+ * 2. écrit celles qui n'ont jamais été publiées dans idees/boite/<jour de collecte>.md, dans un ordre ALÉATOIRE
  *    et sans aucune heure : on sait seulement qu'une idée a été déposée avant la collecte ;
- * 3. commit et push (auteur : le robot GitHub Actions) ;
+ * 3. ajoute leurs références au registre idees/references.txt, puis commit et push (auteur : le robot GitHub Actions) ;
  * 4. acquitte (POST ?op=ideas-ack) : le backend retire ce qui est publié. Sans acquittement, la collecte suivante
- *    reverra les mêmes idées et les ignorera (référence déjà présente).
+ *    reverra les mêmes idées et les ignorera (référence déjà au registre).
+ *
+ * Le registre est la mémoire de la boîte : la réinitialisation (tools/reset-ideas.js) retire les idées traitées de
+ * idees/boite/, mais jamais leur référence du registre. Sans lui, une idée publiée puis retirée reviendrait à la
+ * collecte suivante si son acquittement avait échoué.
  *
  * ⚠️ SÉCURITÉ. Le dépôt est publié par GitHub Pages (Jekyll), sur le MÊME domaine que l'application, et Pages
  * transforme les .md en pages HTML. Un texte d'idée n'est donc jamais interprété, à aucun des trois étages :
@@ -29,7 +33,9 @@ const { execFileSync } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
 const BOX_DIR = path.join(ROOT, "idees", "boite");
+const REGISTRY = path.join(ROOT, "idees", "references.txt");
 const REF_RX = /<!-- ref: ([0-9a-f]{6,64}) -->/g;
+const REGISTRY_HEADER = "# Références de toutes les idées publiées par la collecte, une par ligne. Écrit par tools/collect-ideas.js : ne pas modifier.";
 const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
   "novembre", "décembre"];
 
@@ -50,17 +56,42 @@ function shuffle(list, randomInt) {
   return out;
 }
 
-/* Références déjà publiées, dans tous les fichiers de la boîte. */
-function knownRefs(dir) {
-  const refs = new Set();
+/* Références du registre (toutes les idées jamais publiées). */
+function registryRefs(file) {
+  if (!fs.existsSync(file)) { return []; }
+  return fs.readFileSync(file, "utf8").split("\n").map((l) => l.trim()).filter((l) => /^[0-9a-f]{6,64}$/.test(l));
+}
+
+function appendRegistry(file, refs) {
+  const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\s*$/, "\n") : REGISTRY_HEADER + "\n";
+  fs.writeFileSync(file, existing + refs.map((r) => r + "\n").join(""));
+}
+
+/* Références déjà publiées : celles de la boîte, et celles du registre (une idée retirée par réinitialisation y reste). */
+function knownRefs(dir, registry) {
+  const refs = new Set(registryRefs(registry || ""));
   if (!fs.existsSync(dir)) { return refs; }
   fs.readdirSync(dir).filter((f) => f.endsWith(".md")).forEach((file) => {
-    const text = fs.readFileSync(path.join(dir, file), "utf8");
-    let m;
-    REF_RX.lastIndex = 0;
-    while ((m = REF_RX.exec(text))) { refs.add(m[1]); }
+    parseBox(fs.readFileSync(path.join(dir, file), "utf8")).blocks.forEach((b) => refs.add(b.ref));
   });
   return refs;
+}
+
+/* Un fichier de la boîte : un en-tête, puis des blocs qui commencent par une ligne « --- ». Une ligne « --- » ne
+ * peut venir que du script : le texte d'une idée est cité, chacune de ses lignes commence par « > ». Seul le
+ * commentaire qui OUVRE un bloc compte comme référence : le texte échappé ne peut plus en former un. */
+function parseBox(text) {
+  const parts = String(text).replace(/\r\n?/g, "\n").split(/^---$/m);
+  const blocks = [];
+  parts.slice(1).forEach((raw) => {
+    const m = /^\s*<!-- ref: ([0-9a-f]{6,64}) -->/.exec(raw);
+    if (m) { blocks.push({ ref: m[1], raw: raw.replace(/^\n+/, "").replace(/\s*$/, "") }); }
+  });
+  return { header: parts[0].replace(/\s*$/, ""), blocks };
+}
+
+function serializeBox(header, blocks) {
+  return header + "\n\n" + blocks.map((b) => "---\n\n" + b.raw + "\n").join("\n");
 }
 
 function frenchDay(day) {
@@ -125,7 +156,7 @@ async function main() {
   const ideas = (Array.isArray(exported.ideas) ? exported.ideas : []).filter(validIdea);
   if (!ideas.length) { console.log("Boîte vide."); return; }
 
-  const known = knownRefs(BOX_DIR);
+  const known = knownRefs(BOX_DIR, REGISTRY);
   const fresh = ideas.filter((i) => !known.has(i.ref));
   if (fresh.length) {
     const day = new Date().toISOString().slice(0, 10);
@@ -133,9 +164,11 @@ async function main() {
     fs.mkdirSync(BOX_DIR, { recursive: true });
     const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
     fs.writeFileSync(file, render(day, shuffle(fresh), existing));
+    /* Le registre suit l'ordre mélangé du fichier, jamais celui de l'export. */
+    appendRegistry(REGISTRY, parseBox(fs.readFileSync(file, "utf8")).blocks.map((b) => b.ref).filter((r) => fresh.some((i) => i.ref === r)));
     git(["config", "user.name", "github-actions[bot]"]);
     git(["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]);
-    git(["add", path.relative(ROOT, file)]);
+    git(["add", path.relative(ROOT, file), path.relative(ROOT, REGISTRY)]);
     git(["commit", "-m", "idées : collecte du " + day + " (" + fresh.length + (fresh.length > 1 ? " idées)" : " idée)")]);
     /* Un commit arrivé entre-temps sur la branche fait refuser le push : on se recale une fois, puis on réessaie. */
     try { git(["push"]); } catch (e) { git(["pull", "--rebase"]); git(["push"]); }
@@ -148,7 +181,8 @@ async function main() {
   console.log("Boîte vidée de " + ack.removed + " idée(s).");
 }
 
-module.exports = { escapeText, shuffle, knownRefs, frenchDay, render, renderIdea, validIdea };
+module.exports = { escapeText, shuffle, knownRefs, registryRefs, appendRegistry, parseBox, serializeBox, frenchDay, render,
+  renderIdea, validIdea, REGISTRY_HEADER };
 
 if (require.main === module) {
   main().catch((error) => {

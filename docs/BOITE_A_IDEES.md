@@ -1,8 +1,10 @@
 # Boîte à idées
 
 Les membres déposent des idées **anonymes** dans l'application. Une fois par jour, elles
-sont publiées **brutes** dans ce dépôt. Une IA les reformule, et les versions
-reformulées s'affichent dans l'application, pour toute l'équipe.
+sont publiées **brutes** dans ce dépôt. Une IA les reformule dans un **rapport de
+reformulation**, que l'application affiche à toute l'équipe. Sur demande, l'IA
+**réinitialise** ensuite la boîte : le rapport reste affiché jusqu'à la reformulation
+suivante.
 
 Personne ne relit une idée brute dans l'application. C'est une boîte aux lettres.
 
@@ -24,16 +26,23 @@ Téléphone ── SUBMIT_IDEA, sans auteur ──▶ Apps Script
                                            │  .claude/skills/boite-a-idees/SKILL.md
                                            ▼
        idees/reformulees.json sur main ──▶ GitHub Pages ──▶ écran « Boîte à idées »
+                                           │
+       sur demande : « réinitialise la boîte à idées »
+                                           │  tools/reset-ideas.js
+                                           ▼
+       idées traitées supprimées de idees/boite/ ; le rapport reste affiché
 ```
 
 | Fichier | Rôle | Écrit par |
 |---|---|---|
 | `brainsto-idees.json` (Drive) | idées reçues, pas encore collectées | le backend |
-| `idees/boite/AAAA-MM-JJ.md` | idées brutes, une collecte par fichier | la collecte, jamais à la main |
-| `idees/reformulees.json` | ce que l'application affiche | l'IA |
-| `idees/rapports/*.md` | rapports, quand on les demande | l'IA |
+| `idees/boite/AAAA-MM-JJ.md` | idées brutes, une collecte par fichier | la collecte ; vidé par la réinitialisation |
+| `idees/references.txt` | registre : la référence de chaque idée jamais publiée | la collecte, jamais à la main |
+| `idees/reformulees.json` | le rapport de reformulation courant, affiché par l'application | l'IA |
+| `idees/rapports/*.md` | synthèses écrites, quand on les demande | l'IA |
 | `tools/collect-ideas.js` | la collecte | — |
 | `tools/check-ideas.js` | le contrôle de ce que l'IA publie (la CI le relance) | — |
+| `tools/reset-ideas.js` | la réinitialisation | — |
 
 ---
 
@@ -147,8 +156,13 @@ Le contrôle refuse une source inventée, du HTML, une balise Liquid et un lien 
 l'application. Conséquence : un rapport mal écrit pourrait exécuter du code chez qui
 l'ouvre, ou faire échouer la publication du site entier.
 
-Pour un rapport : **« fais le rapport de la boîte à idées pour septembre »**. Il est
-écrit dans `idees/rapports/`.
+Si la boîte a été réinitialisée depuis le rapport affiché, la reformulation le
+**remplace** par un rapport neuf, fait des seules idées arrivées depuis. Sinon, elle le
+complète.
+
+Pour une synthèse écrite en plus : **« fais la synthèse de la boîte à idées pour
+septembre »**. Elle est écrite dans `idees/rapports/` et une réinitialisation ne la
+touche pas.
 
 ### En routine
 
@@ -161,12 +175,45 @@ l'application ne voit rien avant la fusion.
 
 ---
 
+## Réinitialiser la boîte
+
+Dans Claude Code : **« réinitialise la boîte à idées »**. Seulement sur demande : ni
+l'IA ni une routine ne le font d'elles-mêmes.
+
+**Ce que ça fait.**
+
+- Les idées brutes que le rapport affiché couvre (reformulées ou écartées) sont
+  **supprimées** de `idees/boite/`. Les fichiers vidés disparaissent.
+- Le rapport reste affiché **tel quel**. L'application ajoute : « Boîte vidée le … Les
+  idées déposées depuis figureront dans la prochaine reformulation, qui remplacera
+  celle-ci. »
+- La reformulation suivante remplace le rapport.
+
+**Ce que ça ne fait pas.**
+
+| Ce qui reste | Cause | Conséquence |
+|---|---|---|
+| Les idées arrivées **après** la reformulation | aucun rapport ne les couvre encore | elles restent dans la boîte pour la reformulation suivante. Rien n'est perdu |
+| Les idées encore sur le Drive | pas encore collectées | elles arriveront à la prochaine collecte |
+| Le registre `idees/references.txt` | il empêche la collecte de republier une idée retirée | il ne garde que des références aléatoires, aucun texte |
+| Les textes retirés, dans l'**historique Git** | le dépôt est public et Git garde tout | la boîte est vide pour qui la parcourt, pas pour qui fouille l'historique |
+
+**Garde-fous du script.** Il refuse sans rien écrire si le rapport est invalide, vide,
+déjà réinitialisé, ou ne couvre aucune idée présente. L'IA vérifie en plus que le
+rapport est publié sur `main` avant de réinitialiser : sinon des idées
+disparaîtraient avant que l'équipe en ait vu la version reformulée.
+
+---
+
 ## Retirer une idée publiée
 
 Exemple : une idée brute contient un numéro de téléphone.
 
-1. Supprimer le passage du fichier `idees/boite/<jour>.md` et commiter. Il disparaît
-   de la version courante.
+1. Le plus simple : demander à Claude Code de l'écarter (motif `donnees-personnelles`)
+   puis de réinitialiser la boîte. À la main : supprimer le passage du fichier
+   `idees/boite/<jour>.md`, retirer sa référence des `sources` du rapport s'il la cite
+   (`node tools/check-ideas.js` le signale), et commiter. Sa référence reste au
+   registre : ne pas l'en retirer.
 2. Il reste dans l'**historique Git**. L'effacer demande de réécrire l'historique de
    `main` puis de forcer le push. C'est une décision du propriétaire du dépôt : elle
    casse les copies locales des autres contributeurs.

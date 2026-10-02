@@ -2180,11 +2180,13 @@
    *     partagé. Personne ne la relit dans l'application, pas même son auteur ;
    *   - LECTURE : les idées REFORMULÉES par l'IA, publiées dans le dépôt (idees/reformulees.json) et servies par GitHub
    *     Pages à côté de l'application. Affichées en TEXTE seulement : rien de ce fichier n'est interprété comme du HTML.
+   *     Ce fichier est UN rapport : chaque reformulation le remplace. Une réinitialisation de la boîte le laisse
+   *     affiché tel quel, et le date (`boiteReinitialisee`) pour dire que les idées déposées depuis viendront au suivant.
    * Le fichier est relu en arrivant sur l'écran, puis au plus toutes les deux minutes (le service worker le prend sur
    * le réseau d'abord, avec repli hors ligne). */
   var IDEAS_URL = "idees/reformulees.json";
   var IDEAS_STALE_MS = 2 * 60 * 1000;
-  var ideasFeed = { status: "idle", items: [], updated: "", loadedAt: 0 };
+  var ideasFeed = { status: "idle", items: [], updated: "", resetOn: "", loadedAt: 0 };
 
   function cleanIdea(raw) {
     if (!raw || typeof raw !== "object") { return null; }
@@ -2209,7 +2211,8 @@
     }).then(function (data) {
       var items = (data && Array.isArray(data.idees) ? data.idees : []).map(cleanIdea).filter(Boolean);
       items.sort(function (a, b) { return a.date === b.date ? 0 : (a.date < b.date ? 1 : -1); });
-      ideasFeed = { status: "ok", items: items, updated: data && /^\d{4}-\d{2}-\d{2}$/.test(String(data.misAJour || "")) ? data.misAJour : "", loadedAt: Utils.now() };
+      var day = function (value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : ""; };
+      ideasFeed = { status: "ok", items: items, updated: day(data && data.misAJour), resetOn: day(data && data.boiteReinitialisee), loadedAt: Utils.now() };
       done();
     }, function () {
       ideasFeed.status = "error";
@@ -2314,8 +2317,10 @@
           el("div", { class: "row" }, [
             sectionTitle("sparkle", "Idées reformulées"),
             el("div", { class: "spacer" }),
-            ideasFeed.updated ? el("span", { class: "hint", text: "Mises à jour le " + dayLabel(ideasFeed.updated) }) : null
+            ideasFeed.updated ? el("span", { class: "hint", text: "Reformulation du " + dayLabel(ideasFeed.updated) }) : null
           ]),
+          ideasFeed.resetOn ? el("p", { class: "hint", "data-key": "ideas-reset-note",
+            text: "Boîte vidée le " + dayLabel(ideasFeed.resetOn) + ". Les idées déposées depuis figureront dans la prochaine reformulation, qui remplacera celle-ci." }) : null,
           list
         ])
       ])

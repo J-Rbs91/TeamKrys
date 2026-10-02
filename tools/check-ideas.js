@@ -3,8 +3,15 @@
  *
  *     node tools/check-ideas.js
  *
- * Vérifie idees/reformulees.json (lu par l'application) et idees/rapports/*.md. L'IA lance ce contrôle avant
- * chaque commit (voir .claude/skills/boite-a-idees/SKILL.md), et la CI le relance.
+ *     node tools/check-ideas.js --en-attente     idées brutes que la reformulation courante ne couvre pas
+ *
+ * Vérifie idees/reformulees.json (lu par l'application), idees/rapports/*.md, la boîte et son registre. L'IA lance
+ * ce contrôle avant chaque commit (voir .claude/skills/boite-a-idees/SKILL.md), et la CI le relance.
+ *
+ * La reformulation courante est UN rapport, qui couvre la boîte :
+ *   - tant que la boîte n'est pas réinitialisée (`boiteReinitialisee` vide), chaque référence citée est dans la boîte ;
+ *   - après réinitialisation, chaque référence citée a quitté la boîte mais reste au registre (idees/references.txt).
+ * Une référence absente des deux est une source inventée.
  *
  * ⚠️ Ces fichiers sont servis par GitHub Pages (Jekyll) sur le domaine de l'application, et les .md y deviennent
  * des pages. D'où trois refus dans tout .md de idees/ : le HTML, les balises Liquid (`{{`, `{%`, qui peuvent faire
@@ -14,6 +21,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const collect = require("./collect-ideas.js");
 
 const ROOT = path.join(__dirname, "..");
 const DAY_RX = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,6 +42,11 @@ function checkReformulated(data) {
   if (!data || typeof data !== "object" || Array.isArray(data)) { return ["reformulees.json : un objet est attendu."]; }
   if (data.version !== 1) { fail("reformulees.json : « version » doit valoir 1."); }
   if (data.misAJour !== "" && !DAY_RX.test(String(data.misAJour))) { fail("reformulees.json : « misAJour » doit être une date AAAA-MM-JJ (ou vide)."); }
+  const reset = data.boiteReinitialisee === undefined ? "" : data.boiteReinitialisee;
+  if (reset !== "" && !DAY_RX.test(String(reset))) { fail("reformulees.json : « boiteReinitialisee » doit être une date AAAA-MM-JJ (ou vide)."); }
+  if (reset && (!data.misAJour || reset < data.misAJour)) {
+    fail("reformulees.json : « boiteReinitialisee » ne peut précéder la reformulation (« misAJour »).");
+  }
   if (!Array.isArray(data.idees)) { fail("reformulees.json : « idees » doit être une liste."); return errors; }
   const seen = new Set();
   data.idees.forEach((idea, i) => {
@@ -75,8 +88,7 @@ function boxRefs(dir) {
   const refs = new Map();
   if (!fs.existsSync(dir)) { return refs; }
   fs.readdirSync(dir).filter((f) => f.endsWith(".md")).sort().forEach((file) => {
-    const text = fs.readFileSync(path.join(dir, file), "utf8");
-    (text.match(REF_COMMENT_RX) || []).forEach((c) => refs.set(c.slice(10, -4), file));
+    collect.parseBox(fs.readFileSync(path.join(dir, file), "utf8")).blocks.forEach((b) => refs.set(b.ref, file));
   });
   return refs;
 }
@@ -110,13 +122,25 @@ function run(root) {
   let data;
   try { data = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return ["idees/reformulees.json : JSON illisible (" + e.message + ")."]; }
   errors = errors.concat(checkReformulated(data));
-  /* Une source qui n'existe pas dans la boîte est une source inventée. */
   const refs = boxRefs(path.join(dir, "boite"));
-  const cited = [].concat(...(Array.isArray(data.idees) ? data.idees : []).map((i) => (i && Array.isArray(i.sources) ? i.sources : [])),
-    (Array.isArray(data.ecartees) ? data.ecartees : []).map((e) => e && e.ref));
-  cited.filter((r) => REF_RX.test(String(r)) && !refs.has(r)).forEach((r) => {
-    errors.push("reformulees.json : référence " + r + " introuvable dans idees/boite/ (source inventée ?).");
+  const registry = new Set(collect.registryRefs(path.join(dir, "references.txt")));
+  refs.forEach((file, r) => {
+    if (!registry.has(r)) { errors.push("boite/" + file + " : référence " + r + " absente du registre idees/references.txt."); }
   });
+  const cited = [].concat(...(Array.isArray(data.idees) ? data.idees : []).map((i) => (i && Array.isArray(i.sources) ? i.sources : [])),
+    (Array.isArray(data.ecartees) ? data.ecartees : []).map((e) => e && e.ref)).filter((r) => REF_RX.test(String(r)));
+  if (data.boiteReinitialisee) {
+    cited.filter((r) => !registry.has(r)).forEach((r) => {
+      errors.push("reformulees.json : référence " + r + " absente du registre (source inventée ?).");
+    });
+    cited.filter((r) => refs.has(r)).forEach((r) => {
+      errors.push("réinitialisation incomplète : " + r + " est reformulée ou écartée, mais encore dans idees/boite/" + refs.get(r) + ".");
+    });
+  } else {
+    cited.filter((r) => !refs.has(r)).forEach((r) => {
+      errors.push("reformulees.json : référence " + r + " absente de idees/boite/ (source inventée, ou idée d'avant la dernière réinitialisation ?).");
+    });
+  }
   [["rapports", checkReport], ["boite", checkBox]].forEach(([sub, checkOne]) => {
     const folder = path.join(dir, sub);
     if (!fs.existsSync(folder)) { return; }
@@ -141,6 +165,9 @@ if (require.main === module) {
     const todo = pending(data, refs);
     todo.forEach((r) => console.log(r + "  idees/boite/" + refs.get(r)));
     console.log(todo.length + " idée(s) brute(s) en attente de reformulation.");
+    if (data.boiteReinitialisee) {
+      console.log("Boîte réinitialisée le " + data.boiteReinitialisee + " : la prochaine reformulation REMPLACE le rapport affiché, à partir de ces seules idées.");
+    }
     process.exit(0);
   }
   const errors = run();

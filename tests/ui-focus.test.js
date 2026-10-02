@@ -759,9 +759,21 @@ check("idées reformulées : lues dans idees/reformulees.json, triées, affiché
   assert(cards.length === 2, cards.length + " carte(s), 2 attendues (l'idée sans titre est écartée)");
   assert(cards[0].querySelector(".card-title").textContent === "<img src=x onerror=alert(1)>", "la plus récente d'abord, titre en texte brut");
   assert(!t.app().querySelector("img") && !t.app().querySelector("b"), "du HTML venu du fichier a été interprété");
-  assert(/2 idées d'origine/.test(cards[0].textContent) && /Mises à jour le 03\/10\/2026/.test(t.app().textContent), "métadonnées");
+  assert(/2 idées d'origine/.test(cards[0].textContent) && /Reformulation du 03\/10\/2026/.test(t.app().textContent), "métadonnées");
+  assert(!t.app().querySelector('[data-key="ideas-reset-note"]'), "boîte non réinitialisée : aucune note");
   t.go(ideasRoute);
   assert(calls === 1, "un rendu de plus ne doit pas relire le fichier (" + calls + " lectures)");
+
+  /* Boîte réinitialisée : le rapport reste affiché, avec la date de la remise à zéro. */
+  const z = boot();
+  z.ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, misAJour: "2026-10-03",
+    boiteReinitialisee: "2026-10-05", idees: [{ id: "r1", titre: "Gardée", texte: "Toujours là", date: "2026-10-03", sources: ["aaaaaa"] }] }) });
+  z.go(ideasRoute);
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  const note = z.app().querySelector('[data-key="ideas-reset-note"]');
+  assert(z.app().querySelectorAll(".idea-card").length === 1, "après réinitialisation, le rapport doit rester affiché");
+  assert(note && /vidée le 05\/10\/2026/.test(note.textContent) && /prochaine reformulation/.test(note.textContent), "note de réinitialisation : " + (note && note.textContent));
 
   const e = boot();
   e.ctx.fetch = () => Promise.reject(new TypeError("Failed to fetch"));
