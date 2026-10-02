@@ -154,17 +154,9 @@
     }
   }
 
-  function enhanceMessageBubbles() {
-    var bubbles = document.querySelectorAll(".bubble");
-    for (var i = 0; i < bubbles.length; i++) {
-      if (bubbles[i].querySelector(".ux-bubble-cue")) { continue; }
-      var meta = bubbles[i].querySelector(".bubble-meta");
-      if (!meta) { continue; }
-      var cue = make("span", "ux-bubble-cue", "•••");
-      cue.setAttribute("aria-hidden", "true");
-      meta.appendChild(cue);
-    }
-  }
+  /* Le repère « ••• » des bulles est retiré : il invitait à TOUCHER, et au doigt les actions d'un message s'ouvrent
+   * désormais par un appui long (js/ui.js, « Gestes sur les bulles »). Un repère qui promet le mauvais geste est
+   * pire que pas de repère ; l'indice affiché une fois au-dessus du fil le remplace. */
 
   function enhanceProposals() {
     var currentApp = app();
@@ -236,7 +228,6 @@
     enhanceFlow();
     enhanceTopicCards();
     enhanceTopicTitle();
-    enhanceMessageBubbles();
     enhanceProposals();
     enhanceConsensus();
     enhancePressedState();

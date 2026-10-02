@@ -370,7 +370,10 @@ function boot(options) {
     location: { hash: "#/", href: "http://localhost/", protocol: "http:", host: "localhost", hostname: "localhost", pathname: "/", search: "" },
     history: { state: null, length: 1, pushState() {}, replaceState() {}, back() {} },
     localStorage: storage(), sessionStorage: storage(),
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    /* Minuteries muettes par défaut ; `timers` les retient pour qu'un test les déclenche (appui long). */
+    setTimeout: options.timers ? (fn, ms) => { options.timers.push({ fn, ms, live: true }); return options.timers.length; } : () => 0,
+    clearTimeout: options.timers ? (id) => { if (options.timers[id - 1]) { options.timers[id - 1].live = false; } } : () => {},
+    setInterval: () => 0, clearInterval() {},
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
@@ -669,6 +672,98 @@ check("sans frappe en cours, toucher l'interrupteur ne vole rien : il bascule, e
   tap(t.app().querySelector('[data-key="composer-anon"]'));
   assert(t.ctx.UI.local.composerAnon === true, "l'interrupteur n'a pas basculé");
   assert(t.active().getAttribute("data-key") === "composer-anon", "sans champ actif, le toucher garde le comportement d'un bouton : focus sur " + describe(t.active()));
+});
+
+/* ===================================================== Gestes sur les bulles ==== */
+
+/* Un doigt, tel que le navigateur l'envoie : pointerdown, pointermove, pointerup sur le document (délégation). */
+function finger(t, node, x, y) {
+  const ev = (type, cx, cy) => ({ type, target: node, pointerId: 7, pointerType: "touch", isPrimary: true,
+    clientX: cx, clientY: cy, cancelable: true, button: 0, preventDefault() {}, stopPropagation() {} });
+  return {
+    down() { t.doc.dispatchEvent(ev("pointerdown", x, y)); return this; },
+    move(dx, dy) { t.doc.dispatchEvent(ev("pointermove", x + dx, y + dy)); return this; },
+    up(dx, dy) { t.doc.dispatchEvent(ev("pointerup", x + (dx || 0), y + (dy || 0))); return this; },
+    cancel() { t.doc.dispatchEvent(ev("pointercancel", x, y)); return this; },
+  };
+}
+const fire = (timers) => { timers.filter((x) => x.live).forEach((x) => { x.live = false; x.fn(); }); };
+
+check("au doigt : un simple toucher sur une bulle n'ouvre rien ; un appui long ouvre la feuille d'actions", () => {
+  const timers = [];
+  const t = boot({ timers });
+  t.go(topicRoute("t1"));
+  finger(t, bubble(t, "m1"), 120, 300).down().up();
+  bubble(t, "m1").click();                     // le clic que le navigateur émet après un toucher
+  fire(timers);
+  assert(!dialog(t), "un simple toucher a ouvert la feuille");
+
+  const f = finger(t, bubble(t, "m1"), 120, 300).down();
+  assert(bubble(t, "m1").classList.contains("is-pressing"), "pas de retour visuel pendant l'appui");
+  fire(timers);                                // 450 ms plus tard
+  assert(dialog(t) && dialog(t).classList.contains("sheet"), "l'appui long n'a pas ouvert la feuille");
+  f.up();
+  /* Le doigt se lève au-dessus du fond de la feuille qui vient de s'ouvrir : le clic du navigateur tombe dessus. */
+  /* Ordre du navigateur : la capture sur le document d'abord, puis la cible si rien n'a arrêté le clic. */
+  const scrim = t.overlay().querySelector(".overlay");
+  const click = { type: "click", target: scrim, currentTarget: scrim, stopped: false,
+    preventDefault() {}, stopPropagation() { this.stopped = true; } };
+  t.doc.dispatchEvent(click);
+  if (!click.stopped) { scrim.dispatchEvent(click); }
+  assert(dialog(t) && dialog(t).classList.contains("sheet"), "le clic du relâcher a refermé la feuille ouverte par l'appui long");
+});
+
+check("au doigt : un défilement vertical annule l'appui long ; au clavier et à la souris, le clic ouvre toujours la feuille", () => {
+  const timers = [];
+  const t = boot({ timers });
+  t.go(topicRoute("t1"));
+  finger(t, bubble(t, "m1"), 120, 300).down().move(2, 30);
+  fire(timers);
+  assert(!dialog(t), "un défilement a ouvert la feuille");
+
+  const k = boot();                            // clavier (Entrée) ou lecteur d'écran : un clic sans geste
+  k.go(topicRoute("t1"));
+  bubble(k, "m1").click();
+  assert(dialog(k) && dialog(k).classList.contains("sheet"), "le clic sans geste doit ouvrir la feuille");
+
+  const m = boot();                            // souris : clic droit
+  m.go(topicRoute("t1"));
+  m.doc.dispatchEvent({ type: "contextmenu", target: bubble(m, "m1"), preventDefault() { this.prevented = true; } });
+  assert(dialog(m) && dialog(m).classList.contains("sheet"), "le clic droit doit ouvrir la feuille");
+});
+
+check("glisser une bulle vers la droite active la citation et met le focus dans le champ ; pas depuis le bord de l'écran, pas en dessous du seuil", () => {
+  const t = boot({ timers: [] });
+  t.go(topicRoute("t1"));
+  const f = finger(t, bubble(t, "m1"), 120, 300).down().move(40, 3);
+  assert(t.app().querySelector(".swipe-cue"), "pas de repère de citation pendant le glisser");
+  f.up(40, 3);
+  assert(!t.ctx.UI.local.quote, "un glisser trop court a cité");
+  assert(!t.app().querySelector(".swipe-cue"), "le repère reste après le relâcher");
+
+  finger(t, bubble(t, "m1"), 10, 300).down().move(90, 0).up(90, 0);
+  assert(!t.ctx.UI.local.quote, "un glisser parti du bord gauche (geste retour du système) a cité");
+
+  finger(t, bubble(t, "m1"), 120, 300).down().move(30, 2).move(80, 4).up(80, 4);
+  const q = t.ctx.UI.local.quote;
+  assert(q && q.topicId === "t1" && q.messageId === "m1", "le glisser n'a pas activé la citation : " + JSON.stringify(q));
+  assert(t.active().getAttribute("data-draft") === "composer:t1", "le focus doit aller au champ, il est sur " + describe(t.active()));
+  assert(t.app().querySelector(".quote-preview"), "l'aperçu « En réponse à » n'apparaît pas");
+});
+
+check("feuille d'un message : « Copier le texte » ; indice des gestes affiché une fois, « Compris » le retire pour de bon", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  bubble(t, "m1").click();
+  const labels = dialog(t).querySelectorAll(".sheet-actions button").map((b) => b.textContent);
+  assert(labels.includes("Copier le texte") && labels.includes("Citer"), "actions : " + JSON.stringify(labels));
+  t.escape();
+  const hint = () => t.app().querySelector(".gesture-hint");
+  assert(hint() && /Appui long/.test(hint().textContent) && /droite/.test(hint().textContent), "indice des gestes absent ou incomplet");
+  t.app().querySelector('[data-key="gesture-hint-ok"]').click();
+  assert(!hint(), "« Compris » n'a pas retiré l'indice");
+  t.go(topicRoute("t1"));
+  assert(!hint(), "l'indice revient après un nouveau rendu");
 });
 
 /* ============================================================ BL-011 ==== */

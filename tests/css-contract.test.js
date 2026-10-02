@@ -293,16 +293,20 @@ check("BL-039 le bord du composeur est sur --line-field", function () {
   expect(declFor(field, "border-color", BASE) === "var(--line-field)", ".composer .textarea doit avoir border-color: var(--line-field)");
 });
 
-check("BL-040 le repère de bulle n'a plus d'opacité", function () {
-  RULES.forEach(function (r) {
-    r.selectors.forEach(function (s) {
-      if (s.indexOf("ux-bubble-cue") >= 0) { expect(r.decls.opacity === undefined, "le sélecteur « " + s + " » déclare une opacité"); }
-    });
-  });
-  var cue = { tag: "span", classes: ["ux-bubble-cue"], ancestors: [{ tag: "div", classes: ["bubble-meta"] }, { tag: "button", classes: ["bubble"] }, { tag: "div", classes: ["msg-row"] }] };
-  expect(declFor(cue, "color", BASE) === "var(--muted)", "le repère doit prendre le jeton --muted");
-  var mine = { tag: "span", classes: ["ux-bubble-cue"], ancestors: [{ tag: "div", classes: ["bubble-meta"] }, { tag: "button", classes: ["bubble"] }, { tag: "div", classes: ["msg-row", "mine"] }] };
-  expect(declFor(mine, "color", BASE) === "var(--on-ink-soft)", "le repère d'une bulle à soi doit prendre --on-ink-soft");
+check("gestes au doigt : la bulle laisse le défilement vertical au navigateur, ne sélectionne pas son texte au doigt, et l'ancien repère « ••• » a disparu", function () {
+  var bubble = { tag: "button", classes: ["bubble"], ancestors: [{ tag: "div", classes: ["msg-col"] }, { tag: "div", classes: ["msg-row"] }] };
+  expect(declFor(bubble, "touch-action", BASE) === "pan-y", ".bubble doit porter touch-action: pan-y (le glisser horizontal revient à l'application)");
+  expect(ruleExists(function (r) {
+    return r.selectors.indexOf(".bubble") >= 0 && r.media.some(function (m) { return /pointer:\s*coarse/.test(m); }) &&
+      r.decls["user-select"] === "none" && r.decls["-webkit-touch-callout"] === "none";
+  }), "au doigt (pointer: coarse), la bulle doit couper la sélection et le menu système de l'appui long");
+  expect(!ruleExists(function (r) { return r.selectors.some(function (s) { return s.indexOf("ux-bubble-cue") >= 0; }); }),
+    "le repère « ••• » promet un toucher qui n'ouvre plus rien : ses règles doivent disparaître");
+  var row = { tag: "div", classes: ["msg-row"], ancestors: [] };
+  expect(declFor(row, "position", BASE) === "relative", ".msg-row doit ancrer le repère de citation (position: relative)");
+  expect(RULES.some(function (r) { return r.selectors.indexOf(".bubble.is-pressing") >= 0 && r.decls.transform &&
+    r.media.some(function (m) { return /prefers-reduced-motion:\s*no-preference/.test(m); }); }),
+    "le tassement de l'appui long doit être réservé à prefers-reduced-motion: no-preference");
 });
 
 check("WP-03 .sheet-action:disabled est stylé sans opacité", function () {

@@ -1386,7 +1386,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   color: var(--muted);
 }
 
-.msg-row { display: flex; align-items: flex-end; gap: 8px; margin-top: 2px; }
+.msg-row { position: relative; display: flex; align-items: flex-end; gap: 8px; margin-top: 2px; }
 .msg-row.mine { justify-content: flex-end; }
 .msg-row.first { margin-top: 14px; }
 
@@ -1440,6 +1440,61 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   overflow-wrap: anywhere;
   transition: background var(--dur-fast) linear;
 }
+
+/* Gestes au doigt (js/ui.js, « Gestes sur les bulles ») : le navigateur garde le défilement VERTICAL, le glisser
+   horizontal revient à l'application. Au doigt seulement, l'appui long ne sélectionne plus le texte et n'ouvre ni
+   loupe ni menu système : il ouvre la feuille d'actions, qui propose « Copier le texte ». À la souris, le texte
+   reste sélectionnable. */
+.bubble { touch-action: pan-y; }
+
+@media (pointer: coarse) {
+  .bubble {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Retour pendant l'appui long : la bulle se tasse sur toute la durée du geste, l'œil voit que quelque chose se
+   prépare. Mouvement réduit : le fond change seul. */
+.bubble.is-pressing { background: var(--surface-sunken); }
+.msg-row.mine .bubble.is-pressing { background: var(--ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .bubble.is-pressing { transform: scale(0.97); transition: transform 0.45s var(--ease-out), background var(--dur-fast) linear; }
+  .msg-col { transition: transform var(--dur-base) var(--ease-out); }
+  .msg-col.is-swiping { transition: none; }
+}
+
+/* Glisser vers la droite pour citer : la colonne suit le doigt, le repère de citation apparaît à gauche et se
+   remplit quand le seuil est franchi (le relâcher cite). */
+.swipe-cue {
+  position: absolute;
+  left: 4px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.swipe-cue.is-armed { background: var(--ink); color: var(--on-ink); }
+
+/* Indice des gestes, affiché une fois au-dessus du fil. */
+.gesture-hint {
+  width: calc(100% - 24px);
+  max-width: var(--measure);
+  margin: 8px auto 0;
+  align-items: center;
+}
+
+.gesture-hint .btn { flex: 0 0 auto; margin-left: auto; }
 
 /* « Mes » messages sont la SEULE bulle pleine du fil, et elle est pleine
    d'encre — pas d'accord. C'est le point où le parti pris se paie : la couleur

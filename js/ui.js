@@ -183,6 +183,7 @@
     Object.keys(composerDrafts).forEach(function (key) { draftNote[key] = anonDrafts[key] ? "anon" : "check"; });
 
     bindViewport();
+    bindBubbleGestures();
   };
 
   /* ------------------------------------------------------------ Brouillons --- */
@@ -1364,6 +1365,203 @@
     return row;
   }
 
+  /* ================================================ Gestes sur les bulles ==== */
+
+  /* ⚠️ Au doigt, toucher une bulle ne fait rien : ouvrir des actions en faisant défiler le fil était le défaut le
+   * plus fréquent. Deux gestes les remplacent, comme dans les messageries :
+   *   - APPUI LONG (LONG_PRESS_MS) : la feuille d'actions du message ;
+   *   - GLISSER VERS LA DROITE (au-delà de SWIPE_QUOTE_PX) : la citation, comme « Citer ».
+   * Les écouteurs vivent sur le document, en délégation : le rendu détruit et recrée les bulles, un écouteur par bulle
+   * ne survivrait pas. Le geste ne tient que des identifiants, jamais un nœud dont il aurait besoin après coup.
+   * Seul le toucher (et le stylet) passe par ici. La souris garde le clic, et le clic droit ouvre aussi la feuille ;
+   * le clavier et les lecteurs d'écran gardent Entrée et le double toucher, qui produisent un clic sans geste.
+   * `touch-action: pan-y` (app.css) laisse le défilement vertical au navigateur : un geste qui part en vertical est
+   * abandonné, et le navigateur l'annonce par `pointercancel`. Un départ au bord gauche de l'écran (EDGE_PX) est
+   * laissé au système : c'est le geste « retour » d'iOS et d'Android. */
+  var LONG_PRESS_MS = 450;
+  var MOVE_TOLERANCE_PX = 10;
+  var SWIPE_QUOTE_PX = 64;
+  var SWIPE_MAX_PX = 88;
+  var EDGE_PX = 24;
+  var gesture = null;
+  var touchClickIgnoredUntil = 0;
+  var swallowClickUntil = 0;
+
+  function onClickAfterLongPress(e) {
+    if (Utils.now() >= swallowClickUntil) { return; }
+    swallowClickUntil = 0;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function openMessageSheet(topicId, messageId) {
+    UI.set({ sheet: { type: "message", topicId: topicId, messageId: messageId } });
+  }
+
+  /* Citer : la même chose que l'action « Citer » de la feuille. Le focus va au champ, le clavier s'ouvre. */
+  function quoteMessage(topicId, messageId) {
+    UI.set({ sheet: null, quote: { topicId: topicId, messageId: messageId } });
+    var node = findDraftNode("composer:" + topicId);
+    if (node) { try { node.focus(); } catch (e) { /* champ absent */ } }
+  }
+
+  /* Presse-papiers : l'API moderne d'abord, puis l'ancienne commande pour les navigateurs qui ne l'ont pas. */
+  function copyText(text) {
+    var done = function () { UI.toast("Texte copié."); };
+    var failed = function () { UI.toast("Copie impossible sur cet appareil.", "error"); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { legacyCopy(text) ? done() : failed(); });
+        return;
+      }
+    } catch (e) { /* repli ci-dessous */ }
+    if (legacyCopy(text)) { done(); } else { failed(); }
+  }
+
+  function legacyCopy(text) {
+    var area = el("textarea", { class: "visually-hidden", readonly: true, "aria-hidden": "true" });
+    area.value = text;
+    document.body.appendChild(area);
+    var ok = false;
+    try { area.select(); ok = !!(document.execCommand && document.execCommand("copy")); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  function buzz(ms) {
+    // qa-allow: js-vibrate — bonus haptique facultatif, détecté avant usage et sous try : sans lui (iOS), le geste fonctionne pareil.
+    try { if (navigator.vibrate) { navigator.vibrate(ms); } } catch (e) { /* refusé : sans effet */ }
+  }
+
+  /* Le sujet se lit sur le fil, jamais sur la bulle : deux bulles anonymes doivent rester identiques (BL-013). */
+  function topicOfBubble(bubble) {
+    var thread = bubble.closest ? bubble.closest("[data-thread]") : null;
+    return thread ? thread.getAttribute("data-thread") : null;
+  }
+
+  function gestureBubble(target) {
+    var node = target && target.closest ? target.closest(".bubble[data-message-id]") : null;
+    return node && appRoot && appRoot.contains(node) ? node : null;
+  }
+
+  function resetGesture() {
+    if (!gesture) { return; }
+    if (gesture.timer) { clearTimeout(gesture.timer); }
+    var col = gesture.col;
+    if (col) {
+      col.classList.remove("is-swiping");
+      col.style.transform = "";
+    }
+    if (gesture.bubble) { gesture.bubble.classList.remove("is-pressing"); }
+    if (gesture.cue && gesture.cue.parentNode) { gesture.cue.parentNode.removeChild(gesture.cue); }
+    gesture = null;
+  }
+
+  function onBubblePointerDown(e) {
+    if (e.pointerType === "mouse" || e.isPrimary === false) { return; }
+    var bubble = gestureBubble(e.target);
+    if (!bubble) { return; }
+    resetGesture();
+    var g = gesture = {
+      id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, mode: "pending",
+      bubble: bubble, col: bubble.parentNode, cue: null, armed: false,
+      topicId: topicOfBubble(bubble), messageId: bubble.getAttribute("data-message-id"), timer: 0
+    };
+    bubble.classList.add("is-pressing");
+    g.timer = setTimeout(function () {
+      if (gesture !== g || g.mode !== "pending") { return; }
+      /* Le geste reste suivi jusqu'au relâcher (mode "done") : le doigt est encore posé, et le clic que le
+       * navigateur émettra en le levant tomberait sur le fond de la feuille qui vient de s'ouvrir — et la fermerait. */
+      g.mode = "done";
+      g.timer = 0;
+      g.bubble.classList.remove("is-pressing");
+      buzz(12);
+      openMessageSheet(g.topicId, g.messageId);
+    }, LONG_PRESS_MS);
+  }
+
+  function onBubblePointerMove(e) {
+    var g = gesture;
+    if (!g || e.pointerId !== g.id || g.mode === "done") { return; }
+    var dx = e.clientX - g.x0;
+    var dy = e.clientY - g.y0;
+    if (g.mode === "pending") {
+      if (Math.abs(dx) < MOVE_TOLERANCE_PX && Math.abs(dy) < MOVE_TOLERANCE_PX) { return; }
+      clearTimeout(g.timer);
+      g.timer = 0;
+      g.bubble.classList.remove("is-pressing");
+      if (dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.5 && g.x0 > EDGE_PX) {
+        g.mode = "swipe";
+        g.col.classList.add("is-swiping");
+        g.cue = el("span", { class: "swipe-cue", "aria-hidden": "true" }, [icon("quote", 18)]);
+        g.col.parentNode.insertBefore(g.cue, g.col.parentNode.firstChild);
+      } else {
+        g.mode = "cancel";
+        return;
+      }
+    }
+    if (g.mode !== "swipe") { return; }
+    if (e.cancelable) { e.preventDefault(); }
+    /* Au-delà du seuil, la bulle résiste : on sent que le geste est « pris » sans qu'elle file hors de l'écran. */
+    var shift = dx <= 0 ? 0 : dx <= SWIPE_QUOTE_PX ? dx : SWIPE_QUOTE_PX + (dx - SWIPE_QUOTE_PX) * 0.3;
+    g.dx = dx;
+    g.col.style.transform = "translateX(" + Math.min(shift, SWIPE_MAX_PX) + "px)";
+    var armed = dx >= SWIPE_QUOTE_PX;
+    if (armed !== g.armed) {
+      g.armed = armed;
+      g.cue.classList.toggle("is-armed", armed);
+      if (armed) { buzz(10); }
+    }
+    g.cue.style.opacity = String(Math.min(1, dx / SWIPE_QUOTE_PX));
+  }
+
+  function onBubblePointerEnd(e) {
+    var g = gesture;
+    if (!g || e.pointerId !== g.id) { return; }
+    var cancelled = e.type === "pointercancel";
+    /* Quel que soit le geste, le clic qui le suit n'ouvre rien : c'est ce qui fait qu'un toucher « ne fait rien ». */
+    touchClickIgnoredUntil = Utils.now() + 800;
+    /* Après un appui long, ce clic-là n'atteint RIEN : ni le fond de la feuille (qui la fermerait), ni une action. */
+    if (g.mode === "done") { swallowClickUntil = Utils.now() + 400; }
+    var quote = !cancelled && g.mode === "swipe" && g.dx >= SWIPE_QUOTE_PX;
+    resetGesture();
+    if (quote) { quoteMessage(g.topicId, g.messageId); }
+  }
+
+  /* Android déclenche le menu contextuel sur un appui long, et iOS sa loupe : le geste est à nous. À la souris, le
+   * clic droit ouvre la feuille d'actions, l'équivalent de bureau de l'appui long. */
+  function onBubbleContextMenu(e) {
+    var bubble = gestureBubble(e.target);
+    if (!bubble) { return; }
+    e.preventDefault();
+    if (gesture) { return; }
+    var topicId = topicOfBubble(bubble);
+    if (topicId) { openMessageSheet(topicId, bubble.getAttribute("data-message-id")); }
+  }
+
+  function bindBubbleGestures() {
+    if (!document.addEventListener) { return; }
+    document.addEventListener("pointerdown", onBubblePointerDown, true);
+    document.addEventListener("pointermove", onBubblePointerMove, { capture: true, passive: false });
+    document.addEventListener("pointerup", onBubblePointerEnd, true);
+    document.addEventListener("pointercancel", onBubblePointerEnd, true);
+    document.addEventListener("contextmenu", onBubbleContextMenu, true);
+    document.addEventListener("click", onClickAfterLongPress, true);
+  }
+
+  /* Indice affiché une seule fois : un geste invisible ne se devine pas. Retenu sur l'appareil, rien d'identitaire. */
+  var GESTURE_HINT_KEY = "brainsto.hint.gestures.v1";
+
+  function gestureHint() {
+    if (Utils.storage.get(GESTURE_HINT_KEY, false) === true) { return null; }
+    return el("div", { class: "note gesture-hint" }, [
+      icon("info", 14),
+      el("span", { class: "note-body", text: "Appui long sur un message : réagir, citer, modifier. Glissez-le vers la droite pour le citer." }),
+      el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Compris", "data-key": "gesture-hint-ok",
+        onclick: function () { Utils.storage.set(GESTURE_HINT_KEY, true); UI.force(); } })
+    ]);
+  }
+
   function messageRow(topic, message, previous) {
     /* Deux notions distinctes, à ne pas confondre :
      *   `owns`  — mes droits sur le message (modifier, signer / anonymiser) ;
@@ -1413,9 +1611,15 @@
      * 14:33, bouton » sans dire de qui, et mes propres messages n'ont jamais
      * d'auteur du tout. Le cadenas, lui, est un SVG masqué : sans la mention
      * explicite, l'état verrouillé n'existe que pour l'œil. */
+    /* Toucher la bulle ne fait plus rien : les actions s'ouvrent par un APPUI LONG, la citation par un GLISSER
+     * vers la droite (voir « Gestes sur les bulles »). Le clic reste la voie du clavier (Entrée, Espace), des
+     * lecteurs d'écran et de la souris : un clic qui suit un geste tactile est ignoré. */
     var bubble = el("button", {
       class: "bubble", type: "button", dataset: { messageId: message.id },
-      onclick: function () { UI.set({ sheet: { type: "message", topicId: topic.id, messageId: message.id } }); }
+      onclick: function () {
+        if (Utils.now() < touchClickIgnoredUntil) { return; }
+        openMessageSheet(topic.id, message.id);
+      }
     }, [
       el("span", { class: "visually-hidden", text: (mine ? "Vous" : message.authorName) + ". " }),
       message.quoteId ? quoteBlock(topic, message) : null,
@@ -1701,6 +1905,7 @@
           topic.conclusions.length ? el("span", { class: "badge tone-neutral", text: String(topic.conclusions.length) }) : null
         ])
       ]),
+      topic.messages.length ? gestureHint() : null,
       thread,
       composer(topic)
     ]);
@@ -2265,10 +2470,11 @@
           UI.scrollToMessage(message.quoteId);
         })
         : null,
-      sheetAction("quote", "Citer", function () {
-        UI.set({ sheet: null, quote: { topicId: topic.id, messageId: message.id } });
-        var node = findDraftNode("composer:" + topic.id);
-        if (node) { node.focus(); }
+      sheetAction("quote", "Citer", function () { quoteMessage(topic.id, message.id); }),
+      /* L'appui long ouvre cette feuille au lieu de sélectionner le texte (app.css) : la copie passe donc par ici. */
+      sheetAction("doc", "Copier le texte", function () {
+        UI.set({ sheet: null });
+        copyText(message.text);
       }),
       sheetAction("idea", "Créer une proposition", function () {
         UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });

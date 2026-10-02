@@ -130,7 +130,22 @@ Vos messages signés sont affichés à droite. Les contenus des autres personnes
 à gauche. Un message publié anonymement est lui aussi présenté à gauche, y compris
 sur votre propre téléphone.
 
-Appuyer sur un message donne accès aux actions suivantes :
+**Deux gestes**, comme dans une messagerie :
+
+- **Appui long** sur un message (une demi-seconde) : la feuille d'actions s'ouvre.
+  Un simple toucher ne fait rien, pour qu'on puisse faire défiler le fil sans rien
+  ouvrir par erreur.
+- **Glisser un message vers la droite** : il est cité. L'aperçu « En réponse à … »
+  apparaît au-dessus du champ, et le clavier s'ouvre.
+
+Au clavier, Entrée sur un message ouvre la feuille. À la souris, un clic ou un clic
+droit. Avec un lecteur d'écran, le double toucher. Un rappel de ces gestes s'affiche
+au-dessus de la conversation tant que vous n'avez pas touché « Compris ».
+
+Le texte d'un message ne se sélectionne plus au doigt : l'appui long ouvre les
+actions. Utilisez **Copier le texte**.
+
+La feuille d'un message donne accès aux actions suivantes :
 
 | Action | Effet |
 |---|---|
@@ -139,7 +154,8 @@ Appuyer sur un message donne accès aux actions suivantes :
 | Vague | Mitigé |
 | Croix | Pas d'accord |
 | Cercle barré | À écarter |
-| **Citer** | Répondre en conservant le contexte |
+| **Citer** | Répondre en conservant le contexte (ou glisser le message vers la droite) |
+| **Copier le texte** | Copier le message dans le presse-papiers |
 | **Créer une proposition** | Transformer l'idée en option structurée |
 | **Modifier** | Corriger votre message tant qu'il n'est pas verrouillé |
 | **Rendre anonyme / Signer avec mon nom** | Modifier la signature du message. « Signer avec mon nom » demande une confirmation : votre nom devient visible de toute l'équipe, et ce qui a été vu ne se reprend pas. « Rendre anonyme » s'applique tout de suite et se défait depuis ce téléphone. |

@@ -35,10 +35,12 @@ assert(css.indexOf("prefers-reduced-motion: reduce") >= 0,
   "la feuille UXER doit définir un repli reduced-motion");
 assert(css.indexOf(".ux-card-action") >= 0 && js.indexOf("Ouvrir") >= 0,
   "les cartes de sujet doivent porter un signifiant persistant");
-assert(css.indexOf(".ux-bubble-cue") >= 0 && js.indexOf("ux-bubble-cue") >= 0,
-  "les bulles actionnables doivent porter un signifiant persistant");
-assert(js.indexOf('meta.appendChild(cue)') >= 0,
-  "le signifiant d'actions du message doit rester dans la ligne de métadonnées");
+/* Les bulles ne portent plus « ••• » : au doigt, les actions s'ouvrent par un appui long, et le repère promettait
+ * un toucher. Le signifiant devient l'indice des gestes, affiché une fois par js/ui.js. */
+assert(css.indexOf(".ux-bubble-cue") < 0 && js.indexOf("make(\"span\", \"ux-bubble-cue\"") < 0,
+  "le repère « ••• » ne doit plus être posé sur les bulles");
+assert(fs.readFileSync(path.join(__dirname, "..", "js/ui.js"), "utf8").indexOf("Appui long sur un message") >= 0,
+  "l'indice des gestes doit remplacer le repère des bulles");
 
 assert(!/https?:\/\//.test(css), "la couche UXER ne doit pas charger de ressource distante");
 assert(!/https?:\/\//.test(js), "la couche UXER ne doit pas charger de ressource distante");

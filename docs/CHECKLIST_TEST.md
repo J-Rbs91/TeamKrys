@@ -212,6 +212,24 @@ agrandie.
       seul sur sa ligne, l'interrupteur dessous ; avec la police agrandie, le libellé
       passe à la ligne (mots entiers) sans être coupé.
 - [ ] Mouvement réduit activé dans le système : aucune animation, l'état change d'un coup.
+
+### 1 sexies ter. Gestes sur les messages
+
+- [ ] **Toucher** un message : rien ne s'ouvre. Faire défiler le fil en partant d'un
+      message : rien ne s'ouvre.
+- [ ] **Appui long** (une demi-seconde) : le message se tasse pendant l'appui, puis la
+      feuille d'actions s'ouvre (vibration brève sur Android) et **reste ouverte** au
+      relâcher. Aucune loupe, aucun menu système, aucune sélection de texte.
+- [ ] **Glisser vers la droite** : le message suit le doigt, l'icône de citation se
+      remplit au-delà du seuil ; au relâcher, l'aperçu « En réponse à … » apparaît et
+      le clavier s'ouvre. En dessous du seuil, rien ne se passe.
+- [ ] Glisser depuis le **bord gauche** de l'écran : c'est le geste « retour » du
+      système, la citation ne s'active pas.
+- [ ] **Copier le texte** dans la feuille : le texte est dans le presse-papiers.
+- [ ] Rappel « Appui long sur un message… » visible une fois, retiré par **Compris**,
+      absent après rechargement.
+- [ ] Clavier : Entrée sur un message ouvre la feuille. Souris : clic ou clic droit.
+      VoiceOver / TalkBack : double toucher.
 - [ ] **Clavier ouvert**, en pleine frappe : toucher l'interrupteur, **Envoyer** ou la
       croix « Annuler la citation » ne ferme pas le clavier ; le curseur reste à sa
       place et la frappe continue. Après **Envoyer**, le champ est vide et le clavier

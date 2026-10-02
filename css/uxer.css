@@ -157,21 +157,7 @@
    sujet » gardent l'indication (REC-RUI-009). */
 @media (max-width: 22rem) { .ux-title-hint { display: none; } }
 
-.ux-bubble-cue {
-  display: inline-block;
-  min-width: 18px;
-  margin-left: 2px;
-  /* Jeton, pas opacité : à 0,78 le repère tombait à 3,68:1 sur 11 px. Seul signe visible que
-     la bulle ouvre des actions, il garde au moins 4,5:1 (couples de tools/check-contrast.py). */
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  text-align: center;
-}
-
-.msg-row.mine .ux-bubble-cue { color: var(--on-ink-soft); }
+/* Le repère « ••• » des bulles a été retiré : au doigt, les actions s'ouvrent par un appui long (js/ui.js). */
 
 .bubble {
   transition:
