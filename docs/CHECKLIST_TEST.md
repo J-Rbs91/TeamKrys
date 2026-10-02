@@ -19,10 +19,10 @@ du navigateur ouverte : **zéro erreur console** attendue.
       "ÉCHEC $f"; done` → aucune ligne « ÉCHEC » (backend, pastille d'état,
       nouveautés, code changé, choix idempotents, service worker, lecture des votes,
       contrat CSS, démarrage robuste, focus, champs nommés, actions retenues,
-      recherche et synthèse, brouillons, boîte à idées).
-- [ ] `node tools/check-ideas.js` → « format conforme » (idées reformulées, rapports
-      et boîte : ni HTML, ni balise Liquid, ni lien autre que http(s) ou relatif,
-      aucune source inventée).
+      recherche et synthèse, brouillons, Pandore).
+- [ ] `node tools/pandore-check.js` → « format conforme » (synthèse automatique et
+      pages de `pandore/` : ni HTML, ni balise Liquid, ni lien autre que http(s) ou
+      relatif, aucune source inventée).
 - [ ] `node tests/qa/compat-scan.js` → rien de bloquant au tier A ou B
       (fonctions hors baseline, replis CSS écrits à l'envers, champs sous 16 px).
 - [ ] `runSelfTest()` exécutée dans Apps Script → hachages conformes.
@@ -502,33 +502,33 @@ agrandie.
       l'écran ou ouvrez-la dans votre navigateur. », sans erreur en console, et la
       synthèse reste à l'écran.
 
-## 7 bis. Boîte à idées
+## 7 bis. Pandore
 
 Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
-([`BOITE_A_IDEES.md`](BOITE_A_IDEES.md), « Vérifier la mise en place »).
+([`PANDORE.md`](PANDORE.md), « Vérifier la mise en place »).
 
-- [ ] Accueil → icône boîte aux lettres en haut → écran **Boîte à idées**, bouton
-      **Retour** vers l'accueil.
-- [ ] Message de prudence visible avant le champ : publication telle quelle dans le
-      dépôt public, une fois par jour, aucun nom.
+- [ ] Accueil → icône boîte aux lettres en haut → écran **Pandore**, bouton **Retour**
+      vers l'accueil. Nulle part « boîte à idées » ni « reformulation ».
+- [ ] Message de prudence visible avant le champ : publication telle quelle sur le
+      GitHub public, une fois par jour, aucun nom.
 - [ ] Champ vide → **Déposer anonymement** affiche l'erreur sous le champ, rien ne part.
-- [ ] Idée déposée → bandeau « Idée déposée, sans votre nom. Elle apparaîtra ici une
-      fois reformulée. » ; champ vidé ; l'idée **n'apparaît nulle part** dans
+- [ ] Dépôt → bandeau « Déposé, sans votre nom. Ce sera pris en compte dans la prochaine
+      synthèse automatique. » ; champ vidé ; le texte **n'apparaît nulle part** dans
       l'application, ni chez soi ni sur un autre téléphone.
-- [ ] Hors connexion : l'idée part en file comme un message, puis au retour du réseau.
-- [ ] Après la collecte : l'idée est dans `idees/boite/<jour>.md`, sans nom, sans heure.
-- [ ] Après une reformulation publiée sur `main` et le déploiement de GitHub Pages
-      (le cache de Pages peut ajouter une dizaine de minutes) : en revenant sur l'écran,
-      la carte apparaît sous le champ, sans mise à jour de l'application ; thème, titre,
-      texte, « N idées d'origine », date « Reformulation du … ».
-- [ ] Après une réinitialisation publiée : les mêmes cartes restent affichées, avec la
-      note « Boîte vidée le … ». Une idée déposée ensuite n'apparaît qu'à la reformulation
-      suivante, qui remplace toutes les cartes.
-- [ ] Mode avion **après** une première lecture : les idées reformulées restent
-      affichées. Jamais lues et hors ligne : « Impossible de charger… » avec
-      **Réessayer**.
+- [ ] Hors connexion : le dépôt part en file comme un message, puis au retour du réseau.
+- [ ] Après la collecte : le texte est dans `pandore/depots/<jour>.md`, sans nom, sans heure.
+- [ ] Après une synthèse publiée sur `main` et le déploiement de GitHub Pages (le cache
+      de Pages peut ajouter une dizaine de minutes) : en revenant sur l'écran, la
+      synthèse apparaît sans mise à jour de l'application ; « Synthèse automatique du
+      … », résumé s'il y en a un, « Classement choisi par l'IA : … », catégories dans
+      l'ordre du fichier, « N dépôts d'origine ».
+- [ ] Après une remise à zéro publiée : la même synthèse reste affichée, avec la note
+      « Remise à zéro le … ». Un dépôt fait ensuite n'apparaît qu'à la synthèse suivante,
+      qui remplace toute l'actuelle.
+- [ ] Mode avion **après** une première lecture : la synthèse reste affichée. Jamais lue
+      et hors ligne : « Impossible de charger la synthèse… » avec **Réessayer**.
 - [ ] Mode local, ou backend antérieur à 1.2.0 : champ et bouton grisés, raison
-      affichée ; la liste des idées reformulées reste lisible.
+      affichée ; la synthèse reste lisible.
 
 ## 8. Synchronisation et hors ligne
 

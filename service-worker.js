@@ -8,11 +8,11 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.14.0";
-/* Idées reformulées (boîte à idées) : publiées par l'IA dans le dépôt, elles changent SANS nouvelle version de
+var CACHE_VERSION = "brainsto-v1.15.0";
+/* Synthèse automatique de Pandore : publiée par l'IA dans le dépôt, elle change SANS nouvelle version de
  * l'application. Réseau d'abord ; la dernière copie reçue sert hors ligne, dans un cache à part qui survit aux mises
- * à jour (il ne contient que ce fichier, public). */
-var IDEAS_CACHE = "brainsto-idees-v1";
+ * à jour (il ne contient que ce fichier, public). L'ancien cache « brainsto-idees-v1 » est purgé comme les autres. */
+var PANDORE_CACHE = "brainsto-pandore-v1";
 
 var SHELL_CRITICAL = [
   "./",
@@ -67,7 +67,7 @@ self.addEventListener("activate", function (event) {
       return Promise.all(keys.map(function (key) {
         /* ⚠️ Seulement NOS anciens caches : sur GitHub Pages, les sites d'un même
          * compte partagent l'origine, donc le CacheStorage. */
-        return key.indexOf("brainsto-") === 0 && key !== CACHE_VERSION && key !== IDEAS_CACHE ? caches.delete(key) : null;
+        return key.indexOf("brainsto-") === 0 && key !== CACHE_VERSION && key !== PANDORE_CACHE ? caches.delete(key) : null;
       }));
     }).then(function () { return self.clients.claim(); })
   );
@@ -83,8 +83,8 @@ function isShellRequest(url) {
 
 /* La page de l'application : racine de la portée ou index.html, avec ou sans
  * paramètres (un lien partagé en porte parfois, p. ex. ?fbclid=). */
-function isIdeasFeed(url) {
-  return url.pathname === new URL("idees/reformulees.json", self.location.href).pathname;
+function isPandoreFeed(url) {
+  return url.pathname === new URL("pandore/synthese.json", self.location.href).pathname;
 }
 
 function isAppPage(url) {
@@ -101,16 +101,16 @@ self.addEventListener("fetch", function (event) {
 
   if (!isShellRequest(url)) { return; }
 
-  if (isIdeasFeed(url)) {
+  if (isPandoreFeed(url)) {
     event.respondWith(
       fetch(request).then(function (response) {
         if (response && response.status === 200) {
           var copy = response.clone();
-          caches.open(IDEAS_CACHE).then(function (cache) { cache.put(request, copy); });
+          caches.open(PANDORE_CACHE).then(function (cache) { cache.put(request, copy); });
         }
         return response;
       }).catch(function (error) {
-        return caches.open(IDEAS_CACHE).then(function (cache) { return cache.match(request); }).then(function (cached) {
+        return caches.open(PANDORE_CACHE).then(function (cache) { return cache.match(request); }).then(function (cached) {
           if (cached) { return cached; }
           throw error;
         });

@@ -705,81 +705,100 @@ check("Détails du sujet : « Épingler pour toute l'équipe » envoie l'épingl
   assert(/mis à jour/.test(dialog(old).textContent), "la raison de l'indisponibilité n'est pas dite");
 });
 
-/* ========================================================== Boîte à idées ==== */
+/* ================================================================ Pandore ==== */
 
-const ideasRoute = { name: "ideas", topicId: null, raw: "#/ideas" };
+const pandoreRoute = { name: "pandore", topicId: null, raw: "#/pandore" };
+const tick = () => new Promise((r) => setImmediate(r));
 
-check("boîte à idées : entrée depuis l'accueil ; dépôt anonyme, champ vidé, avertissement public ; vide refusé", () => {
+check("Pandore : entrée depuis l'accueil ; dépôt anonyme, champ vidé, avertissement public ; vide refusé ; plus aucun « boîte à idées »", () => {
   const t = boot();
   t.go(TOPICS);
-  assert(t.app().querySelector('[data-key="open-ideas"]') && t.app().querySelector('[data-key="open-ideas"]').getAttribute("aria-label") === "Boîte à idées",
-    "aucune entrée « Boîte à idées » dans l'en-tête de l'accueil");
+  const entry = t.app().querySelector('[data-key="open-pandore"]');
+  assert(entry && entry.getAttribute("aria-label") === "Pandore", "aucune entrée « Pandore » dans l'en-tête de l'accueil");
   const sent = [];
   t.ctx.App.actions.submitIdea = (text) => { sent.push(text); return Promise.resolve({ ok: true }); };
-  t.go(ideasRoute);
-  assert(/dépôt public/.test(t.app().textContent) && /aucun nom/.test(t.app().textContent), "l'avertissement de publication publique manque");
-  const area = () => t.app().querySelector('[data-draft="ideas:new"]');
-  const submit = () => t.app().querySelector('[data-key="ideas-submit"]');
+  t.go(pandoreRoute);
+  const text = t.app().textContent;
+  assert(/GitHub public/.test(text) && /aucun nom/.test(text), "l'avertissement de publication publique manque");
+  assert(/plainte/.test(text) && /synthèse automatique/i.test(text), "l'écran doit dire que tout peut s'y déposer, et parler de synthèse");
+  assert(!/reformul|bo[iî]te à idées/i.test(text), "vocabulaire d'avant Pandore à l'écran : " + text);
+  const area = () => t.app().querySelector('[data-draft="pandore:new"]');
+  const submit = () => t.app().querySelector('[data-key="pandore-submit"]');
   assert(submit() && submit().textContent === "Déposer anonymement" && !submit().disabled, "bouton de dépôt");
   submit().click();
-  assert(sent.length === 0 && area().getAttribute("aria-invalid") === "true", "une idée vide est partie, ou le refus n'est pas relié au champ");
-  area().value = "  Moins de réunions le lundi  ";
+  assert(sent.length === 0 && area().getAttribute("aria-invalid") === "true", "un dépôt vide est parti, ou le refus n'est pas relié au champ");
+  area().value = "  La réunion du lundi déborde  ";
   submit().click();
-  assert(JSON.stringify(sent) === '["Moins de réunions le lundi"]', "dépôt : " + JSON.stringify(sent));
+  assert(JSON.stringify(sent) === '["La réunion du lundi déborde"]', "dépôt : " + JSON.stringify(sent));
   assert(area().value === "", "le champ doit être vidé après le dépôt");
 });
 
-check("boîte à idées : mode local et serveur trop ancien désactivent le dépôt avec leur raison", () => {
+check("Pandore : mode local et serveur trop ancien désactivent le dépôt avec leur raison", () => {
   const local = boot();
   local.ctx.Sync.connection = { url: "", localMode: true, unlocked: true };
-  local.go(ideasRoute);
-  assert(local.app().querySelector('[data-key="ideas-submit"]').disabled && /mode local/.test(local.app().textContent), "mode local");
+  local.go(pandoreRoute);
+  assert(local.app().querySelector('[data-key="pandore-submit"]').disabled && /mode local/.test(local.app().textContent), "mode local");
   const old = boot();
   old.ctx.Sync.supports = (name) => name === "since";
-  old.go(ideasRoute);
-  assert(old.app().querySelector('[data-key="ideas-submit"]').disabled && /mis à jour/.test(old.app().textContent), "serveur sans « ideas »");
+  old.go(pandoreRoute);
+  assert(old.app().querySelector('[data-key="pandore-submit"]').disabled && /mis à jour/.test(old.app().textContent), "serveur sans « ideas »");
 });
 
-check("idées reformulées : lues dans idees/reformulees.json, triées, affichées en TEXTE (jamais en HTML) ; erreur avec « Réessayer »", async () => {
+check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'IA l'a choisi, en TEXTE (jamais en HTML) ; erreur avec « Réessayer »", async () => {
   const t = boot();
   let calls = 0;
   t.ctx.fetch = (url, opts) => {
     calls += 1;
-    assert(url === "idees/reformulees.json" && opts && opts.cache === "no-store", "lecture : " + url + " " + JSON.stringify(opts));
-    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, misAJour: "2026-10-03", idees: [
-      { id: "r1", titre: "Ancienne", texte: "Texte A", date: "2026-09-01", sources: ["aaaaaa"] },
-      { id: "r2", titre: "<img src=x onerror=alert(1)>", texte: "<b>gras</b>", theme: "Réunions", date: "2026-10-03", sources: ["bbbbbb", "cccccc"] },
-      { id: "r3", titre: "", texte: "sans titre" }
-    ] }) });
+    assert(url === "pandore/synthese.json" && opts && opts.cache === "no-store", "lecture : " + url + " " + JSON.stringify(opts));
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, date: "2026-10-03", remiseAZero: "",
+      classement: "Par nature", resume: "Deux sujets reviennent.", points: [
+        { id: "p1", categorie: "Plaintes", titre: "<img src=x onerror=alert(1)>", texte: "<b>gras</b>", sources: ["bbbbbb", "cccccc"] },
+        { id: "p2", categorie: "Idées", titre: "Afficher le planning le jeudi", texte: "Proposition : …", sources: ["aaaaaa"] },
+        { id: "p3", categorie: "Plaintes", titre: "Pauses écourtées", texte: "Constat : …", sources: ["dddddd"] },
+        { id: "p4", titre: "", texte: "sans titre" }
+      ] }) });
   };
-  t.go(ideasRoute);
-  await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setImmediate(r));
-  const cards = t.app().querySelectorAll(".idea-card");
-  assert(cards.length === 2, cards.length + " carte(s), 2 attendues (l'idée sans titre est écartée)");
-  assert(cards[0].querySelector(".card-title").textContent === "<img src=x onerror=alert(1)>", "la plus récente d'abord, titre en texte brut");
+  t.go(pandoreRoute);
+  await tick(); await tick();
+  const cards = t.app().querySelectorAll(".pandore-card");
+  assert(cards.length === 3, cards.length + " carte(s), 3 attendues (le point sans titre est écarté)");
+  const groups = t.app().querySelectorAll("h2.pandore-group");
+  assert(groups.length === 2 && groups[0].textContent === "Plaintes" && groups[1].textContent === "Idées",
+    "catégories dans l'ordre de l'IA, chacune une fois : " + Array.prototype.map.call(groups, (g) => g.textContent).join(", "));
+  const titles = Array.prototype.map.call(cards, (c) => c.querySelector(".card-title").textContent);
+  assert(JSON.stringify(titles) === JSON.stringify(["<img src=x onerror=alert(1)>", "Pauses écourtées", "Afficher le planning le jeudi"]),
+    "les points d'une catégorie sont regroupés sous elle : " + JSON.stringify(titles));
   assert(!t.app().querySelector("img") && !t.app().querySelector("b"), "du HTML venu du fichier a été interprété");
-  assert(/2 idées d'origine/.test(cards[0].textContent) && /Reformulation du 03\/10\/2026/.test(t.app().textContent), "métadonnées");
-  assert(!t.app().querySelector('[data-key="ideas-reset-note"]'), "boîte non réinitialisée : aucune note");
-  t.go(ideasRoute);
+  const text = t.app().textContent;
+  assert(/2 dépôts d'origine/.test(cards[0].textContent) && /du 03\/10\/2026/.test(text), "métadonnées");
+  assert(/Deux sujets reviennent\./.test(text) && /Classement choisi par l'IA : Par nature/.test(text), "résumé et axe de classement");
+  assert(!t.app().querySelector('[data-key="pandore-reset-note"]'), "pas de remise à zéro : aucune note");
+  t.go(pandoreRoute);
   assert(calls === 1, "un rendu de plus ne doit pas relire le fichier (" + calls + " lectures)");
 
-  /* Boîte réinitialisée : le rapport reste affiché, avec la date de la remise à zéro. */
+  /* Sans catégorie : une liste simple, sans titre de groupe. */
+  const flat = boot();
+  flat.ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, date: "2026-10-03",
+    points: [{ id: "p1", titre: "Un", texte: "x", sources: ["aaaaaa"] }, { id: "p2", titre: "Deux", texte: "y", sources: ["bbbbbb"] }] }) });
+  flat.go(pandoreRoute);
+  await tick(); await tick();
+  assert(flat.app().querySelectorAll(".pandore-card").length === 2 && !flat.app().querySelector("h2.pandore-group"), "liste sans catégorie");
+
+  /* Remise à zéro : la synthèse reste affichée, avec la date. */
   const z = boot();
-  z.ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, misAJour: "2026-10-03",
-    boiteReinitialisee: "2026-10-05", idees: [{ id: "r1", titre: "Gardée", texte: "Toujours là", date: "2026-10-03", sources: ["aaaaaa"] }] }) });
-  z.go(ideasRoute);
-  await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setImmediate(r));
-  const note = z.app().querySelector('[data-key="ideas-reset-note"]');
-  assert(z.app().querySelectorAll(".idea-card").length === 1, "après réinitialisation, le rapport doit rester affiché");
-  assert(note && /vidée le 05\/10\/2026/.test(note.textContent) && /prochaine reformulation/.test(note.textContent), "note de réinitialisation : " + (note && note.textContent));
+  z.ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, date: "2026-10-03",
+    remiseAZero: "2026-10-05", points: [{ id: "p1", titre: "Gardé", texte: "Toujours là", sources: ["aaaaaa"] }] }) });
+  z.go(pandoreRoute);
+  await tick(); await tick();
+  const note = z.app().querySelector('[data-key="pandore-reset-note"]');
+  assert(z.app().querySelectorAll(".pandore-card").length === 1, "après remise à zéro, la synthèse doit rester affichée");
+  assert(note && /Remise à zéro le 05\/10\/2026/.test(note.textContent) && /prochaine synthèse/.test(note.textContent), "note de remise à zéro : " + (note && note.textContent));
 
   const e = boot();
   e.ctx.fetch = () => Promise.reject(new TypeError("Failed to fetch"));
-  e.go(ideasRoute);
-  await new Promise((r) => setImmediate(r));
-  assert(/Impossible de charger/.test(e.app().textContent) && e.app().querySelector('[data-key="ideas-retry"]'), "erreur muette");
+  e.go(pandoreRoute);
+  await tick();
+  assert(/Impossible de charger la synthèse/.test(e.app().textContent) && e.app().querySelector('[data-key="pandore-retry"]'), "erreur muette");
 });
 
 /* ===================================================== Gestes sur les bulles ==== */

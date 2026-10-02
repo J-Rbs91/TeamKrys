@@ -60,10 +60,10 @@ jobs:
           node tests/startup-robust.test.js
       - name: Contrat CSS (lisibilité à 320 px, pastille d'état)
         run: node tests/css-contract.test.js
-      - name: Boîte à idées (collecte, format publié par l'IA)
+      - name: Pandore (collecte, synthèse publiée par l'IA, remise à zéro)
         run: |
-          node tests/ideas.test.js
-          node tools/check-ideas.js
+          node tests/pandore.test.js
+          node tools/pandore-check.js
       - name: Tout test du dépôt est câblé dans ce fichier
         run: |
           # Un test ajouté sans être lancé ici ne protégerait rien : on échoue.

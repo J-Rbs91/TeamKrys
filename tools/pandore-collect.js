@@ -1,21 +1,27 @@
 #!/usr/bin/env node
-/* BrainstO. — collecte quotidienne de la boîte à idées (GitHub Actions, .github/workflows/boite-a-idees.yml).
+/* BrainstO. — collecte quotidienne de Pandore (GitHub Actions, .github/workflows/pandore.yml).
  *
- *     BRAINSTO_SCRIPT_URL=… BRAINSTO_IDEAS_SECRET=… node tools/collect-ideas.js
+ *     BRAINSTO_SCRIPT_URL=… BRAINSTO_IDEAS_SECRET=… node tools/pandore-collect.js
  *
- * 1. demande au backend Apps Script les idées en attente (POST ?op=ideas-export, avec le secret de collecte) ;
- * 2. écrit celles qui n'ont jamais été publiées dans idees/boite/<jour de collecte>.md, dans un ordre ALÉATOIRE
- *    et sans aucune heure : on sait seulement qu'une idée a été déposée avant la collecte ;
- * 3. ajoute leurs références au registre idees/references.txt, puis commit et push (auteur : le robot GitHub Actions) ;
+ * Pandore reçoit tout ce que l'équipe veut dire anonymement : idées, plaintes, questions, remarques.
+ *
+ * 1. demande au backend Apps Script les dépôts en attente (POST ?op=ideas-export, avec le secret de collecte) ;
+ * 2. écrit ceux qui n'ont jamais été publiés dans pandore/depots/<jour de collecte>.md, dans un ordre ALÉATOIRE
+ *    et sans aucune heure : on sait seulement qu'un dépôt a été fait avant la collecte ;
+ * 3. ajoute leurs références au registre pandore/references.txt, puis commit et push (auteur : le robot GitHub Actions) ;
  * 4. acquitte (POST ?op=ideas-ack) : le backend retire ce qui est publié. Sans acquittement, la collecte suivante
- *    reverra les mêmes idées et les ignorera (référence déjà au registre).
+ *    reverra les mêmes dépôts et les ignorera (référence déjà au registre).
  *
- * Le registre est la mémoire de la boîte : la réinitialisation (tools/reset-ideas.js) retire les idées traitées de
- * idees/boite/, mais jamais leur référence du registre. Sans lui, une idée publiée puis retirée reviendrait à la
+ * Les noms techniques du backend (opérations `ideas-*`, secret BRAINSTO_IDEAS_SECRET, action SUBMIT_IDEA) datent
+ * d'avant le nom Pandore. Ils restent tels quels : les changer obligerait à redéployer le backend, sans rien
+ * changer pour l'équipe.
+ *
+ * Le registre est la mémoire de Pandore : la remise à zéro (tools/pandore-reset.js) retire les dépôts synthétisés de
+ * pandore/depots/, mais jamais leur référence du registre. Sans lui, un dépôt publié puis retiré reviendrait à la
  * collecte suivante si son acquittement avait échoué.
  *
- * ⚠️ SÉCURITÉ. Le dépôt est publié par GitHub Pages (Jekyll), sur le MÊME domaine que l'application, et Pages
- * transforme les .md en pages HTML. Un texte d'idée n'est donc jamais interprété, à aucun des trois étages :
+ * ⚠️ SÉCURITÉ. Le dépôt Git est publié par GitHub Pages (Jekyll), sur le MÊME domaine que l'application, et Pages
+ * transforme les .md en pages HTML. Un texte déposé n'est donc jamais interprété, à aucun des trois étages :
  *   - HTML : `&`, `<`, `>` échappés. Sinon une balise <script> s'exécuterait chez quiconque ouvre la page ;
  *   - Liquid : `{` et `}` échappés. Sinon `{% x %}` ferait ÉCHOUER la publication du site entier, application
  *     comprise, et `{: onclick=…}` (attributs kramdown) ajouterait un gestionnaire d'événement ;
@@ -32,10 +38,9 @@ const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
-const BOX_DIR = path.join(ROOT, "idees", "boite");
-const REGISTRY = path.join(ROOT, "idees", "references.txt");
-const REF_RX = /<!-- ref: ([0-9a-f]{6,64}) -->/g;
-const REGISTRY_HEADER = "# Références de toutes les idées publiées par la collecte, une par ligne. Écrit par tools/collect-ideas.js : ne pas modifier.";
+const BOX_DIR = path.join(ROOT, "pandore", "depots");
+const REGISTRY = path.join(ROOT, "pandore", "references.txt");
+const REGISTRY_HEADER = "# Références de tous les dépôts publiés par la collecte, une par ligne. Écrit par tools/pandore-collect.js : ne pas modifier.";
 const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
   "novembre", "décembre"];
 
@@ -56,7 +61,7 @@ function shuffle(list, randomInt) {
   return out;
 }
 
-/* Références du registre (toutes les idées jamais publiées). */
+/* Références du registre (tous les dépôts jamais publiés). */
 function registryRefs(file) {
   if (!fs.existsSync(file)) { return []; }
   return fs.readFileSync(file, "utf8").split("\n").map((l) => l.trim()).filter((l) => /^[0-9a-f]{6,64}$/.test(l));
@@ -67,7 +72,7 @@ function appendRegistry(file, refs) {
   fs.writeFileSync(file, existing + refs.map((r) => r + "\n").join(""));
 }
 
-/* Références déjà publiées : celles de la boîte, et celles du registre (une idée retirée par réinitialisation y reste). */
+/* Références déjà publiées : celles de pandore/depots/, et celles du registre (un dépôt retiré par remise à zéro y reste). */
 function knownRefs(dir, registry) {
   const refs = new Set(registryRefs(registry || ""));
   if (!fs.existsSync(dir)) { return refs; }
@@ -77,8 +82,8 @@ function knownRefs(dir, registry) {
   return refs;
 }
 
-/* Un fichier de la boîte : un en-tête, puis des blocs qui commencent par une ligne « --- ». Une ligne « --- » ne
- * peut venir que du script : le texte d'une idée est cité, chacune de ses lignes commence par « > ». Seul le
+/* Un fichier de dépôts : un en-tête, puis des blocs qui commencent par une ligne « --- ». Une ligne « --- » ne
+ * peut venir que du script : le texte d'un dépôt est cité, chacune de ses lignes commence par « > ». Seul le
  * commentaire qui OUVRE un bloc compte comme référence : le texte échappé ne peut plus en former un. */
 function parseBox(text) {
   const parts = String(text).replace(/\r\n?/g, "\n").split(/^---$/m);
@@ -101,31 +106,31 @@ function frenchDay(day) {
 
 function header(day) {
   return [
-    "# Idées collectées le " + frenchDay(day),
+    "# Dépôts collectés le " + frenchDay(day),
     "",
-    "Déposées anonymement dans BrainstO., publiées **telles quelles** (non reformulées), dans un ordre aléatoire.",
+    "Déposés anonymement dans Pandore (BrainstO.), publiés **tels quels**, dans un ordre aléatoire.",
     "Les chevrons, accolades et crochets y sont écrits en entités HTML (`&lt;`, `&#123;`, `&#91;`…) : c'est voulu.",
-    "Ne cherchez pas à en identifier les auteurs. Les versions reformulées sont dans",
-    "[`idees/reformulees.json`](../reformulees.json) et s'affichent dans l'application.",
+    "Ne cherchez pas à en identifier les auteurs. La synthèse automatique est dans",
+    "[`pandore/synthese.json`](../synthese.json) et s'affiche dans l'application.",
     ""
   ].join("\n");
 }
 
-/* Une idée : sa référence (commentaire, pour l'IA et la déduplication), puis son texte en citation, ligne par ligne.
+/* Un dépôt : sa référence (commentaire, pour l'IA et la déduplication), puis son texte en citation, ligne par ligne.
  * Une référence n'est jamais tirée du texte : seules les références posées par ce script comptent, et le texte
  * échappé ne peut plus en contenir (`<` devient `&lt;`). */
-function renderIdea(idea) {
-  const lines = escapeText(idea.text).replace(/\r\n?/g, "\n").split("\n").map((l) => "> " + l.trimEnd());
-  return ["---", "", "<!-- ref: " + idea.ref + " -->", ...lines, ""].join("\n");
+function renderDeposit(deposit) {
+  const lines = escapeText(deposit.text).replace(/\r\n?/g, "\n").split("\n").map((l) => "> " + l.trimEnd());
+  return ["---", "", "<!-- ref: " + deposit.ref + " -->", ...lines, ""].join("\n");
 }
 
-function render(day, ideas, existing) {
-  const body = ideas.map(renderIdea).join("\n");
+function render(day, deposits, existing) {
+  const body = deposits.map(renderDeposit).join("\n");
   return (existing ? existing.replace(/\s*$/, "\n\n") : header(day) + "\n") + body;
 }
 
-function validIdea(idea) {
-  return !!idea && /^[0-9a-f]{6,64}$/.test(String(idea.ref || "")) && typeof idea.text === "string" && idea.text.trim() !== "";
+function validDeposit(deposit) {
+  return !!deposit && /^[0-9a-f]{6,64}$/.test(String(deposit.ref || "")) && typeof deposit.text === "string" && deposit.text.trim() !== "";
 }
 
 async function call(url, op, body) {
@@ -153,11 +158,11 @@ async function main() {
     return;
   }
   const exported = await call(url, "ideas-export", { secret });
-  const ideas = (Array.isArray(exported.ideas) ? exported.ideas : []).filter(validIdea);
-  if (!ideas.length) { console.log("Boîte vide."); return; }
+  const deposits = (Array.isArray(exported.ideas) ? exported.ideas : []).filter(validDeposit);
+  if (!deposits.length) { console.log("Rien en attente."); return; }
 
   const known = knownRefs(BOX_DIR, REGISTRY);
-  const fresh = ideas.filter((i) => !known.has(i.ref));
+  const fresh = deposits.filter((d) => !known.has(d.ref));
   if (fresh.length) {
     const day = new Date().toISOString().slice(0, 10);
     const file = path.join(BOX_DIR, day + ".md");
@@ -165,24 +170,24 @@ async function main() {
     const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
     fs.writeFileSync(file, render(day, shuffle(fresh), existing));
     /* Le registre suit l'ordre mélangé du fichier, jamais celui de l'export. */
-    appendRegistry(REGISTRY, parseBox(fs.readFileSync(file, "utf8")).blocks.map((b) => b.ref).filter((r) => fresh.some((i) => i.ref === r)));
+    appendRegistry(REGISTRY, parseBox(fs.readFileSync(file, "utf8")).blocks.map((b) => b.ref).filter((r) => fresh.some((d) => d.ref === r)));
     git(["config", "user.name", "github-actions[bot]"]);
     git(["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]);
     git(["add", path.relative(ROOT, file), path.relative(ROOT, REGISTRY)]);
-    git(["commit", "-m", "idées : collecte du " + day + " (" + fresh.length + (fresh.length > 1 ? " idées)" : " idée)")]);
+    git(["commit", "-m", "pandore : collecte du " + day + " (" + fresh.length + (fresh.length > 1 ? " dépôts)" : " dépôt)")]);
     /* Un commit arrivé entre-temps sur la branche fait refuser le push : on se recale une fois, puis on réessaie. */
     try { git(["push"]); } catch (e) { git(["pull", "--rebase"]); git(["push"]); }
-    console.log(fresh.length + " idée(s) publiée(s) dans " + path.relative(ROOT, file) + ".");
+    console.log(fresh.length + " dépôt(s) publié(s) dans " + path.relative(ROOT, file) + ".");
   } else {
-    console.log("Toutes les idées exportées étaient déjà publiées : acquittement seul.");
+    console.log("Tous les dépôts exportés étaient déjà publiés : acquittement seul.");
   }
-  /* Acquitter APRÈS le push : une idée n'est retirée de la boîte qu'une fois dans le dépôt distant. */
-  const ack = await call(url, "ideas-ack", { secret, refs: ideas.map((i) => i.ref) });
-  console.log("Boîte vidée de " + ack.removed + " idée(s).");
+  /* Acquitter APRÈS le push : un dépôt n'est retiré du backend qu'une fois dans le dépôt Git distant. */
+  const ack = await call(url, "ideas-ack", { secret, refs: deposits.map((d) => d.ref) });
+  console.log("Backend vidé de " + ack.removed + " dépôt(s).");
 }
 
 module.exports = { escapeText, shuffle, knownRefs, registryRefs, appendRegistry, parseBox, serializeBox, frenchDay, render,
-  renderIdea, validIdea, REGISTRY_HEADER };
+  renderDeposit, validDeposit, REGISTRY_HEADER };
 
 if (require.main === module) {
   main().catch((error) => {

@@ -1160,6 +1160,17 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 .section-title .icon { opacity: 0.85; }
 
+/* Pandore : une catégorie de la synthèse automatique. Le libellé vient de l'IA (axe choisi par elle) ; seule sa
+   place dans la hiérarchie est fixée ici, un cran sous le titre de section, au-dessus des cartes. */
+.pandore-group {
+  margin: 10px 0 0;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.pandore-group:first-child { margin-top: 0; }
+
 .divider { height: 1px; background: var(--line); border: 0; margin: 6px 0; }
 
 /* --- États vides ---------------------------------------------------------- */

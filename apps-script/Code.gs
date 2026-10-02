@@ -17,8 +17,8 @@ var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
 var PROP_FILE_ID = "BRAINSTO_FILE_ID";
 var PROP_BACKUP_VERSION = "BRAINSTO_BACKUP_VERSION";
-/* Boîte à idées : un fichier Drive À PART, jamais envoyé aux téléphones (doGet ne le lit pas), vidé par la collecte
- * quotidienne (GitHub Actions, tools/collect-ideas.js). Le secret de collecte est une propriété du script, jamais
+/* Pandore (anciennement « boîte à idées », d'où les noms ci-dessous) : un fichier Drive À PART, jamais envoyé aux
+ * téléphones (doGet ne le lit pas), vidé par la collecte quotidienne (GitHub Actions, tools/pandore-collect.js). Le secret de collecte est une propriété du script, jamais
  * dans ce fichier : sans lui (ou trop court), la collecte est désactivée. */
 var IDEAS_FILE_NAME = "brainsto-idees.json";
 var PROP_IDEAS_FILE_ID = "BRAINSTO_IDEAS_FILE_ID";

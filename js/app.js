@@ -566,7 +566,7 @@
     if (!parts.length) { return { raw: "#/", name: "topics", topicId: null }; }
     if (parts[0] === "settings") { return { raw: raw, name: "settings", topicId: null }; }
     if (parts[0] === "meeting") { return { raw: raw, name: "meeting", topicId: null }; }
-    if (parts[0] === "ideas") { return { raw: raw, name: "ideas", topicId: null }; }
+    if (parts[0] === "pandore") { return { raw: raw, name: "pandore", topicId: null }; }
     if (parts[0] === "topic" && parts[1]) {
       if (parts[2] === "proposals") { return { raw: raw, name: "proposals", topicId: parts[1] }; }
       if (parts[2] === "conclusion") { return { raw: raw, name: "conclusion", topicId: parts[1] }; }
@@ -627,7 +627,7 @@
     topics: null,
     settings: "topics",
     meeting: "settings",
-    ideas: "topics",
+    pandore: "topics",
     topic: "topics",
     proposals: "topic",
     conclusion: "topic"
@@ -842,8 +842,9 @@
       dispatch("CHANGE_TOPIC_STATUS", { topicId: topicId, status: status });
     },
 
-    /* ⚠️ Une idée part TOUJOURS sans auteur : l'acteur est forcé à l'anonyme ici, et le serveur refuse toute idée qui
-     * en porte un. Elle n'entre pas dans l'état partagé (voir Core.applyAction) : rien ne s'affiche, rien ne se relit. */
+    /* Dépôt dans Pandore (SUBMIT_IDEA est son nom technique, d'avant Pandore).
+     * ⚠️ Il part TOUJOURS sans auteur : l'acteur est forcé à l'anonyme ici, et le serveur refuse tout dépôt qui en
+     * porte un. Il n'entre pas dans l'état partagé (voir Core.applyAction) : rien ne s'affiche, rien ne se relit. */
     submitIdea: function (text) {
       return dispatch("SUBMIT_IDEA", { ideaId: Utils.uid(), text: text }, { id: "", name: Core.ANON_NAME });
     },

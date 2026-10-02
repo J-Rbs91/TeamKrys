@@ -101,7 +101,7 @@ réseau n'est pas appliquée deux fois).
 | `SET_CONCLUSION_VOTE` | `topicId`, `conclusionId`, `set` (facultatif) |
 | `REMOVE_CONCLUSION_VOTE` | `topicId` |
 | `SET_TOPIC_PIN` | `topicId`, `pinned` (affectation, pas bascule) |
-| `SUBMIT_IDEA` | `ideaId`, `text` ; `actorId` **vide** obligatoire |
+| `SUBMIT_IDEA` | `ideaId`, `text` ; `actorId` **vide** obligatoire. Dépôt dans Pandore (nom technique d'avant Pandore) |
 
 L'auteur d'une action est toujours pris dans l'enveloppe (`actorId`,
 `actorName`) : le contenu anonyme n'enregistre donc aucune identité.
@@ -110,19 +110,20 @@ L'auteur d'une action est toujours pris dans l'enveloppe (`actorId`,
 les capacités `pins` et `ideas`. Le client ne les propose pas à un serveur qui ne les
 annonce pas.
 
-`SUBMIT_IDEA` est à part :
+`SUBMIT_IDEA` (un dépôt dans Pandore) est à part :
 
-- le serveur **refuse** une idée dont l'enveloppe porte un `actorId` (« Une idée est
-  toujours anonyme. ») ; le client envoie `actorId: ""` et `actorName: "Anonyme"` ;
-- elle ne laisse **aucune trace** dans les données partagées : ni texte, ni révision,
+- le serveur **refuse** un dépôt dont l'enveloppe porte un `actorId` (« Une idée est
+  toujours anonyme. », message d'avant Pandore) ; le client envoie `actorId: ""` et
+  `actorName: "Anonyme"` ;
+- il ne laisse **aucune trace** dans les données partagées : ni texte, ni révision,
   ni `updatedAt`, ni `id` dans `processedActionIds`. Cause : une révision qui avance
   sans rien de visible dirait à chacun l'heure du dépôt. Conséquence : un renvoi est
-  dédupliqué par la référence de l'idée (dans la boîte, puis dans le dépôt), pas par
-  l'`id` de l'action ;
+  dédupliqué par la référence du dépôt (sur le Drive, puis dans le dépôt GitHub), pas
+  par l'`id` de l'action ;
 - le serveur range son texte dans un second fichier Drive, `brainsto-idees.json`, à
   côté du fichier de données, sous une référence tirée de `ideaId` par hachage. Ni
   heure ni appareil n'y sont notés. La collecte quotidienne le vide (voir
-  [`BOITE_A_IDEES.md`](BOITE_A_IDEES.md)).
+  [`PANDORE.md`](PANDORE.md)).
 
 ### Choix idempotents : le marqueur `set:true`
 
@@ -292,7 +293,7 @@ sans `conclusion`. Deux voies :
 | Titre de proposition | 200 |
 | Description de proposition | 3000 |
 | Conclusion | 5000 |
-| Idée (boîte à idées) | 2000 |
+| Dépôt dans Pandore | 2000 |
 
 Les identifiants (`actorId`, `participantId`, `topicId`, `messageId`, `proposalId`,
 `conclusionId`, `quoteId`, `ideaId` et l'`id` d'une action) ont **120 caractères au plus** : au

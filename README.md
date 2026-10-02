@@ -17,7 +17,7 @@ application (PWA) sur iPhone et Android.
 | Frontend (PWA) | GitHub Pages | **oui** — c'est ce que Pages sert |
 | Backend | Google Apps Script | **oui** — `apps-script/`, à copier dans l'éditeur |
 | Données (un fichier JSON) | Google Drive | **non, jamais** |
-| Boîte à idées : idées anonymes et leurs reformulations | `idees/` | **oui, volontairement** (voir ci-dessous) |
+| Pandore : dépôts anonymes et leur synthèse automatique | `pandore/` | **oui, volontairement** (voir ci-dessous) |
 | Secrets (code d'accès, adresse du script) | éditeur Apps Script / appareil | **non, jamais** |
 
 > Le backend a longtemps été tenu hors du dépôt, au motif qu'il porte le code
@@ -48,12 +48,12 @@ Règles tenues par ce dépôt :
   mesurent de 24 à 36 px de haut, délibérément (`min-height: 24px`). Ne pas
   promettre « 44 px partout » dans la documentation.
 
-**Une exception, choisie : la boîte à idées.** Les idées déposées anonymement sont
-publiées chaque jour dans `idees/boite/`, pour qu'une IA les reformule dans
-`idees/reformulees.json`, que l'application affiche. Ce sont les seuls contenus de
-l'équipe qui entrent dans le dépôt, et l'application le dit avant chaque dépôt.
-Fonctionnement, mise en place et limites de l'anonymat :
-[`docs/BOITE_A_IDEES.md`](docs/BOITE_A_IDEES.md).
+**Une exception, choisie : Pandore.** Ce que l'équipe y dépose anonymement (idées,
+plaintes, questions, remarques) est publié chaque jour dans `pandore/depots/`, pour
+qu'une IA en écrive la synthèse automatique dans `pandore/synthese.json`, que
+l'application affiche. Ce sont les seuls contenus de l'équipe qui entrent dans le
+dépôt, et l'application le dit avant chaque dépôt. Fonctionnement, mise en place et
+limites de l'anonymat : [`docs/PANDORE.md`](docs/PANDORE.md).
 
 L'adresse du script et le code d'accès sont saisis **par chaque utilisateur dans
 l'application**. L'adresse reste dans le `localStorage` de son appareil ; le code
@@ -81,12 +81,12 @@ docs/IDENTITE_VISUELLE.md  le noyau d'identité : pourquoi le produit est ainsi
 docs/                      installation, guide utilisateur, checklist de test
 tools/check-contrast.py    relit les jetons du thème et échoue sous le seuil
 tools/build-icons.py       régénère les icônes depuis une source unique
-tools/collect-ideas.js     collecte quotidienne de la boîte à idées (GitHub Actions)
-tools/check-ideas.js       contrôle de ce que l'IA publie dans idees/
-tools/reset-ideas.js       réinitialisation de la boîte à idées, sur demande
-idees/                     boîte à idées : idées brutes, reformulées, rapports
-.claude/skills/boite-a-idees/  procédure de reformulation pour Claude Code
-.github/workflows/         tests (test.yml) et collecte des idées (boite-a-idees.yml)
+tools/pandore-collect.js   collecte quotidienne de Pandore (GitHub Actions)
+tools/pandore-check.js     contrôle de ce que l'IA publie dans pandore/
+tools/pandore-reset.js     remise à zéro de Pandore, sur demande
+pandore/                   Pandore : dépôts bruts, synthèse automatique, registre
+.claude/skills/pandore/    procédure de synthèse automatique pour Claude Code
+.github/workflows/         tests (test.yml) et collecte de Pandore (pandore.yml)
 apps-script/Code.gs        backend : stockage Drive, verrou, dédup, protocole
 apps-script/appsscript.json manifeste du projet Apps Script
 tests/parity.test.js       parité client / backend, action par action
@@ -515,7 +515,7 @@ raccourci qu'une fois celui-ci annoncé :
 | `batch` | un `POST` peut porter jusqu'à 20 actions, avec un verdict par action |
 | `lean` | l'état envoyé n'emporte plus `processedActionIds` — **un tiers du poids** |
 | `pins` | épingler un sujet pour toute l'équipe (`SET_TOPIC_PIN`) |
-| `ideas` | déposer une idée dans la boîte à idées (`SUBMIT_IDEA`) |
+| `ideas` | déposer dans Pandore (`SUBMIT_IDEA` ; noms d'avant Pandore) |
 
 Un serveur d'avant n'annonce rien : le client retombe sur le protocole
 d'origine. Un client d'avant ignore le champ : le serveur récent lui répond
@@ -901,7 +901,7 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — installer le backend et publier le site
 - [`docs/GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md) — guide de l'équipe
 - [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md) — structure du JSON et liste des actions
-- [`docs/BOITE_A_IDEES.md`](docs/BOITE_A_IDEES.md) — boîte à idées : trajet d'une idée, anonymat, mise en place, reformulation
+- [`docs/PANDORE.md`](docs/PANDORE.md) — Pandore : trajet d'un dépôt, synthèse automatique, anonymat, mise en place, remise à zéro
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion

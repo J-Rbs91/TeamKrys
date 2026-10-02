@@ -348,35 +348,37 @@ l'est jamais.
 
 ---
 
-## Boîte à idées
+## Pandore
 
-On l'ouvre depuis l'accueil, avec l'icône de boîte aux lettres en haut de l'écran.
+Pandore est l'espace **anonyme** de l'équipe et de la direction : on y dépose ce qu'on
+veut dire. Une idée, une plainte, une question, une remarque. On l'ouvre depuis
+l'accueil, avec l'icône de boîte aux lettres en haut de l'écran.
 
-**Déposer.** Écrivez l'idée, puis **Déposer anonymement**. Elle part **sans nom ni
+**Déposer.** Écrivez votre texte, puis **Déposer anonymement**. Il part **sans nom ni
 identifiant**, même si vous signez vos messages ailleurs. C'est une boîte aux lettres :
-personne ne relit l'idée dans l'application, pas même vous, et elle ne se retire pas.
+personne ne relit un dépôt dans l'application, pas même vous, et il ne se retire pas.
 
-**Ce que deviennent les idées.**
+**Ce que deviennent les dépôts.**
 
-1. Une fois par jour, les idées reçues sont publiées **telles quelles** dans le dépôt
-   public du projet sur GitHub (dossier `idees/boite/`), dans un ordre mélangé et sans
-   heure. N'y mettez donc **aucun nom ni rien de confidentiel**.
-2. Une IA les reformule ensuite : idées proches regroupées, détails qui trahiraient
-   l'auteur retirés, sens conservé, critiques comprises.
-3. Les versions reformulées s'affichent sous le champ de dépôt, **pour toute l'équipe**,
-   les plus récentes d'abord. « 3 idées d'origine » signifie que trois idées déposées
-   disaient la même chose.
+1. Une fois par jour, ils sont publiés **tels quels** sur le GitHub public du projet
+   (dossier `pandore/depots/`), dans un ordre mélangé et sans heure. N'y mettez donc
+   **aucun nom ni rien de confidentiel**.
+2. Une IA en écrit ensuite une **synthèse automatique** : sujets proches regroupés,
+   détails qui trahiraient l'auteur retirés, sens conservé, plaintes comprises.
+3. La synthèse s'affiche sous le champ de dépôt, **pour tous**. L'IA choisit comment la
+   classer (par nature, par thème…) et l'écran l'indique. « 3 dépôts d'origine »
+   signifie que trois dépôts disaient la même chose.
 
-Une idée déposée n'apparaît donc pas tout de suite : il faut la collecte du jour, puis
-le passage de l'IA.
+Un dépôt n'apparaît donc pas tout de suite : il faut la collecte du jour, puis le
+passage de l'IA.
 
-Ce qui s'affiche est **le dernier rapport de reformulation**, daté (« Reformulation du
-… »). Quand la boîte a été vidée après ce rapport, une note le dit : le rapport reste
-affiché, et les idées déposées depuis figureront dans le suivant, qui le remplacera.
+Ce qui s'affiche est **la dernière synthèse automatique**, datée (« Synthèse
+automatique du … »). Quand Pandore a été remise à zéro après cette synthèse, une note
+le dit : la synthèse reste affichée, et ce qui a été déposé depuis figurera dans la
+suivante, qui la remplacera.
 
 En mode local, ou si le serveur de l'équipe n'a pas été mis à jour (backend 1.2.0), le
-dépôt est grisé et l'écran dit pourquoi. La lecture des idées reformulées fonctionne
-quand même.
+dépôt est grisé et l'écran dit pourquoi. La lecture de la synthèse fonctionne quand même.
 
 ---
 

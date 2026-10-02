@@ -1291,8 +1291,8 @@
         sub: App.user.name ? "Bonjour " + App.user.name : null,
         actions: [
           statusPill(),
-          el("button", { class: "btn-icon", type: "button", "aria-label": "Boîte à idées", "data-key": "open-ideas",
-            onclick: function () { App.go("#/ideas"); } }, [icon("inbox", 21)]),
+          el("button", { class: "btn-icon", type: "button", "aria-label": "Pandore", "data-key": "open-pandore",
+            onclick: function () { App.go("#/pandore"); } }, [icon("inbox", 21)]),
           el("button", { class: "btn-icon", type: "button", "aria-label": "Réglages",
             onclick: function () { App.go("#/settings"); } }, [icon("settings", 21)])
         ]
@@ -2173,50 +2173,60 @@
     if (!printed) { UI.toast(PRINT_UNAVAILABLE, "error"); }
   }
 
-  /* =========================================================== Boîte à idées ==== */
+  /* ================================================================ Pandore ==== */
 
-  /* ⚠️ Deux circuits, jamais mélangés :
-   *   - DÉPÔT : une idée part par la file d'actions (SUBMIT_IDEA), toujours anonyme, et n'entre jamais dans l'état
-   *     partagé. Personne ne la relit dans l'application, pas même son auteur ;
-   *   - LECTURE : les idées REFORMULÉES par l'IA, publiées dans le dépôt (idees/reformulees.json) et servies par GitHub
-   *     Pages à côté de l'application. Affichées en TEXTE seulement : rien de ce fichier n'est interprété comme du HTML.
-   *     Ce fichier est UN rapport : chaque reformulation le remplace. Une réinitialisation de la boîte le laisse
-   *     affiché tel quel, et le date (`boiteReinitialisee`) pour dire que les idées déposées depuis viendront au suivant.
+  /* Pandore : l'espace anonyme où l'équipe dépose ce qu'elle veut dire (idées, plaintes, questions, remarques).
+   * ⚠️ Deux circuits, jamais mélangés :
+   *   - DÉPÔT : le texte part par la file d'actions (SUBMIT_IDEA, nom technique d'avant Pandore), toujours anonyme, et
+   *     n'entre jamais dans l'état partagé. Personne ne le relit dans l'application, pas même son auteur ;
+   *   - LECTURE : la SYNTHÈSE AUTOMATIQUE écrite par l'IA, publiée dans le dépôt Git (pandore/synthese.json) et servie
+   *     par GitHub Pages à côté de l'application. Affichée en TEXTE seulement : rien n'y est interprété comme du HTML.
+   *     Chaque synthèse remplace la précédente. Une remise à zéro la laisse affichée telle quelle, et la date
+   *     (`remiseAZero`) pour dire que ce qui a été déposé depuis viendra dans la suivante.
+   *   - CLASSEMENT : l'IA choisit l'axe (`classement`) et les catégories (`categorie` de chaque point). L'écran les
+   *     montre dans l'ordre du fichier, sans les réinterpréter.
    * Le fichier est relu en arrivant sur l'écran, puis au plus toutes les deux minutes (le service worker le prend sur
    * le réseau d'abord, avec repli hors ligne). */
-  var IDEAS_URL = "idees/reformulees.json";
-  var IDEAS_STALE_MS = 2 * 60 * 1000;
-  var ideasFeed = { status: "idle", items: [], updated: "", resetOn: "", loadedAt: 0 };
+  var PANDORE_URL = "pandore/synthese.json";
+  var PANDORE_STALE_MS = 2 * 60 * 1000;
+  var pandoreFeed = { status: "idle", points: [], date: "", resetOn: "", classement: "", resume: "", loadedAt: 0 };
 
-  function cleanIdea(raw) {
+  function isDay(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")); }
+
+  function cleanPoint(raw) {
     if (!raw || typeof raw !== "object") { return null; }
     var titre = Utils.trim(raw.titre);
     var texte = Utils.trim(raw.texte);
     if (!titre || !texte) { return null; }
     return {
-      id: String(raw.id || ""), titre: Utils.limit(titre, 120), texte: Utils.limit(texte, 1500),
-      theme: Utils.limit(Utils.trim(raw.theme), 40), date: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.date || "")) ? raw.date : "",
+      titre: Utils.limit(titre, 120), texte: Utils.limit(texte, 1500), categorie: Utils.limit(Utils.trim(raw.categorie), 40),
       sources: Array.isArray(raw.sources) ? raw.sources.length : 0
     };
   }
 
-  function loadReformulatedIdeas() {
-    if (ideasFeed.status === "loading") { return; }
-    if (typeof fetch !== "function") { ideasFeed.status = "error"; return; }
-    ideasFeed.status = "loading";
-    var done = function () { if (App.route && App.route.name === "ideas") { UI.force(); } };
-    fetch(IDEAS_URL, { cache: "no-store" }).then(function (response) {
+  function loadSynthesis() {
+    if (pandoreFeed.status === "loading") { return; }
+    if (typeof fetch !== "function") { pandoreFeed.status = "error"; return; }
+    pandoreFeed.status = "loading";
+    var done = function () { if (App.route && App.route.name === "pandore") { UI.force(); } };
+    fetch(PANDORE_URL, { cache: "no-store" }).then(function (response) {
       if (!response.ok) { throw new Error("HTTP " + response.status); }
       return response.json();
     }).then(function (data) {
-      var items = (data && Array.isArray(data.idees) ? data.idees : []).map(cleanIdea).filter(Boolean);
-      items.sort(function (a, b) { return a.date === b.date ? 0 : (a.date < b.date ? 1 : -1); });
-      var day = function (value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : ""; };
-      ideasFeed = { status: "ok", items: items, updated: day(data && data.misAJour), resetOn: day(data && data.boiteReinitialisee), loadedAt: Utils.now() };
+      data = data && typeof data === "object" ? data : {};
+      pandoreFeed = {
+        status: "ok",
+        points: (Array.isArray(data.points) ? data.points : []).map(cleanPoint).filter(Boolean),
+        date: isDay(data.date) ? data.date : "",
+        resetOn: isDay(data.remiseAZero) ? data.remiseAZero : "",
+        classement: Utils.limit(Utils.trim(data.classement), 60),
+        resume: Utils.limit(Utils.trim(data.resume), 1500),
+        loadedAt: Utils.now()
+      };
       done();
     }, function () {
-      ideasFeed.status = "error";
-      ideasFeed.loadedAt = Utils.now();
+      pandoreFeed.status = "error";
+      pandoreFeed.loadedAt = Utils.now();
       done();
     });
   }
@@ -2226,101 +2236,118 @@
     return parts.length === 3 ? parts[2] + "/" + parts[1] + "/" + parts[0] : "";
   }
 
-  /* Disponibilité du dépôt : en mode local, aucun serveur ne recevrait l'idée ; un serveur qui répond sans annoncer
-   * « ideas » (backend d'avant 1.2.0) la refuserait. Tant que le serveur n'a jamais répondu, on ne présume rien. */
-  function ideasUnavailableReason() {
+  /* Groupes dans l'ordre où l'IA les a écrits : une catégorie apparaît là où apparaît son premier point. */
+  function groupPoints(points) {
+    var groups = [];
+    var byLabel = {};
+    points.forEach(function (point) {
+      var key = "c:" + point.categorie;
+      if (!byLabel[key]) { byLabel[key] = { label: point.categorie, points: [] }; groups.push(byLabel[key]); }
+      byLabel[key].points.push(point);
+    });
+    return groups;
+  }
+
+  /* Disponibilité du dépôt : en mode local, aucun serveur ne recevrait le texte ; un serveur qui répond sans annoncer
+   * « ideas » (backend d'avant 1.2.0) le refuserait. Tant que le serveur n'a jamais répondu, on ne présume rien. */
+  function pandoreUnavailableReason() {
     if (Sync.connection && (Sync.connection.localMode || !Sync.connection.url)) {
-      return "La boîte à idées a besoin de l'espace de l'équipe : en mode local, aucun serveur ne recevrait votre idée.";
+      return "Pandore a besoin de l'espace de l'équipe : en mode local, aucun serveur ne recevrait votre dépôt.";
     }
     if (Sync.supports && Sync.supports("since") && !Sync.supports("ideas")) {
-      return "Boîte à idées indisponible : le serveur de l'équipe doit être mis à jour.";
+      return "Pandore est indisponible : le serveur de l'équipe doit être mis à jour.";
     }
     return null;
   }
 
-  function screenIdeas() {
-    if (ideasFeed.status === "idle" || (ideasFeed.status !== "loading" && Utils.now() - ideasFeed.loadedAt > IDEAS_STALE_MS)) {
-      loadReformulatedIdeas();
+  function screenPandore() {
+    if (pandoreFeed.status === "idle" || (pandoreFeed.status !== "loading" && Utils.now() - pandoreFeed.loadedAt > PANDORE_STALE_MS)) {
+      loadSynthesis();
     }
-    var unavailable = ideasUnavailableReason();
+    var unavailable = pandoreUnavailableReason();
 
     var area = bindCounter(el("textarea", {
-      class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Votre idée…", "aria-required": "true",
-      "data-draft": "ideas:new", disabled: !!unavailable
-    }), "ideas:new", Core.LIMITS.idea);
+      class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Une idée, une plainte, une question…", "aria-required": "true",
+      "data-draft": "pandore:new", disabled: !!unavailable
+    }), "pandore:new", Core.LIMITS.idea);
 
     function submit() {
       var text = Utils.trim(area.value);
-      if (!text) { invalid(area, "Écrivez votre idée avant de la déposer."); return; }
+      if (!text) { invalid(area, "Écrivez quelque chose avant de déposer."); return; }
       var typed = area.value;
       /* Vidé AVANT l'envoi : le rendu qui suit réinjecterait sinon le texte déjà parti (même piège que le composeur). */
       area.value = "";
       var sent = App.actions.submitIdea(text);
       var settle = function (result) {
         if (result && result.ok === false) {
-          var node = findDraftNode("ideas:new");
+          var node = findDraftNode("pandore:new");
           if (node) { node.value = typed; }
           return;
         }
-        UI.toast("Idée déposée, sans votre nom. Elle apparaîtra ici une fois reformulée.");
+        UI.toast("Déposé, sans votre nom. Ce sera pris en compte dans la prochaine synthèse automatique.");
       };
       if (sent && typeof sent.then === "function") { sent.then(settle, function () { settle(null); }); } else { settle(sent); }
     }
 
     var deposit = el("div", { class: "card card-static stack" }, [
-      sectionTitle("inbox", "Déposer une idée"),
-      el("p", { class: "hint", text: "Votre idée part sans nom ni identifiant. Personne ne la relit ici, pas même vous : une IA reformule les idées reçues, et les versions reformulées s'affichent plus bas, pour toute l'équipe." }),
-      el("div", { class: "note ideas-public" }, [
+      sectionTitle("inbox", "Déposer"),
+      el("p", { class: "hint", text: "Idée, plainte, question, remarque : tout peut s'y déposer. Votre texte part sans nom ni identifiant. Personne ne le relit ici, pas même vous : une IA en tire une synthèse automatique, affichée plus bas pour tous." }),
+      el("div", { class: "note pandore-public" }, [
         icon("warning", 14),
-        el("span", { class: "note-body", text: "Les idées sont publiées telles quelles dans le dépôt public du projet sur GitHub, une fois par jour. N'y mettez aucun nom ni rien de confidentiel. Une idée déposée ne se retire pas." })
+        el("span", { class: "note-body", text: "Ce que vous déposez est publié tel quel, une fois par jour, sur le GitHub public du projet. N'y mettez aucun nom ni rien de confidentiel. Un dépôt ne se retire pas." })
       ]),
-      field("Votre idée", area),
-      counterFor("ideas:new", Core.LIMITS.idea),
+      field("Ce que vous voulez dire", area),
+      counterFor("pandore:new", Core.LIMITS.idea),
       unavailable ? el("p", { class: "hint", text: unavailable }) : null,
-      el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "ideas-submit", disabled: !!unavailable, onclick: submit },
+      el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "pandore-submit", disabled: !!unavailable, onclick: submit },
         [icon("send", 17), el("span", { text: "Déposer anonymement" })])
     ]);
 
     var list = el("div", { class: "stack" });
-    if (ideasFeed.status === "loading" && !ideasFeed.items.length) {
-      list.appendChild(el("p", { class: "hint", text: "Chargement des idées reformulées…" }));
-    } else if (ideasFeed.status === "error" && !ideasFeed.items.length) {
+    var feed = pandoreFeed;
+    if (feed.status === "loading" && !feed.points.length) {
+      list.appendChild(el("p", { class: "hint", text: "Chargement de la synthèse…" }));
+    } else if (feed.status === "error" && !feed.points.length) {
       list.appendChild(el("div", { class: "note" }, [
         icon("warning", 14),
         el("div", { class: "note-body" }, [
-          el("div", { text: "Impossible de charger les idées reformulées pour l'instant." }),
-          el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "ideas-retry",
-            onclick: function () { ideasFeed.status = "idle"; UI.force(); } }, [icon("sync", 15), el("span", { text: "Réessayer" })])
+          el("div", { text: "Impossible de charger la synthèse pour l'instant." }),
+          el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "pandore-retry",
+            onclick: function () { pandoreFeed.status = "idle"; UI.force(); } }, [icon("sync", 15), el("span", { text: "Réessayer" })])
         ])
       ]));
-    } else if (!ideasFeed.items.length) {
-      list.appendChild(el("p", { class: "hint", text: "Aucune idée reformulée pour l'instant. Elles apparaîtront ici après le passage de l'IA." }));
+    } else if (!feed.points.length) {
+      list.appendChild(el("p", { class: "hint", text: "Pas encore de synthèse. Elle apparaîtra ici après le passage de l'IA." }));
     }
-    ideasFeed.items.forEach(function (idea, i) {
-      list.appendChild(reveal(el("article", { class: "card card-static stack idea-card" }, [
-        idea.theme ? el("div", { class: "row-wrap" }, [toneBadge(idea.theme, "tone-neutral")]) : null,
-        el("h3", { class: "card-title", text: idea.titre }),
-        el("p", { class: "pre-wrap", text: idea.texte }),
-        el("div", { class: "card-meta" }, [
-          idea.date ? el("span", { text: "Reformulée le " + dayLabel(idea.date) }) : null,
-          idea.date && idea.sources ? el("span", { class: "meta-dot" }) : null,
-          idea.sources ? el("span", { text: Utils.plural(idea.sources, "idée d'origine", "idées d'origine") }) : null
-        ])
-      ]), i));
+    var index = 0;
+    groupPoints(feed.points).forEach(function (group) {
+      if (group.label) { list.appendChild(el("h2", { class: "pandore-group", text: group.label })); }
+      group.points.forEach(function (point) {
+        index += 1;
+        list.appendChild(reveal(el("article", { class: "card card-static stack pandore-card" }, [
+          el("h3", { class: "card-title", text: point.titre }),
+          el("p", { class: "pre-wrap", text: point.texte }),
+          point.sources ? el("div", { class: "card-meta" }, [
+            el("span", { text: Utils.plural(point.sources, "dépôt d'origine", "dépôts d'origine") })
+          ]) : null
+        ]), index));
+      });
     });
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Boîte à idées", back: App.remonter, backLabel: "Sujets" }),
+      topbar({ title: "Pandore", back: App.remonter, backLabel: "Sujets" }),
       el("div", { class: "content stack-lg" }, [
         reveal(deposit, 0),
         el("section", { class: "stack" }, [
           el("div", { class: "row" }, [
-            sectionTitle("sparkle", "Idées reformulées"),
+            sectionTitle("sparkle", "Synthèse automatique"),
             el("div", { class: "spacer" }),
-            ideasFeed.updated ? el("span", { class: "hint", text: "Reformulation du " + dayLabel(ideasFeed.updated) }) : null
+            feed.date ? el("span", { class: "hint", text: "du " + dayLabel(feed.date) }) : null
           ]),
-          ideasFeed.resetOn ? el("p", { class: "hint", "data-key": "ideas-reset-note",
-            text: "Boîte vidée le " + dayLabel(ideasFeed.resetOn) + ". Les idées déposées depuis figureront dans la prochaine reformulation, qui remplacera celle-ci." }) : null,
+          feed.resetOn ? el("p", { class: "hint", "data-key": "pandore-reset-note",
+            text: "Remise à zéro le " + dayLabel(feed.resetOn) + " : ce qui a été déposé depuis figurera dans la prochaine synthèse, qui remplacera celle-ci." }) : null,
+          feed.resume ? el("p", { class: "pre-wrap pandore-resume", text: feed.resume }) : null,
+          feed.classement && feed.points.length ? el("p", { class: "hint", text: "Classement choisi par l'IA : " + feed.classement }) : null,
           list
         ])
       ])
@@ -3025,7 +3052,7 @@
     if (route.name === "conclusion") { return screenConclusion(route.topicId); }
     if (route.name === "settings") { return screenSettings(); }
     if (route.name === "meeting") { return screenMeeting(); }
-    if (route.name === "ideas") { return screenIdeas(); }
+    if (route.name === "pandore") { return screenPandore(); }
     return screenTopics();
   }
 
@@ -3060,7 +3087,7 @@
     if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
     if (route.name === "settings") { return "Réglages" + tail; }
     if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
-    if (route.name === "ideas") { return "Boîte à idées" + tail; }
+    if (route.name === "pandore") { return "Pandore" + tail; }
     return "Sujets" + tail;
   }
 
