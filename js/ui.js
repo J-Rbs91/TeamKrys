@@ -3387,8 +3387,8 @@
       eyebrow: "Les sujets",
       title: "Un sujet par point à traiter",
       text: "L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment "
-        + "actif au plus ancien. Le bouton + en ajoute un ; vous pouvez le proposer "
-        + "sans le signer.",
+        + "actif au plus ancien. Le bouton + en ajoute un, signé ou anonyme. Épinglez "
+        + "les plus importants : ils restent en tête, pour tous.",
       textLocal: "En mode local, les données restent sur cet appareil. Le vote et les "
         + "réactions prennent leur sens à plusieurs."
     },
@@ -3396,11 +3396,12 @@
       icon: "users",
       eyebrow: "Le débat",
       title: "On en discute, chacun à son rythme",
-      text: "La discussion se lit comme un fil de messages. Appuyez sur une bulle "
-        + "pour réagir, la citer, ou en tirer une proposition.",
-      textJoining: "L'équipe a déjà lancé des sujets. Ouvrez-en un : la discussion "
-        + "s'y trouve. Appuyez sur une bulle pour réagir, la citer, ou en tirer une "
-        + "proposition."
+      text: "La discussion se lit comme un fil de messages. Appui long sur une bulle : "
+        + "réagir, copier, en tirer une proposition. Glissez-la vers la droite pour la "
+        + "citer.",
+      textJoining: "L'équipe a déjà lancé des sujets : ouvrez-en un pour lire la "
+        + "discussion. Appui long sur une bulle pour réagir ou en tirer une "
+        + "proposition ; glissez-la vers la droite pour la citer."
     },
     proposals: {
       icon: "idea",
@@ -3414,15 +3415,18 @@
       icon: "checkCircle",
       eyebrow: "La conclusion",
       title: "Ce que vous présenterez",
-      text: "Chaque sujet se referme sur une conclusion. Chacun en choisit une "
-        + "seule ; la mieux votée porte la mention En tête."
+      text: "Chaque sujet se referme sur une conclusion : chacun en choisit une, la "
+        + "mieux votée porte la mention En tête. Pour la réunion, Réglages puis Ouvrir "
+        + "la synthèse : tout tient sur une page."
     },
-    meeting: {
-      icon: "print",
-      eyebrow: "La réunion",
-      title: "Tout tient sur une page",
-      text: "Réglages, puis Ouvrir la synthèse : sujets, votes et conclusions, prêts "
-        + "à projeter. Vous pourrez revoir cette présentation depuis les Réglages.",
+    pandore: {
+      icon: "inbox",
+      eyebrow: "Pandore",
+      title: "Ce qui ne se dit pas en réunion",
+      text: "Une idée, une plainte, une question : déposez-la anonymement dans Pandore, "
+        + "depuis l'icône de boîte aux lettres de l'accueil. Une IA en tire une synthèse "
+        + "que tous peuvent lire. Vous pourrez revoir cette présentation depuis les "
+        + "Réglages.",
       extra: "logo"
     }
   };

@@ -319,10 +319,9 @@
     var map = {
       "La conclusion": "Le consensus",
       "Ce que vous présenterez": "Le cap que vous porterez",
-      "Chaque sujet se referme sur une conclusion. Chacun en choisit une seule ; la mieux votée porte la mention En tête.":
-        "Après le débat et les votes, l'équipe formule le cap qu'elle veut porter en réunion. Chacun choisit un consensus ; celui qui arrive en tête sert de repère collectif.",
-      "Réglages, puis Ouvrir la synthèse : sujets, votes et conclusions, prêts à projeter. Vous pourrez revoir cette présentation depuis les Réglages.":
-        "Réglages, puis Ouvrir la synthèse : sujets, votes et consensus, prêts à projeter. Vous pourrez revoir cette présentation depuis les Réglages."
+      /* ⚠️ Clé = texte EXACT de ONBOARD_TEXT.conclusion dans js/ui.js (tests/onboarding.test.js le vérifie). */
+      "Chaque sujet se referme sur une conclusion : chacun en choisit une, la mieux votée porte la mention En tête. Pour la réunion, Réglages puis Ouvrir la synthèse : tout tient sur une page.":
+        "Après le débat et les votes, l'équipe formule le cap qu'elle veut porter en réunion. Chacun choisit un consensus ; celui qui arrive en tête sert de repère. Pour la réunion, Réglages puis Ouvrir la synthèse : tout tient sur une page."
     };
     var walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, null);
     var node;

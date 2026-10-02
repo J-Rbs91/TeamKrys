@@ -17,7 +17,7 @@
      * la présentation à toute l'équipe au moindre correctif de patch — c'est
      * exactement ce qu'il ne faut pas. On n'incrémente ce nombre que lorsqu'on
      * veut réellement que la séquence soit rejouée. */
-    ONBOARDING_REV: 1,
+    ONBOARDING_REV: 2,
 
     /* Schéma de l'enregistrement posé sur l'appareil. Un changement de forme
      * incompatible s'accompagne d'un incrément : un enregistrement écrit sous un
@@ -158,7 +158,12 @@
   /* ------------------------------------------------ Présentation initiale --- */
 
   /* Ce que la présentation montre, et à qui. Ce ne sont pas des panneaux choisis :
-   * ce sont les cinq parties de l'application, dans l'ordre où on les traverse.
+   * ce sont les parties de l'application, dans l'ordre où on les traverse.
+   *
+   * Révision 2 : la conclusion et la réunion forment UN panneau (c'est le même
+   * aboutissement), ce qui laisse la place à Pandore sans dépasser cinq écrans ; le
+   * débat décrit les gestes (appui long, glissement), qui ne se devinent pas. Pandore
+   * n'est jamais présentée en mode local : elle y est fermée.
    *
    * Trois listes, parce que la même séquence ne convient pas à tout le monde :
    *
@@ -175,8 +180,8 @@
    * L'ordre des tests compte : le mode local l'emporte sur la présence de sujets,
    * parce qu'un espace local peuplé reste un espace d'une seule personne. */
   CONFIG.ONBOARDING_PANELS = {
-    full: ["topics", "debate", "proposals", "conclusion", "meeting"],
-    joining: ["debate", "conclusion"],
+    full: ["topics", "debate", "proposals", "conclusion", "pandore"],
+    joining: ["debate", "conclusion", "pandore"],
     local: ["topics", "debate", "conclusion"]
   };
 

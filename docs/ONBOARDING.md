@@ -977,3 +977,32 @@ douce dans un chantier d'onboarding.**
    ni `role="status"` ni annoncé.
    Corrigé depuis : la pastille est une région `role="status"` unique par écran, qui
    n'annonce que les transitions utiles (`statusAnnouncement` dans `js/ui.js`).
+
+---
+
+## Révision 2 — présenter l'application d'aujourd'hui
+
+`CONFIG.ONBOARDING_REV` passe à **2**.
+- Cause : la règle `revision` rejoue la séquence une seule fois aux appareils qui l'ont
+  déjà terminée.
+- Conséquence : toute l'équipe déjà installée voit les nouveautés une fois, avec le
+  parcours de sa situation. Un appareil reconnu comme déjà utilisé mais sans
+  enregistrement reste « migré » et ne voit rien.
+
+| Parcours | Panneaux | Ce qui change |
+|---|---|---|
+| `full` (espace vide) | sujets · débat · propositions · conclusion · Pandore | conclusion et réunion fusionnées en un panneau ; Pandore en dernier, avec le monogramme et « revoir depuis les Réglages » |
+| `joining` (espace peuplé) | débat · conclusion · Pandore | Pandore ajoutée : elle ne se devine pas depuis l'accueil |
+| `local` | sujets · débat · conclusion | inchangé : Pandore est fermée en mode local, on ne la promet pas |
+
+Textes revus :
+- **sujets** : l'épinglage pour toute l'équipe ;
+- **débat** : l'appui long (un simple toucher n'ouvre plus rien) et le glissement vers
+  la droite pour citer ;
+- **conclusion** : la réunion y est rattachée.
+
+La règle des cinq panneaux au plus tient toujours. `tests/onboarding.test.js` vérifie
+en plus deux choses :
+- chaque panneau annoncé a son texte ;
+- la couche produit (`js/product-ui.js`) reconnaît le corps du panneau « conclusion »
+  pour le dire en « consensus ».

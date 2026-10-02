@@ -104,26 +104,26 @@ check("la migration ne propose aucun panneau", () => {
 
 /* --------------------------------------------------------- Les segments --- */
 
-check("espace vide : les cinq parties", () => {
+check("espace vide : les cinq parties, Pandore en dernier", () => {
   const plan = due(null, NEUF);
   assert(plan.segment === "full", "un espace vide relève du segment complet");
   assert(plan.panels.length === 5, "cinq panneaux, pas un de plus");
-  assert(plan.panels.join(",") === "topics,debate,proposals,conclusion,meeting",
-    "l'ordre doit suivre celui du cycle réel");
+  assert(plan.panels.join(",") === "topics,debate,proposals,conclusion,pandore",
+    "l'ordre doit suivre celui du cycle réel, puis Pandore, à côté du cycle");
 });
 
-check("espace déjà peuplé : deux panneaux seulement", () => {
+check("espace déjà peuplé : trois panneaux, ce qui ne se devine pas", () => {
   const plan = due(null, { hasConnection: false, localMode: false, hasName: false, hasTopics: true });
   assert(plan.segment === "joining", "un espace peuplé relève du segment « arrivant »");
-  assert(plan.panels.join(",") === "debate,conclusion",
-    "on ne garde que ce qui ne se devine pas, et ce à quoi ça sert");
+  assert(plan.panels.join(",") === "debate,conclusion,pandore",
+    "les gestes, ce à quoi tout sert, et l'espace anonyme : rien de cela ne se devine");
 });
 
 check("mode local : trois panneaux, ni votes ni réunion", () => {
   const plan = due(record({ step: 0 }), { localMode: true, hasTopics: false });
   assert(plan.segment === "local", "le mode local a son propre segment");
   assert(plan.panels.indexOf("proposals") < 0, "le vote n'a aucun sens seul");
-  assert(plan.panels.indexOf("meeting") < 0, "la réunion non plus");
+  assert(plan.panels.indexOf("pandore") < 0, "Pandore est fermée en mode local : ne pas la promettre");
 });
 
 check("mode local ET espace peuplé : le mode local l'emporte", () => {
@@ -145,7 +145,7 @@ check("segment changé pendant la séquence : on reprend au début, pas dans le 
    * le segment devient « arrivant », qui n'a que deux panneaux. */
   const plan = due(record({ step: 4 }), { hasTopics: true });
   assert(plan.step === 0, "une étape qui n'existe plus doit ramener au début");
-  assert(plan.panels.length === 2, "et le nouveau segment doit s'appliquer");
+  assert(plan.panels.length === 3, "et le nouveau segment doit s'appliquer");
 });
 
 /* ---------------------------------------------------------- Le rejeu --- */
@@ -322,6 +322,21 @@ check("le voile ne se refond pas entre deux étapes", () => {
     "le fondu du voile doit être porté par la classe d'arrivée");
   assert(!/(^|[^-])\.onboard::backdrop\s*\{[^}]*animation/.test(CSS),
     "aucune animation ne doit être posée sur le voile hors de l'arrivée");
+});
+
+check("chaque panneau annoncé a son texte dans js/ui.js (sinon il retomberait en silence sur « Les sujets »)", () => {
+  const ui = require("fs").readFileSync(path.join(ROOT, "js/ui.js"), "utf8");
+  const start = ui.indexOf("var ONBOARD_TEXT = {");
+  const block = ui.slice(start, ui.indexOf("\n  };", start));
+  const ids = new Set([].concat(...Object.values(CONFIG.ONBOARDING_PANELS)));
+  ids.forEach((id) => assert(new RegExp("\\n    " + id + ": \\{").test(block), "panneau sans texte : " + id));
+  assert(!/Appuyez sur une bulle/.test(block), "un simple toucher n'ouvre plus rien : le texte doit parler d'appui long");
+  /* La couche produit (js/product-ui.js) remplace le corps du panneau « conclusion » par sa version « consensus »,
+   * en reconnaissant le texte EXACT. Un texte modifié d'un seul côté laisserait « conclusion » à l'écran. */
+  const body = /conclusion: \{[\s\S]*?text: ([\s\S]*?)\n    \}/.exec(block);
+  const text = body[1].split("\n").map((l) => (/"((?:[^"\\]|\\.)*)"/.exec(l) || [, ""])[1]).join("");
+  const product = require("fs").readFileSync(path.join(ROOT, "js/product-ui.js"), "utf8");
+  assert(product.indexOf(JSON.stringify(text)) >= 0, "js/product-ui.js ne reconnaît pas le corps du panneau « conclusion » : " + text);
 });
 
 /* ------------------------------------------------------------ Rapport --- */
