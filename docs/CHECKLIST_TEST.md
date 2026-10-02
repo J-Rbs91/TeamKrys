@@ -57,7 +57,7 @@ Le raisonnement est dans [`NAVIGATION.md`](NAVIGATION.md).
 
 ## 1. Premier lancement
 
-- [ ] Écran d'accueil : adresse du script + code d'accès.
+- [ ] Écran d'accueil : « Adresse de l'équipe » + code d'accès (aucun « script » ni « URL » à l'écran).
 - [ ] Adresse invalide → message d'erreur clair, on reste sur l'écran.
 - [ ] Mauvais code → « Code d'accès refusé par le serveur. »
 - [ ] Bon code → passage à l'écran du nom.
@@ -224,8 +224,9 @@ agrandie.
       d'exemple ; idem pour « Votre nom », la recherche, le champ de message,
       « Texte du message » (fenêtre Modifier le message) et « Titre » /
       « Description » (fenêtre Modifier le sujet).
-- [ ] Nouveau sujet, champ « Votre nom » : la phrase « Laissez vide pour publier ce
-      sujet en anonyme : aucune identité ne sera enregistrée. » est lue avec le champ.
+- [ ] Nouveau sujet : l'interrupteur **Publier en anonyme** est lu comme un
+      interrupteur ; allumé, il annonce « Anonyme » et « Aucune identité ne sera
+      enregistrée avec ce sujet. », et le champ « Votre nom » disparaît.
 - [ ] Valider un nouveau sujet sans titre : « Le titre du sujet est obligatoire. »
       s'affiche **sous le champ**, le focus y revient, le lecteur d'écran lit le
       message avec le champ, et le message disparaît à la première frappe. Même
@@ -322,7 +323,10 @@ agrandie.
 - [ ] Liste vide → bouton « Ajouter un sujet » **centré**.
 - [ ] Liste non vide → bouton rond **+** en bas à droite.
 - [ ] Titre obligatoire ; description facultative.
-- [ ] Nom laissé vide → sujet créé au nom d'**Anonyme**.
+- [ ] Interrupteur **Publier en anonyme** allumé → sujet créé au nom d'**Anonyme**.
+- [ ] Interrupteur éteint et nom effacé → « Indiquez votre nom, ou allumez « Publier
+      en anonyme ». » sous le champ ; aucun sujet créé.
+- [ ] Allumer puis éteindre l'interrupteur : le nom tapé revient.
 - [ ] Plus de six sujets → champ de recherche ; la recherche filtre bien.
 - [ ] Recherche tolérante : « cafe » trouve « Café », « REUNION » trouve « réunion »,
       « oeuvre » trouve « œuvre », et deux espaces dans la saisie ne gênent pas ; la
@@ -396,14 +400,19 @@ agrandie.
       au-delà de 1 ; re-tap = retrait.
 - [ ] Citer → aperçu « en réponse à … » annulable ; message publié avec bloc
       cité ; appui sur le bloc → défilement + flash sur l'original.
-- [ ] Rendre anonyme après envoi → nom remplacé par « Anonyme » ; re-signer
-      restaure le nom ; l'auteur conserve ses droits après rechargement.
+- [ ] Rendre anonyme après envoi → nom remplacé par « Anonyme », bandeau « Message
+      rendu anonyme. », sans question ; l'auteur conserve ses droits après rechargement.
+- [ ] « Signer avec mon nom » sur un de ses messages anonymes → fenêtre « Signer avec
+      mon nom » qui dit l'effet ; **Annuler** ne change rien ; **Signer** restaure le nom.
 - [ ] Réaction d'une **autre** personne → 🔒 sur un message signé, et « Modifier »
       grisé avec sa raison (« Modifier (verrouillé : quelqu'un y a déjà réagi) ») ;
       la signature reste modifiable. Un message anonyme verrouillé n'a pas de
       cadenas.
 - [ ] Barre compacte : compteurs Propositions / Conclusion à jour.
 - [ ] Appui sur le titre (ⓘ) → infos du sujet, changement de statut, modification.
+- [ ] Statut **Clôturé** ou **Archivé** → fenêtre de confirmation ; **Annuler** laisse
+      le statut d'avant ; « Prêt pour la réunion » et « En discussion » partent sans
+      fenêtre.
 - [ ] Infos du sujet : l'auteur (ou « Anonyme »), « Créé le … » et « Dernière activité
       le … », chacun avec la date et l'heure.
 - [ ] Bouton **Retour** visible et fonctionnel sur chaque écran secondaire.
@@ -416,6 +425,12 @@ agrandie.
       fermeture, l'affichage est identique à avant l'appui.
 - [ ] Changer un statut affiche une confirmation à l'écran (« *titre* :
       *statut*. »), et le lecteur d'écran l'annonce.
+- [ ] « Écartée » ouvre d'abord la fenêtre « Écarter la proposition » ; **Annuler**
+      laisse le menu sur le statut d'avant. Les autres statuts partent sans fenêtre.
+- [ ] Boutons **Pour / Contre / Abstention**, **Choisir** et **Retirer mon vote** :
+      44 px de haut. Pastilles de réaction sous les bulles : un toucher juste en
+      dessous de la pastille la touche encore, un toucher sur le bord bas de la bulle
+      ouvre toujours la feuille du message.
 - [ ] Lecteur d'écran, écran de propositions : les menus de statut portent des
       noms **distincts**, incluant le titre de chaque proposition.
 - [ ] Écran de 320 px : le menu de statut occupe sa propre ligne, pleine

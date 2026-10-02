@@ -160,7 +160,7 @@
   App.saveConnection = function (url, code) {
     if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); return; }
     var clean = Utils.trim(url);
-    if (!clean) { refuse("setup:url", "Collez l'adresse du script de l'équipe."); return; }
+    if (!clean) { refuse("setup:url", "Collez l'adresse de l'équipe."); return; }
     /* https obligatoire, sauf pour un serveur local de test. */
     var isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(clean);
     if (clean.indexOf("https://") !== 0 && !isLocal) {

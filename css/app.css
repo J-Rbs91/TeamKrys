@@ -1582,6 +1582,20 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 }
 
 .reaction:active { transform: scale(0.94); }
+
+/* La pastille dessinée fait 24 px de haut ; sa zone tactile en fait 44. Elle déborde surtout VERS LE BAS, dans la
+   réserve laissée sous la ligne (`.msg-row.has-reactions`), et très peu vers le haut : la bulle au-dessus ouvre la
+   feuille du message, un toucher sur son bord ne doit pas poser une réaction à la place. Latéralement, 2 px de
+   chaque côté : l'écart entre pastilles (4 px) n'est jamais partagé par deux zones. */
+.reaction { position: relative; }
+.reaction::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  bottom: -14px;
+  left: -2px;
+  right: -2px;
+}
 .reaction .mark { color: var(--muted); }
 
 /* Ma propre réaction : pastille encrée pleine. Sur un fil à plusieurs, on doit
@@ -1723,6 +1737,9 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   align-items: center;
   justify-content: space-between;
   column-gap: 8px;
+  /* Toute la largeur : dans une fenêtre (« Nouveau sujet »), une colonne flex la rétrécirait à son contenu et le
+     nom passerait seul sur une ligne. Le plafond reste la colonne de lecture. */
+  width: 100%;
   max-width: var(--measure);
   margin: 0 auto 9px;
   padding: 0 4px 0 12px;
@@ -2386,6 +2403,11 @@ html.has-layer body { overflow: hidden; }
    et la rangée sortait de sa carte. Le dernier passe dessous, sans réduire ni marges ni cibles. */
 .vote-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .vote-actions .btn { flex: 1; }
+
+/* Voter, choisir un consensus, retirer son vote : les gestes les plus fréquents d'une carte gardent la cible de
+   44 px de toute l'application. `.btn-sm` les plafonnait à 36 px. */
+.vote-actions .btn,
+.card-foot .btn-sm { min-height: var(--tap); }
 /* Le bouton de vote choisi prend la couleur de CE QU'IL EXPRIME, pas une
    couleur de sélection. Un « contre » qui s'allumerait en bleu dirait la même
    chose qu'un Consensus, et le système cesserait de vouloir dire quelque chose

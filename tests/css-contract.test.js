@@ -678,6 +678,22 @@ check("écriture anonyme : bord en tirets mais toujours sur --line-field, fond c
   expect(declFor(fieldMark, "pointer-events", BASE) === "none", "le masque du champ ne doit pas intercepter le toucher ni le focus");
 });
 
+check("cibles tactiles : voter, choisir, retirer son vote à 44 px ; pastille de réaction à zone tactile de 44 px sans mordre sur la bulle", function () {
+  var vote = { tag: "button", classes: ["btn", "btn-sm", "btn-outline"], ancestors: [{ tag: "div", classes: ["vote-actions"] }] };
+  expect(declFor(vote, "min-height", BASE) === "var(--tap)", "boutons de vote : min-height var(--tap) attendu, trouvé " + declFor(vote, "min-height", BASE));
+  var foot = { tag: "button", classes: ["btn", "btn-sm", "btn-outline"], ancestors: [{ tag: "div", classes: ["card-foot", "row-wrap"] }] };
+  expect(declFor(foot, "min-height", BASE) === "var(--tap)", "« Choisir » et « Retirer mon vote » : min-height var(--tap) attendu, trouvé " + declFor(foot, "min-height", BASE));
+  var hit = RULES.filter(function (r) { return r.selectors.indexOf(".reaction::before") >= 0; })[0];
+  expect(hit, ".reaction::before (zone tactile) absent");
+  var px = function (v) { return parseFloat(String(v || "0").replace("px", "")); };
+  var height = 24 - px(hit.decls.top) - px(hit.decls.bottom);
+  expect(height >= 44, "zone tactile de la réaction : " + height + " px de haut, 44 attendus");
+  expect(-px(hit.decls.top) <= 6, "la zone tactile ne doit presque pas monter sur la bulle (top " + hit.decls.top + ")");
+  expect(-px(hit.decls.left) * 2 <= 4 && -px(hit.decls.right) * 2 <= 4, "deux zones voisines ne doivent pas se chevaucher (écart de 4 px)");
+  var chip = { tag: "button", classes: ["reaction"], ancestors: [{ tag: "div", classes: ["reactions"] }] };
+  expect(declFor(chip, "position", BASE) === "relative", ".reaction doit ancrer sa zone tactile (position: relative)");
+});
+
 if (failures.length) {
   console.error("css-contract : " + failures.length + " échec(s) sur " + total + " contrôles");
   failures.forEach(function (f) { console.error(" - " + f); });

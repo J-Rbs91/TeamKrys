@@ -1011,7 +1011,7 @@
     var urlInput = el("input", {
       class: "input", type: "url", inputmode: "url", autocomplete: "off",
       autocapitalize: "off", spellcheck: "false",
-      placeholder: "Collez ici l'URL du script (…/exec)", "aria-required": "true",
+      placeholder: "Collez ici l'adresse reçue (…/exec)", "aria-required": "true",
       "data-draft": "setup:url",
       value: Sync.connection.url || ""
     });
@@ -1037,7 +1037,7 @@
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("link", "Rejoindre l'espace de l'équipe"),
           storageNote(),
-          field("Adresse du script de l'équipe", urlInput,
+          field("Adresse de l'équipe", urlInput,
             "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
           field("Code d'accès", codeInput,
             "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
@@ -1476,8 +1476,36 @@
   /* ⚠️ Le rendu DÉTRUIT et reconstruit le composeur (voir UI.render) : une transition CSS ne se joue donc jamais, le
    * nœud neuf naît déjà dans son état final. Le geste de bascule lève ce drapeau ; le rendu qu'il provoque le consomme
    * UNE fois et pose `is-flip`, que app.css traduit en animation depuis l'ancien état. Un rendu ultérieur (données
-   * reçues) ne rejoue rien : le drapeau est retombé. */
-  var signatureFlip = false;
+   * reçues) ne rejoue rien : le drapeau est retombé. Il porte la clé de l'interrupteur actionné : celui du composeur
+   * et celui de « Nouveau sujet » ne s'animent jamais l'un pour l'autre. */
+  var signatureFlip = null;
+
+  /* Interrupteur signé / anonyme, partagé par le composeur et « Nouveau sujet » : la même décision a le même geste et
+   * les mêmes mots partout. Son libellé est STABLE (« Publier en anonyme ») : c'est son état, pas son texte, qui
+   * change — un bouton dont le libellé alternait entre l'action et l'état se lisait dans les deux sens. Le nom affiché
+   * à gauche est celui que les autres verront ; la description du contrôle le reprend. Après la bascule, le focus
+   * revient sur lui (même clé) et le lecteur d'écran annonce le nouvel état (aria-checked).
+   * o : { anon, key (data-key), whoId, whoText, onToggle, describedBy (facultatif : ids ajoutés à la description) } */
+  function signatureRow(o) {
+    var flip = signatureFlip === o.key;
+    if (flip) { signatureFlip = null; }
+    return el("div", { class: "signature-toggle" + (o.anon ? " is-anon" : "") + (flip ? " is-flip" : "") }, [
+      el("span", { class: "who" }, [
+        icon(o.anon ? "mask" : "user", 15),
+        el("span", { class: "who-name", id: o.whoId, text: o.whoText })
+      ]),
+      el("button", {
+        class: "sig-switch", type: "button", role: "switch", "aria-checked": o.anon ? "true" : "false",
+        "data-key": o.key, "aria-describedby": o.whoId + (o.describedBy ? " " + o.describedBy : ""),
+        onclick: function () { signatureFlip = o.key; o.onToggle(); }
+      }, [
+        el("span", { class: "sig-label", text: "Publier en anonyme" }),
+        el("span", { class: "sig-track", "aria-hidden": "true" }, [
+          el("span", { class: "sig-thumb" }, [icon(o.anon ? "mask" : "user", 11)])
+        ])
+      ])
+    ]);
+  }
 
   function composer(topic) {
     var draftKey = "composer:" + topic.id;
@@ -1570,8 +1598,6 @@
     /* L'état est lu ICI, après le rétablissement d'un brouillon anonyme (plus haut) : c'est lui qui décide de tout ce
      * qui suit — l'interrupteur, le nom, et les repères de la zone d'écriture. */
     var anon = UI.local.composerAnon === true;
-    var flip = signatureFlip;
-    signatureFlip = false;
 
     /* Repères d'anonymat DANS la zone d'écriture : on regarde le champ en tapant, pas la ligne du dessus. Jamais la
      * teinte seule — une icône, un texte (indication du champ, nom de l'envoi) et un trait en tirets le disent aussi. */
@@ -1583,33 +1609,17 @@
       sendBtn.appendChild(el("span", { class: "send-mark", "aria-hidden": "true" }, [icon("mask", 11)]));
     }
 
-    /* Interrupteur signé / anonyme. Son libellé est STABLE (« Publier en anonyme ») : c'est son état, pas son texte,
-     * qui change — un bouton dont le libellé alternait entre l'action et l'état se lisait dans les deux sens. Le nom
-     * affiché à gauche est celui que les autres verront ; la description du contrôle le reprend. Après la bascule, le
-     * focus revient sur lui (même clé) et le lecteur d'écran annonce le nouvel état (aria-checked). */
-    parts.push(el("div", { class: "signature-toggle" + (anon ? " is-anon" : "") + (flip ? " is-flip" : "") }, [
-      el("span", { class: "who" }, [
-        icon(anon ? "mask" : "user", 15),
-        el("span", { class: "who-name", id: "composer-who", text: anon ? "Anonyme" : "Signé : " + (App.user.name || "moi") })
-      ]),
-      el("button", {
-        class: "sig-switch", type: "button", role: "switch", "aria-checked": anon ? "true" : "false",
-        "data-key": "composer-anon", "aria-describedby": "composer-who",
-        onclick: function () {
-          var next = !UI.local.composerAnon;
-          dismissNote(draftKey);
-          /* Geste explicite : le choix du brouillon suit (sinon un rechargement le rétablirait ou le perdrait). */
-          if (composerDrafts[draftKey]) { stageDraft(draftKey, composerDrafts[draftKey], next); }
-          signatureFlip = true;
-          UI.set({ composerAnon: next });
-        }
-      }, [
-        el("span", { class: "sig-label", text: "Publier en anonyme" }),
-        el("span", { class: "sig-track", "aria-hidden": "true" }, [
-          el("span", { class: "sig-thumb" }, [icon(anon ? "mask" : "user", 11)])
-        ])
-      ])
-    ]));
+    parts.push(signatureRow({
+      anon: anon, key: "composer-anon", whoId: "composer-who",
+      whoText: anon ? "Anonyme" : "Signé : " + (App.user.name || "moi"),
+      onToggle: function () {
+        var next = !UI.local.composerAnon;
+        dismissNote(draftKey);
+        /* Geste explicite : le choix du brouillon suit (sinon un rechargement le rétablirait ou le perdrait). */
+        if (composerDrafts[draftKey]) { stageDraft(draftKey, composerDrafts[draftKey], next); }
+        UI.set({ composerAnon: next });
+      }
+    }));
 
     /* Le champ est enveloppé pour porter son repère à côté de lui (frère du <textarea>) : le champ garde sa clé de
      * brouillon et son rôle, et l'icône ne reçoit ni focus ni saisie (aria-hidden, pointer-events: none). */
@@ -1645,7 +1655,7 @@
       threadInner.appendChild(emptyState("message", "La discussion démarre ici",
         "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer.",
         null,
-        "Ensuite : une idée qui mûrit devient une proposition, depuis la barre du bas."));
+        "Ensuite : une idée qui mûrit devient une proposition, depuis l'onglet Propositions."));
     }
 
     var thread = el("div", { class: "thread", dataset: { thread: topic.id } }, [threadInner]);
@@ -1718,14 +1728,19 @@
     /* Le titre entre dans le nom : dans une liste de propositions, cinq
      * contrôles nommés « Statut de la proposition » sont indiscernables au
      * balayage, et on change le statut de la mauvaise. Le changement part vers
-     * toute l'équipe sans confirmation : il doit au moins être annoncé — le
-     * libellé est lu AVANT l'envoi, qui provoque un rendu détruisant ce nœud. */
+     * toute l'équipe : il est annoncé, et « Écartée » se confirme d'abord. */
     var statusSelect = el("select", {
       class: "select", "aria-label": "Statut de la proposition : " + proposal.title, "data-key": "proposal-" + proposal.id + "-status",
       onchange: function (e) {
-        var label = Core.PROPOSAL_STATUS_LABELS[e.target.value];
-        App.actions.changeProposalStatus(topic.id, proposal.id, e.target.value);
-        UI.toast(proposal.title + " : " + label + ".");
+        var status = e.target.value;
+        /* « Écartée » sort la proposition du jeu pour tout le monde, et rien ne dit qui l'a fait : confirmé
+         * AVANT. Le menu revient tout de suite à l'état réel, l'annulation n'a donc rien à défaire. */
+        if (status === "rejected") {
+          e.target.value = proposal.status;
+          UI.set({ modal: { type: "confirmStatus", kind: "proposal", topicId: topic.id, proposalId: proposal.id, status: status } });
+          return;
+        }
+        applyProposalStatus(topic, proposal, status);
       }
     });
     Core.PROPOSAL_STATUSES.forEach(function (status) {
@@ -2250,9 +2265,17 @@
         if (locked) { UI.toast("Message verrouillé : quelqu'un y a déjà réagi.", "error"); return; }
         UI.set({ sheet: null, modal: { type: "editMessage", topicId: topic.id, messageId: message.id } });
       }, { disabled: locked }) : null,
+      /* ⚠️ Règle asymétrique (même principe que REC-RUI-001) : lever l'anonymat expose le nom à toute
+       * l'équipe et ce qui a été vu ne se reprend pas, donc il se confirme AVANT. Rendre anonyme protège
+       * et se défait depuis ce téléphone : pas de question, un bandeau dit ce qui s'est passé. */
       mine ? sheetAction(message.anon ? "user" : "mask", message.anon ? "Signer avec mon nom" : "Rendre anonyme", function () {
-        App.actions.setMessageSignature(topic.id, message.id, !message.anon);
+        if (message.anon) {
+          UI.set({ sheet: null, modal: { type: "signMessage", topicId: topic.id, messageId: message.id } });
+          return;
+        }
+        App.actions.setMessageSignature(topic.id, message.id, true);
         UI.set({ sheet: null });
+        UI.toast("Message rendu anonyme.");
       }) : null
     ]);
 
@@ -2277,9 +2300,15 @@
 
     var statusSelect = el("select", { class: "select", "aria-label": "Statut du sujet", "data-key": "topic-status",
       onchange: function (e) {
-        var label = Core.TOPIC_STATUS_LABELS[e.target.value];
-        App.actions.changeTopicStatus(topic.id, e.target.value);
-        UI.toast(topic.title + " : " + label + ".");
+        var status = e.target.value;
+        /* Clôturer ou archiver retire le sujet de la discussion pour toute l'équipe : confirmé AVANT (voir
+         * la proposition « Écartée »). La feuille cède sa place à la fenêtre de confirmation. */
+        if (status === "closed" || status === "archived") {
+          e.target.value = topic.status;
+          UI.set({ sheet: null, modal: { type: "confirmStatus", kind: "topic", topicId: topic.id, status: status } });
+          return;
+        }
+        applyTopicStatus(topic, status);
       }
     });
     Core.TOPIC_STATUSES.forEach(function (status) {
@@ -2306,7 +2335,12 @@
     ]));
   }
 
-  function createTopicModal() {
+  /* ⚠️ L'anonymat d'un sujet se décide avec le MÊME interrupteur que dans le composeur. Il se déduisait d'un champ
+   * « Votre nom » vidé : un geste invisible, qu'on pouvait faire sans le vouloir. Le choix vit dans la couche
+   * (`spec.anon`) ; le champ nom reste dans l'arbre, masqué, pour que ce qui y a été tapé revienne à l'extinction. Un
+   * nom vide sans l'interrupteur est refusé : il ne vaut jamais anonymat. */
+  function createTopicModal(spec) {
+    var anon = spec.anon === true;
     var titleInput = bindCounter(el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.topicTitle,
       placeholder: "Titre du sujet", "aria-required": "true", "data-draft": "newTopic:title"
@@ -2318,15 +2352,25 @@
     });
 
     var nameInput = el("input", {
-      class: "input", type: "text", maxlength: Core.LIMITS.name,
+      class: "input", type: "text", maxlength: Core.LIMITS.name, "aria-required": "true",
       value: App.user.name || "", "data-draft": "newTopic:name"
     });
+
+    var nameField = field("Votre nom", nameInput, "Le nom affiché sur ce sujet.");
+    if (anon) { nameField.setAttribute("hidden", ""); }
 
     return modal("Nouveau sujet", el("div", { class: "stack" }, [
       field("Titre (obligatoire)", titleInput),
       counterFor("newTopic:title", Core.LIMITS.topicTitle),
       field("Description", descInput),
-      field("Votre nom", nameInput, "Laissez vide pour publier ce sujet en anonyme : aucune identité ne sera enregistrée.")
+      signatureRow({
+        anon: anon, key: "newTopic-anon", whoId: "newTopic-who", whoText: anon ? "Anonyme" : "Signé",
+        describedBy: anon ? "newTopic-anon-hint" : null,
+        onToggle: function () { UI.set({ modal: Object.assign({}, spec, { anon: !anon }) }); }
+      }),
+      /* La ligne est étroite dans une fenêtre : l'effet de l'anonymat se dit dessous, en entier. */
+      anon ? el("p", { class: "hint", id: "newTopic-anon-hint", text: "Aucune identité ne sera enregistrée avec ce sujet." }) : null,
+      nameField
     ]), [
       el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
       el("button", {
@@ -2334,7 +2378,9 @@
         onclick: function () {
           var title = Utils.trim(titleInput.value);
           if (!title) { invalid(titleInput, "Le titre du sujet est obligatoire."); return; }
-          App.actions.createTopic(title, descInput.value, Utils.trim(nameInput.value));
+          var name = anon ? "" : Utils.trim(nameInput.value);
+          if (!anon && !name) { invalid(nameInput, "Indiquez votre nom, ou allumez « Publier en anonyme »."); return; }
+          App.actions.createTopic(title, descInput.value, name);
         }
       })
     ]);
@@ -2467,6 +2513,51 @@
     ]);
   }
 
+  /* Un changement de statut part vers toute l'équipe : il est toujours annoncé. Le libellé est lu AVANT
+   * l'envoi, qui provoque un rendu détruisant le menu. */
+  function applyProposalStatus(topic, proposal, status) {
+    var label = Core.PROPOSAL_STATUS_LABELS[status];
+    App.actions.changeProposalStatus(topic.id, proposal.id, status);
+    UI.toast(proposal.title + " : " + label + ".");
+  }
+
+  function applyTopicStatus(topic, status) {
+    var label = Core.TOPIC_STATUS_LABELS[status];
+    App.actions.changeTopicStatus(topic.id, status);
+    UI.toast(topic.title + " : " + label + ".");
+  }
+
+  /* Confirmation d'un statut qui sort un contenu du jeu pour toute l'équipe (Écartée, Clôturé, Archivé).
+   * Le texte dit l'effet ET qu'il se rattrape : la fenêtre protège d'un mauvais toucher, elle ne doit pas
+   * faire croire à une perte. Contenu disparu entre-temps : rien à confirmer. */
+  function confirmStatusModal(m) {
+    var topic = Core.findTopic(Store.view, m.topicId);
+    if (!topic) { return null; }
+    if (m.kind === "proposal") {
+      var proposal = Core.findProposal(topic, m.proposalId);
+      if (!proposal) { return null; }
+      return confirmModal("Écarter la proposition",
+        "« " + proposal.title + " » passera en « Écartée » pour toute l'équipe. Vous pourrez rétablir son statut ensuite.",
+        "Écarter", function () { closeOverlay(); applyProposalStatus(topic, proposal, m.status); });
+    }
+    var archived = m.status === "archived";
+    return confirmModal(archived ? "Archiver le sujet" : "Clôturer le sujet",
+      archived
+        ? "« " + topic.title + " » quittera la liste des sujets pour toute l'équipe. Il restera dans « Afficher les sujets archivés »."
+        : "« " + topic.title + " » passera en « Clôturé » pour toute l'équipe. Vous pourrez rétablir son statut ensuite.",
+      archived ? "Archiver" : "Clôturer", function () { closeOverlay(); applyTopicStatus(topic, m.status); });
+  }
+
+  /* Lever l'anonymat d'un de MES messages : seul ce sens se confirme (voir la feuille du message). */
+  function signMessageModal(m) {
+    var topic = Core.findTopic(Store.view, m.topicId);
+    var message = topic ? Core.findMessage(topic, m.messageId) : null;
+    if (!message || !message.anon) { return null; }
+    return confirmModal("Signer avec mon nom",
+      "Votre nom s'affichera sur ce message pour toute l'équipe. Ceux qui l'auront vu le sauront, même si vous le rendez anonyme ensuite.",
+      "Signer", function () { closeOverlay(); App.actions.setMessageSignature(m.topicId, m.messageId, false); });
+  }
+
   function confirmModal(title, text, confirmLabel, onConfirm) {
     return modal(title, el("p", { class: "hint", text: text }), [
       el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
@@ -2484,7 +2575,9 @@
       else if (spec.type === "topicInfo") { node = topicInfoSheet(spec); }
     } else if (UI.local.modal) {
       var m = UI.local.modal;
-      if (m.type === "createTopic") { node = createTopicModal(); }
+      if (m.type === "createTopic") { node = createTopicModal(m); }
+      else if (m.type === "confirmStatus") { node = confirmStatusModal(m); }
+      else if (m.type === "signMessage") { node = signMessageModal(m); }
       else if (m.type === "editTopic") { node = editTopicModal(m); }
       else if (m.type === "editMessage") { node = editMessageModal(m); }
       else if (m.type === "createProposal" || m.type === "editProposal") { node = proposalModal(m); }
@@ -2499,7 +2592,7 @@
          * d'être envoyé — c'est la seule qui détruit du travail. */
         var waiting = Sync.diagnostics().pending.length;
         node = confirmModal("Se déconnecter de l'équipe",
-          "L'adresse du script, le déverrouillage et votre nom seront oubliés sur cet "
+          "L'adresse de l'équipe, le déverrouillage et votre nom seront oubliés sur cet "
           + "appareil. Vous ne pourrez plus modifier vos messages anonymes depuis ce "
           + "téléphone : c'est ce qui les rend anonymes."
           + (waiting

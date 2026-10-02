@@ -20,7 +20,8 @@ après la réunion.
 2. Ajouter BrainstO. à l'**écran d'accueil** du téléphone (recommandé), puis
    ouvrir l'application depuis son icône. Les étapes, navigateur par navigateur,
    sont dans [`INSTALLATION.md`](INSTALLATION.md).
-3. **Dans l'application installée**, coller l'**adresse du script** et saisir le
+3. **Dans l'application installée**, coller l'**adresse de l'équipe** (elle se
+   termine par `/exec`) et saisir le
    **code d'accès** s'il y en a un.
 4. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
 
@@ -70,8 +71,13 @@ a été actif pour la dernière fois : « Actif à l'instant », « Actif il y a
 date (« Actif le 12/09/2026 ») à partir de sept jours.
 
 Un sujet possède un titre obligatoire et une description facultative. Il peut être
-proposé sans signature : aucune identité n'est alors enregistrée dans les données
-partagées pour son auteur.
+proposé sans signature : dans « Nouveau sujet », allumez l'interrupteur **Publier en
+anonyme**, le même que sous le champ de message. Aucune identité n'est alors
+enregistrée dans les données partagées pour son auteur. Interrupteur éteint, le nom
+est obligatoire : un nom effacé ne publie jamais en anonyme par accident.
+
+**Clôturer** ou **archiver** un sujet (dans « Détails ») demande une confirmation :
+le changement vaut pour toute l'équipe. Il se rattrape en rechoisissant le statut.
 
 Les statuts sont :
 
@@ -136,7 +142,7 @@ Appuyer sur un message donne accès aux actions suivantes :
 | **Citer** | Répondre en conservant le contexte |
 | **Créer une proposition** | Transformer l'idée en option structurée |
 | **Modifier** | Corriger votre message tant qu'il n'est pas verrouillé |
-| **Rendre anonyme / Signer** | Modifier la signature du message |
+| **Rendre anonyme / Signer avec mon nom** | Modifier la signature du message. « Signer avec mon nom » demande une confirmation : votre nom devient visible de toute l'équipe, et ce qui a été vu ne se reprend pas. « Rendre anonyme » s'applique tout de suite et se défait depuis ce téléphone. |
 
 Une personne ne peut avoir qu'une réaction par message. Appuyer à nouveau sur la
 même réaction la retire.
@@ -391,7 +397,7 @@ déconnexion les efface. Sans réseau, le nouveau code ne peut pas être vérifi
 (« Code d'accès incorrect, ou nouveau code impossible à vérifier sans
 connexion. ») : l'appareil reste verrouillé et rien n'est perdu.
 
-**Se déconnecter de l'équipe** oublie sur cet appareil l'adresse du script, le
+**Se déconnecter de l'équipe** oublie sur cet appareil l'adresse de l'équipe, le
 verrouillage, votre identité locale et la preuve de propriété de vos contenus
 anonymes, ainsi que vos brouillons de messages (avec leur choix « anonyme ») et le
 repère de ce que l'appareil avait déjà consulté : la personne qui se connecte ensuite

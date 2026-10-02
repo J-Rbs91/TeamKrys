@@ -508,15 +508,38 @@ check("BL-009 fenêtres et feuille (nouveau sujet, modifier le sujet, le message
   });
 });
 
-check("BL-009 « Votre nom » du Nouveau sujet décrit son effet d'anonymat (aria-describedby)", () => {
+check("Nouveau sujet : l'anonymat se choisit avec l'interrupteur « Publier en anonyme », jamais en vidant le champ nom", () => {
   const t = boot();
+  const created = [];
+  t.ctx.App.actions.createTopic = (title, desc, name) => { created.push({ title, name }); };
   t.go(TOPICS);
   t.set({ modal: { type: "createTopic" } });
-  const input = t.overlay().querySelector('input[data-draft="newTopic:name"]');
-  assert(input, "champ « Votre nom » absent");
-  assert(nameOf(t.doc, input) === "Votre nom", "nom accessible : « " + nameOf(t.doc, input) + " »");
-  const text = describedText(t.doc, input);
-  assert(/anonyme/.test(text), "la description ne dit pas l'effet d'anonymat : « " + text + " »");
+  const input = () => t.overlay().querySelector('input[data-draft="newTopic:name"]');
+  const sw = () => t.overlay().querySelector('[data-key="newTopic-anon"]');
+  const create = () => t.overlay().querySelectorAll("button").find((b) => b.textContent === "Créer").click();
+  assert(input() && nameOf(t.doc, input()) === "Votre nom", "champ « Votre nom » absent ou mal nommé");
+  assert(sw() && sw().getAttribute("role") === "switch" && sw().getAttribute("aria-checked") === "false", "interrupteur absent ou allumé au départ");
+  assert(sw().textContent === "Publier en anonyme", "libellé de l'interrupteur : « " + sw().textContent + " »");
+  assert(/Signé/.test(describedText(t.doc, sw())), "l'état signé n'est pas exposé : « " + describedText(t.doc, sw()) + " »");
+
+  t.overlay().querySelector('[data-draft="newTopic:title"]').value = "Sujet";
+  input().value = "";
+  create();
+  assert(created.length === 0, "un nom vidé, interrupteur éteint, a créé un sujet (anonyme par accident)");
+  assert(input().getAttribute("aria-invalid") === "true", "le refus n'est pas relié au champ nom");
+
+  input().value = "Alice";
+  sw().click();
+  assert(sw().getAttribute("aria-checked") === "true", "l'interrupteur ne s'allume pas");
+  assert(/aucune identité/i.test(describedText(t.doc, sw())), "l'effet de l'anonymat n'est pas exposé : « " + describedText(t.doc, sw()) + " »");
+  assert(input().closest(".field").hasAttribute("hidden"), "le champ nom reste visible en anonyme");
+  create();
+  assert(created.length === 1 && created[0].name === "", "création anonyme : nom transmis « " + (created[0] && created[0].name) + " »");
+
+  sw().click();
+  assert(!input().closest(".field").hasAttribute("hidden") && input().value === "Alice", "le nom tapé ne revient pas à l'extinction : « " + input().value + " »");
+  create();
+  assert(created.length === 2 && created[1].name === "Alice", "création signée : nom transmis « " + (created[1] && created[1].name) + " »");
 });
 
 check("BL-009 erreur de saisie : aria-invalid et message relié au champ, focus au champ, effacés à la frappe", () => {
@@ -545,11 +568,11 @@ check("BL-009 erreur de saisie : aria-invalid et message relié au champ, focus 
 check("BL-009 UI.fieldError relie un refus venu de js/app.js au champ, sans perdre l'indication d'origine", () => {
   const t = boot();
   t.gate("connection");
-  t.ctx.UI.fieldError("setup:url", "Collez l'adresse du script de l'équipe.");
+  t.ctx.UI.fieldError("setup:url", "Collez l'adresse de l'équipe.");
   const input = t.app().querySelector('input[data-draft="setup:url"]');
   assert(input.getAttribute("aria-invalid") === "true", "aria-invalid absent");
   const text = describedText(t.doc, input);
-  assert(text.indexOf("Collez l'adresse du script de l'équipe.") >= 0, "message non relié : « " + text + " »");
+  assert(text.indexOf("Collez l'adresse de l'équipe.") >= 0, "message non relié : « " + text + " »");
   assert(text.indexOf("Cette adresse vous est communiquée") >= 0, "l'indication d'origine doit rester reliée");
   t.ctx.UI.fieldError("absent:cle", "sans effet");   // aucune exception
 });
@@ -696,7 +719,7 @@ check("BL-035 mouvement réduit : le défilement vers le message cité n'est pas
 check("BL-009 js/app.js relie chaque refus de saisie à son champ (setup:url, setup:code, lock:code, nom) sans retirer le toast", () => {
   const app = fs.readFileSync(path.join(ROOT, "js/app.js"), "utf8");
   [
-    /refuse\("setup:url", "Collez l'adresse du script de l'équipe\."\)/,
+    /refuse\("setup:url", "Collez l'adresse de l'équipe\."\)/,
     /refuse\("setup:url", "L'adresse doit commencer par https:\/\/"\)/,
     /refuse\("setup:code", "Code d'accès refusé par le serveur\."\)/,
     /refuse\("lock:code", "Saisissez le code d'accès\."\)/,

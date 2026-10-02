@@ -716,6 +716,42 @@ check("BL-011 feuille puis fenêtre (« Modifier le sujet ») : focus dans la fe
   assertBackgroundClosed(t);
 });
 
+check("statuts qui sortent un contenu du jeu (Écartée, Clôturé, Archivé) : confirmés AVANT l'envoi ; les autres partent tout de suite", () => {
+  const t = boot();
+  const sent = [];
+  t.ctx.App.actions.changeProposalStatus = (topicId, proposalId, status) => { sent.push("proposition:" + status); };
+  t.ctx.App.actions.changeTopicStatus = (topicId, status) => { sent.push("sujet:" + status); };
+  const choose = (select, value) => { select.value = value; select.dispatchEvent({ type: "change", target: select }); };
+  const button = (label) => dialog(t).querySelectorAll("button").find((b) => b.textContent === label);
+
+  t.go(proposalsRoute("t1"));
+  choose(t.app().querySelector('[data-key="proposal-p1-status"]'), "rejected");
+  assert(sent.length === 0, "« Écartée » est parti sans confirmation : " + JSON.stringify(sent));
+  assert(dialog(t) && /Écarter la proposition/.test(dialog(t).textContent), "fenêtre de confirmation absente");
+  assert(/pour toute l'équipe/.test(dialog(t).textContent) && /rétablir/.test(dialog(t).textContent), "la fenêtre ne dit ni l'effet ni qu'il se rattrape");
+  button("Annuler").click();
+  assert(sent.length === 0 && !dialog(t), "Annuler a envoyé quelque chose ou laissé la fenêtre");
+  choose(t.app().querySelector('[data-key="proposal-p1-status"]'), "rejected");
+  button("Écarter").click();
+  assert(JSON.stringify(sent) === '["proposition:rejected"]', "confirmation : " + JSON.stringify(sent));
+  choose(t.app().querySelector('[data-key="proposal-p1-status"]'), "selected");
+  assert(sent[1] === "proposition:selected" && !dialog(t), "« Retenue » doit partir sans fenêtre : " + JSON.stringify(sent));
+
+  t.go(topicRoute("t1"));
+  [["closed", "Clôturer"], ["archived", "Archiver"]].forEach(([status, label]) => {
+    t.app().querySelector('[data-key="topic-info"]').click();
+    choose(dialog(t).querySelector('[data-key="topic-status"]'), status);
+    assert(sent.length === 2, status + " est parti sans confirmation : " + JSON.stringify(sent));
+    assert(dialog(t) && dialog(t).classList.contains("modal") && button(label), status + " : fenêtre de confirmation absente");
+    button(label).click();
+    assert(sent[sent.length - 1] === "sujet:" + status, status + " : non envoyé après confirmation");
+    sent.length = 2;
+  });
+  t.app().querySelector('[data-key="topic-info"]').click();
+  choose(dialog(t).querySelector('[data-key="topic-status"]'), "ready");
+  assert(sent[2] === "sujet:ready", "« Prêt pour la réunion » doit partir sans fenêtre : " + JSON.stringify(sent));
+});
+
 check("BL-011 un rendu pendant qu'une couche est ouverte garde le focus dans le calque", () => {
   const t = boot();
   t.go(topicRoute("t1"));

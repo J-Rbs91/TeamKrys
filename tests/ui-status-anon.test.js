@@ -607,6 +607,34 @@ check("BL-019 la feuille de MON message anonyme ne propose aucune réaction ; «
   assert(t.overlay().querySelectorAll(".emoji-btn").length === R.length, "mon message signé doit garder ses " + R.length + " réactions");
 });
 
+/* ===================================== Lever l'anonymat se confirme ==== */
+
+check("« Signer avec mon nom » se confirme AVANT l'envoi ; « Rendre anonyme » part tout de suite et le dit", () => {
+  const t = boot();
+  const sent = [];
+  t.ctx.App.actions.setMessageSignature = (topicId, messageId, anon) => { sent.push(messageId + ":" + (anon ? "anonyme" : "signé")); };
+  const actionBtn = (label) => t.overlay().querySelectorAll("button").find((b) => b.textContent === label);
+  t.go(topicRoute("t1"));
+  t.set({ sheet: { type: "message", topicId: "t1", messageId: "m1" } });
+  actionBtn("Signer avec mon nom").click();
+  assert(sent.length === 0, "le nom est parti sans confirmation : " + JSON.stringify(sent));
+  const dlg = t.overlay().querySelector(".modal");
+  assert(dlg && /pour toute l'équipe/.test(dlg.textContent), "fenêtre de confirmation absente ou muette sur l'effet");
+  actionBtn("Annuler").click();
+  assert(sent.length === 0 && !t.overlay().querySelector(".modal"), "Annuler a envoyé ou laissé la fenêtre");
+  t.set({ sheet: { type: "message", topicId: "t1", messageId: "m1" } });
+  actionBtn("Signer avec mon nom").click();
+  actionBtn("Signer").click();
+  assert(JSON.stringify(sent) === '["m1:signé"]', "après confirmation : " + JSON.stringify(sent));
+
+  t.go(topicRoute("t3"));
+  t.set({ sheet: { type: "message", topicId: "t3", messageId: "m3" } });
+  actionBtn("Rendre anonyme").click();
+  assert(sent[1] === "m3:anonyme" && !t.overlay().querySelector(".modal"), "« Rendre anonyme » doit partir sans fenêtre : " + JSON.stringify(sent));
+  const toasts = t.toasts().querySelectorAll(".toast").map((n) => n.textContent);
+  assert(toasts.includes("Message rendu anonyme."), "aucun retour après « Rendre anonyme » : " + JSON.stringify(toasts));
+});
+
 /* ============================================================ BL-029 ==== */
 
 check("BL-029 accueil, cartes, noms accessibles et toasts du consensus : jamais « conclusion »", () => {
