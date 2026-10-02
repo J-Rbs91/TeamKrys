@@ -8,7 +8,7 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.13.2";
+var CACHE_VERSION = "brainsto-v1.14.0";
 /* Idées reformulées (boîte à idées) : publiées par l'IA dans le dépôt, elles changent SANS nouvelle version de
  * l'application. Réseau d'abord ; la dernière copie reçue sert hors ligne, dans un cache à part qui survit aux mises
  * à jour (il ne contient que ce fichier, public). */
