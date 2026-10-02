@@ -1650,6 +1650,50 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .send-btn:active { background: var(--accord-surface-hover); }
 .send-btn:disabled { background: var(--surface-sunken); color: var(--faint); box-shadow: none; }
 
+/* Le champ est enveloppé pour porter son repère d'anonymat (frère du <textarea>, voir js/ui.js). */
+.composer-field { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
+
+/* ⚠️ Écrire en anonyme se voit DANS la zone d'écriture, là où le regard est pendant la frappe : masque à
+   l'entrée du champ, bord en tirets, fond creusé, et (js/ui.js) indication « Message anonyme… » et envoi nommé
+   « Envoyer en anonyme ». Jamais la teinte seule. Le bord reste `--line-field` (3:1, BL-039) : seul son trait change.
+   `--text` et `--faint` sont mesurés sur `--surface-sunken` (tools/check-contrast.py). */
+.composer.is-anon .textarea {
+  border-style: dashed;
+  background: var(--surface-sunken);
+  padding-left: 44px;
+}
+
+/* Calé sur la première ligne : 1 px de bord + 12 px de marge + la moitié d'une ligne de 1,55 em. */
+.field-mark {
+  position: absolute;
+  top: 17px;
+  left: 15px;
+  display: flex;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Pastille sur le coin du bouton d'envoi : le dernier geste avant la publication dit lui aussi qu'elle sera
+   anonyme. Encre sur papier avec un anneau de la couleur du composeur : elle se détache autant de l'aplat bleu que
+   du fond, dans les deux thèmes (couple `--on-ink` / `--ink` mesuré). */
+.send-btn { position: relative; }
+
+.send-mark {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: 0 0 0 2px var(--surface);
+  pointer-events: none;
+}
+
 .quote-preview {
   display: flex;
   align-items: center;
@@ -1667,24 +1711,118 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .quote-preview .quote-body { flex: 1; min-width: 0; }
 .quote-preview .quote-text { color: var(--muted); }
 
-/* Bascule signé / anonyme : rendue explicite (pastille d'état + action),
-   c'est une décision engageante dans un débat d'équipe. */
+/* Interrupteur signé / anonyme : c'est une décision engageante dans un débat d'équipe, donc il se lit sans
+   interprétation. À gauche, le NOM que les autres verront (« Signé : Prénom » ou « Anonyme ») ; à droite, un
+   vrai interrupteur au libellé STABLE. Le bouton qu'il remplace alternait entre l'action (« Anonyme ») et l'état
+   (« Signer ») : on ne savait pas si « Anonyme » disait ce qui était actif ou ce qui allait l'être.
+   L'état ne repose jamais sur la teinte seule : position du bouton, icône (silhouette ou masque), texte du nom
+   et fond de la ligne le disent chacun. */
 .signature-toggle {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  column-gap: 8px;
   max-width: var(--measure);
   margin: 0 auto 9px;
-  padding: 6px 6px 6px 12px;
+  padding: 0 4px 0 12px;
   border-radius: var(--radius-chip);
   background: var(--surface-soft);
   font-size: var(--fs-xs);
   color: var(--muted);
 }
 
-.signature-toggle .who { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+/* Anonyme : le fond se creuse et le nom passe à l'encre pleine — le texte reste sur des couples déjà mesurés
+   (tools/check-contrast.py : --text et --faint sur --surface-sunken). */
+.signature-toggle.is-anon { background: var(--surface-sunken); color: var(--text); }
+
+/* `5rem` de base : à 320 px le nom garde sa place sur la ligne de l'interrupteur ; au grand texte (ou avec une police
+   large) il passe seul sur la sienne au lieu d'être rogné jusqu'à disparaître. Les 6 px verticaux ne changent rien sur
+   une ligne (la cible de 44 px décide) : ils décollent le nom du bord quand il se retrouve seul. */
+.signature-toggle .who { flex: 1 1 5rem; display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 0; }
 .signature-toggle .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signature-toggle.is-anon .who-name { font-weight: 650; }
+
+/* Le bouton entier est la cible (libellé + piste) : 44 px de haut, comme toute commande de l'application. */
+.sig-switch {
+  flex: 0 1 auto;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  margin-left: auto;
+  padding: 4px 4px 4px 8px;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sig-label { min-width: 0; text-align: right; }
+
+/* Le réglage global de :focus ramène tous les rayons à 6 px : la pastille perdrait sa forme au focus. Deux règles,
+   jamais un groupe (BL-047). */
+.sig-switch:focus { border-radius: var(--radius-chip); }
+.sig-switch:focus-visible { border-radius: var(--radius-chip); }
+
+/* Piste 44 × 26 (bord compris), bouton 18 px, 2 px de jeu : course = 44 − 2 × 2 (bord) − 2 × 2 (jeu) − 18 = 18 px.
+   Éteint : piste claire au bord `--line-field` (3:1 sur la ligne) et bouton `--muted` (couples texte mesurés).
+   Allumé : piste encrée, bouton papier — le couple `--on-ink` / `--ink` des bulles à soi. */
+.sig-track {
+  --sw-travel: 18px;
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 44px;
+  height: 26px;
+  border: 2px solid var(--line-field);
+  border-radius: var(--radius-chip);
+  background: var(--surface);
+}
+
+.sig-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--surface);
+}
+
+.sig-switch[aria-checked="true"] .sig-track { border-color: var(--ink); background: var(--ink); }
+.sig-switch[aria-checked="true"] .sig-thumb { transform: translateX(var(--sw-travel)); background: var(--on-ink); color: var(--ink); }
+
+/* Mouvement : le rendu reconstruit le nœud, une transition ne se jouerait donc jamais. `is-flip` (posé une seule fois,
+   par le geste de bascule — js/ui.js) lance une animation DEPUIS l'ancien état : le bouton glisse, la piste change de
+   fond, le nom monte (ou redescend) à sa place. 240 ms, `--ease-out`, sans dépassement ; réservé à une commande
+   qu'on actionne rarement, donc compatible avec la règle de fréquence. Mouvement réduit : rien ne s'anime, l'état
+   final est simplement là. */
+@keyframes sig-thumb-on { from { transform: translateX(0); background: var(--muted); color: var(--surface); } }
+@keyframes sig-thumb-off { from { transform: translateX(var(--sw-travel)); background: var(--on-ink); color: var(--ink); } }
+@keyframes sig-track-on { from { border-color: var(--line-field); background: var(--surface); } }
+@keyframes sig-track-off { from { border-color: var(--ink); background: var(--ink); } }
+@keyframes sig-name-up { from { opacity: 0; transform: translateY(8px); } }
+@keyframes sig-name-down { from { opacity: 0; transform: translateY(-8px); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .signature-toggle.is-flip .sig-thumb { animation: sig-thumb-off var(--dur-slow) var(--ease-out); }
+  .signature-toggle.is-flip .sig-track { animation: sig-track-off var(--dur-slow) var(--ease-out); }
+  .signature-toggle.is-flip .who-name { animation: sig-name-down var(--dur-slow) var(--ease-out); }
+  .signature-toggle.is-flip.is-anon .sig-thumb { animation-name: sig-thumb-on; }
+  .signature-toggle.is-flip.is-anon .sig-track { animation-name: sig-track-on; }
+  .signature-toggle.is-flip.is-anon .who-name { animation-name: sig-name-up; }
+}
 
 /* ==================================================== Feuilles & fenêtres ==== */
 
@@ -2401,7 +2539,7 @@ html.has-layer body { overflow: hidden; }
   }
 
   .composer .textarea { max-height: 24vh; max-height: 24dvh; }
-  .signature-toggle { margin-bottom: 6px; padding-top: 2px; padding-bottom: 2px; }
+  .signature-toggle { margin-bottom: 6px; }
   .quote-preview { margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
   .quote-preview .quote-text { -webkit-line-clamp: 1; }
   .thread { padding-top: 8px; padding-bottom: 10px; }

@@ -817,6 +817,8 @@ check("BL-059 jamais gardés : connexion, code, nom, fenêtres « Modifier » (l
 
 const NOTE_ANON_TEXT = "Brouillon retrouvé sur cet appareil. Il sera publié en anonyme : vérifiez avant d'envoyer.";
 const NOTE_CHECK_TEXT = "Brouillon retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant d'envoyer.";
+/* Le nom que les autres verront, à gauche de l'interrupteur : « Signé : Prénom », ou « Anonyme » une fois la bascule actionnée. */
+const WHO_ANON = "Anonyme";
 const whoLine = (t) => t.doc.getElementById("composer-who").textContent;
 const noteNodeOf = (t) => t.doc.getElementById("composer-restored");
 const pressToggle = (t) => t.app().querySelector('[data-key="composer-anon"]').click();
@@ -826,7 +828,7 @@ function anonDeviceFor(id) {
   const t = boot();
   t.go(topicRoute(id));
   pressToggle(t);
-  assert(whoLine(t) === "Publié en anonyme", "contrôle sans objet : la bascule ne donne pas « Publié en anonyme » (" + whoLine(t) + ")");
+  assert(whoLine(t) === WHO_ANON, "contrôle sans objet : la bascule ne donne pas « " + WHO_ANON + " » (" + whoLine(t) + ")");
   t.type(t.composer(id), TEXT);
   t.fire();
   return t;
@@ -858,14 +860,14 @@ check("REC-RUI-001 rechargement : le brouillon anonyme revient ANONYME, la note 
   assert(b.ctx.UI.local.composerAnon === false, "contrôle sans objet : le choix en mémoire démarre signé après un rechargement");
   b.go(topicRoute("t1"));
   assert(b.ctx.UI.local.composerAnon === true, "le brouillon anonyme n'a pas rétabli l'anonymat");
-  assert(whoLine(b) === "Publié en anonyme", "la ligne dit : " + whoLine(b));
+  assert(whoLine(b) === WHO_ANON, "la ligne dit : " + whoLine(b));
   assert(b.composer("t1").value === TEXT, "texte non restauré");
   const note = noteNodeOf(b);
   assert(note && note.textContent === NOTE_ANON_TEXT, "note absente ou autre : " + (note && note.textContent));
   assert(note.getAttribute("role") === "status", "la note n'est pas annoncée (role=status) à sa première apparition");
   assert(b.composer("t1").getAttribute("aria-describedby") === "composer-restored", "le champ ne porte pas la note en description");
   b.ctx.UI.force();                                   // arrivée de données : même choix, même note, pas de nouvelle annonce
-  assert(whoLine(b) === "Publié en anonyme" && noteNodeOf(b) && noteNodeOf(b).textContent === NOTE_ANON_TEXT, "un rendu de plus perd le choix ou la note");
+  assert(whoLine(b) === WHO_ANON && noteNodeOf(b) && noteNodeOf(b).textContent === NOTE_ANON_TEXT, "un rendu de plus perd le choix ou la note");
   assert(noteNodeOf(b).getAttribute("role") !== "status", "la note est ré-annoncée à chaque rendu");
   assert(b.composer("t1").getAttribute("aria-describedby") === "composer-restored", "un rendu de plus perd la description du champ");
   b.send();
@@ -933,7 +935,7 @@ check("REC-RUI-001 refus LOCAL d'un envoi anonyme : le texte revient avec son in
   assert(saved && saved["composer:t1"] === TEXT && JSON.stringify(saved.anon) === '["composer:t1"]', "refus : texte ou indicateur non conservés : " + t.ls.getItem(KEY));
   const b = boot({ storage: t.ls });
   b.go(topicRoute("t1"));
-  assert(whoLine(b) === "Publié en anonyme", "après rechargement : « " + whoLine(b) + " »");
+  assert(whoLine(b) === WHO_ANON, "après rechargement : « " + whoLine(b) + " »");
 });
 
 check("REC-RUI-001 le choix est global, le brouillon est par sujet : un brouillon anonyme n'est jamais affiché « Signé » parce que le choix a été changé ailleurs", () => {
@@ -945,7 +947,7 @@ check("REC-RUI-001 le choix est global, le brouillon est par sujet : un brouillo
   pressToggle(t);                                     // Signer, mais dans l'AUTRE sujet (sans texte)
   assert(whoLine(t) === "Signé : Alice", "contrôle sans objet : « " + whoLine(t) + " »");
   t.go(topicRoute("t1"));
-  assert(whoLine(t) === "Publié en anonyme", "le brouillon anonyme revient signé dans son sujet : « " + whoLine(t) + " »");
+  assert(whoLine(t) === WHO_ANON, "le brouillon anonyme revient signé dans son sujet : « " + whoLine(t) + " »");
   assert(noteNodeOf(t) && /anonyme/.test(noteNodeOf(t).textContent), "le retour à l'anonymat n'est pas expliqué par une note");
 });
 

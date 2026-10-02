@@ -105,6 +105,17 @@ COUPLES = [
     ("--warning", "--surface-strong", COMPOSANT, "gommette « en cours » sur sa pastille"),
     ("--danger", "--surface-strong", COMPOSANT, "gommette « en erreur » sur sa pastille"),
     ("--faint", "--surface-strong", COMPOSANT, "gommette « local » et « hors ligne » sur sa pastille"),
+    # Interrupteur signé / anonyme. Éteint : bord de la piste sur la ligne, puis bouton (--muted) sur la piste (--surface).
+    # Allumé : piste encrée sur la ligne creusée, bouton papier sur la piste ; le nom en encre pleine sur le même creux.
+    # Repères d'anonymat de la zone d'écriture : masque du champ sur le creux, pastille d'envoi (encre sur papier).
+    ("--line-field", "--surface-soft", COMPOSANT, "bord de la piste de l'interrupteur éteint sur sa ligne"),
+    ("--surface", "--muted", COMPOSANT, "bouton de l'interrupteur éteint sur sa piste"),
+    ("--ink", "--surface-sunken", COMPOSANT, "piste de l'interrupteur allumé sur la ligne creusée"),
+    ("--on-ink", "--ink", COMPOSANT, "bouton de l'interrupteur allumé sur sa piste"),
+    ("--text", "--surface-sunken", TEXTE, "nom « Anonyme » sur la ligne creusée"),
+    ("--muted", "--surface-sunken", COMPOSANT, "masque à l'entrée du champ d'écriture anonyme"),
+    ("--on-ink", "--ink", TEXTE, "masque de la pastille d'envoi anonyme"),
+    ("--ink", "--surface", COMPOSANT, "pastille d'envoi anonyme sur son anneau"),
 ]
 
 

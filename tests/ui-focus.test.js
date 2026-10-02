@@ -16,7 +16,8 @@
  * Contrôles :
  *  - re-rendu (vote, retrait de vote, réaction, message reçu) : le focus revient
  *    sur l'élément équivalent (même data-key), sans jamais déranger une saisie ;
- *  - bascule Anonyme / Signer : le focus reste sur la commande, l'état est exposé ;
+ *  - interrupteur Anonyme : le focus reste sur la commande, l'état est exposé (aria-checked) sous un libellé stable ;
+ *    le nom affiché change, l'animation n'est posée que par le geste ; la zone d'écriture porte ses propres repères ;
  *  - feuilles et fenêtres : focus dans le calque à l'ouverture, fond inerte (ou
  *    aria-hidden sans `inert`), classe has-layer, Tab confiné ; à la fermeture
  *    (Fermer, Échap, fond), focus rendu au déclencheur et fond rétabli ;
@@ -553,24 +554,74 @@ check("BL-012 une saisie en cours n'est jamais dérangée par un rendu", () => {
 
 /* ============================================================ BL-010 ==== */
 
-check("BL-010 bascule Anonyme / Signer : le focus reste sur la commande et l'état courant est exposé", () => {
+check("BL-010 interrupteur Anonyme : le focus reste sur la commande, l'état courant est exposé (aria-checked) et son libellé ne change pas", () => {
   const t = boot();
   t.go(topicRoute("t1"));
   const toggle = t.app().querySelector('[data-key="composer-anon"]');
-  assert(toggle, "bascule sans clé data-key=composer-anon");
+  assert(toggle, "interrupteur sans clé data-key=composer-anon");
+  assert(toggle.getAttribute("role") === "switch" && toggle.getAttribute("aria-checked") === "false",
+    "un vrai interrupteur est attendu, éteint au départ : role=" + toggle.getAttribute("role") + ", aria-checked=" + toggle.getAttribute("aria-checked"));
+  const label = toggle.querySelector(".sig-label").textContent;
+  assert(label === "Publier en anonyme", "libellé de l'interrupteur : « " + label + " »");
   toggle.focus();
   toggle.click();
   let now = t.active();
   assert(t.ctx.UI.local.composerAnon === true, "la bascule n'a pas basculé");
   assert(now !== toggle && now.getAttribute("data-key") === "composer-anon", "focus après la bascule sur " + describe(now));
+  assert(now.getAttribute("aria-checked") === "true", "interrupteur allumé : aria-checked=" + now.getAttribute("aria-checked"));
+  assert(now.querySelector(".sig-label").textContent === label, "le libellé de l'interrupteur a changé avec son état : « " + now.querySelector(".sig-label").textContent + " »");
   let state = t.doc.getElementById(now.getAttribute("aria-describedby") || "-");
-  assert(state && state.textContent === "Publié en anonyme", "état non exposé par la commande : " + (state ? state.textContent : "aucune description"));
+  assert(state && state.textContent === "Anonyme", "état non exposé par la commande : " + (state ? state.textContent : "aucune description"));
 
   now.click();
   now = t.active();
   assert(now.getAttribute("data-key") === "composer-anon", "second appui : focus sur " + describe(now));
+  assert(now.getAttribute("aria-checked") === "false", "interrupteur éteint : aria-checked=" + now.getAttribute("aria-checked"));
   state = t.doc.getElementById(now.getAttribute("aria-describedby") || "-");
   assert(state && state.textContent === "Signé : Alice", "état signé non exposé : " + (state ? state.textContent : "aucune description"));
+});
+
+check("interrupteur Anonyme : le nom affiché devient « Anonyme », et l'animation n'est posée que par le geste, jamais par un rendu de plus", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  const row = () => t.app().querySelector(".signature-toggle");
+  assert(!row().classes().has("is-flip") && !row().classes().has("is-anon"), "état de départ : " + row().className);
+  assert(t.doc.getElementById("composer-who").textContent === "Signé : Alice", "nom de départ : « " + t.doc.getElementById("composer-who").textContent + " »");
+  t.app().querySelector('[data-key="composer-anon"]').click();
+  assert(row().classes().has("is-anon") && row().classes().has("is-flip"), "après le geste : " + row().className);
+  assert(t.doc.getElementById("composer-who").textContent === "Anonyme", "nom après la bascule : « " + t.doc.getElementById("composer-who").textContent + " »");
+  t.ctx.UI.force();   // données reçues, nouveau rendu : l'état tient, l'animation ne se rejoue pas
+  assert(row().classes().has("is-anon") && !row().classes().has("is-flip"), "rendu suivant : " + row().className);
+  t.app().querySelector('[data-key="composer-anon"]').click();
+  assert(!row().classes().has("is-anon") && row().classes().has("is-flip"), "retour au nom signé : " + row().className);
+});
+
+check("écriture anonyme : le champ, le composeur et l'envoi portent un repère qui n'est pas la teinte seule", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  const field = () => t.app().querySelector('[data-draft="composer:t1"]');
+  const send = () => t.app().querySelector('[data-key="send"]');
+  assert(!t.app().querySelector(".composer").classes().has("is-anon") && !t.app().querySelector(".field-mark") && !t.app().querySelector(".send-mark"),
+    "repère d'anonymat présent alors que la signature est active");
+  assert(field().getAttribute("placeholder") === "Votre message…" && field().getAttribute("aria-label") === "Votre message" && send().getAttribute("aria-label") === "Envoyer",
+    "textes signés : « " + field().getAttribute("placeholder") + " » / « " + field().getAttribute("aria-label") + " » / « " + send().getAttribute("aria-label") + " »");
+
+  t.app().querySelector('[data-key="composer-anon"]').click();
+  assert(t.app().querySelector(".composer").classes().has("is-anon"), "le composeur ne porte pas is-anon");
+  const mark = t.app().querySelector(".composer-field .field-mark");
+  assert(mark && mark.getAttribute("aria-hidden") === "true" && mark.querySelector(".icon-mask"), "masque absent à l'entrée du champ, ou lu au lecteur d'écran");
+  assert(field().parentNode === mark.parentNode, "le repère n'est pas dans l'enveloppe du champ");
+  assert(!field().contains(mark) && !mark.querySelector("textarea"), "le repère ne doit pas envelopper le champ");
+  assert(field().getAttribute("placeholder") === "Message anonyme…", "indication du champ : « " + field().getAttribute("placeholder") + " »");
+  assert(field().getAttribute("aria-label") === "Votre message anonyme", "nom du champ : « " + field().getAttribute("aria-label") + " »");
+  assert(send().getAttribute("aria-label") === "Envoyer en anonyme", "nom de l'envoi : « " + send().getAttribute("aria-label") + " »");
+  const badge = send().querySelector(".send-mark");
+  assert(badge && badge.getAttribute("aria-hidden") === "true" && badge.querySelector(".icon-mask"), "pastille d'anonymat absente de l'envoi");
+
+  t.app().querySelector('[data-key="composer-anon"]').click();
+  assert(!t.app().querySelector(".composer").classes().has("is-anon") && !t.app().querySelector(".field-mark") && !t.app().querySelector(".send-mark"),
+    "repères restés après le retour à la signature");
+  assert(field().getAttribute("aria-label") === "Votre message" && send().getAttribute("aria-label") === "Envoyer", "noms non rétablis");
 });
 
 /* ============================================================ BL-011 ==== */

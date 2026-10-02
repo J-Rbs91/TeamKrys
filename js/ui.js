@@ -1473,6 +1473,12 @@
     }
   };
 
+  /* ⚠️ Le rendu DÉTRUIT et reconstruit le composeur (voir UI.render) : une transition CSS ne se joue donc jamais, le
+   * nœud neuf naît déjà dans son état final. Le geste de bascule lève ce drapeau ; le rendu qu'il provoque le consomme
+   * UNE fois et pose `is-flip`, que app.css traduit en animation depuis l'ancien état. Un rendu ultérieur (données
+   * reçues) ne rejoue rien : le drapeau est retombé. */
+  var signatureFlip = false;
+
   function composer(topic) {
     var draftKey = "composer:" + topic.id;
     var textarea = el("textarea", {
@@ -1561,33 +1567,61 @@
       parts.push(noteNode);
     }
 
-    parts.push(el("div", { class: "signature-toggle" }, [
+    /* L'état est lu ICI, après le rétablissement d'un brouillon anonyme (plus haut) : c'est lui qui décide de tout ce
+     * qui suit — l'interrupteur, le nom, et les repères de la zone d'écriture. */
+    var anon = UI.local.composerAnon === true;
+    var flip = signatureFlip;
+    signatureFlip = false;
+
+    /* Repères d'anonymat DANS la zone d'écriture : on regarde le champ en tapant, pas la ligne du dessus. Jamais la
+     * teinte seule — une icône, un texte (indication du champ, nom de l'envoi) et un trait en tirets le disent aussi. */
+    if (anon) {
+      textarea.setAttribute("placeholder", "Message anonyme…");
+      textarea.setAttribute("aria-label", "Votre message anonyme");
+      sendBtn.setAttribute("aria-label", "Envoyer en anonyme");
+      sendBtn.classList.add("is-anon");
+      sendBtn.appendChild(el("span", { class: "send-mark", "aria-hidden": "true" }, [icon("mask", 11)]));
+    }
+
+    /* Interrupteur signé / anonyme. Son libellé est STABLE (« Publier en anonyme ») : c'est son état, pas son texte,
+     * qui change — un bouton dont le libellé alternait entre l'action et l'état se lisait dans les deux sens. Le nom
+     * affiché à gauche est celui que les autres verront ; la description du contrôle le reprend. Après la bascule, le
+     * focus revient sur lui (même clé) et le lecteur d'écran annonce le nouvel état (aria-checked). */
+    parts.push(el("div", { class: "signature-toggle" + (anon ? " is-anon" : "") + (flip ? " is-flip" : "") }, [
       el("span", { class: "who" }, [
-        icon(UI.local.composerAnon ? "mask" : "user", 15),
-        el("span", { id: "composer-who", text: UI.local.composerAnon ? "Publié en anonyme" : "Signé : " + (App.user.name || "moi") })
+        icon(anon ? "mask" : "user", 15),
+        el("span", { class: "who-name", id: "composer-who", text: anon ? "Anonyme" : "Signé : " + (App.user.name || "moi") })
       ]),
-      /* Le libellé dit l'action (« Signer »), la description dit ce que sera le
-       * prochain message (« Publié en anonyme ») : après la bascule, le focus
-       * revient sur elle (même clé) et le lecteur d'écran annonce le nouvel état. */
       el("button", {
-        class: "btn btn-sm btn-outline", type: "button",
+        class: "sig-switch", type: "button", role: "switch", "aria-checked": anon ? "true" : "false",
         "data-key": "composer-anon", "aria-describedby": "composer-who",
         onclick: function () {
           var next = !UI.local.composerAnon;
           dismissNote(draftKey);
           /* Geste explicite : le choix du brouillon suit (sinon un rechargement le rétablirait ou le perdrait). */
           if (composerDrafts[draftKey]) { stageDraft(draftKey, composerDrafts[draftKey], next); }
+          signatureFlip = true;
           UI.set({ composerAnon: next });
         }
       }, [
-        icon(UI.local.composerAnon ? "user" : "mask", 15),
-        el("span", { text: UI.local.composerAnon ? "Signer" : "Anonyme" })
+        el("span", { class: "sig-label", text: "Publier en anonyme" }),
+        el("span", { class: "sig-track", "aria-hidden": "true" }, [
+          el("span", { class: "sig-thumb" }, [icon(anon ? "mask" : "user", 11)])
+        ])
       ])
     ]));
 
-    parts.push(el("div", { class: "composer-inner" }, [textarea, sendBtn]));
+    /* Le champ est enveloppé pour porter son repère à côté de lui (frère du <textarea>) : le champ garde sa clé de
+     * brouillon et son rôle, et l'icône ne reçoit ni focus ni saisie (aria-hidden, pointer-events: none). */
+    parts.push(el("div", { class: "composer-inner" }, [
+      el("div", { class: "composer-field" }, [
+        textarea,
+        anon ? el("span", { class: "field-mark", "aria-hidden": "true" }, [icon("mask", 16)]) : null
+      ]),
+      sendBtn
+    ]));
 
-    return el("div", { class: "composer" }, parts);
+    return el("div", { class: "composer" + (anon ? " is-anon" : "") }, parts);
   }
 
   function screenTopic(topicId) {

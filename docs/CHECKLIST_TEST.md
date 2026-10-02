@@ -177,7 +177,7 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       Safari. » ; même message au déverrouillage, l'appareil reste verrouillé ;
       connexion **sans** code : possible.
 
-### 1 sexies. Clavier : feuilles, fenêtres et bascule Anonyme / Signer
+### 1 sexies. Clavier : feuilles, fenêtres et interrupteur Anonyme
 
 À faire avec un clavier (celui d'un ordinateur, ou un clavier externe sur le
 téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
@@ -187,9 +187,33 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] **Échap** ferme la feuille et rend le focus au bouton qui l'a ouverte.
 - [ ] Le fond ne défile pas et ne reçoit pas le focus tant qu'une feuille est
       ouverte.
-- [ ] Le bouton **Anonyme / Signer** garde le focus quand on l'actionne et annonce
-      l'état du prochain message (« Publié en anonyme » ou « Signé : » suivi du
-      nom).
+- [ ] L'interrupteur **Publier en anonyme** garde le focus quand on l'actionne
+      (Espace ou Entrée), garde **le même libellé** dans les deux états, et annonce
+      « activé » ou « désactivé » avec le nom du prochain message (« Anonyme » ou
+      « Signé : » suivi du nom). Sous VoiceOver et TalkBack : lu comme un interrupteur,
+      pas comme un bouton.
+
+### 1 sexies bis. Interrupteur Anonyme et repères de la zone d'écriture
+
+À faire sur téléphone, clair **et** sombre, à 100 % puis avec la police du système
+agrandie.
+
+- [ ] Interrupteur éteint : à gauche « Signé : » suivi du prénom, à droite le libellé
+      fixe **Publier en anonyme** et la piste claire, bouton à gauche (silhouette).
+- [ ] Un appui allume l'interrupteur : le bouton **glisse** vers la droite (masque), la
+      piste passe à l'encre, le nom devient **Anonyme** en montant à sa place, en
+      moins d'un quart de seconde, sans rebond. Un second appui rejoue l'inverse.
+- [ ] Interrupteur allumé : le **champ d'écriture** montre un masque à l'entrée, un bord
+      en tirets sur fond creusé, et « Message anonyme… » quand il est vide ; le bouton
+      d'envoi porte un petit masque. Tout disparaît à l'extinction.
+- [ ] Les repères tiennent **pendant la frappe** (le masque et les tirets restent quand
+      le champ contient du texte et grandit sur plusieurs lignes).
+- [ ] À 320 px de large : rien ne déborde. Si la ligne est trop étroite, le nom passe
+      seul sur sa ligne, l'interrupteur dessous ; avec la police agrandie, le libellé
+      passe à la ligne (mots entiers) sans être coupé.
+- [ ] Mouvement réduit activé dans le système : aucune animation, l'état change d'un coup.
+- [ ] Une arrivée de nouveaux messages pendant ou juste après la bascule ne rejoue pas
+      l'animation et ne fait pas perdre le texte en cours de saisie.
 
 ### 1 septies. Lecteur d'écran : champs, erreurs, titres, mouvement réduit
 
@@ -217,8 +241,8 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 
 ### 1 octies. Brouillons anonymes, fenêtres « Modifier », noms lus, impression, bandeau, copies
 
-- [ ] Choisir **Anonyme**, taper un brouillon, puis recharger la page (ou « Mettre à
-      jour ») : la ligne dit « Publié en anonyme », la note « Brouillon retrouvé sur cet
+- [ ] Allumer **Publier en anonyme**, taper un brouillon, puis recharger la page (ou
+      « Mettre à jour ») : la ligne dit « Anonyme », l'interrupteur est allumé, la note « Brouillon retrouvé sur cet
       appareil. Il sera publié en anonyme : vérifiez avant d'envoyer. » est affichée près
       du champ, et **Envoyer** publie le message sans nom. Dans les outils du navigateur,
       `brainsto.drafts.v1` contient une liste `anon` avec la clé du sujet, et rien
@@ -227,10 +251,10 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
       `brainsto.drafts.v1` ; le brouillon revient signé, avec la note « Brouillon
       retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant d'envoyer. »,
       et rien n'est converti en anonyme.
-- [ ] Brouillon anonyme retrouvé, puis appui sur **Signer** : la note disparaît et le
-      message part signé (le geste est respecté). Sans toucher à la bascule, le message
+- [ ] Brouillon anonyme retrouvé, puis interrupteur **éteint** : la note disparaît et le
+      message part signé (le geste est respecté). Sans toucher à l'interrupteur, le message
       ne part **jamais** signé. Avec un brouillon anonyme dans un autre sujet : les
-      autres sujets passent aussi en anonyme jusqu'à l'appui sur **Signer**.
+      autres sujets passent aussi en anonyme jusqu'à ce que l'interrupteur soit éteint.
 - [ ] « Se déconnecter de l'équipe », puis lecture du stockage du navigateur :
       `brainsto.drafts.v1` **et** `brainsto.seenTopics.v1` sont absents. Au
       reverrouillage d'inactivité d'une heure, au contraire, les deux sont toujours là

@@ -626,6 +626,58 @@ check("REC-UI-042 textes rognés : le repère « nouveau » est un bloc à point
   });
 });
 
+check("interrupteur Anonyme : cible de 44 px, forme de pastille gardée au focus (deux règles, jamais un groupe), libellé qui peut passer à la ligne", function () {
+  var sw = { tag: "button", classes: ["sig-switch"], ancestors: [{ tag: "div", classes: ["signature-toggle"] }] };
+  expect(declFor(sw, "min-height", BASE) === "var(--tap)", ".sig-switch doit garder une cible de 44 px (--tap)");
+  expect(/^0 1 auto$/.test(declFor(sw, "flex", BASE) || ""),
+    ".sig-switch doit pouvoir rétrécir (flex: 0 1 auto) : au grand texte le libellé passe à la ligne au lieu de déborder");
+  ["focus", "focus-visible"].forEach(function (pseudo) {
+    expect(ruleExists(function (r) {
+      return r.selectors.length === 1 && r.selectors[0] === ".sig-switch:" + pseudo && r.decls["border-radius"] === "var(--radius-chip)";
+    }), ".sig-switch:" + pseudo + " doit avoir sa propre règle de rayon (le :focus global ramène tout à 6 px)");
+  });
+  var row = { tag: "div", classes: ["signature-toggle"], ancestors: [] };
+  expect(declFor(row, "flex-wrap", BASE) === "wrap", ".signature-toggle doit passer à la ligne au grand texte");
+});
+
+check("interrupteur Anonyme : toute animation de bascule est réservée à `prefers-reduced-motion: no-preference`, sans courbe à dépassement", function () {
+  var flips = RULES.filter(function (r) {
+    return r.selectors.some(function (s) { return s.indexOf("is-flip") >= 0; });
+  });
+  expect(flips.length >= 6, "les six animations de bascule (bouton, piste, nom, dans les deux sens) sont attendues, " + flips.length + " trouvées");
+  flips.forEach(function (r) {
+    expect(r.media.some(function (m) { return /prefers-reduced-motion:\s*no-preference/.test(m); }),
+      "« " + r.selectors[0] + " » s'anime hors de (prefers-reduced-motion: no-preference) : un utilisateur de mouvement réduit la verrait");
+    expect(!r.decls.animation || (/var\(--ease-out\)/.test(r.decls.animation) && !/ease-spring/.test(r.decls.animation)),
+      "« " + r.selectors[0] + " » : l'animation doit utiliser --ease-out, sans dépassement");
+  });
+  ["sig-thumb-on", "sig-thumb-off", "sig-track-on", "sig-track-off", "sig-name-up", "sig-name-down"].forEach(function (name) {
+    expect(new RegExp("@keyframes " + name + "\\b").test(APP_TEXT), "@keyframes " + name + " absent");
+  });
+  var plain = RULES.filter(function (r) {
+    return r.selectors.some(function (s) { return /\.sig-(switch|track|thumb)\b/.test(s) && s.indexOf("is-flip") < 0; }) && (r.decls.transition || r.decls.animation);
+  });
+  expect(!plain.length, "une transition ou une animation hors `is-flip` sur l'interrupteur : le rendu reconstruit le nœud, elle ne se jouerait jamais");
+});
+
+check("écriture anonyme : bord en tirets mais toujours sur --line-field, fond creusé, place du masque à gauche, pastille d'envoi ancrée", function () {
+  var anonField = { tag: "textarea", classes: ["textarea", "grow"], ancestors: [{ tag: "div", classes: ["composer", "is-anon"] }] };
+  expect(declFor(anonField, "border-style", BASE) === "dashed", "le champ d'écriture anonyme doit avoir un bord en tirets");
+  expect(declFor(anonField, "border-color", BASE) === "var(--line-field)", "le bord en tirets reste sur --line-field (3:1, BL-039)");
+  expect(declFor(anonField, "background", BASE) === "var(--surface-sunken)", "le champ d'écriture anonyme doit être creusé");
+  expect(/^\d+px$/.test(declFor(anonField, "padding-left", BASE) || "") && parseInt(declFor(anonField, "padding-left", BASE), 10) >= 40,
+    "le texte doit laisser la place du masque (44 px à gauche)");
+  var signedField = { tag: "textarea", classes: ["textarea", "grow"], ancestors: [{ tag: "div", classes: ["composer"] }] };
+  expect(!declFor(signedField, "border-style", BASE) && !declFor(signedField, "padding-left", BASE) && declFor(signedField, "padding", BASE) === "12px 18px",
+    "le champ signé garde son bord plein et sa marge de 18 px (le tiret et le retrait de 44 px sont réservés à .composer.is-anon)");
+  var send = { tag: "button", classes: ["send-btn", "is-anon"], ancestors: [] };
+  expect(declFor(send, "position", BASE) === "relative", ".send-btn doit ancrer sa pastille d'anonymat");
+  var mark = { tag: "span", classes: ["send-mark"], ancestors: [{ tag: "button", classes: ["send-btn", "is-anon"] }] };
+  expect(declFor(mark, "pointer-events", BASE) === "none", "la pastille d'envoi ne doit pas intercepter le toucher");
+  var fieldMark = { tag: "span", classes: ["field-mark"], ancestors: [{ tag: "div", classes: ["composer-field"] }] };
+  expect(declFor(fieldMark, "pointer-events", BASE) === "none", "le masque du champ ne doit pas intercepter le toucher ni le focus");
+});
+
 if (failures.length) {
   console.error("css-contract : " + failures.length + " échec(s) sur " + total + " contrôles");
   failures.forEach(function (f) { console.error(" - " + f); });

@@ -168,15 +168,24 @@ Le brouillon est effacé quand le message est accepté dans la file d'envoi, qua
 vous videz le champ, et quand vous vous déconnectez de l'équipe. Si le téléphone
 refuse l'envoi, le texte revient dans le champ et la citation est remise.
 
-**Brouillon écrit en anonyme.** Si vous écriviez en **Anonyme**, ce choix est gardé
+**Signer ou publier en anonyme.** Au-dessus du champ, une ligne montre le nom que les
+autres verront (« Signé : » suivi de votre prénom) et un interrupteur **Publier en
+anonyme**. Allumez-le : le nom devient **Anonyme**, le bouton glisse et le fond de la
+ligne se creuse. Le champ d'écriture change lui aussi, pour que vous le voyiez en
+tapant : un masque à l'entrée, un bord en tirets, l'indication « Message anonyme… »,
+et un petit masque sur le bouton d'envoi (lu « Envoyer en anonyme » par un lecteur
+d'écran). Éteignez l'interrupteur pour signer de nouveau. Avec le mouvement réduit
+activé sur l'appareil, rien ne s'anime : l'état change simplement.
+
+**Brouillon écrit en anonyme.** Si vous écriviez en anonyme, ce choix est gardé
 avec le brouillon, sur votre téléphone seulement. Au retour, le brouillon revient en
 anonyme, avec la note « Brouillon retrouvé sur cet appareil. Il sera publié en
 anonyme : vérifiez avant d'envoyer. » : il n'est jamais republié sous votre nom à
 votre insu. Comme ce choix vaut pour tout l'écran de discussion, retrouver un
 brouillon anonyme met aussi les autres sujets en anonyme, jusqu'à ce que vous
-appuyiez sur **Signer**. Un brouillon écrit en **Signé** n'a aucun indicateur : il
+éteigniez l'interrupteur. Un brouillon écrit en **Signé** n'a aucun indicateur : il
 revient signé, avec la note « Brouillon retrouvé sur cet appareil. Vérifiez « Signé »
-ou « Anonyme » avant d'envoyer. ». Un appui sur la bascule fait disparaître la note.
+ou « Anonyme » avant d'envoyer. ». Un appui sur l'interrupteur fait disparaître la note.
 
 Ne sont jamais gardés : votre nom, les champs de connexion et de code, le texte des
 fenêtres « Modifier » et de création. Tant qu'il n'est pas envoyé, le brouillon est
