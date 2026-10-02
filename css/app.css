@@ -1160,6 +1160,20 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 .section-title .icon { opacity: 0.85; }
 
+/* Invitation : quatre canaux côte à côte (deux par ligne sur téléphone), consignes d'installation numérotées. */
+.invite-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.invite-actions .btn { min-height: var(--tap); text-decoration: none; }
+.install-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 6px;
+}
+
 /* Pandore : une catégorie de la synthèse automatique. Le libellé vient de l'IA (axe choisi par elle) ; seule sa
    place dans la hiérarchie est fixée ici, un cran sous le titre de section, au-dessus des cartes. */
 .pandore-group {

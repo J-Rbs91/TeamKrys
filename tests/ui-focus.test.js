@@ -801,6 +801,101 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   assert(/Impossible de charger la synthèse/.test(e.app().textContent) && e.app().querySelector('[data-key="pandore-retry"]'), "erreur muette");
 });
 
+/* ============================================================= Invitation ==== */
+
+const INVITED = "https://script.google.com/macros/s/AKfycb_INVITE/exec";
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
+function invited(t, configured) {
+  const joined = [];
+  Object.assign(t.ctx.App, {
+    gate: () => "connection",
+    invitation: () => ({ url: INVITED, token: "x", sameTeam: false }),
+    connectionConfigured: () => !!configured,
+    saveConnection: (url, code) => { joined.push([url, code]); }
+  });
+  t.go(TOPICS);
+  return joined;
+}
+
+check("invitation : « Rejoindre l'équipe » ne demande que le code ; l'adresse vient du lien et n'est jamais affichée", () => {
+  const t = boot();
+  const joined = invited(t, false);
+  const card = t.app().querySelector('[data-key="invite-card"]');
+  assert(card, "écran d'invitation absent");
+  assert(!t.app().querySelector('[data-draft="setup:url"]'), "le champ d'adresse ne doit pas apparaître : l'adresse vient du lien");
+  assert(t.app().textContent.indexOf(INVITED) < 0, "l'adresse du script ne doit jamais s'afficher");
+  assert(/Code d'espace de l'équipe : [0-9A-F]{4}-[0-9A-F]{4}/.test(card.textContent), "code d'espace pour comparer");
+  t.app().querySelector('[data-draft="setup:code"]').value = "1234";
+  t.app().querySelector('[data-key="invite-join"]').click();
+  assert(JSON.stringify(joined) === JSON.stringify([[INVITED, "1234"]]), "rejoindre : " + JSON.stringify(joined));
+  assert(/Rejoindre l'équipe/.test(t.app().querySelector('[data-key="invite-join"]').textContent), "libellé du bouton");
+  assert(t.app().querySelector('[data-key="invite-install"]'), "consignes d'installation absentes dans le navigateur");
+});
+
+check("invitation : sur iPhone, consignes Safari et « Copier l'invitation » ; dans l'application installée, aucune consigne", () => {
+  const t = boot();
+  t.ctx.navigator.userAgent = IPHONE;
+  invited(t, false);
+  const install = t.app().querySelector('[data-key="invite-install"]');
+  assert(install && /Sur l'écran d'accueil/.test(install.textContent) && /Coller l'invitation/.test(install.textContent), "consignes iPhone");
+  assert(t.app().querySelector('[data-key="invite-copy"]'), "« Copier l'invitation » absent sur iPhone");
+  const app = boot();
+  app.ctx.matchMedia = (q) => ({ matches: /standalone/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  invited(app, false);
+  assert(!app.app().querySelector('[data-key="invite-install"]'), "dans l'application installée, pas de consigne d'installation");
+});
+
+check("invitation : un appareil d'une autre équipe est prévenu, et peut garder son équipe", () => {
+  const t = boot();
+  invited(t, true);
+  const text = t.app().textContent;
+  assert(/autre équipe/.test(text) && /remplace l'équipe actuelle/.test(text), "avertissement de changement d'équipe");
+  assert(/Changer d'équipe/.test(t.app().querySelector('[data-key="invite-join"]').textContent), "libellé explicite");
+  const keep = t.app().querySelector('[data-key="invite-dismiss"]');
+  let went = null;
+  t.ctx.App.go = (hash) => { went = hash; };
+  keep.click();
+  assert(/Garder mon équipe actuelle/.test(keep.textContent) && went === "#/", "garder son équipe : " + went);
+});
+
+check("connexion : lien abîmé signalé ; « Coller l'invitation » présent si le presse-papiers se lit", () => {
+  const t = boot();
+  Object.assign(t.ctx.App, { gate: () => "connection", invitation: () => ({ url: "", token: "AAAA", sameTeam: false }), connectionConfigured: () => false });
+  t.go(TOPICS);
+  assert(t.app().querySelector('[data-key="invite-broken"]'), "lien abîmé non signalé");
+  assert(t.app().querySelector('[data-draft="setup:url"]'), "le champ d'adresse doit rester disponible");
+  assert(!t.app().querySelector('[data-key="invite-paste"]'), "sans lecture du presse-papiers, pas de bouton");
+  const c = boot();
+  c.ctx.navigator.clipboard = { readText: () => Promise.resolve("") };
+  Object.assign(c.ctx.App, { gate: () => "connection", connectionConfigured: () => false });
+  c.go(TOPICS);
+  assert(c.app().querySelector('[data-key="invite-paste"]'), "« Coller l'invitation » absent");
+});
+
+check("Réglages : « Inviter des collaborateurs » propose SMS, Mail, WhatsApp et Copier, avec le lien et la ligne du code", () => {
+  const LINK = "https://j-rbs91.github.io/TeamKrys/#/invitation/abc";
+  const t = boot();
+  Object.assign(t.ctx.App, { inviteLink: () => LINK, teamHasCode: () => true });
+  t.go(SETTINGS);
+  const card = t.app().querySelector('[data-key="invite-settings"]');
+  assert(card, "carte d'invitation absente");
+  const href = (key) => decodeURIComponent(t.app().querySelector('[data-key="' + key + '"]').getAttribute("href") || "");
+  assert(href("invite-sms").indexOf("sms:") === 0 && href("invite-sms").indexOf(LINK) > 0, "SMS : " + href("invite-sms"));
+  assert(href("invite-mail").indexOf("mailto:?subject=") === 0 && href("invite-mail").indexOf(LINK) > 0, "Mail : " + href("invite-mail"));
+  assert(href("invite-whatsapp").indexOf("https://wa.me/?text=") === 0 && href("invite-whatsapp").indexOf(LINK) > 0, "WhatsApp : " + href("invite-whatsapp"));
+  assert(/Code d'accès : $/.test(href("invite-sms")), "le message doit se terminer par la ligne du code, à compléter");
+  assert(t.app().querySelector('[data-key="invite-copy-message"]'), "« Copier » absent");
+  const free = boot();
+  Object.assign(free.ctx.App, { inviteLink: () => LINK, teamHasCode: () => false });
+  free.go(SETTINGS);
+  assert(!/Code d'accès/.test(decodeURIComponent(free.app().querySelector('[data-key="invite-sms"]').getAttribute("href"))), "sans code d'équipe, pas de ligne du code");
+  const local = boot();
+  Object.assign(local.ctx.App, { inviteLink: () => "" });
+  local.go(SETTINGS);
+  assert(!local.app().querySelector('[data-key="invite-settings"]'), "pas d'invitation sans équipe (mode local)");
+});
+
 /* ===================================================== Gestes sur les bulles ==== */
 
 /* Un doigt, tel que le navigateur l'envoie : pointerdown, pointermove, pointerup sur le document (délégation). */

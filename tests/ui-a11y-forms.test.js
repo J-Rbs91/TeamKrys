@@ -573,7 +573,7 @@ check("BL-009 UI.fieldError relie un refus venu de js/app.js au champ, sans perd
   assert(input.getAttribute("aria-invalid") === "true", "aria-invalid absent");
   const text = describedText(t.doc, input);
   assert(text.indexOf("Collez l'adresse de l'équipe.") >= 0, "message non relié : « " + text + " »");
-  assert(text.indexOf("Cette adresse vous est communiquée") >= 0, "l'indication d'origine doit rester reliée");
+  assert(text.indexOf("Cette adresse, ou le lien d'invitation entier") >= 0, "l'indication d'origine doit rester reliée");
   t.ctx.UI.fieldError("absent:cle", "sans effet");   // aucune exception
 });
 

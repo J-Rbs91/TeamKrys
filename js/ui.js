@@ -1008,11 +1008,120 @@
     return el("div", { class: "note" }, [icon("info", 14), el("span", { text: text })]);
   }
 
+  /* ---------------------------------------------------- Accueil : invitation --- */
+
+  /* Téléphone et mode d'ouverture : seulement pour adapter les consignes d'installation, jamais pour décider d'un
+   * droit. Une détection fausse ne coûte qu'une consigne moins précise. */
+  function devicePlatform() {
+    var ua = String((navigator && navigator.userAgent) || "");
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) { return "ios"; }
+    if (/Android/.test(ua)) { return "android"; }
+    return "other";
+  }
+
+  function isInstalledApp() {
+    try {
+      if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) { return true; }
+    } catch (e) { /* requête média refusée : on suppose le navigateur */ }
+    return navigator.standalone === true;
+  }
+
+  /* Fenêtre intégrée à une application (Instagram, Facebook, LinkedIn…) : rien n'y est gardé durablement. */
+  function inAppBrowser() {
+    return /FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Snapchat|Line\/|MicroMessenger|WhatsApp/.test(String(navigator.userAgent || ""));
+  }
+
+  /* L'invitation reçue, depuis le presse-papiers. Sur iPhone, l'application installée ne voit rien de ce que Safari
+   * a ouvert : coller l'invitation est le seul pont. Sans accès au presse-papiers, l'appui long dans le champ
+   * d'adresse fait la même chose (le champ accepte le lien entier). */
+  function canPaste() {
+    try { return !!(navigator.clipboard && navigator.clipboard.readText); } catch (e) { return false; }
+  }
+
+  function pasteInvitation() {
+    var fail = function () {
+      UI.toast("Aucune invitation trouvée. Copiez le lien reçu, ou collez-le dans le champ « Adresse de l'équipe ».", "error");
+    };
+    try {
+      navigator.clipboard.readText().then(function (text) {
+        var token = Utils.inviteTokenIn(text);
+        if (token) { App.go("#/invitation/" + token); return; }
+        var direct = Utils.inviteTarget(Utils.trim(text));
+        var node = direct ? findDraftNode("setup:url") : null;
+        if (node) { node.value = direct; UI.toast("Adresse collée : saisissez le code, puis « Enregistrer et continuer »."); return; }
+        fail();
+      }, fail);
+    } catch (e) { fail(); }
+  }
+
+  function installCard(platform) {
+    var steps = platform === "ios" ? [
+      "Dans Safari, touchez Partager, puis « Sur l'écran d'accueil ».",
+      "Ouvrez BrainstO. depuis la nouvelle icône.",
+      "Touchez « Coller l'invitation », puis saisissez le code."
+    ] : platform === "android" ? [
+      "Rejoignez d'abord l'équipe ci-dessus.",
+      "Puis, dans le menu ⋮ du navigateur, touchez « Installer l'application » ou « Ajouter à l'écran d'accueil ».",
+      "L'application installée reste normalement réglée. Si elle redemande l'adresse : copiez le lien reçu, puis touchez « Coller l'invitation »."
+    ] : [
+      "Sur ordinateur, rien à installer : rejoignez l'équipe ci-dessus.",
+      "Sur téléphone, ouvrez ce même lien dans Safari (iPhone) ou Chrome (Android)."
+    ];
+    return el("div", { class: "card card-static stack", "data-key": "invite-install" }, [
+      sectionTitle("inbox", "Installer sur votre téléphone"),
+      inAppBrowser() ? el("div", { class: "note" }, [icon("warning", 14), el("span", { class: "note-body",
+        text: "Ce lien s'est ouvert dans une application. Ouvrez-le dans Safari ou Chrome (menu ⋯, puis « Ouvrir dans le navigateur ») : ici, rien ne serait gardé." })]) : null,
+      el("ol", { class: "install-steps" }, steps.map(function (step) { return el("li", { text: step }); })),
+      platform === "ios" ? el("div", { class: "note" }, [icon("info", 14), el("span", { class: "note-body",
+        text: "Sur iPhone, l'application installée ne garde rien de ce que vous faites dans Safari. Copiez l'invitation avant d'installer : vous la collerez dans l'application." })]) : null,
+      platform === "ios" ? el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "invite-copy",
+        onclick: function () { copyText(window.location.href, "Invitation copiée : collez-la dans l'application installée."); } },
+      [icon("copy", 16), el("span", { text: "Copier l'invitation" })]) : null
+    ]);
+  }
+
+  /* Page d'arrivée d'un lien d'invitation : l'adresse vient du lien, il ne reste que le code. Sur un appareil déjà
+   * réglé sur une AUTRE équipe, rejoindre remplace l'équipe actuelle, et l'écran le dit avant. */
+  function screenInvitation(invitation) {
+    var configured = App.connectionConfigured();
+    var codeInput = el("input", {
+      class: "input", type: "password", autocomplete: "off", inputmode: "text",
+      placeholder: "Code d'accès reçu avec le lien", "data-draft": "setup:code"
+    });
+    var join = function () { App.saveConnection(invitation.url, codeInput.value); };
+    return el("div", { class: "screen" }, [
+      configured ? topbar({ title: "Invitation", back: App.remonter, backLabel: "Retour" }) : null,
+      el("div", { class: "content stack-lg" }, [
+        heroBlock("Préparer les réunions de l'équipe, ensemble.", !configured),
+        reveal(el("div", { class: "card card-static stack", "data-key": "invite-card" }, [
+          sectionTitle("users", "Rejoindre l'équipe"),
+          storageNote(),
+          el("p", { text: configured
+            ? "Cette invitation mène à une autre équipe que celle de cet appareil. La rejoindre remplace l'équipe actuelle sur ce téléphone."
+            : "Vous êtes invité dans l'espace de votre équipe. L'adresse est dans le lien : il ne reste que le code d'accès, reçu avec lui." }),
+          el("p", { class: "hint", text: "Code d'espace de l'équipe : " + Utils.fingerprint(invitation.url) }),
+          field("Code d'accès", codeInput,
+            "Laissez vide si le message n'en contient pas. Le code n'est jamais enregistré sur l'appareil."),
+          el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "invite-join", onclick: join },
+            [el("span", { text: configured ? "Changer d'équipe" : "Rejoindre l'équipe" }), icon("forward", 18)])
+        ]), 1),
+        isInstalledApp() ? null : reveal(installCard(devicePlatform()), 2),
+        reveal(el("button", {
+          class: "btn btn-ghost btn-block", type: "button", "data-key": "invite-dismiss",
+          text: configured ? "Garder mon équipe actuelle" : "Saisir l'adresse à la main",
+          onclick: function () { App.go("#/"); }
+        }), 3)
+      ])
+    ]);
+  }
+
   function screenConnection() {
+    var invitation = typeof App.invitation === "function" ? App.invitation() : null;
+    if (invitation && invitation.url) { return screenInvitation(invitation); }
     var urlInput = el("input", {
       class: "input", type: "url", inputmode: "url", autocomplete: "off",
       autocapitalize: "off", spellcheck: "false",
-      placeholder: "Collez ici l'adresse reçue (…/exec)", "aria-required": "true",
+      placeholder: "Collez ici l'adresse ou le lien d'invitation", "aria-required": "true",
       "data-draft": "setup:url",
       value: Sync.connection.url || ""
     });
@@ -1038,8 +1147,12 @@
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("link", "Rejoindre l'espace de l'équipe"),
           storageNote(),
+          invitation ? el("div", { class: "note", "data-key": "invite-broken" }, [icon("warning", 14), el("span", { class: "note-body",
+            text: "Ce lien d'invitation est incomplet : demandez-en un nouveau, ou saisissez l'adresse." })]) : null,
+          canPaste() ? el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "invite-paste",
+            onclick: pasteInvitation }, [icon("copy", 16), el("span", { text: "Coller l'invitation" })]) : null,
           field("Adresse de l'équipe", urlInput,
-            "Cette adresse vous est communiquée par la personne qui a installé BrainstO. Elle reste sur cet appareil."),
+            "Cette adresse, ou le lien d'invitation entier, vous est envoyée par la personne qui gère l'équipe. Elle reste sur cet appareil."),
           field("Code d'accès", codeInput,
             "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
           el("button", { class: "btn btn-primary btn-block", type: "button", onclick: submit },
@@ -1408,8 +1521,8 @@
   }
 
   /* Presse-papiers : l'API moderne d'abord, puis l'ancienne commande pour les navigateurs qui ne l'ont pas. */
-  function copyText(text) {
-    var done = function () { UI.toast("Texte copié."); };
+  function copyText(text, doneMessage) {
+    var done = function () { UI.toast(doneMessage || "Texte copié."); };
     var failed = function () { UI.toast("Copie impossible sur cet appareil.", "error"); };
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2486,6 +2599,41 @@
       [icon("logout", 16), el("span", { text: "Se déconnecter de l'équipe" })])
     ]);
 
+    /* Inviter : un lien qui ouvre l'application déjà réglée sur l'équipe (Utils.inviteLink). Le code d'accès n'est
+     * jamais gardé par l'application : le message se termine par « Code d'accès : », à compléter avant l'envoi. */
+    var inviteLink = connected && typeof App.inviteLink === "function" ? App.inviteLink() : "";
+    var inviteCard = null;
+    if (inviteLink) {
+      var withCode = typeof App.teamHasCode === "function" && App.teamHasCode();
+      var message = [
+        "Bonjour,",
+        "Voici le lien pour rejoindre l'équipe sur BrainstO., l'outil qui nous sert à préparer les réunions :",
+        inviteLink,
+        "Ouvrez-le dans Safari (iPhone) ou Chrome (Android)."
+      ].concat(withCode ? ["Code d'accès : "] : []).join("\n");
+      var body = encodeURIComponent(message);
+      var channel = function (key, href, iconName, label, external) {
+        return el("a", { class: "btn btn-outline", href: href, "data-key": key,
+          target: external ? "_blank" : null, rel: external ? "noopener noreferrer" : null },
+        [icon(iconName, 16), el("span", { text: label })]);
+      };
+      inviteCard = el("div", { class: "card card-static stack", "data-key": "invite-settings" }, [
+        sectionTitle("users", "Inviter des collaborateurs"),
+        el("div", { class: "hint", text: "Envoyez un lien qui ouvre BrainstO. déjà réglé sur votre équipe : la personne invitée n'aura qu'à saisir le code d'accès." }),
+        withCode ? el("div", { class: "note" }, [icon("info", 14), el("span", { class: "note-body",
+          text: "Le message se termine par « Code d'accès : ». Ajoutez le code avant d'envoyer : l'application ne le connaît pas." })]) : null,
+        el("div", { class: "invite-actions" }, [
+          channel("invite-sms", "sms:?&body=" + body, "message", "SMS"),
+          channel("invite-mail", "mailto:?subject=" + encodeURIComponent("Invitation à BrainstO.") + "&body=" + body, "mail", "Mail"),
+          channel("invite-whatsapp", "https://wa.me/?text=" + body, "send", "WhatsApp", true),
+          el("button", { class: "btn btn-outline", type: "button", "data-key": "invite-copy-message",
+            onclick: function () { copyText(message, "Message copié : collez-le où vous voulez."); } },
+          [icon("copy", 16), el("span", { text: "Copier" })])
+        ]),
+        el("div", { class: "hint", text: "Quiconque reçoit le lien et le code peut rejoindre l'équipe : envoyez-les seulement aux personnes concernées." })
+      ]);
+    }
+
     function diagRow(label, value, danger) {
       return el("div", { class: "diag-row" }, [
         el("span", { class: "diag-label", text: label }),
@@ -2584,6 +2732,7 @@
             "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
         ]), 0),
         reveal(connectionRows, 1),
+        inviteCard ? reveal(inviteCard, 1) : null,
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("doc", "Réunion"),
           el("div", { class: "hint", text: "Synthèse de tous les sujets, prête à imprimer ou à projeter." }),

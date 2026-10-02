@@ -60,6 +60,8 @@ jobs:
           node tests/startup-robust.test.js
       - name: Contrat CSS (lisibilité à 320 px, pastille d'état)
         run: node tests/css-contract.test.js
+      - name: Lien d'invitation (fabrication, lecture, arrivée dans l'application)
+        run: node tests/invite.test.js
       - name: Pandore (collecte, synthèse publiée par l'IA, remise à zéro)
         run: |
           node tests/pandore.test.js

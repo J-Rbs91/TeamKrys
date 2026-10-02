@@ -19,7 +19,7 @@ du navigateur ouverte : **zéro erreur console** attendue.
       "ÉCHEC $f"; done` → aucune ligne « ÉCHEC » (backend, pastille d'état,
       nouveautés, code changé, choix idempotents, service worker, lecture des votes,
       contrat CSS, démarrage robuste, focus, champs nommés, actions retenues,
-      recherche et synthèse, brouillons, Pandore).
+      recherche et synthèse, brouillons, Pandore, lien d'invitation).
 - [ ] `node tools/pandore-check.js` → « format conforme » (synthèse automatique et
       pages de `pandore/` : ni HTML, ni balise Liquid, ni lien autre que http(s) ou
       relatif, aucune source inventée).
@@ -501,6 +501,28 @@ agrandie.
       sait pas imprimer : « Impression indisponible ici : affichez la synthèse à
       l'écran ou ouvrez-la dans votre navigateur. », sans erreur en console, et la
       synthèse reste à l'écran.
+
+## 6 bis. Lien d'invitation
+
+- [ ] Réglages, connecté à l'équipe → carte **Inviter des collaborateurs** : SMS, Mail,
+      WhatsApp, Copier. En mode local : pas de carte.
+- [ ] **SMS** ouvre Messages, **Mail** l'application de courrier, **WhatsApp** WhatsApp,
+      chacun avec le message prérempli et le lien. Équipe avec code : le message se
+      termine par « Code d'accès : ».
+- [ ] iPhone, appareil neuf : le lien ouvert dans Safari montre **Rejoindre l'équipe**,
+      sans champ d'adresse, avec le code d'espace. Les étapes Safari et **Copier
+      l'invitation** sont là.
+- [ ] iPhone : copier l'invitation, ajouter à l'écran d'accueil, ouvrir l'icône →
+      **Coller l'invitation** → écran **Rejoindre l'équipe** → code → prénom → accueil.
+- [ ] Android (Chrome) : rejoindre dans le navigateur, puis installer. L'application
+      installée s'ouvre déjà réglée. Sinon, **Coller l'invitation** fonctionne.
+- [ ] Lien ouvert sur un téléphone déjà dans l'équipe → accueil et « Cet appareil fait
+      déjà partie de cette équipe. ». Sur un téléphone d'une autre équipe →
+      avertissement ; **Garder mon équipe actuelle** ne change rien.
+- [ ] Lien tronqué → « Ce lien d'invitation est incomplet… ». Coller le message entier
+      dans le champ d'adresse fonctionne aussi.
+- [ ] Ouvert dans Instagram ou Facebook : l'écran demande d'ouvrir le lien dans le
+      navigateur.
 
 ## 7 bis. Pandore
 

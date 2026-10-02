@@ -160,6 +160,9 @@
   App.saveConnection = function (url, code) {
     if (storageRefused) { UI.toast(STORAGE_REFUSED, "error"); return; }
     var clean = Utils.trim(url);
+    /* Le lien d'invitation entier (ou le message qui le contient) vaut l'adresse qu'il porte. */
+    var invited = typeof Utils.inviteTokenIn === "function" ? Utils.inviteTokenIn(clean) : "";
+    if (invited) { clean = Utils.inviteUrl(invited); }
     if (!clean) { refuse("setup:url", "Collez l'adresse de l'équipe."); return; }
     /* https obligatoire, sauf pour un serveur local de test. */
     var isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(clean);
@@ -204,7 +207,8 @@
       }
       Sync.start();
       Sync.now();
-      UI.force();
+      /* Arrivé par une invitation : l'équipe est rejointe, le lien n'a plus d'objet. */
+      if (App.route && App.route.name === "invitation") { App.go("#/"); } else { UI.force(); }
     }).catch(function (error) {
       if (Api.isAuthError(error)) {
         refuse("setup:code", "Code d'accès refusé par le serveur.");
@@ -213,6 +217,37 @@
       }
     });
   };
+
+  /* ------------------------------------------------------- Invitation ---
+   * Ouvrir un lien d'invitation montre l'écran « Rejoindre l'équipe » : l'adresse vient du lien, la personne ne
+   * saisit que le code. Rien n'est enregistré avant qu'elle valide, et un appareil déjà réglé sur une AUTRE équipe
+   * ne change d'équipe que si elle le confirme sur cet écran. Le lien reste dans l'adresse jusque-là : un
+   * rechargement ne le perd pas. */
+  App.invitation = function () {
+    if (!App.route || App.route.name !== "invitation" || typeof Utils.inviteUrl !== "function") { return null; }
+    var url = Utils.inviteUrl(App.route.invite);
+    return { url: url, token: App.route.invite, sameTeam: !!url && url === Sync.connection.url };
+  };
+
+  /* Un appareil déjà dans l'équipe, ou un lien abîmé sur un appareil réglé : rien à rejoindre, on rentre à
+   * l'accueil en le disant. Rend le message à afficher, ou "". */
+  function settleInvitation() {
+    var invitation = App.invitation();
+    if (!invitation || !App.connectionConfigured()) { return ""; }
+    if (invitation.url && !invitation.sameTeam) { return ""; }
+    App.route = parseRoute("#/");
+    remplacer("#/");
+    return invitation.url ? "Cet appareil fait déjà partie de cette équipe." : "Ce lien d'invitation est incomplet : demandez-en un nouveau.";
+  }
+
+  /* Lien à envoyer aux collaborateurs : l'adresse de CETTE application, réglée sur l'équipe de cet appareil. */
+  App.inviteLink = function () {
+    if (!Sync.connection.url || Sync.connection.localMode || typeof Utils.inviteLink !== "function") { return ""; }
+    return Utils.inviteLink(window.location.href, Sync.connection.url);
+  };
+
+  /* L'équipe demande-t-elle un code ? Connu par le vérificateur posé à la connexion ; le code, lui, n'est jamais gardé. */
+  App.teamHasCode = function () { return !!lockVerifier; };
 
   App.editConnection = function () {
     App.editingConnection = true;
@@ -386,6 +421,8 @@
   };
 
   App.gate = function () {
+    var invitation = App.invitation();
+    if (invitation && invitation.url && !invitation.sameTeam) { return "connection"; }
     if (!App.connectionConfigured() || App.editingConnection) { return "connection"; }
     if (App.needsUnlock()) { return "lock"; }
     if (!App.user.name) { return "name"; }
@@ -567,6 +604,8 @@
     if (parts[0] === "settings") { return { raw: raw, name: "settings", topicId: null }; }
     if (parts[0] === "meeting") { return { raw: raw, name: "meeting", topicId: null }; }
     if (parts[0] === "pandore") { return { raw: raw, name: "pandore", topicId: null }; }
+    /* Lien d'invitation (Utils.inviteLink) : le jeton porte l'adresse du script de l'équipe. */
+    if (parts[0] === "invitation") { return { raw: raw, name: "invitation", topicId: null, invite: parts[1] || "" }; }
     if (parts[0] === "topic" && parts[1]) {
       if (parts[2] === "proposals") { return { raw: raw, name: "proposals", topicId: parts[1] }; }
       if (parts[2] === "conclusion") { return { raw: raw, name: "conclusion", topicId: parts[1] }; }
@@ -628,6 +667,7 @@
     settings: "topics",
     meeting: "settings",
     pandore: "topics",
+    invitation: "topics",
     topic: "topics",
     proposals: "topic",
     conclusion: "topic"
@@ -720,9 +760,11 @@
    * qu'on applique. */
   function appliquer(route) {
     App.route = route;
+    var notice = settleInvitation();
     resynchronisation = true;
     UI.set({ sheet: null, modal: null, quote: null });
     resynchronisation = false;
+    if (notice) { UI.toast(notice); }
   }
 
   App.go = function (hash) {
@@ -1116,6 +1158,7 @@
     loadOnboarding();
     UI.local.showArchived = Utils.storage.get(CONFIG.KEYS.showArchived, false) === true;
     App.route = parseRoute(window.location.hash);
+    var invitationNotice = settleInvitation();
     /* La trace repart de zéro : sous l'entrée courante, la pile ne contient
      * rien qui nous appartienne — qu'on arrive par un lien partagé, par un
      * rechargement ou par la reprise d'une application mise en veille. C'est ce
@@ -1136,6 +1179,7 @@
 
     Sync.boot().then(function () {
       UI.force();
+      if (invitationNotice) { UI.toast(invitationNotice); }
       if (Sync.isConnected()) { Sync.start(); Sync.now(); }
     });
 

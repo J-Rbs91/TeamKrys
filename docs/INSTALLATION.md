@@ -203,6 +203,30 @@ vérifié leur contenu.
 L'adresse et le code se transmettent de la main à la main (message privé,
 oral) — jamais dans un dépôt public, jamais dans une capture d'écran partagée.
 
+**Le plus simple : le lien d'invitation.** Dans l'application, **Réglages → Inviter
+des collaborateurs** prépare un message avec un lien qui ouvre BrainstO. déjà réglé
+sur l'équipe. Il part par **SMS**, **Mail** ou **WhatsApp**, ou se copie. La personne
+invitée n'a plus qu'à saisir le code d'accès et son prénom.
+
+- **Le code n'est pas dans le message.**
+  - Cause : l'application ne garde jamais le code.
+  - Conséquence : le message se termine par « Code d'accès : », à compléter avant
+    l'envoi. Une équipe sans code n'a pas cette ligne.
+- **L'adresse du script est dans le lien**, après le `#`.
+  - Cause : cette partie d'une adresse ne quitte jamais le téléphone.
+  - Conséquence : elle n'est envoyée ni à GitHub, ni aux aperçus de lien des
+    messageries. Elle circule seulement dans le message.
+- **Seule une adresse de script Google est acceptée** dans un lien d'invitation.
+  L'application ne rejoint jamais une équipe toute seule : la personne valide, et un
+  téléphone déjà réglé sur une autre équipe le dit avant de changer.
+- **Limite.** Le jeton envoyé au serveur ne dépend que du code. Un faux lien vers le
+  script Google d'un tiers pourrait donc recueillir ce jeton. N'ouvrez que les
+  invitations reçues de la personne qui gère l'équipe, et ne publiez jamais le
+  message.
+- **Sur iPhone**, l'application installée ne voit rien de ce que Safari a ouvert.
+  L'écran d'arrivée le dit : copier l'invitation, installer, ouvrir l'application,
+  puis **Coller l'invitation**. Le champ d'adresse accepte aussi le lien entier.
+
 Ce que l'application fait du code : elle ne l'envoie jamais tel quel, mais un
 jeton calculé à partir de lui. Pour les lectures, Apps Script n'accepte que des
 paramètres dans l'adresse (requête `GET`) : ce jeton figure donc dans l'adresse

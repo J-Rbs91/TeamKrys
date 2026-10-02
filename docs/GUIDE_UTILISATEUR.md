@@ -12,6 +12,19 @@ après la réunion.
 
 ## Démarrer
 
+**Avec un lien d'invitation** (le cas le plus courant) : ouvrez le lien reçu dans
+Safari (iPhone) ou Chrome (Android). L'écran **Rejoindre l'équipe** ne demande que le
+**code d'accès**, écrit dans le même message, puis votre **prénom**. L'écran donne
+aussi les étapes pour installer l'application.
+
+- Sur iPhone, l'application installée ne voit rien de ce que Safari a ouvert. Touchez
+  **Copier l'invitation** avant d'installer. Ouvrez ensuite l'application depuis son
+  icône et touchez **Coller l'invitation**.
+- Si le téléphone fait déjà partie d'une autre équipe, l'écran le dit. **Garder mon
+  équipe actuelle** ne change rien.
+
+**Sans lien d'invitation :**
+
 1. Ouvrir l'adresse communiquée par l'équipe **dans le navigateur** (Safari sur
    iPhone ; Chrome, Samsung Internet ou Firefox sur Android). Si le lien arrive
    dans WhatsApp, Instagram, Messenger, Gmail ou Teams, il s'ouvre dans une
@@ -21,7 +34,7 @@ après la réunion.
    ouvrir l'application depuis son icône. Les étapes, navigateur par navigateur,
    sont dans [`INSTALLATION.md`](INSTALLATION.md).
 3. **Dans l'application installée**, coller l'**adresse de l'équipe** (elle se
-   termine par `/exec`) et saisir le
+   termine par `/exec`), ou le lien d'invitation entier, et saisir le
    **code d'accès** s'il y en a un.
 4. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
 
@@ -441,9 +454,16 @@ synchronisée.
 
 ## Réglages et déconnexion
 
-Les réglages permettent de modifier votre nom, la connexion, de revoir la
-présentation initiale, d'ouvrir la synthèse et de consulter le diagnostic de
-synchronisation. Quand des actions de plus de 30 jours attendent sur l'appareil, le
+Les réglages permettent de modifier votre nom, la connexion, d'inviter des
+collaborateurs, de revoir la présentation initiale, d'ouvrir la synthèse et de
+consulter le diagnostic de synchronisation.
+
+**Inviter des collaborateurs.** Les boutons **SMS**, **Mail** et **WhatsApp** ouvrent un
+message déjà écrit, avec le lien d'invitation ; **Copier** le met dans le
+presse-papiers pour toute autre application. Si l'équipe a un code d'accès, le
+message se termine par « Code d'accès : ». Ajoutez-y le code avant d'envoyer :
+l'application ne le connaît pas. Quiconque reçoit le lien et le code peut rejoindre
+l'équipe : envoyez-les seulement aux personnes concernées. Quand des actions de plus de 30 jours attendent sur l'appareil, le
 bouton **Envoyer quand même** s'y ajoute (voir « Hors connexion »).
 
 **Si l'équipe change de code**, ou en pose un alors qu'elle travaillait sans code,

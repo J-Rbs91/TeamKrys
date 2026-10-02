@@ -105,7 +105,9 @@
     eye: ["M2.8 12S6.5 6.5 12 6.5 21.2 12 21.2 12 17.5 17.5 12 17.5 2.8 12 2.8 12z", "M12 9.7a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z"],
     flag: ["M6 20V4.5", "M6 5.2c3.5-1.6 7-1.6 10.5 0v7c-3.5 1.6-7 1.6-10.5 0z"],
     pin: ["M9 3.5h6", "M10 3.5v5.2L7 12.5v1.5h10v-1.5l-3-3.8V3.5", "M12 14v6.5"],
-    inbox: ["M3.5 13.5 6 5.5h12l2.5 8", "M3.5 13.5v5h17v-5h-5l-1.2 2.2h-4.6L8.5 13.5z"]
+    inbox: ["M3.5 13.5 6 5.5h12l2.5 8", "M3.5 13.5v5h17v-5h-5l-1.2 2.2h-4.6L8.5 13.5z"],
+    mail: ["M4 6.5h16v11H4z", "m4.5 7 7.5 6 7.5-6"],
+    copy: ["M9 9h10.5v10.5H9z", "M15 9V4.5H4.5V15H9"]
   };
 
   /* Renvoie un <svg> autonome. `size` en pixels (24 par défaut). */
@@ -500,6 +502,56 @@
     var hex = ((h1 ^ h2) >>> 0).toString(16).toUpperCase();
     while (hex.length < 8) { hex = "0" + hex; }
     return hex.slice(0, 4) + "-" + hex.slice(4);
+  };
+
+  /* ------------------------------------------------------- Invitation --- */
+
+  /* Lien d'invitation : l'adresse du script de l'équipe, encodée dans le FRAGMENT de l'adresse de l'application
+   * (…/#/invitation/<jeton>). Cause : un fragment ne quitte jamais l'appareil, ni vers GitHub Pages, ni vers les
+   * robots d'aperçu des messageries. Conséquence : l'adresse ne circule que dans le message lui-même.
+   *
+   * ⚠️ Seule une adresse de script Google (ou un serveur local de test) est acceptée. Le jeton envoyé au serveur
+   * ne dépend que du code d'accès : un lien qui mènerait vers n'importe quel serveur permettrait de recueillir ce
+   * jeton en se faisant passer pour l'équipe. La restriction ne supprime pas ce risque (un script Google peut être
+   * celui d'un tiers), elle le borne ; l'application ne se connecte jamais seule et demande confirmation avant de
+   * changer d'équipe. */
+  var INVITE_IN_TEXT_RX = /#\/invitation\/([A-Za-z0-9_-]+)/;
+  /* Formes publiées par Google : …/macros/s/<id>/exec, et pour un compte Workspace …/a/macros/<domaine>/s/<id>/exec
+   * (ou l'ancienne …/a/<domaine>/macros/s/<id>/exec). */
+  var INVITE_TARGET_RX = /^https:\/\/script\.google\.com\/(macros|a\/macros\/[^\/?#\s]+|a\/[^\/?#\s]+\/macros)\/s\/[A-Za-z0-9_-]+\/exec$/;
+  var INVITE_LOCAL_RX = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/[^\s]*$/;
+
+  Utils.inviteTarget = function (url) {
+    var value = String(url == null ? "" : url).trim();
+    return INVITE_TARGET_RX.test(value) || INVITE_LOCAL_RX.test(value) ? value : "";
+  };
+
+  Utils.inviteToken = function (url) {
+    var target = Utils.inviteTarget(url);
+    if (!target) { return ""; }
+    try { return btoa(target).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+    catch (e) { return ""; }
+  };
+
+  /* Adresse du script portée par un jeton ; "" si le jeton est abîmé ou mène ailleurs qu'à un script Google. */
+  Utils.inviteUrl = function (token) {
+    var value = String(token == null ? "" : token);
+    if (!/^[A-Za-z0-9_-]+$/.test(value)) { return ""; }
+    var b64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) { b64 += "="; }
+    try { return Utils.inviteTarget(atob(b64)); } catch (e) { return ""; }
+  };
+
+  /* Jeton trouvé dans un texte collé : le lien seul, ou tout le message reçu. */
+  Utils.inviteTokenIn = function (text) {
+    var m = INVITE_IN_TEXT_RX.exec(String(text == null ? "" : text));
+    return m && Utils.inviteUrl(m[1]) ? m[1] : "";
+  };
+
+  /* `base` : l'adresse de l'application, sans fragment ni paramètres (…/TeamKrys/). */
+  Utils.inviteLink = function (base, url) {
+    var token = Utils.inviteToken(url);
+    return token ? String(base).split("#")[0].split("?")[0].replace(/index\.html$/, "") + "#/invitation/" + token : "";
   };
 
   Utils.clone = function (value) {
