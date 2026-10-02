@@ -3116,6 +3116,26 @@
 
   /* -------------------------------------------------- Bandeau nouvelle version --- */
 
+  var UPDATE_BANNER_TEXT = "Une nouvelle version est disponible.";
+  var bannerSaid = false;   // le bandeau posé a déjà été annoncé : une seule annonce par apparition
+
+  /* ⚠️ REC-UI-052 (WCAG 4.1.3) : le bandeau est un bloc posé sur <body>, sans rôle ni aria-live ; aucun
+   * lecteur d'écran n'apprenait donc qu'une mise à jour attendait. Son apparition est ANNONCÉE UNE FOIS par la
+   * région vive qui existe déjà, #toast-root (role="status", aria-live="polite", présente dès le chargement :
+   * une région insérée avec son contenu n'annonce rien), dans un nœud masqué à l'écran : aucun toast visible
+   * en doublon du bandeau. Jamais de second role="status" ni d'aria-live sur le bandeau lui-même : une seule
+   * région d'état par écran (WP-03). Le nœud est retiré au bout de quelques secondes, comme un toast ; le
+   * bandeau, lui, reste atteignable au clavier (« Mettre à jour », « Plus tard »). */
+  function announceUpdateBanner() {
+    if (bannerSaid || !toastRoot) { return; }
+    bannerSaid = true;
+    var said = el("div", { class: "visually-hidden", text: UPDATE_BANNER_TEXT });
+    toastRoot.appendChild(said);
+    setTimeout(function () {
+      if (said.parentNode) { said.parentNode.removeChild(said); }
+    }, 5200);
+  }
+
   UI.showUpdateBanner = function (onUpdate) {
     /* Ajourné pendant la présentation : son bouton est focusable, il vit sur
      * document.body — donc hors du piège de focus — et il se poserait exactement
@@ -3125,15 +3145,16 @@
     bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
       icon("sparkle", 17),
-      el("span", { style: { flex: "1" }, text: "Une nouvelle version est disponible." }),
+      el("span", { style: { flex: "1" }, text: UPDATE_BANNER_TEXT }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",
-        onclick: function () { bannerUpdate = null; banner.remove(); onUpdate(); }
+        onclick: function () { bannerUpdate = null; bannerSaid = false; banner.remove(); onUpdate(); }
       }),
       el("button", { class: "btn-icon", type: "button", "aria-label": "Plus tard",
-        onclick: function () { bannerUpdate = null; banner.remove(); } }, [icon("close", 18)])
+        onclick: function () { bannerUpdate = null; bannerSaid = false; banner.remove(); } }, [icon("close", 18)])
     ]);
     document.body.appendChild(banner);
+    announceUpdateBanner();
   };
 
   root.UI = UI;

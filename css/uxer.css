@@ -28,8 +28,11 @@
 /* =================================================== Parcours du sujet ==== */
 
 .ux-flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  /* Rangée qui passe à la ligne ENTRE les étapes (REC-UI-041). À 100 % les trois étapes se partagent la
+     largeur à parts égales, comme avant ; à texte agrandi (130 %, 200 %) ou sur 320 px, une étape qui
+     ne tient plus passe sur la ligne suivante au lieu de voir son mot coupé au milieu. */
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px max(14px, var(--safe-right)) 9px max(14px, var(--safe-left));
   border-bottom: 1px solid var(--line);
@@ -42,7 +45,9 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-width: 0;
+  /* Parts égales (base 0), et surtout PAS de `min-width: 0` : la largeur minimale de l'étape est celle de
+     son mot le plus long, qui ne rétrécit donc jamais ; c'est l'étape entière qui passe à la ligne. */
+  flex: 1 1 0%;
   min-height: var(--tap);
   padding: 7px 9px;
   border: 1px solid var(--line);
@@ -74,11 +79,11 @@
 }
 
 .ux-flow-step .icon { flex: 0 0 auto; }
-/* Jamais de points de suspension sur Discussion, Propositions, Consensus (BL-043) : ces trois mots
-   nomment l'étape. Un mot qui ne tient pas (texte à 200 %, fenêtre de 196 px) passe à la ligne, avec
-   une césure si le moteur sait la faire. À 100 %, les règles de largeur plus bas gardent chaque mot
-   sur une seule ligne entre 351 et 480 px. */
-.ux-flow-label { min-width: 0; overflow-wrap: anywhere; -webkit-hyphens: auto; hyphens: auto; text-align: center; }
+/* Jamais de points de suspension (BL-043) ni de mot coupé au milieu (REC-UI-041) sur Discussion,
+   Propositions, Consensus : ces trois mots nomment l'étape. Le libellé reste ENTIER : ni `anywhere` ni
+   `break-word` (ils ramènent la largeur minimale du mot à une lettre, et la colonne le coupe n'importe
+   où), ni `min-width: 0`, ni césure. Quand la place manque, l'étape entière passe à la ligne (.ux-flow). */
+.ux-flow-label { overflow-wrap: normal; word-break: normal; -webkit-hyphens: manual; hyphens: manual; text-align: center; }
 
 .ux-flow-count {
   display: inline-grid;
@@ -402,9 +407,11 @@ html.ux-route-fallback .screen--enter .reveal {
   .ux-status-control { width: 100%; justify-content: space-between; }
 }
 
-/* Pied de carte de l'accueil, très étroit (fenêtre de 196 px) ou très grand texte (BL-044) : le bouton
-   « Ouvrir » passait de 27 px hors de l'écran. Le pied passe à la ligne ; « Ouvrir » reste à droite. */
-@media (max-width: 19rem) {
+/* Pied de carte de l'accueil, étroit (360 px et moins) ou grand texte (BL-044, REC-UI-040) : le pied passe
+   à la ligne. Sans cela le nom de l'auteur se retrouvait dans une colonne de 29 à 46 px (« Amélie »,
+   « Anonyme » coupés au milieu) ; à la ligne il garde sa largeur de texte, ou prend sa ligne entière
+   quand elle manque. « Ouvrir » reste à droite. 24rem = 384 px à 100 % : rien ne change dès 390 px. */
+@media (max-width: 24rem) {
   .card-foot { flex-wrap: wrap; row-gap: 6px; }
   .ux-card-action { margin-left: auto; }
 }
@@ -417,6 +424,21 @@ html.ux-route-fallback .screen--enter .reveal {
 
 @media (max-height: 300px) {
   .ux-flow { display: none; }
+}
+
+/* Fenêtre très étroite (page zoomée à 200 % sur un téléphone : 196 px, REC-UI-041) : le parcours passe à la ligne,
+   ses marges latérales se resserrent pour que Discussion et Propositions tiennent ensemble sur la première
+   ligne, même avec un ascenseur classique (deux lignes au lieu de trois). */
+@media (max-width: 240px) {
+  .ux-flow { padding-left: 6px; padding-right: 6px; }
+}
+
+/* Très étroite ET basse (196 x 425) : à deux ou trois lignes de 44 px le parcours ramenait le fil de discussion
+   de 159 à 61 px (BL-045). Les étapes passent à 32 px de haut (WCAG 2.5.8 demande 24 px), marges de 2 à 3 px.
+   Les mots restent entiers ; les paysages et les claviers ouverts (320 px et plus de large) ne changent pas. */
+@media (max-width: 240px) and (max-height: 480px) {
+  .ux-flow { gap: 3px; padding-top: 3px; padding-bottom: 3px; }
+  .ux-flow-step { min-height: 32px; padding-top: 2px; padding-bottom: 2px; }
 }
 
 @media (max-width: 350px) {

@@ -52,6 +52,7 @@ jobs:
           node tests/utils-el.test.js
           node tests/drafts.test.js
           node tests/ui-review.test.js
+          node tests/ui-banner.test.js
           node tests/news-own-activity.test.js
       - name: Coquille hors ligne (service worker, CSP, démarrage)
         run: |

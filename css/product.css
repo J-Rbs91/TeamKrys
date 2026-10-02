@@ -33,6 +33,10 @@
 }
 
 .product-unread {
+  /* Bloc, et non le `inline-flex` de `.badge` (REC-UI-042) : `text-overflow` ne s'applique pas au texte d'un
+     conteneur flex, et à 200 % de texte « Consensus mis à jour » était coupé net (« mis à jo »). Ce repère ne
+     contient que du texte : en bloc, son ellipse fonctionne. */
+  display: inline-block;
   flex: 0 1 auto;
   max-width: 100%;
   overflow: hidden;

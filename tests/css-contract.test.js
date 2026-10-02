@@ -19,7 +19,10 @@
  *    libellés du parcours sans ellipse (BL-043), rangées, pastilles et pieds de carte qui passent
  *    à la ligne (BL-044), marge de défilement (BL-046), anneau de focus en règles séparées
  *    (BL-047), bouton retour compact (BL-048), repli vh avant dvh (BL-049), accueil de bureau
- *    sans colonnes de tableau (BL-050).
+ *    sans colonnes de tableau (BL-050) ;
+ *  - lot WP-23 : parcours aux mots entiers et pied de carte qui passe à la ligne (REC-UI-041, 040), jetons
+ *    sombres limités à l'écran donc palette claire à l'impression (043), bandeau de mise à jour centré
+ *    sans transform (046).
  *
  * `CSS_CONTRACT_ROOT` : racine alternative (par exemple une copie de HEAD) pour prouver que
  * le test échoue sur l'ancien CSS. */
@@ -377,7 +380,7 @@ check("BL-042 / BL-045 fenêtre basse : composeur plafonné, barre du haut non c
   expect(declFor(topbar, "position", { width: 568, height: 700, rem: 16 }) === "sticky", "au-dessus de 480 px de hauteur la barre reste collante");
   var flow = { tag: "nav", classes: ["ux-flow"], ancestors: [] };
   expect(declFor(flow, "display", { width: 568, height: 299, rem: 16 }) === "none", "le parcours s'efface sous 300 px de hauteur (clavier ouvert en paysage)");
-  expect(declFor(flow, "display", LOW) === "grid", "le parcours reste affiché à 320 px de hauteur");
+  expect(declFor(flow, "display", LOW) === "flex", "le parcours reste affiché à 320 px de hauteur (rangée flex qui passe à la ligne)");
 });
 
 check("BL-043 libellés du parcours : jamais de points de suspension, un mot par ligne de 351 à 480 px", function () {
@@ -385,7 +388,7 @@ check("BL-043 libellés du parcours : jamais de points de suspension, un mot par
   var label = { tag: "span", classes: ["ux-flow-label"], ancestors: chain };
   expect(!declFor(label, "text-overflow", BASE), ".ux-flow-label ne doit plus porter text-overflow");
   expect(declFor(label, "white-space", BASE) !== "nowrap", ".ux-flow-label ne doit plus être en nowrap");
-  expect(declFor(label, "overflow-wrap", BASE) === "anywhere", ".ux-flow-label doit passer à la ligne (overflow-wrap: anywhere) quand le mot ne tient pas");
+  expect(["anywhere", "break-word"].indexOf(declFor(label, "overflow-wrap", BASE)) < 0, ".ux-flow-label ne doit jamais couper n'importe où : le mot reste entier et l'étape passe à la ligne (REC-UI-041)");
   var icon = { tag: "svg", classes: ["icon"], ancestors: chain };
   var count = { tag: "span", classes: ["ux-flow-count"], ancestors: chain };
   [320, 351, 390, 412, 430, 440].forEach(function (w) {
@@ -515,6 +518,112 @@ check("REC-RUI-009 sous-titre de la barre du haut : le premier texte rétrécit 
   expect(mediaApplies(hide.media, { width: 320, rem: 16 }), "à 320 px le repère « Détails » doit être masqué");
   expect(mediaApplies(hide.media, { width: 700, rem: 32 }), "à 200 % de police le repère doit être masqué jusqu'à 704 px");
   expect(!mediaApplies(hide.media, { width: 360, rem: 16 }) && !mediaApplies(hide.media, { width: 393, rem: 16 }), "à 100 % le repère reste visible dès 353 px (aucun changement sur les téléphones courants)");
+});
+
+/* --- WP-23 : finitions de la recette finale « ui » (mots entiers, impression claire, bandeau) ------ */
+
+check("REC-UI-041 libellés du parcours : jamais coupés au milieu d'un mot, l'étape entière passe à la ligne", function () {
+  var chain = [{ tag: "button", classes: ["ux-flow-step"] }, { tag: "nav", classes: ["ux-flow"] }];
+  var label = { tag: "span", classes: ["ux-flow-label"], ancestors: chain };
+  var step = { tag: "button", classes: ["ux-flow-step"], ancestors: [{ tag: "nav", classes: ["ux-flow"] }] };
+  var flow = { tag: "nav", classes: ["ux-flow"], ancestors: [] };
+  [{ width: 320, rem: 16 }, { width: 390, rem: 16 }, { width: 320, rem: 20.8 }, { width: 390, rem: 20.8 }, { width: 320, rem: 32 }, { width: 600, rem: 32 }].forEach(function (env) {
+    var where = " (largeur " + env.width + " px, rem " + env.rem + " px)";
+    var wrap = declFor(label, "overflow-wrap", env);
+    expect(wrap !== "anywhere" && wrap !== "break-word", ".ux-flow-label ne doit jamais couper n'importe où (overflow-wrap: " + wrap + ")" + where);
+    var brk = declFor(label, "word-break", env);
+    expect(brk !== "break-all" && brk !== "break-word", ".ux-flow-label ne doit pas porter word-break: " + brk + where);
+    expect(declFor(label, "hyphens", env) !== "auto", ".ux-flow-label ne doit pas porter hyphens: auto (césure au milieu du mot)" + where);
+    expect(declFor(label, "min-width", env) !== "0" && declFor(step, "min-width", env) !== "0", "ni l'étape ni son libellé ne portent min-width: 0 : le mot le plus long ne doit jamais rétrécir" + where);
+    expect(declFor(flow, "display", env) === "flex" && declFor(flow, "flex-wrap", env) === "wrap", ".ux-flow doit être une rangée flex qui passe à la ligne entre les étapes" + where);
+    expect(declFor(step, "flex", env) === "1 1 0%", ".ux-flow-step doit partager la rangée à parts égales (flex: 1 1 0%) tant que les mots tiennent" + where);
+  });
+  RULES.forEach(function (r) {
+    r.selectors.forEach(function (s) {
+      if (s.indexOf("ux-flow-label") < 0 && s.indexOf("ux-flow-step") < 0) { return; }
+      var d = r.decls;
+      expect(d["overflow-wrap"] !== "anywhere" && d["overflow-wrap"] !== "break-word", "le sélecteur « " + s + " » coupe les mots (overflow-wrap: " + d["overflow-wrap"] + ")");
+      expect(d["word-break"] !== "break-all" && d["word-break"] !== "break-word", "le sélecteur « " + s + " » coupe les mots (word-break: " + d["word-break"] + ")");
+      expect(d["text-overflow"] === undefined, "le sélecteur « " + s + " » pose des points de suspension");
+    });
+  });
+});
+
+check("REC-UI-040 pied de carte : il passe à la ligne dès 384 px (24rem), le nom de l'auteur garde sa largeur ou sa ligne", function () {
+  var foot = { tag: "div", classes: ["card-foot"], ancestors: [{ tag: "button", classes: ["card"] }] };
+  var open = { tag: "span", classes: ["ux-card-action"], ancestors: [{ tag: "div", classes: ["card-foot"] }, { tag: "button", classes: ["card"] }] };
+  [320, 360, 375, 384].forEach(function (w) {
+    expect(declFor(foot, "flex-wrap", { width: w, rem: 16 }) === "wrap", "à " + w + " px et 100 % le pied de carte doit passer à la ligne (le nom de l'auteur tenait dans 29 à 46 px)");
+  });
+  [385, 390, 430, 600].forEach(function (w) {
+    expect(declFor(foot, "flex-wrap", { width: w, rem: 16 }) !== "wrap", "à " + w + " px et 100 % le pied de carte ne change pas");
+  });
+  [20.8, 32].forEach(function (rem) {
+    expect(declFor(foot, "flex-wrap", { width: 390, rem: rem }) === "wrap", "à " + Math.round(rem * 100 / 16) + " % de police le pied de carte doit passer à la ligne sur 390 px");
+  });
+  expect(declFor(open, "margin-left", { width: 320, rem: 16 }) === "auto", "« Ouvrir » reste à droite quand le pied passe à la ligne");
+  var meta = { tag: "span", classes: ["card-meta"], ancestors: [{ tag: "div", classes: ["card-foot"] }] };
+  expect(declFor(meta, "min-width", BASE) === "0", ".card-meta garde min-width: 0 (un nom sans espace ne pousse pas « Ouvrir » hors de la carte)");
+});
+
+check("REC-UI-043 jetons sombres : limités à l'écran, la palette claire reste en vigueur à l'impression", function () {
+  var css = APP_TEXT.replace(/\/\*[\s\S]*?\*\//g, "");
+  var re = /@media\s+([^{]*prefers-color-scheme:\s*dark[^{]*)\{/g;
+  var hit;
+  var token = [];
+  while ((hit = re.exec(css))) {
+    var depth = 1;
+    var i = hit.index + hit[0].length;
+    while (i < css.length && depth) {
+      if (css.charAt(i) === "{") { depth++; } else if (css.charAt(i) === "}") { depth--; }
+      i++;
+    }
+    if (/--canvas\s*:/.test(css.slice(hit.index + hit[0].length, i - 1))) { token.push(hit[1].trim()); }
+  }
+  expect(token.length === 1, "le bloc des jetons sombres (--canvas) doit exister une seule fois : " + token.length);
+  expect(/^screen\s+and\s+\(prefers-color-scheme:\s*dark\)$/.test(token[0]), "les jetons sombres doivent être limités à l'écran (@media screen and (prefers-color-scheme: dark)) ; trouvé « @media " + token[0] + " » : imprimée depuis un appareil en thème sombre, la synthèse sortirait en textes clairs sur papier blanc (REC-UI-043)");
+  RULES.forEach(function (r) {
+    if (r.decls["--canvas"] === undefined || !r.media.length) { return; }
+    expect(r.media.some(function (c) { return /(^|\s)screen(\s|$)/.test(c); }), "« " + r.selectors.join(", ") + " » redéfinit --canvas hors d'un @media screen : il s'appliquerait à l'impression");
+  });
+  expect(ruleExists(function (r) { return r.selectors.indexOf(":root") >= 0 && r.decls["--canvas"] !== undefined && !r.media.length; }), "les jetons clairs doivent rester sur :root, sans @media : ils servent l'écran ET l'impression");
+});
+
+check("REC-UI-046 bandeau de mise à jour : centré sans transform, l'animation d'entrée ne le décale plus", function () {
+  var banner = { tag: "div", classes: ["update-banner"], ancestors: [] };
+  var transform = declFor(banner, "transform", BASE);
+  expect(!transform || transform === "none", ".update-banner ne doit porter aucun transform au repos (`animation` le remplace pendant l'entrée : translateX(-50%) écrasé, le bandeau sautait d'une demi-largeur)");
+  expect(declFor(banner, "left", BASE) === "0" && declFor(banner, "right", BASE) === "0" && declFor(banner, "margin", BASE) === "0 auto", ".update-banner doit se centrer par left: 0, right: 0 et margin: 0 auto");
+  expect(/banner-up/.test(declFor(banner, "animation", BASE) || ""), ".update-banner garde une animation d'entrée (banner-up)");
+  var frames = /@keyframes banner-up \{([\s\S]*?\})\s*\}/.exec(APP_TEXT.replace(/\/\*[\s\S]*?\*\//g, ""));
+  expect(frames, "il manque @keyframes banner-up (entrée du bandeau)");
+  expect(!/translateX/.test(frames[1]), "l'entrée du bandeau ne doit jamais porter de translateX : le centrage ne passe pas par un transform");
+  var travel = /translateY\((\d+)px\)/.exec(frames[1]);
+  expect(travel && Number(travel[1]) <= 14, "la course verticale de l'entrée doit rester sous la marge basse du bandeau (14 px) : son rectangle ne sort jamais de l'écran");
+  expect(/@media \(prefers-reduced-motion: reduce\) \{\s*\*,\s*\*::before,\s*\*::after \{[^}]*animation-duration: 0\.001ms !important/.test(APP_TEXT), "sous « réduire les animations » le bandeau arrive sans mouvement (durée quasi nulle)");
+});
+
+check("REC-UI-041 / BL-045 fenêtre très étroite et basse : le parcours à plusieurs lignes se resserre pour rendre sa place au fil", function () {
+  var step = { tag: "button", classes: ["ux-flow-step"], ancestors: [{ tag: "nav", classes: ["ux-flow"] }] };
+  var flow = { tag: "nav", classes: ["ux-flow"], ancestors: [] };
+  var zoomed = { width: 196, height: 425, rem: 16 };
+  expect(declFor(step, "min-height", zoomed) === "32px", "à 196 x 425 (page zoomée à 200 %) les étapes passent à 32 px de haut (WCAG 2.5.8 : 24 px au minimum)");
+  expect(declFor(flow, "gap", zoomed) === "3px", "à 196 x 425 le parcours resserre son espacement");
+  expect(declFor(flow, "padding-left", { width: 196, rem: 16 }) === "6px" && declFor(flow, "padding-right", { width: 196, rem: 16 }) === "6px", "à 196 px de large les marges latérales du parcours se resserrent (deux étapes sur la première ligne, même avec un ascenseur)");
+  [{ width: 320, height: 568, rem: 16 }, { width: 568, height: 320, rem: 16 }, { width: 667, height: 375, rem: 16 }, { width: 390, height: 844, rem: 16 }, { width: 320, height: 284, rem: 16 }, { width: 241, height: 425, rem: 16 }].forEach(function (env) {
+    expect(declFor(step, "min-height", env) === "var(--tap)", "les paysages, les claviers ouverts et les téléphones à 100 % gardent des étapes de 44 px (" + env.width + " x " + env.height + ")");
+  });
+  expect(declFor(flow, "padding-left", { width: 320, height: 568, rem: 16 }) === "10px", "le parcours garde ses marges de 10 px dès 241 px de large");
+});
+
+check("REC-UI-042 textes rognés : le repère « nouveau » est un bloc à points de suspension, les champs en ont aussi", function () {
+  var unread = { tag: "span", classes: ["badge", "tone-info", "product-unread"], ancestors: [{ tag: "div", classes: ["row-wrap"] }, { tag: "div", classes: ["card-foot"] }, { tag: "button", classes: ["card"] }] };
+  expect(declFor(unread, "display", BASE) === "inline-block", ".product-unread doit être un bloc (inline-block) : text-overflow ne s'applique pas au texte d'un conteneur flex, et .badge est un inline-flex");
+  expect(declFor(unread, "overflow", BASE) === "hidden" && declFor(unread, "text-overflow", BASE) === "ellipsis" && declFor(unread, "white-space", BASE) === "nowrap", ".product-unread garde overflow: hidden, text-overflow: ellipsis et sa ligne unique");
+  [["input", "input"], ["textarea", "textarea"], ["select", "select"]].forEach(function (t) {
+    var field = { tag: t[0], classes: [t[1]], ancestors: [] };
+    expect(declFor(field, "text-overflow", BASE) === "ellipsis", "le champ « " + t[0] + " » doit porter text-overflow: ellipsis (indication ou valeur trop longue)");
+  });
 });
 
 if (failures.length) {

@@ -132,7 +132,12 @@ def lire_themes(chemin):
     """Renvoie (clair, sombre). Le sombre est le clair surchargé par le média."""
     css = open(chemin, encoding="utf-8").read()
     clair = _jetons(_bloc_racine(css))
-    media = css.index("@media (prefers-color-scheme: dark)")
+    # Le bloc sombre est limité à l'écran (`@media screen and (prefers-color-scheme: dark)`, REC-UI-043) :
+    # on accepte aussi la forme sans `screen and`, et on prend le PREMIER bloc, celui des jetons.
+    debut = re.search(r"@media\s+(?:screen\s+and\s+)?\(prefers-color-scheme:\s*dark\)", css)
+    if debut is None:
+        raise ValueError("bloc des jetons sombres introuvable dans %s" % chemin)
+    media = debut.start()
     sombre = dict(clair)
     sombre.update(_jetons(_bloc_racine(css, media)))
     return clair, sombre

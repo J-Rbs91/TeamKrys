@@ -306,7 +306,10 @@
    chroma des neutres y est donc plus basse qu'en clair, à teinte égale.
    Le clair reste le mode de conception : c'est lui qui est lu en magasin, en
    plein jour, et c'est là que les défauts de hiérarchie se voient. */
-@media (prefers-color-scheme: dark) {
+/* ⚠️ `screen and` : le sombre ne vaut QUE pour l'écran (REC-UI-043). À l'impression la palette claire reste
+   en vigueur, quel que soit le thème de l'appareil : sans cela la synthèse partait sur papier blanc avec
+   les textes clairs du sombre (54 textes sur 97 sous le seuil de contraste, badges à 1,94:1). */
+@media screen and (prefers-color-scheme: dark) {
   :root {
     --n-0: #1c1915;
     --n-25: #171410;
@@ -913,6 +916,9 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   background: var(--surface);
   color: var(--text);
   font-size: var(--fs-body);
+  /* Indication (placeholder) ou valeur trop longue pour le champ : points de suspension plutôt qu'une coupe
+     nette (REC-UI-042) ; sans effet sur un textarea. */
+  text-overflow: ellipsis;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -1710,6 +1716,14 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   to { transform: none; opacity: 1; }
 }
 
+/* Entrée du bandeau de mise à jour (REC-UI-046) : 12 px de course seulement, moins que sa marge basse (14 px),
+   pour que son rectangle ne sorte jamais de l'écran pendant l'animation. Le centrage ne passe pas par un
+   transform (voir .update-banner) : cette animation ne le décale donc plus d'une demi-largeur. */
+@keyframes banner-up {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 .sheet {
   width: 100%;
   /* Repli vh AVANT dvh (BL-049) : avec une barre d'adresse rétractable, `vh` compte la fenêtre barre
@@ -1911,8 +1925,13 @@ html.has-layer body { overflow: hidden; }
 
 .update-banner {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centré par left/right et marges automatiques, SANS transform (REC-UI-046) : l'animation d'entrée
+     `slide-up` pose son propre transform et écrasait `translateX(-50%)` ; le bandeau entrait décalé d'une
+     demi-largeur hors de l'écran puis sautait au centre. Sa largeur est définie plus bas : les marges
+     automatiques le centrent. */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   bottom: calc(var(--safe-bottom) + 14px);
   z-index: var(--z-banner);
   display: flex;
@@ -1926,7 +1945,7 @@ html.has-layer body { overflow: hidden; }
   background: var(--surface-strong);
   box-shadow: var(--shadow-2);
   font-size: var(--fs-xs);
-  animation: slide-up var(--dur-slow) var(--ease-out);
+  animation: banner-up var(--dur-slow) var(--ease-out);
 }
 
 /* Réponse au « et ensuite ? » d'un état vide : un cran sous le texte principal,
@@ -2010,7 +2029,7 @@ html.has-layer body { overflow: hidden; }
 }
 
 /* Le centrage passe par `margin: 0 auto`, hérité de `.onboard`, et non par un
-   `translateX(-50%)` comme le bandeau de version : un transform au repos sur un
+   `translateX(-50%)` comme le faisait le bandeau de version (REC-UI-046) : un transform au repos sur un
    élément par ailleurs animé est exactement ce que le contrôle de repli interdit,
    et il n'apporte rien ici. */
 /* Sélecteur doublé : `.onboard--flat` ne battait `inset` de `.onboard` que par
