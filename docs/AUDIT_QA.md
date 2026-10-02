@@ -32,7 +32,8 @@ En bref :
   corriger au plus petit, rejouer la suite complète, rejouer le constat APRÈS (il passe), relire son diff.
   Un constat qui ne se reproduit pas n'est pas corrigé.
 - **Recettes finales sur des instantanés figés** (copie du dépôt à un commit donné : le jugement ne porte que sur cette copie) :
-  d5ec227 (noyau, résilience, revue du noyau) et 58b415c (parcours, interface, revue de l'interface).
+  d5ec227 (noyau, résilience, revue du noyau), 58b415c (parcours, interface, revue de l'interface), puis 25c4961
+  (régression du parcours complet après les deux derniers lots).
 
 Sources : `qa/BACKLOG.md` (l. 7 à 12), `qa/backlog.json` (`summary` et `items`), `qa/FIX_BRIEF.md` (§2),
 `qa/ORCH_NOTES.md` (PHASE 3), `qa/recette/SNAPSHOT.txt` et `SNAPSHOT-FINAL.txt`.
@@ -81,7 +82,7 @@ contrôles conformes / non conformes), *noyau*, *résilience*, *interface*. « D
 | 2 | Chemin Sujet, Discussion, Proposition, Vote, Consensus, Réunion | non observé | conforme | parcours 6/0 | |
 | 3 | Sujets : états, dates, tri, recherche | partiel | conforme | parcours 54/0, interface | auteur coupé à 320 px (REC-UI-040) corrigé par WP-23, vu par sonde seulement |
 | 4 | Discussion, citation, cinq réactions | partiel | conforme | parcours 24/0, noyau, interface | l'interface de citation n'est pas vue par le rapport noyau |
-| 5 | Publication anonyme | partiel | conforme | parcours 43/0, noyau, interface | 2 défauts S2 de la revue adverse corrigés par WP-22 (sondes Chromium 18/18), recette complète non rejouée |
+| 5 | Publication anonyme | partiel | conforme | parcours 43/0, noyau, interface | 2 défauts S2 de la revue adverse corrigés par WP-22 (sondes Chromium 18/18) ; parcours complet rejoué sur 25c4961 : 0 non conforme |
 | 6 | Intégrité : verrou, signature | conforme | conforme | parcours 8/0, noyau | |
 | 7 | Propositions | partiel | conforme | parcours 16/0, noyau, interface | |
 | 8 | Lecture des votes | partiel | conforme | parcours 21/0, noyau, interface | |
@@ -119,6 +120,12 @@ Sources : `qa/recette/fonctionnel.md` (section C), `qa/recette/noyau.md` (sectio
 | Parcours (fonctionnel) | 58b415c | 317 | 1 | 0 | 12 | non indiqué |
 | Interface (ui) | 58b415c | 47 | 10 | 3 | 1 | non indiqué |
 | Revue adverse du noyau | d5ec227 | 6 | 4 | 2 | 0 | non indiqué |
+| Régression finale du parcours (P1 à P5) | 25c4961 | 125 | 0 | 0 | 0 | 125 |
+
+La régression finale rejoue, sur le code définitif (25c4961), les cinq parties du parcours utilisateur de la recette
+fonctionnelle (clics et saisie au clavier, lecture de l'écran). Deux sélecteurs du script de test ont dû être mis à jour
+(le bouton flottant se nomme maintenant « Nouveau sujet », changement voulu de WP-22) : c'est le script qui était périmé,
+pas l'application ; avant cette mise à jour, 4 étapes n'avaient pas pu s'exécuter.
 
 Revues adverses, constats trouvés puis corrigés :
 
@@ -179,10 +186,11 @@ Sources : `qa/ORCH_NOTES.md` (l. 38, 39, 40, 65, 70, 147, 180, 181), `qa/fix/WP-
   `LockService` réel et latence réelle (de 0,3 à 2 s par exécution) non observés. Les en-têtes CORS des
   pages d'erreur de Google ne sont pas vérifiés.
 - **Latence réseau réelle** : les parcours ont été joués à latence nulle.
-- **Les deux derniers lots (WP-22, WP-23)** sont postérieurs aux recettes complètes. Ils ont été validés par
-  leurs tests (`drafts` 34 contrôles, `ui-review` 8, `ui-banner` 6, `css-contract` 30) et par des sondes dans
-  Chromium, pas par une recette complète rejouée. À la date de ce rapport, aucun chiffre de la section 5 ne
-  vient d'une recette sur 25c4961.
+- **Les deux derniers lots (WP-22, WP-23)** sont postérieurs aux recettes complètes du noyau, de la résilience et de
+  l'interface. Ils ont été validés par leurs tests (`drafts` 34 contrôles, `ui-review` 8, `ui-banner` 6,
+  `css-contract` 30), par des sondes dans Chromium et par la régression du parcours complet sur 25c4961 (section 5 :
+  125 conformes, 0 non conforme). Les recettes complètes de l'interface (captures lues, mesures d'accessibilité) et de
+  la résilience n'ont **pas** été rejouées sur 25c4961.
 
 Sources : `qa/recette/fonctionnel.md` (« Non observé »), `qa/recette/noyau.md` (« Non observé »),
 `qa/recette/resilience.md` (REC-NOB-002), `qa/recette/ui.md` (« Non observé »), `qa/ORCH_NOTES.md` (l. 88),
