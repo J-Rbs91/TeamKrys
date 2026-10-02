@@ -149,7 +149,11 @@ début du message, coupé à la fin d'un mot et terminé par « … » quand il 
 caractères, et la description reprend le message en entier dès que le titre en est
 une version raccourcie. Seul le texte est repris, jamais son auteur. Les fenêtres
 **Modifier** (message, sujet, formulation du consensus) s'ouvrent avec le texte
-actuel, prêt à être corrigé.
+actuel, prêt à être corrigé. Si l'enregistrement est refusé (par exemple parce
+qu'une autre personne vient de réagir à votre message), la fenêtre reste **ouverte**,
+avec le texte que vous avez rédigé, et un message vous explique pourquoi : corrigez,
+ou copiez votre texte avant d'appuyer sur **Annuler**. Cela vaut aussi pour la
+fenêtre **Modifier la proposition**.
 
 ### Message en cours d'écriture
 
@@ -162,11 +166,21 @@ n'est jamais affiché sur l'écran de verrouillage.
 
 Le brouillon est effacé quand le message est accepté dans la file d'envoi, quand
 vous videz le champ, et quand vous vous déconnectez de l'équipe. Si le téléphone
-refuse l'envoi, le texte revient dans le champ et la citation est remise. Ne sont
-jamais gardés : le choix Anonyme / Signer (le prochain message est de nouveau
-signé), votre nom, les champs de connexion et de code, le texte des fenêtres
-« Modifier » et de création. Tant qu'il n'est pas envoyé, le brouillon est écrit en
-clair sur l'appareil : l'écran de verrouillage protège l'application, pas le
+refuse l'envoi, le texte revient dans le champ et la citation est remise.
+
+**Brouillon écrit en anonyme.** Si vous écriviez en **Anonyme**, ce choix est gardé
+avec le brouillon, sur votre téléphone seulement. Au retour, le brouillon revient en
+anonyme, avec la note « Brouillon retrouvé sur cet appareil. Il sera publié en
+anonyme : vérifiez avant d'envoyer. » : il n'est jamais republié sous votre nom à
+votre insu. Comme ce choix vaut pour tout l'écran de discussion, retrouver un
+brouillon anonyme met aussi les autres sujets en anonyme, jusqu'à ce que vous
+appuyiez sur **Signer**. Un brouillon écrit en **Signé** n'a aucun indicateur : il
+revient signé, avec la note « Brouillon retrouvé sur cet appareil. Vérifiez « Signé »
+ou « Anonyme » avant d'envoyer. ». Un appui sur la bascule fait disparaître la note.
+
+Ne sont jamais gardés : votre nom, les champs de connexion et de code, le texte des
+fenêtres « Modifier » et de création. Tant qu'il n'est pas envoyé, le brouillon est
+écrit en clair sur l'appareil : l'écran de verrouillage protège l'application, pas le
 stockage du téléphone.
 
 ### Anonymat
@@ -290,6 +304,10 @@ navigateur. » s'affiche et la synthèse reste à l'écran. Si l'impression se l
 mais ne produit rien, l'application ne peut pas le savoir et ne dit rien : ouvrez
 alors la synthèse dans le navigateur.
 
+À l'impression, la synthèse reprend toujours les couleurs claires sur fond blanc, même
+si votre appareil est en thème sombre : l'écran reste sombre, le papier ou le PDF ne
+l'est jamais.
+
 ---
 
 ## Hors connexion
@@ -366,8 +384,11 @@ connexion. ») : l'appareil reste verrouillé et rien n'est perdu.
 
 **Se déconnecter de l'équipe** oublie sur cet appareil l'adresse du script, le
 verrouillage, votre identité locale et la preuve de propriété de vos contenus
-anonymes, ainsi que vos brouillons de messages. Les données partagées de l'équipe
-restent intactes.
+anonymes, ainsi que vos brouillons de messages (avec leur choix « anonyme ») et le
+repère de ce que l'appareil avait déjà consulté : la personne qui se connecte ensuite
+voit les nouveautés comme neuves. Le verrouillage d'inactivité d'une heure, lui, garde
+ce repère et vos brouillons : c'est la même personne après le code. Les données
+partagées de l'équipe restent intactes.
 
 Si des actions sont encore en attente, elles seraient perdues lors de la
 déconnexion. Attendez **À jour** avant de vous déconnecter.
@@ -401,8 +422,10 @@ déconnexion. Attendez **À jour** avant de vous déconnecter.
   son nom (« Retour vers Sujets ») reste lu par le lecteur d'écran. À 440 px de large
   et moins, les icônes des étapes du parcours (Discussion, Propositions, Consensus)
   sont masquées : le mot et le compteur restent, et le compteur disparaît à son tour
-  à 350 px et moins. Les mots du parcours ne sont plus coupés par des points de
-  suspension : ils passent à la ligne.
+  à 350 px et moins. Les mots du parcours ne sont jamais coupés, ni par des points de
+  suspension ni en plein mot : quand le texte est agrandi (130 % et 200 %) ou que
+  l'écran est très étroit (320 px), une étape qui ne tient plus passe à la ligne et le
+  parcours prend **deux lignes**, ce qui laisse un peu moins de place au fil.
 - **Écran bas** (téléphone en paysage, clavier ouvert). Sous 480 px de hauteur, les
   barres du haut ne restent plus collées en haut de l'écran, et le champ d'envoi ne
   grandit que jusqu'à environ un quart de la hauteur, puis défile : le bouton d'envoi
@@ -410,6 +433,15 @@ déconnexion. Attendez **À jour** avant de vous déconnecter.
   barres occupent encore une bonne part de l'écran de discussion.
 - **Grand écran.** Sur l'accueil, à partir de 900 px de large, les groupes de sujets
   s'empilent sur toute la largeur et leurs cartes se répartissent en colonnes.
+- **Noms et compteurs lus.** Le bouton flottant de l'accueil est nommé « Nouveau
+  sujet » pour le lecteur d'écran, comme à l'écran. Sur une carte de sujet, chaque
+  compteur est lu avec son unité : « 1 message », « 2 propositions », « 3
+  formulations », et non « 1 2 3 ».
+- **Nouvelle version.** Quand une nouvelle version est prête, le bandeau « Une
+  nouvelle version est disponible. » propose **Mettre à jour**, ou une croix nommée
+  « Plus tard ». Son apparition est annoncée une seule fois au lecteur d'écran, par la
+  zone d'annonces de l'écran, sans fenêtre ni message en plus ; il reste atteignable au
+  clavier.
 
 ---
 

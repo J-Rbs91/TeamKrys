@@ -215,6 +215,54 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Réglage du système « Réduire les animations » activé : « Aller au message
       cité » défile **instantanément** ; désactivé, le défilement est animé.
 
+### 1 octies. Brouillons anonymes, fenêtres « Modifier », noms lus, impression, bandeau, copies
+
+- [ ] Choisir **Anonyme**, taper un brouillon, puis recharger la page (ou « Mettre à
+      jour ») : la ligne dit « Publié en anonyme », la note « Brouillon retrouvé sur cet
+      appareil. Il sera publié en anonyme : vérifiez avant d'envoyer. » est affichée près
+      du champ, et **Envoyer** publie le message sans nom. Dans les outils du navigateur,
+      `brainsto.drafts.v1` contient une liste `anon` avec la clé du sujet, et rien
+      d'identitaire (ni nom ni identifiant).
+- [ ] Brouillon écrit en **Signé**, puis rechargé : pas de liste `anon` dans
+      `brainsto.drafts.v1` ; le brouillon revient signé, avec la note « Brouillon
+      retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant d'envoyer. »,
+      et rien n'est converti en anonyme.
+- [ ] Brouillon anonyme retrouvé, puis appui sur **Signer** : la note disparaît et le
+      message part signé (le geste est respecté). Sans toucher à la bascule, le message
+      ne part **jamais** signé. Avec un brouillon anonyme dans un autre sujet : les
+      autres sujets passent aussi en anonyme jusqu'à l'appui sur **Signer**.
+- [ ] « Se déconnecter de l'équipe », puis lecture du stockage du navigateur :
+      `brainsto.drafts.v1` **et** `brainsto.seenTopics.v1` sont absents. Au
+      reverrouillage d'inactivité d'une heure, au contraire, les deux sont toujours là
+      et aucun « Nouveau » en trop n'apparaît après le code.
+- [ ] « Modifier le message » refusé pendant la saisie (un collègue vient de réagir) : la
+      fenêtre **reste ouverte** avec le texte rédigé, le message d'erreur est visible,
+      « Annuler » la ferme. Même contrôle pour « Modifier le sujet », « Modifier la
+      proposition » et « Modifier la formulation » quand l'enregistrement est refusé.
+- [ ] Lecteur d'écran (VoiceOver ou TalkBack) sur l'accueil : le bouton flottant est lu
+      « Nouveau sujet » ; chaque compteur d'une carte est lu avec son unité (« 1 message,
+      1 proposition, 1 formulation »), jamais « 1 1 1 ».
+- [ ] Appareil en **thème sombre** : Réglages → Ouvrir la synthèse → Imprimer (aperçu ou
+      enregistrement en PDF) : le document est en couleurs claires sur fond blanc, tous
+      les textes sont lisibles (badges « Prêt pour la réunion » et « En discussion »,
+      mentions « proposé par… » comprises) ; l'écran, lui, reste sombre. À faire sur une
+      vraie impression ou un vrai PDF : le contrôle automatique n'a émulé que le mode
+      impression.
+- [ ] Nouvelle version publiée, **VoiceOver ou TalkBack** activé : à l'apparition du
+      bandeau, « Une nouvelle version est disponible. » est annoncée **une seule fois**,
+      sans fenêtre ni message en plus ; « Mettre à jour » et « Plus tard » s'atteignent
+      au toucher et au clavier ; le bandeau est entier à l'écran pendant son entrée (320,
+      393 et 768 px de large).
+- [ ] Texte du système à 130 % puis 200 %, écran de 320 px : dans le parcours (Discussion,
+      Propositions, Consensus) aucun mot n'est coupé en deux, une étape entière passe à
+      la ligne (le parcours tient sur deux lignes) ; sur les cartes de l'accueil, le nom
+      de l'auteur n'est pas coupé en plein mot et le pied de la carte passe à la ligne.
+- [ ] Message signé, copie manuelle (`backupNow()`), puis « Rendre anonyme » : l'état
+      partagé est anonyme, mais la copie `brainsto-data.json.manuel.<date>` contient
+      encore l'auteur. Vérifier que le dossier `BrainstO.` n'est pas plus partagé que le
+      fichier de données ; après `restoreFromBackup` sur cette copie, le message reste
+      anonyme.
+
 ## 2. Verrou
 
 - [ ] Fermer puis rouvrir l'application dans la foulée → **aucun code demandé**,
@@ -517,13 +565,14 @@ téléphone) : ces contrôles ne se voient pas à la souris ni au doigt.
 - [ ] Un message contenant `<script>alert(1)</script>` s'affiche **en texte**.
 - [ ] Écran de 320 px de large, puis texte du système à 130 % et à 200 % : le bouton
       retour se réduit à sa flèche (son nom « Retour vers … » reste lu), aucune
-      étiquette du parcours n'est coupée par « … » (les mots passent à la ligne),
+      étiquette du parcours n'est coupée (ni par « … » ni en plein mot : le parcours
+      passe sur deux lignes quand il ne tient plus sur une),
       aucun défilement horizontal sur l'accueil, les propositions, les réglages et la
       synthèse.
 - [ ] Téléphone en paysage (moins de 480 px de haut) ou clavier ouvert, six lignes
       saisies : le bouton d'envoi reste visible, les barres du haut ne collent plus,
       et sous 300 px de haut le parcours est masqué. Limite connue : à 200 % de
-      zoom, les barres occupent encore environ 63 % de la hauteur de la discussion
+      zoom, les barres occupent encore environ 68 % de la hauteur de la discussion
       sur un téléphone de 393 px de large.
 - [ ] Au clavier, un anneau de focus **plein** (2 px) entoure chaque commande (boutons,
       champs, menu de statut), et l'élément qui a le focus n'est jamais caché derrière

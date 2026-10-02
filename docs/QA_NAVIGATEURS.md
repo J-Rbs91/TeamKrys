@@ -107,10 +107,10 @@ en thème clair **et** sombre, console ouverte, **zéro erreur** attendue.
 - [ ] Taille de police du système à **130 %** : rien de tronqué ni superposé.
 - [ ] Taille de police du système à **200 %** (ou zoom 200 %), sur un écran de 320 à
       430 px de large : aucun défilement horizontal, le bouton retour réduit à sa
-      flèche, aucune étiquette du parcours coupée par « … » (elles passent à la
-      ligne). Limite connue : sur la discussion, à 200 % sur un téléphone de 393 px
+      flèche, aucune étiquette du parcours coupée (ni par « … » ni en plein mot : une
+      étape entière passe à la ligne). Limite connue : sur la discussion, à 200 % sur un téléphone de 393 px
       de large, les barres du haut, du parcours et du composeur occupent encore
-      environ 63 % de la hauteur (72 % avant), d'après la mesure de la recette.
+      environ 68 % de la hauteur (72 % à l'origine), d'après la mesure du dernier lot.
 - [ ] Tirage vers le bas dans le fil de discussion : **pas de rechargement**
       au milieu d'une saisie.
 - [ ] Geste de retour du système depuis un écran secondaire : retour dans

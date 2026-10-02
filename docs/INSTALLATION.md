@@ -97,6 +97,13 @@ revenir en arrière, voir « Revenir en arrière » plus bas : `restoreFromBacku
 refuse une copie qui n'a pas de liste de sujets et conserve les anonymisations
 faites après la copie.
 
+**Protégez les copies comme le fichier de données.** Une copie prise **avant** qu'un
+message soit rendu anonyme contient encore le nom et l'identifiant de son auteur :
+rendre le message anonyme ensuite ne réécrit pas les copies déjà déposées. Ne partagez
+donc pas le dossier `BrainstO.` plus largement que le fichier de données, et
+supprimez à la main les copies dont vous n'avez plus besoin (le script n'en supprime
+aucune).
+
 > **Pas besoin de synchroniser les deux déploiements.** Le frontend et le
 > backend négocient leurs capacités : un téléphone resté sur l'ancienne version
 > de l'application continue de fonctionner contre le nouveau script, et
@@ -148,6 +155,9 @@ téléphones attendent la fin) :
   identifiant de l'auteur vidés, clé de réaction de l'auteur retirée). Si le fichier
   actuel est illisible, il n'y a rien à reporter : ces anonymisations ne subsistent
   que dans la copie `avant-restauration`, qui garde le texte abîmé tel quel ;
+- elle ne modifie jamais la copie restaurée : si cette copie a été prise avant qu'un
+  message soit rendu anonyme, elle contient encore son auteur et reste à protéger
+  comme les données (voir « Protégez les copies » plus haut) ;
 - elle donne à l'état restauré une révision égale au plus grand des deux numéros
   (état actuel, copie) **plus un**. Cause : un numéro de révision ne doit jamais
   se répéter. Conséquence : un téléphone qui avait déjà ce numéro recharge l'état
@@ -299,6 +309,8 @@ script. Pour en faire une copie de sauvegarde : exécuter `backupNow()` (la copi
 dossier créé par `setupProject` et dupliquer le fichier. Pour restaurer une copie,
 voir « Revenir en arrière ». Aucune donnée n'est stockée ailleurs,
 hormis, sur chaque appareil, une copie locale de lecture (pour le hors-ligne) et
-le brouillon du message en cours d'écriture dans chaque sujet (détail dans
+le brouillon du message en cours d'écriture dans chaque sujet (avec son choix
+« anonyme » quand il a été écrit en anonyme) et le repère de ce que l'appareil a déjà
+consulté (détail dans
 [`MODELE_DONNEES.md`](MODELE_DONNEES.md)), effacés par « Se déconnecter de
 l'équipe ».

@@ -225,11 +225,16 @@ python3 tools/check-contrast.py
 
 Le script lit les jetons de `css/app.css` — il ne les recopie pas, sans quoi il y
 aurait deux vérités —, résout les `var(--…)` et les `rgba()` posés sur leur fond
-réel, et **échoue sous le seuil**. Trente-huit couples par mode, soixante-seize
+réel, et **échoue sous le seuil**. Quarante-neuf couples par mode, quatre-vingt-dix-huit
 au total : texte courant, texte secondaire, horodatages, encres posées sur un
 aplat, pastilles sur leur fond pâle, bords de champ, contours de focus, segments
 de vote, pastilles de synchronisation. Bibliothèque standard uniquement, et la CI
 l'exécute à chaque poussée.
+
+Le bloc des jetons sombres que le script lit est `@media screen and
+(prefers-color-scheme: dark)` (il accepte aussi la forme sans `screen and`) : le thème
+sombre ne vaut que pour l'écran. La synthèse imprimée garde donc toujours la palette
+claire, même depuis un appareil en thème sombre.
 
 C'est ce qui manquait : la phrase « tous les couples ont été vérifiés au ratio »
 vieillissait à chaque modification de jeton, parce qu'elle reposait sur une
@@ -542,12 +547,17 @@ déjà traités, `revision` incrémentée à chaque écriture.
 
 Côté application : application optimiste immédiate, file d'actions persistée
 dans **IndexedDB** (ordre garanti par une clé auto-incrémentée), rejeu au retour
-du réseau. Une erreur **réseau** conserve la file ; une erreur **métier**
-(action devenue impossible) retire l'action et l'explique à l'utilisateur. Un
-échec du **stockage local** est une troisième catégorie, à ne confondre avec
-aucune des deux : l'action quitte quand même la file en mémoire — sinon elle
-serait repostée sans fin — et l'éventuel doublon au redémarrage est absorbé par
-la déduplication serveur.
+du réseau. Une action ne quitte la file que sur confirmation (voir « Une action ne
+quitte la file que sur confirmation » plus bas) : une erreur **réseau** ou une
+réponse **sans verdict** (page d'erreur, JSON illisible, exception du serveur) la
+conserve ; seul un refus **définitif** (`code: "invalid"`) la retire, en rendant le
+texte saisi. Un échec du **stockage local** est une troisième catégorie, à ne
+confondre avec aucune des deux : l'action RESTE dans la file en mémoire (sous une clé
+`local-<n>`, qui ne peut pas se confondre avec une clé de la base), part quand même au
+serveur, et une nouvelle écriture dans IndexedDB est tentée à chaque cycle ;
+l'application prévient une seule fois (« Enregistrement sur cet appareil impossible :
+l'envoi continue, gardez l'application ouverte. »). Un doublon éventuel au
+redémarrage est absorbé par la déduplication du serveur.
 
 Là où IndexedDB est refusée (fenêtre in-app d'une messagerie, navigation privée,
 protection renforcée contre le pistage), `js/database.js` bascule sur un repli
@@ -563,12 +573,20 @@ sujet. Il survit à « Mettre à jour », à l'éviction de la page par le syst�
 restauration d'un onglet : l'écriture suit la frappe après 500 ms de silence, et
 `js/app.js` la force tout de suite avant le rechargement d'une mise à jour, au
 passage en arrière-plan et au `pagehide`. Bornes : 50 brouillons, 20 000 caractères
-en tout,
-4 000 par brouillon. Il est effacé quand le message est accepté en file et par
-`App.logout`, jamais par le reverrouillage d'inactivité ; un refus local rend le
-texte au champ. Il ne quitte jamais l'appareil (aucune requête ne le porte) et reste
-en clair dans le stockage. Détail : [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md),
-« Données gardées sur l'appareil ».
+en tout, 4 000 par brouillon. Un brouillon écrit en mode **anonyme** garde ce choix,
+sur l'appareil seulement : la clé contient alors aussi une liste `anon` de clés de
+brouillons (`{ "composer:<sujet>": "texte", "anon": ["composer:<sujet>"] }`), jamais
+un nom ni un identifiant, écrite seulement s'il existe un brouillon anonyme (un
+brouillon signé n'a aucun indicateur). Au retour, le brouillon est rétabli en
+anonyme, avec une note près du composeur ; il n'est **jamais** converti en signé. Le
+brouillon et son indicateur sont effacés quand le message est accepté en file, quand
+le champ est vidé et par `App.logout`, jamais par le reverrouillage d'inactivité ; un
+refus local rend le texte au champ. Il ne quitte jamais l'appareil (aucune requête
+ne le porte) et reste en clair dans le stockage. `App.logout` efface les clés
+`apiUrl`, `lockVerifier`, `localMode`, `user`, `ownItems`, `session`,
+`brainsto.drafts.v1` et `brainsto.seenTopics.v1` (le repère des nouveautés, qui porte
+un condensat de l'identifiant) ; `showArchived` et `onboarding` restent. Détail :
+[`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md), « Données gardées sur l'appareil ».
 
 > Le POST part volontairement en `Content-Type: text/plain;charset=utf-8` :
 > c'est une « requête simple », sans préflight `OPTIONS`, auquel Apps Script ne
@@ -766,7 +784,9 @@ Au premier lancement, l'application demande :
 Un lien « Continuer sans connexion (mode local) » permet d'essayer
 l'application sans backend : les données restent alors sur l'appareil.
 Réglages → « Modifier l'adresse ou le code » permet d'y revenir, et
-« Se déconnecter de l'équipe » oublie l'adresse et le vérificateur.
+« Se déconnecter de l'équipe » oublie l'adresse, le vérificateur, l'identité locale,
+la preuve de propriété des contenus anonymes, les brouillons et le repère des
+nouveautés (liste des clés dans « Brouillons », plus haut).
 
 ---
 
@@ -783,7 +803,11 @@ la navigation vers l'application est servie par la coquille du cache versionné
 donc une publication **sans** montée de `CACHE_VERSION` n'atteint plus ces
 appareils. Une fois la version montée, au chargement suivant, un bandeau
 « nouvelle version disponible » propose la mise à jour ; le rechargement n'a lieu
-que si l'utilisateur l'a demandé.
+que si l'utilisateur l'a demandé. L'apparition du bandeau (« Une nouvelle version
+est disponible. ») est annoncée une fois aux lecteurs d'écran par la région d'état
+`#toast-root`, qui existe déjà : `announceUpdateBanner()` (`js/ui.js`) y ajoute un
+nœud masqué, retiré au bout de quelques secondes, sans toast visible ni second
+`role="status"`.
 
 ---
 
@@ -799,7 +823,8 @@ node tests/qa/compat-scan.js
 ```
 
 Les autres fichiers de `tests/` (backend, démarrage robuste, focus, champs nommés,
-actions retenues, recherche et synthèse, brouillons, contrat CSS) se lancent de la
+actions retenues, recherche et synthèse, brouillons, revue de l'interface, bandeau de
+mise à jour, contrat CSS) se lancent de la
 même façon. Cette boucle les exécute tous ; aucune ligne « ÉCHEC » ne doit
 apparaître :
 
@@ -863,6 +888,7 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion
+- [`docs/AUDIT_QA.md`](docs/AUDIT_QA.md) : rapport d'audit final du run QA (ce qui a été corrigé, conformité à la spécification, ce qui reste, ce qui n'a pas été observé)
 
 ---
 

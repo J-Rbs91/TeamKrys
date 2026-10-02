@@ -209,6 +209,15 @@ sans `conclusion`. Deux voies :
   `avant-restauration`, qui garde le texte abîmé tel quel. `updatedAt` du message et
   du sujet concernés prend la date de la restauration : le sujet remonte dans la
   liste.
+- **Une copie prise avant l'anonymisation d'un message contient encore son auteur.**
+  Les copies (`manuel`, `avant-<version>`, `avant-restauration`) sont des instantanés
+  complets du fichier : rendre un message anonyme ensuite ne les réécrit pas (constat
+  REC-FON-090 de la recette : la copie `brainsto-data.json.manuel.<date>` gardait
+  `authorId` et `authorName`). Conséquence : une copie se protège comme les données
+  elles-mêmes (même dossier Drive, mêmes personnes), et se supprime à la main quand
+  elle ne sert plus : le script ne supprime aucune copie. `restoreFromBackup`
+  ré-applique les anonymisations postérieures à la copie (voir plus haut), mais ne
+  réécrit jamais la copie restaurée.
 
 ---
 
@@ -335,19 +344,41 @@ locaux, pas un second exemplaire à synchroniser.
 | `brainsto.localMode` | choix du mode local | oui |
 | `brainsto.showArchived` | choix « Afficher les sujets archivés » | non |
 | `brainsto.onboarding` | état de la présentation initiale (étape atteinte, terminée ou passée) | non |
-| `brainsto.seenTopics.v1` (`js/product-ui.js`) | ce que l'appareil a déjà consulté, pour signaler les nouveautés | non |
+| `brainsto.seenTopics.v1` (`js/product-ui.js`) | ce que l'appareil a déjà consulté, pour signaler les nouveautés (porte un condensat de l'identifiant de la personne) | oui |
 | `brainsto.drafts.v1` (`js/ui.js`) | brouillons des messages en cours d'écriture | oui |
 | `brainsto.probe` (`js/utils.js`) | sonde d'écriture du stockage, écrite puis retirée aussitôt | sans objet |
+
+Le repère `brainsto.seenTopics.v1` est effacé à la déconnexion parce qu'il porte un
+condensat de l'identifiant de la personne et des comptes « sans moi » : de quoi
+désigner l'auteur d'un message anonyme (`App.logout`, `js/app.js`). C'est une preuve
+locale dérivée, au même titre que `brainsto.ownItems`. La personne qui se connecte
+ensuite repart donc sans pastilles « Nouveau ». Le reverrouillage d'inactivité d'une
+heure (`App.relock`) le garde, comme les brouillons : c'est la même personne après le
+code.
 
 ### Les brouillons (`brainsto.drafts.v1`)
 
 - **Ce qui est stocké** : le texte en cours d'écriture dans le champ de message de
-  chaque sujet, sous la forme `{ "composer:<identifiant du sujet>": "texte" }`. Seules
-  les clés qui commencent par `composer:` sont acceptées, à l'écriture comme à la
-  lecture ; une valeur absente, abîmée ou d'une autre forme est ignorée sans erreur.
-  Ne sont jamais conservés : le choix Anonyme / Signer (le composeur restauré
-  revient en mode signé), le nom et l'identité, la citation en cours, les champs de
-  connexion et de code, les fenêtres « Modifier » et de création, la recherche.
+  chaque sujet, sous la forme `{ "composer:<identifiant du sujet>": "texte",
+  "anon": ["composer:<identifiant du sujet>"] }`. Seules les clés qui commencent par
+  `composer:` sont acceptées, à l'écriture comme à la lecture ; une valeur absente,
+  abîmée ou d'une autre forme est ignorée sans erreur.
+- **Le choix « anonyme »** : un brouillon écrit en mode Anonyme garde ce choix, sur
+  l'appareil seulement. La liste `anon` ne contient que des clés de brouillons (jamais
+  un nom ni un identifiant) ; elle n'est écrite que s'il existe au moins un brouillon
+  anonyme, et un brouillon signé n'a aucun indicateur. L'indicateur ne survit jamais à
+  son texte : il part avec lui (envoi accepté, champ vidé, déconnexion). Cause : un nom
+  divulgué ne se rattrape pas, alors qu'un message resté anonyme par prudence se
+  corrige. Conséquence : au retour, le brouillon anonyme est rétabli en anonyme et une
+  note le dit près du composeur (« Brouillon retrouvé sur cet appareil. Il sera publié
+  en anonyme : vérifiez avant d'envoyer. ») ; il n'est **jamais** converti en signé. Un
+  brouillon sans indicateur (signé, ou écrit avant ce changement) revient signé, avec la
+  note « Brouillon retrouvé sur cet appareil. Vérifiez « Signé » ou « Anonyme » avant
+  d'envoyer. ». Le choix de publication vaut pour tout l'écran : rétablir un brouillon
+  anonyme met aussi les autres sujets en anonyme, jusqu'à un geste sur la bascule, qui
+  retire la note et réécrit le choix fait. Un ancien `js/ui.js` ignore la liste `anon`.
+- **Ne sont jamais conservés** : le nom et l'identité, la citation en cours, les champs
+  de connexion et de code, les fenêtres « Modifier » et de création, la recherche.
 - **Bornes** (`js/ui.js`) : 50 brouillons au plus (les plus anciens partent d'abord),
   20 000 caractères au total, 4 000 caractères par brouillon. L'écriture a lieu après
   500 ms sans frappe ; elle est faite tout de suite au passage en arrière-plan, à la
@@ -357,8 +388,10 @@ locaux, pas un second exemplaire à synchroniser.
   un déverrouillage. Il n'est jamais affiché sur l'écran de verrouillage.
 - **Quand il est effacé** : quand le message est accepté dans la file d'envoi (sauf si
   un texte plus récent a été saisi pendant l'envoi), quand le champ est vidé, et par
-  « Se déconnecter de l'équipe ». Pas au verrouillage par inactivité. Un envoi refusé
-  sur l'appareil remet le texte dans le champ et dans le brouillon.
+  « Se déconnecter de l'équipe » ; son indicateur anonyme part toujours avec lui. Pas au
+  verrouillage par inactivité. Un envoi refusé sur l'appareil remet le texte dans le
+  champ et dans le brouillon, avec son indicateur. Après « Se déconnecter »,
+  `brainsto.drafts.v1` et `brainsto.seenTopics.v1` sont absents du stockage.
 - **Il ne quitte jamais l'appareil** : aucune requête ne le porte, et la clé n'est
   définie que dans `js/ui.js`. Il est écrit en clair : l'écran de verrouillage
   protège l'interface, pas le stockage. Si le stockage est refusé, le brouillon ne
