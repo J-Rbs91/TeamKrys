@@ -212,6 +212,10 @@ agrandie.
       seul sur sa ligne, l'interrupteur dessous ; avec la police agrandie, le libellé
       passe à la ligne (mots entiers) sans être coupé.
 - [ ] Mouvement réduit activé dans le système : aucune animation, l'état change d'un coup.
+- [ ] **Clavier ouvert**, en pleine frappe : toucher l'interrupteur, **Envoyer** ou la
+      croix « Annuler la citation » ne ferme pas le clavier ; le curseur reste à sa
+      place et la frappe continue. Après **Envoyer**, le champ est vide et le clavier
+      toujours là pour le message suivant.
 - [ ] Une arrivée de nouveaux messages pendant ou juste après la bascule ne rejoue pas
       l'animation et ne fait pas perdre le texte en cours de saisie.
 

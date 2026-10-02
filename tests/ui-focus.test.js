@@ -624,6 +624,53 @@ check("écriture anonyme : le champ, le composeur et l'envoi portent un repère 
   assert(field().getAttribute("aria-label") === "Votre message" && send().getAttribute("aria-label") === "Envoyer", "noms non rétablis");
 });
 
+/* ======================== Le clavier reste ouvert pendant la frappe ==== */
+
+/* Toucher, tel qu'un navigateur le fait : `mousedown` (dont le défaut donne le focus au bouton), puis le clic.
+ * Si la commande annule ce défaut, le focus reste où il était — c'est ce qui garde le clavier virtuel ouvert. */
+function tap(node) {
+  let prevented = false;
+  node.dispatchEvent({ type: "mousedown", target: node, currentTarget: node,
+    preventDefault() { prevented = true; }, stopPropagation() {} });
+  if (!prevented) { node.focus(); }
+  node.click();
+}
+
+check("frappe en cours : toucher l'interrupteur, « Envoyer » ou « Annuler la citation » laisse le focus (donc le clavier) dans le champ", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  const field = () => t.app().querySelector('[data-draft="composer:t1"]');
+
+  field().focus();
+  field().value = "Je ne suis pas sûr";
+  tap(t.app().querySelector('[data-key="composer-anon"]'));
+  assert(t.ctx.UI.local.composerAnon === true, "l'interrupteur n'a pas basculé");
+  assert(t.active().getAttribute("data-draft") === "composer:t1", "interrupteur : le focus a quitté le champ, sur " + describe(t.active()));
+  assert(field().value === "Je ne suis pas sûr", "interrupteur : la saisie a été perdue (« " + field().value + " »)");
+
+  t.ctx.UI.set({ quote: { topicId: "t1", messageId: "m1" } });
+  field().focus();
+  tap(t.app().querySelector('[aria-label="Annuler la citation"]'));
+  assert(!t.ctx.UI.local.quote, "la citation n'a pas été annulée");
+  assert(t.active().getAttribute("data-draft") === "composer:t1", "citation : le focus a quitté le champ, sur " + describe(t.active()));
+
+  const sent = [];
+  t.ctx.App.actions.createMessage = (topicId, text) => { sent.push(text); t.ctx.UI.force(); };
+  field().focus();
+  tap(t.app().querySelector('[data-key="send"]'));
+  assert(JSON.stringify(sent) === '["Je ne suis pas sûr"]', "envoi : " + JSON.stringify(sent));
+  assert(t.active().getAttribute("data-draft") === "composer:t1" && field().value === "", "envoi : le focus doit rester dans le champ vidé, il est sur " + describe(t.active()));
+});
+
+check("sans frappe en cours, toucher l'interrupteur ne vole rien : il bascule, et au clavier physique le focus reste sur lui", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  t.doc.body.focus();
+  tap(t.app().querySelector('[data-key="composer-anon"]'));
+  assert(t.ctx.UI.local.composerAnon === true, "l'interrupteur n'a pas basculé");
+  assert(t.active().getAttribute("data-key") === "composer-anon", "sans champ actif, le toucher garde le comportement d'un bouton : focus sur " + describe(t.active()));
+});
+
 /* ============================================================ BL-011 ==== */
 
 check("BL-011 ouverture d'une feuille : focus dans le calque, fond inerte, défilement verrouillé", () => {

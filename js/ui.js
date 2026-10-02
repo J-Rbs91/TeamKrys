@@ -1480,6 +1480,17 @@
    * et celui de « Nouveau sujet » ne s'animent jamais l'un pour l'autre. */
   var signatureFlip = null;
 
+  /* ⚠️ Toucher un bouton lui donne le focus : le champ en cours de frappe le perd, et le téléphone range le clavier
+   * au milieu de la phrase. Les commandes qui accompagnent la frappe (interrupteur de signature, Envoyer, Annuler la
+   * citation) refusent donc de PRENDRE le focus quand un champ de saisie l'a. Le clic n'est pas annulé, seul le
+   * transfert de focus l'est (défaut de `mousedown`, émis aussi après un toucher sur iOS et Android) : le clavier
+   * reste ouvert, et le rendu qui suit rend le focus au champ, curseur compris (restoreDrafts). Au clavier physique,
+   * rien ne change : Tab donne le focus à la commande, Espace l'actionne, et le focus y reste. */
+  function keepTypingFocus(e) {
+    var active = document.activeElement;
+    if (active && active.hasAttribute && active.hasAttribute("data-draft")) { e.preventDefault(); }
+  }
+
   /* Interrupteur signé / anonyme, partagé par le composeur et « Nouveau sujet » : la même décision a le même geste et
    * les mêmes mots partout. Son libellé est STABLE (« Publier en anonyme ») : c'est son état, pas son texte, qui
    * change — un bouton dont le libellé alternait entre l'action et l'état se lisait dans les deux sens. Le nom affiché
@@ -1497,6 +1508,7 @@
       el("button", {
         class: "sig-switch", type: "button", role: "switch", "aria-checked": o.anon ? "true" : "false",
         "data-key": o.key, "aria-describedby": o.whoId + (o.describedBy ? " " + o.describedBy : ""),
+        onmousedown: keepTypingFocus,
         onclick: function () { signatureFlip = o.key; o.onToggle(); }
       }, [
         el("span", { class: "sig-label", text: "Publier en anonyme" }),
@@ -1553,7 +1565,9 @@
     }
 
     var sendBtn = el("button", {
-      class: "send-btn", type: "button", "aria-label": "Envoyer", "data-key": "send", onclick: send
+      class: "send-btn", type: "button", "aria-label": "Envoyer", "data-key": "send",
+      /* Comme dans toute messagerie, le clavier reste ouvert après l'envoi : on enchaîne le message suivant. */
+      onmousedown: keepTypingFocus, onclick: send
     }, [icon("send", 20)]);
 
     /* ⚠️ Un brouillon rédigé en anonyme n'est jamais affiché « Signé » par déduction (REC-RUI-001) : le choix est global, le
@@ -1575,7 +1589,7 @@
             el("div", { class: "quote-text", text: quoted.text })
           ]),
           el("button", { class: "btn-icon", type: "button", "aria-label": "Annuler la citation",
-            onclick: function () { UI.set({ quote: null }); } }, [icon("close", 18)])
+            onmousedown: keepTypingFocus, onclick: function () { UI.set({ quote: null }); } }, [icon("close", 18)])
         ]));
       }
     }
