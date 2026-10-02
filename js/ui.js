@@ -2602,6 +2602,10 @@
       el("div", { class: "hint", text: connected
         ? "Connecté à l'espace de l'équipe."
         : "Mode local : les données restent sur cet appareil." }),
+      /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux codes différents = deux scripts
+       * différents, et c'est la première explication à « je ne vois pas les messages des autres ». Il vit donc
+       * avec la connexion, à la vue de tous, et non dans le diagnostic replié. */
+      connected ? el("div", { class: "diag" }, [diagRow("Code d'espace", Utils.fingerprint(Sync.connection.url))]) : null,
       el("button", { class: "btn btn-outline btn-block", type: "button",
         onclick: function () { App.editConnection(); } },
       [icon("edit", 16), el("span", { text: "Modifier l'adresse ou le code" })]),
@@ -2700,11 +2704,21 @@
         "data-key": "sync-now", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
       [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
       staleBlock,
+      /* Ce qui sert à tous reste visible : ce qui attend, et la dernière erreur quand il y en a une. */
       el("div", { class: "diag" }, [
-        /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux
-         * codes différents = deux scripts différents, et c'est la première
-         * explication à « je ne vois pas les messages des autres ». */
-        connected ? diagRow("Code d'espace", Utils.fingerprint(Sync.connection.url)) : null,
+        diagRow("Actions en attente", String(diagnostics.pending.length) +
+          (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
+        diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null
+      ]),
+      /* Le reste ne sert qu'au dépannage (refonte B) : replié, retenu ouvert d'un rendu à l'autre. */
+      el("details", {
+        class: "diag-more", open: diagMoreOpen === true,
+        ontoggle: function (e) { diagMoreOpen = e.target.open === true; }
+      }, [
+        el("summary", { class: "proposal-more-summary", id: "settings-diag-more" }, [
+          el("span", { text: "Diagnostic technique" }), icon("down", 15)
+        ]),
+        el("div", { class: "diag" }, [
         diagRow("Révision", String(diagnostics.revision)),
         diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "-"),
         connected ? diagRow("Dernier échange",
@@ -2719,8 +2733,6 @@
         connected ? diagRow("Rythme actuel",
           (diagnostics.intervalMs / 1000).toFixed(1).replace(".", ",") + " s" +
           (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,
-        diagRow("Actions en attente", String(diagnostics.pending.length) +
-          (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
         /* « IndexedDB » seul se lisait comme une garantie de durabilité qui n'était
          * pas faite : l'éviction est totale et muette. On dit donc les deux states —
          * disponible, et durable ou non. */
@@ -2728,8 +2740,8 @@
           ? ("IndexedDB : " + diagnostics.durability)
           : "mémoire : non persistant",
         !diagnostics.persistent || diagnostics.durability === "évinçable"),
-        diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null,
         diagRow("Version", CONFIG.APP_VERSION)
+        ])
       ])
     ]);
 
@@ -2742,17 +2754,12 @@
           el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
             "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
         ]), 0),
+        /* Ordre (refonte B) : soi, l'équipe, la synchronisation, puis l'aide. La synthèse de réunion n'est plus
+         * ici : c'est un onglet de la barre du bas. */
         reveal(connectionRows, 1),
         inviteCard ? reveal(inviteCard, 1) : null,
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("doc", "Réunion"),
-          el("div", { class: "hint", text: "Synthèse de tous les sujets, prête à imprimer ou à projeter." }),
-          el("button", { class: "btn btn-outline btn-block", type: "button",
-            onclick: function () { App.go("#/meeting"); } },
-          [icon("print", 16), el("span", { text: "Ouvrir la synthèse" })])
-        ]), 2),
-        /* Le rejeu vit APRÈS les fonctions utiles et AVANT le diagnostic technique :
-         * c'est une aide, pas un réglage, et encore moins une donnée de dépannage. */
+        reveal(diagRows, 2),
+        /* Le rejeu de la présentation est une aide, pas un réglage : en dernier. */
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("sparkle", "Présentation"),
           /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces
@@ -2765,11 +2772,13 @@
               if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
             } },
           [icon("sparkle", 16), el("span", { text: "Revoir la présentation" })])
-        ]), 3),
-        reveal(diagRows, 4)
+        ]), 3)
       ])
     ]);
   }
+
+  /* Volet « Diagnostic technique » des Réglages ouvert ou non, retenu d'un rendu à l'autre. */
+  var diagMoreOpen = false;
 
   /* ========================================================= OVERLAYS ==== */
 

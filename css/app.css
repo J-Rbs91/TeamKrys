@@ -1206,6 +1206,8 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .proposal-more > .card-foot { margin-top: 4px; padding-top: 0; border-top: 0; }
 @media (prefers-reduced-motion: reduce) { .proposal-more-summary .icon { transition: none; } }
 @media print { .proposal-more { display: none; } }
+.diag-more { border-top: 1px solid var(--line); padding-top: 4px; }
+.diag-more[open] > .proposal-more-summary .icon { transform: rotate(180deg); }
 
 /* ======================================================= Barre de navigation ==== */
 

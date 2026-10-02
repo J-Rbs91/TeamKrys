@@ -463,9 +463,12 @@ synchronisée.
 
 ## Réglages et déconnexion
 
-Les réglages permettent de modifier votre nom, la connexion, d'inviter des
-collaborateurs, de revoir la présentation initiale, d'ouvrir la synthèse et de
-consulter le diagnostic de synchronisation.
+Les réglages permettent de modifier votre nom et la connexion, d'inviter des
+collaborateurs, de synchroniser à la main et de revoir la présentation initiale. Le
+**code d'espace**, à comparer d'un téléphone à l'autre, est affiché avec la connexion.
+Le détail technique (révision, rythme, stockage, version) est replié sous
+**Diagnostic technique** : il ne sert qu'au dépannage. La dernière erreur de
+synchronisation, elle, reste toujours visible.
 
 **Inviter des collaborateurs.** Les boutons **SMS**, **Mail** et **WhatsApp** ouvrent un
 message déjà écrit, avec le lien d'invitation ; **Copier** le met dans le

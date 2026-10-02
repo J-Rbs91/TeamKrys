@@ -62,7 +62,7 @@ rien d'irréversible n'arrive avant la vérification.
    en fait une automatiquement : la sauvegarde automatique n'a lieu qu'à la
    première écriture du nouveau code, donc *après* le point de non-retour.
 2. **Noter la révision actuelle**, lisible dans l'application : Réglages →
-   *Révision*. C'est le nombre à retrouver à l'étape 5.
+   *Diagnostic technique* → *Révision*. C'est le nombre à retrouver à l'étape 5.
 3. Coller le nouveau `Code.gs` (et le manifeste), **sans encore déployer**.
    Renseigner `ACCESS_CODE` avec le code existant de l'équipe — le même
    qu'avant, sinon tous les téléphones seront refusés.

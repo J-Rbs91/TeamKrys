@@ -162,7 +162,7 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 - [ ] Avec des actions en attente : la confirmation les **compte** et annonce leur perte.
 - [ ] Après déconnexion : l'écran du **nom** est redemandé, et un message anonyme
       envoyé avant n'offre plus « Modifier ».
-- [ ] Diagnostic → « Stockage local » : dit **durable** ou **évinçable**, jamais
+- [ ] Réglages → **Diagnostic technique** (replié) → « Stockage local » : dit **durable** ou **évinçable**, jamais
       « IndexedDB » seul.
 - [ ] Poser une action hors ligne, puis relire le diagnostic : l'état de durabilité a
       été demandé au moins une fois.
@@ -502,7 +502,7 @@ agrandie.
       l'écran ou ouvrez-la dans votre navigateur. », sans erreur en console, et la
       synthèse reste à l'écran.
 
-## 5 bis. Barre de navigation
+## 5 bis. Barre de navigation et densité
 
 - [ ] Sujets, Réunion, Pandore, Réglages : la barre est en bas de ces quatre écrans,
       l'onglet courant en bleu avec un trait au-dessus de l'icône.
@@ -516,6 +516,13 @@ agrandie.
 - [ ] Le dernier sujet de la liste et le bouton « Nouveau sujet » ne sont jamais cachés
       sous la barre.
 - [ ] Impression de la Réunion : la barre n'apparaît pas.
+- [ ] Réglages : plus de carte « Réunion » ; le code d'espace est sous la connexion ;
+      **Diagnostic technique** est replié et reste ouvert si on l'ouvre, même pendant une
+      synchronisation ; une erreur de synchronisation s'affiche hors du volet.
+- [ ] Propositions : « Statut et actions » replié ; on y trouve le statut, « Modifier »
+      et « Retirer mon vote » ; ouvert, il le reste quand un collègue vote.
+- [ ] Accueil : une ligne de titre, une de repères ; le statut n'est plus répété sur
+      les cartes, sauf dans « Épinglés ».
 
 ## 6 bis. Lien d'invitation
 
@@ -602,7 +609,7 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 - [ ] Réglages → **Dernier échange** avance tout seul ; **Rythme actuel**
       descend vers 1,8 s pendant une conversation et remonte vers 6 s au repos.
 - [ ] Ouvrir l'application depuis un lien partagé dans **WhatsApp / Instagram /
-      Messenger** (fenêtre in-app) : si Réglages affiche « Stockage local :
+      Messenger** (fenêtre in-app) : si Réglages → Diagnostic technique affiche « Stockage local :
       mémoire — non persistant », un bandeau l'a annoncé — et **les messages
       partent quand même** vers les autres appareils.
 - [ ] Laisser l'application ouverte dix minutes sans rien faire, puis écrire

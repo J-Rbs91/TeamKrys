@@ -819,6 +819,32 @@ check("propositions : statut, Modifier et Retirer mon vote repliés sous « Stat
   assert(more() !== d && more().hasAttribute("open"), "après un rendu, le volet ouvert doit le rester");
 });
 
+/* ================================================== Réglages regroupés ==== */
+
+check("Réglages : plus de carte Réunion ; code d'espace visible ; diagnostic technique replié, dernière erreur toujours visible", () => {
+  const t = boot();
+  t.go(SETTINGS);
+  const text = t.app().textContent;
+  assert(text.indexOf("Ouvrir la synthèse") < 0, "la Réunion est un onglet : plus de carte dans les Réglages");
+  const more = t.app().querySelector("details.diag-more");
+  assert(more && !more.hasAttribute("open"), "diagnostic technique replié par défaut");
+  assert(/Stockage local/.test(more.textContent) && /Révision/.test(more.textContent) && /Version/.test(more.textContent), "lignes techniques dans le volet");
+  const outside = (needle) => t.app().querySelectorAll(".diag-row").some((r) => r.textContent.indexOf(needle) === 0 && !r.closest("details"));
+  assert(outside("Code d'espace"), "le code d'espace reste visible (comparer deux téléphones)");
+  assert(outside("Actions en attente"), "les actions en attente restent visibles");
+  assert(text.indexOf("Synchroniser maintenant") >= 0, "la synchronisation manuelle reste visible");
+  more.open = true;
+  more.dispatchEvent({ type: "toggle", target: more });
+  t.ctx.UI.force();
+  assert(t.app().querySelector("details.diag-more").hasAttribute("open"), "le volet ouvert le reste après un rendu");
+  const e = boot();
+  e.ctx.Sync.status = () => ({ code: "error", label: "Erreur", pending: 1, error: "Réponse illisible du serveur", lastSyncAt: null, revision: 3 });
+  e.ctx.Sync.diagnostics = () => ({ revision: 3, updatedAt: null, lastSyncAt: null, lastFlushAt: null, intervalMs: 6000, failures: 2,
+    pending: [], persistent: true, durability: "durable", status: { code: "error", label: "Erreur", pending: 1, error: "Réponse illisible du serveur" } });
+  e.go(SETTINGS);
+  assert(e.app().querySelectorAll(".diag-row").some((r) => /^Dernière erreur/.test(r.textContent) && !r.closest("details")), "la dernière erreur ne doit jamais être repliée");
+});
+
 /* ================================================== Barre de navigation ==== */
 
 check("barre de navigation : quatre onglets sur les écrans de premier niveau, l'onglet courant signalé ; absente dans un sujet", () => {
