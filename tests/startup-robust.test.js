@@ -550,9 +550,22 @@ test("BL-058 pushState ET replaceState lèvent : démarrage, navigation et retou
   w.App.go("#/meeting");
   assert(w.App.route.name === "meeting", "synthèse non atteinte : " + JSON.stringify(w.App.route));
   w.App.remonter();
-  assert(w.App.route.name === "settings", "retour aux réglages impossible : " + JSON.stringify(w.App.route));
+  assert(w.App.route.name === "topics", "les onglets sont frères : le retour ramène à Sujets : " + JSON.stringify(w.App.route));
+  w.App.go("#/pandore");
+  assert(w.App.route.name === "pandore", "Pandore non atteinte : " + JSON.stringify(w.App.route));
   w.App.go("#/");
   assert(w.App.route.name === "topics", "retour à la liste impossible : " + JSON.stringify(w.App.route));
+});
+
+test("barre de navigation : quitter Sujets empile, passer d'un onglet à l'autre remplace (le retour ramène à Sujets)", async () => {
+  const w = makeWorld({});
+  await settle();
+  w.App.go("#/pandore");
+  assert(w.history.pushed.length === 1 && w.history.pushed[0].url === "#/pandore", "Sujets → Pandore doit empiler : " + JSON.stringify(w.history.pushed));
+  w.App.go("#/meeting");
+  w.App.go("#/settings");
+  assert(w.history.pushed.length === 1, "d'un onglet à l'autre, rien ne doit s'empiler : " + JSON.stringify(w.history.pushed));
+  assert(w.history.replaced.map((r) => r.url).join(",") === "#/,#/meeting,#/settings", "onglets frères : remplacement : " + JSON.stringify(w.history.replaced));
 });
 
 test("BL-058 historique sain : mêmes appels qu'avant (descendre empile, un écran frère remplace)", async () => {

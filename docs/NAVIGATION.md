@@ -66,13 +66,22 @@ C'est la ligne du milieu qu'on oublie, et c'est elle qui produisait le défaut.
 ### L'arbre de BrainstO.
 
 ```
-Sujets  (racine)
+Sujets  (racine, onglet)
 ├── Sujet
 │   ├── Propositions
 │   └── Conclusion
-└── Réglages
-    └── Réunion
+├── Réunion   (onglet)
+├── Pandore   (onglet)
+└── Réglages  (onglet)
 ```
+
+**Les onglets de la barre du bas.** Réunion, Pandore et Réglages sont des enfants
+directs de Sujets, donc frères entre eux.
+- Cause : passer d'un onglet à l'autre se fait à profondeur égale, donc **remplace**
+  l'entrée d'historique ; quitter Sujets vers un onglet empile une seule entrée.
+- Conséquence : depuis n'importe quel onglet, le geste retour du système ramène à
+  Sujets, puis quitte l'application. C'est la convention d'Android, sans aucune
+  interception. Les onglets n'ont pas de bouton retour : la barre en tient lieu.
 
 La table `PARENT`, en tête de la section navigation de `js/app.js`, est **le
 seul endroit** où cette structure est écrite. Ajouter un écran, c'est y ajouter

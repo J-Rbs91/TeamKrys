@@ -1160,6 +1160,64 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 .section-title .icon { opacity: 0.85; }
 
+/* ======================================================= Barre de navigation ==== */
+
+/* Quatre onglets fixés en bas des écrans de premier niveau (js/ui.js, tabBar). L'onglet courant se reconnaît par la
+   couleur de l'accord ET par un trait au-dessus de l'icône : jamais la teinte seule. */
+:root { --tabbar-h: 60px; }
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-chrome);
+  background: var(--surface-opaque);
+  border-top: 1px solid var(--line);
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+.tabbar-inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.tabbar-item {
+  min-height: var(--tabbar-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+  position: relative;
+  padding: 6px 2px;
+  min-width: 0;
+}
+.tabbar-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabbar-item.is-current { color: var(--accord); }
+.tabbar-item.is-current::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 28%;
+  right: 28%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accord);
+}
+.tabbar-item:focus-visible { outline: 2px solid var(--accord); outline-offset: -4px; border-radius: 10px; }
+.has-tabbar .content { padding-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + 104px); }
+.has-tabbar .fab { bottom: calc(var(--safe-bottom) + var(--tabbar-h) + 14px); }
+/* Pendant la saisie, la barre s'efface (voir onTypingFocus). */
+.is-typing .tabbar { display: none; }
+.is-typing .has-tabbar .fab { display: none; }
+
 /* Invitation : quatre canaux côte à côte (deux par ligne sur téléphone), consignes d'installation numérotées. */
 .invite-actions {
   display: grid;
@@ -2539,7 +2597,7 @@ html.has-layer body { overflow: hidden; }
 .print-list li { margin-bottom: 8px; line-height: 1.55; }
 
 @media print {
-  .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .onboard, .no-print { display: none !important; }
+  .topbar, .composer, .fab, .quickbar, .toast-root, .update-banner, .onboard, .no-print, .tabbar { display: none !important; }
   html, body { background: #fff; color: #000; }
   body::before, body::after { display: none; }
   .content { padding: 0; max-width: none; }

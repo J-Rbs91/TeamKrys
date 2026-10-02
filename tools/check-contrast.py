@@ -52,6 +52,9 @@ COUPLES = [
     ("--faint", "--surface", TEXTE, "horodatages sur une surface"),
     ("--faint", "--surface-sunken", TEXTE, "horodatages sur un creux"),
     ("--faint", "--surface-sheet", TEXTE, "horodatages sur une feuille"),
+    # Barre de navigation : libellés des onglets au repos, et onglet courant (accord) sur la barre.
+    ("--faint", "--surface-opaque", TEXTE, "libellé d'onglet au repos sur la barre de navigation"),
+    ("--accord", "--surface-opaque", TEXTE, "onglet courant sur la barre de navigation"),
 
     # --- Encre posée sur un aplat ------------------------------------------
     ("--on-accord", "--accord-surface", TEXTE, "encre sur l'accord en aplat"),

@@ -713,8 +713,8 @@ const tick = () => new Promise((r) => setImmediate(r));
 check("Pandore : entrée depuis l'accueil ; dépôt anonyme, champ vidé, avertissement public ; vide refusé ; plus aucun « boîte à idées »", () => {
   const t = boot();
   t.go(TOPICS);
-  const entry = t.app().querySelector('[data-key="open-pandore"]');
-  assert(entry && entry.getAttribute("aria-label") === "Pandore", "aucune entrée « Pandore » dans l'en-tête de l'accueil");
+  const entry = t.app().querySelector('nav.tabbar [data-key="tab-pandore"]');
+  assert(entry && /Pandore/.test(entry.textContent), "aucun onglet « Pandore » dans la barre de navigation");
   const sent = [];
   t.ctx.App.actions.submitIdea = (text) => { sent.push(text); return Promise.resolve({ ok: true }); };
   t.go(pandoreRoute);
@@ -799,6 +799,41 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   e.go(pandoreRoute);
   await tick();
   assert(/Impossible de charger la synthèse/.test(e.app().textContent) && e.app().querySelector('[data-key="pandore-retry"]'), "erreur muette");
+});
+
+/* ================================================== Barre de navigation ==== */
+
+check("barre de navigation : quatre onglets sur les écrans de premier niveau, l'onglet courant signalé ; absente dans un sujet", () => {
+  const t = boot();
+  const screens = [[TOPICS, "topics"], [{ name: "meeting", raw: "#/meeting" }, "meeting"], [pandoreRoute, "pandore"], [SETTINGS, "settings"]];
+  screens.forEach(([route, tab]) => {
+    t.go(route);
+    const nav = t.app().querySelector("nav.tabbar");
+    assert(nav && nav.getAttribute("aria-label") === "Navigation principale", "barre absente sur " + route.raw);
+    const items = nav.querySelectorAll(".tabbar-item");
+    assert(items.length === 4 && items.map((b) => b.textContent).join(",") === "Sujets,Réunion,Pandore,Réglages", "onglets : " + items.map((b) => b.textContent));
+    const current = nav.querySelectorAll('[aria-current="page"]');
+    assert(current.length === 1 && current[0].getAttribute("data-key") === "tab-" + tab, "onglet courant sur " + route.raw);
+    assert(!t.app().querySelector('[data-key="back"]'), "un onglet n'a pas de bouton retour : " + route.raw);
+  });
+  t.go(topicRoute("t1"));
+  assert(!t.app().querySelector("nav.tabbar"), "dans un sujet, la barre doit disparaître");
+  assert(t.app().querySelector('[data-key="back"]'), "dans un sujet, le bouton retour reste");
+  let went = null;
+  t.go(TOPICS);
+  t.ctx.App.go = (hash) => { went = hash; };
+  t.app().querySelector('[data-key="tab-pandore"]').click();
+  assert(went === "#/pandore", "l'onglet Pandore mène à #/pandore : " + went);
+  went = null;
+  t.app().querySelector('[data-key="tab-topics"]').click();
+  assert(went === null, "toucher l'onglet courant ne navigue pas");
+});
+
+check("Pandore : section à part, présentée comme une zone d'expression libre et anonyme", () => {
+  const t = boot();
+  t.go(pandoreRoute);
+  assert(/Expression libre et anonyme/.test(t.app().querySelector(".topbar").textContent), "sous-titre de Pandore");
+  assert(!t.app().querySelector('[data-key="back"]'), "Pandore n'est pas un écran enfant des sujets");
 });
 
 /* ============================================================= Invitation ==== */

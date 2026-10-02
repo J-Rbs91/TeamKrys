@@ -64,6 +64,14 @@ collectives prennent naturellement leur sens une fois connecté à l'équipe.
 
 ---
 
+## Se déplacer
+
+En bas de l'écran, quatre onglets : **Sujets** (la liste, l'accueil), **Réunion** (la
+synthèse à projeter), **Pandore** (l'expression libre et anonyme) et **Réglages**. Dans
+un sujet, la barre disparaît : le bouton retour, en haut à gauche, ramène à la liste.
+Le geste retour du téléphone ramène toujours à **Sujets**, puis quitte l'application.
+Pendant la saisie d'un texte, la barre s'efface pour laisser la place au clavier.
+
 ## Les sujets
 
 Un sujet correspond à un point que l'équipe souhaite faire mûrir.
@@ -336,7 +344,7 @@ formulation supprime aussi les votes qui la visaient.
 
 ## Synthèse à projeter ou imprimer
 
-Dans **Réglages → Ouvrir la synthèse**, BrainstO. rassemble les sujets non archivés,
+Dans l'onglet **Réunion**, BrainstO. rassemble les sujets non archivés,
 leurs propositions, les résultats de vote et les Consensus.
 
 Cette page sert de support de préparation à projeter ou imprimer. Elle ne constitue
@@ -363,9 +371,10 @@ l'est jamais.
 
 ## Pandore
 
-Pandore est l'espace **anonyme** de l'équipe et de la direction : on y dépose ce qu'on
-veut dire. Une idée, une plainte, une question, une remarque. On l'ouvre depuis
-l'accueil, avec l'icône de boîte aux lettres en haut de l'écran.
+Pandore est la zone d'**expression libre et anonyme** de l'équipe et de la direction.
+Ce n'est pas une discussion : on y dépose ce qu'on veut dire, une idée, une plainte,
+une question, une remarque, sans attendre de réponse. On l'ouvre avec l'onglet
+**Pandore**, dans la barre du bas.
 
 **Déposer.** Écrivez votre texte, puis **Déposer anonymement**. Il part **sans nom ni
 identifiant**, même si vous signez vos messages ailleurs. C'est une boîte aux lettres :

@@ -292,7 +292,7 @@ agrandie.
 - [ ] Lecteur d'écran (VoiceOver ou TalkBack) sur l'accueil : le bouton flottant est lu
       « Nouveau sujet » ; chaque compteur d'une carte est lu avec son unité (« 1 message,
       1 proposition, 1 formulation »), jamais « 1 1 1 ».
-- [ ] Appareil en **thème sombre** : Réglages → Ouvrir la synthèse → Imprimer (aperçu ou
+- [ ] Appareil en **thème sombre** : onglet Réunion → Imprimer (aperçu ou
       enregistrement en PDF) : le document est en couleurs claires sur fond blanc, tous
       les textes sont lisibles (badges « Prêt pour la réunion » et « En discussion »,
       mentions « proposé par… » comprises) ; l'écran, lui, reste sombre. À faire sur une
@@ -490,7 +490,7 @@ agrandie.
 
 ## 7. Réunion
 
-- [ ] Réglages → « Ouvrir la synthèse » : tous les sujets non archivés.
+- [ ] Onglet **Réunion** : tous les sujets non archivés.
 - [ ] Propositions avec statut, indicateur et détail des votes.
 - [ ] Conclusions triées par nombre de votes, mention « en tête ».
 - [ ] Aperçu avant impression : barres, boutons et bandeaux masqués.
@@ -501,6 +501,21 @@ agrandie.
       sait pas imprimer : « Impression indisponible ici : affichez la synthèse à
       l'écran ou ouvrez-la dans votre navigateur. », sans erreur en console, et la
       synthèse reste à l'écran.
+
+## 5 bis. Barre de navigation
+
+- [ ] Sujets, Réunion, Pandore, Réglages : la barre est en bas de ces quatre écrans,
+      l'onglet courant en bleu avec un trait au-dessus de l'icône.
+- [ ] Dans un sujet (discussion, propositions, consensus) : pas de barre, un bouton retour.
+- [ ] Android : Sujets → Pandore → Réunion → Réglages, puis geste retour : on revient à
+      **Sujets** ; un second retour quitte l'application.
+- [ ] Toucher un champ (Pandore, nom dans Réglages, recherche) : la barre et le bouton
+      « Nouveau sujet » s'effacent pendant la saisie et reviennent ensuite.
+- [ ] 320 px de large et texte agrandi à 200 % : les quatre libellés restent lisibles
+      (coupés par « … » au besoin), rien ne déborde.
+- [ ] Le dernier sujet de la liste et le bouton « Nouveau sujet » ne sont jamais cachés
+      sous la barre.
+- [ ] Impression de la Réunion : la barre n'apparaît pas.
 
 ## 6 bis. Lien d'invitation
 
@@ -529,8 +544,8 @@ agrandie.
 Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 ([`PANDORE.md`](PANDORE.md), « Vérifier la mise en place »).
 
-- [ ] Accueil → icône boîte aux lettres en haut → écran **Pandore**, bouton **Retour**
-      vers l'accueil. Nulle part « boîte à idées » ni « reformulation ».
+- [ ] Onglet **Pandore** (barre du bas) → écran **Pandore**, sous-titre « Expression
+      libre et anonyme », sans bouton retour : c'est une section à part. Nulle part « boîte à idées » ni « reformulation ».
 - [ ] Message de prudence visible avant le champ : publication telle quelle sur le
       GitHub public, une fois par jour, aucun nom.
 - [ ] Champ vide → **Déposer anonymement** affiche l'erreur sous le champ, rien ne part.

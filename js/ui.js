@@ -184,6 +184,8 @@
 
     bindViewport();
     bindBubbleGestures();
+    document.addEventListener("focusin", onTypingFocus);
+    document.addEventListener("focusout", onTypingFocus);
   };
 
   /* ------------------------------------------------------------ Brouillons --- */
@@ -1402,13 +1404,7 @@
       topbar({
         title: CONFIG.APP_NAME,
         sub: App.user.name ? "Bonjour " + App.user.name : null,
-        actions: [
-          statusPill(),
-          el("button", { class: "btn-icon", type: "button", "aria-label": "Pandore", "data-key": "open-pandore",
-            onclick: function () { App.go("#/pandore"); } }, [icon("inbox", 21)]),
-          el("button", { class: "btn-icon", type: "button", "aria-label": "Réglages",
-            onclick: function () { App.go("#/settings"); } }, [icon("settings", 21)])
-        ]
+        actions: [statusPill()]
       }),
       el("div", { class: "content" }, [body])
     ]);
@@ -2448,7 +2444,7 @@
     });
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Pandore", back: App.remonter, backLabel: "Sujets" }),
+      topbar({ title: "Pandore", sub: "Expression libre et anonyme" }),
       el("div", { class: "content stack-lg" }, [
         reveal(deposit, 0),
         el("section", { class: "stack" }, [
@@ -2538,8 +2534,6 @@
         title: "Réunion",
         heading: false,   // le h1 de la synthèse est celui du document imprimable
         sub: "Synthèse imprimable",
-        back: App.remonter,
-        backLabel: "Réglages",
         actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button",
           onclick: printMeeting }, [icon("print", 16), el("span", { text: "Imprimer" })])]
       }),
@@ -2723,7 +2717,7 @@
     ]);
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Réglages", back: App.remonter, backLabel: "Sujets", actions: [statusPill()] }),
+      topbar({ title: "Réglages", actions: [statusPill()] }),
       el("div", { class: "content stack-lg" }, [
         reveal(el("div", { class: "card card-static stack" }, [
           sectionTitle("user", "Votre nom"),
@@ -3199,10 +3193,54 @@
     if (route.name === "topic") { return screenTopic(route.topicId); }
     if (route.name === "proposals") { return screenProposals(route.topicId); }
     if (route.name === "conclusion") { return screenConclusion(route.topicId); }
-    if (route.name === "settings") { return screenSettings(); }
-    if (route.name === "meeting") { return screenMeeting(); }
-    if (route.name === "pandore") { return screenPandore(); }
-    return screenTopics();
+    var screen = route.name === "settings" ? screenSettings()
+      : route.name === "meeting" ? screenMeeting()
+      : route.name === "pandore" ? screenPandore()
+      : screenTopics();
+    screen.classList.add("has-tabbar");
+    screen.appendChild(tabBar(TAB_OF[route.name] || "topics"));
+    return screen;
+  }
+
+  /* ================================================== Barre de navigation ==== */
+
+  /* Quatre destinations, toujours visibles sur les écrans de premier niveau : Sujets, Réunion, Pandore, Réglages.
+   * Pandore y a sa place à part entière : ce n'est pas un espace de discussion mais une zone d'expression libre et
+   * anonyme, qui ne dépend d'aucun sujet. Dans un sujet (discussion, propositions, consensus), la barre disparaît :
+   * l'écran appartient au sujet, et le bouton retour ramène à la liste.
+   *
+   * Sujets reste la SEULE racine (voir PARENT dans js/app.js) : les trois autres onglets en sont des enfants directs.
+   * Passer de l'un à l'autre remplace l'entrée d'historique (même profondeur) ; le geste retour du système ramène
+   * donc toujours à Sujets, puis sort de l'application. C'est la convention d'Android, et elle ne demande aucune
+   * interception. */
+  var TABS = [
+    { name: "topics", hash: "#/", icon: "message", label: "Sujets" },
+    { name: "meeting", hash: "#/meeting", icon: "doc", label: "Réunion" },
+    { name: "pandore", hash: "#/pandore", icon: "inbox", label: "Pandore" },
+    { name: "settings", hash: "#/settings", icon: "settings", label: "Réglages" }
+  ];
+  var TAB_OF = { topics: "topics", meeting: "meeting", pandore: "pandore", settings: "settings" };
+
+  function tabBar(current) {
+    return el("nav", { class: "tabbar no-print", "aria-label": "Navigation principale" }, [
+      el("div", { class: "tabbar-inner" }, TABS.map(function (tab) {
+        var here = tab.name === current;
+        return el("button", {
+          class: "tabbar-item" + (here ? " is-current" : ""), type: "button", "data-key": "tab-" + tab.name,
+          "aria-current": here ? "page" : null,
+          onclick: function () { if (!here) { App.go(tab.hash); } }
+        }, [icon(tab.icon, 22), el("span", { class: "tabbar-label", text: tab.label })]);
+      }))
+    ]);
+  }
+
+  /* Pendant la saisie, la barre s'efface : sur iPhone elle resterait accrochée au bas de la page, derrière ou
+   * au-dessus du clavier, et sur Android elle mangerait la hauteur laissée au champ. */
+  function onTypingFocus(e) {
+    var t = e.target;
+    var typing = !!t && (t.tagName === "TEXTAREA" || t.tagName === "SELECT" ||
+      (t.tagName === "INPUT" && !/^(button|submit|checkbox|radio|range|color|file|reset|image)$/i.test(t.type || "")));
+    document.documentElement.classList.toggle("is-typing", e.type === "focusin" && typing);
   }
 
   function signature() {
@@ -3416,17 +3454,17 @@
       eyebrow: "La conclusion",
       title: "Ce que vous présenterez",
       text: "Chaque sujet se referme sur une conclusion : chacun en choisit une, la "
-        + "mieux votée porte la mention En tête. Pour la réunion, Réglages puis Ouvrir "
-        + "la synthèse : tout tient sur une page."
+        + "mieux votée porte la mention En tête. Pour la réunion, l'onglet Réunion : "
+        + "tout tient sur une page."
     },
     pandore: {
       icon: "inbox",
       eyebrow: "Pandore",
       title: "Ce qui ne se dit pas en réunion",
-      text: "Une idée, une plainte, une question : déposez-la anonymement dans Pandore, "
-        + "depuis l'icône de boîte aux lettres de l'accueil. Une IA en tire une synthèse "
-        + "que tous peuvent lire. Vous pourrez revoir cette présentation depuis les "
-        + "Réglages.",
+      text: "Pandore n'est pas une discussion : c'est une zone d'expression libre et "
+        + "anonyme. Une idée, une plainte, une question : déposez-la depuis l'onglet "
+        + "Pandore. Une IA en tire une synthèse que tous peuvent lire. Vous pourrez "
+        + "revoir cette présentation depuis les Réglages.",
       extra: "logo"
     }
   };
