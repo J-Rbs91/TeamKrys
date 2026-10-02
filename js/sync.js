@@ -566,7 +566,7 @@
     var many = count > 1;
     message(count + " action" + (many ? "s" : "") + " de plus de "
       + Math.round(CONFIG.STALE_ACTION_MS / 86400000) + " jours " + (many ? "attendent" : "attend")
-      + " : ouvrez Réglages pour " + (many ? "les envoyer." : "l'envoyer."), "error");
+      + " : ouvrez Réglages, puis Système, pour " + (many ? "les envoyer." : "l'envoyer."), "error");
   }
 
   /* Seules les actions dont la clé de file est attribuée sont envoyables, et

@@ -73,6 +73,7 @@ Sujets  (racine, onglet)
 ├── Réunion   (onglet)
 ├── Pandore   (onglet)
 └── Réglages  (onglet)
+    └── Système
 ```
 
 **Les onglets de la barre du bas.** Réunion, Pandore et Réglages sont des enfants
@@ -82,6 +83,13 @@ directs de Sujets, donc frères entre eux.
 - Conséquence : depuis n'importe quel onglet, le geste retour du système ramène à
   Sujets, puis quitte l'application. C'est la convention d'Android, sans aucune
   interception. Les onglets n'ont pas de bouton retour : la barre en tient lieu.
+
+**Système, sous Réglages.** C'est le second niveau des réglages (connexion et
+synchronisation), à l'adresse `#/settings/system`.
+- Cause : il est plus profond que Réglages, donc l'atteindre **empile**.
+- Conséquence : son bouton retour (« Réglages ») et le geste retour ramènent aux
+  Réglages, puis à Sujets. Il n'a pas de barre du bas : comme un sujet, l'écran
+  appartient à sa tâche, ce qui éloigne aussi le pouce des actions sensibles.
 
 La table `PARENT`, en tête de la section navigation de `js/app.js`, est **le
 seul endroit** où cette structure est écrite. Ajouter un écran, c'est y ajouter

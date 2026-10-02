@@ -19,7 +19,8 @@ plus reconnue comme déjà traitée. C'est pourquoi les choix (vote, réaction,
 soutien) s'envoient sous la forme marquée `set:true` (voir « Choix idempotents »),
 dont le rejeu est sans effet, et pourquoi le client retient, au lieu de la renvoyer
 en silence, une action restée en file plus de 30 jours (`CONFIG.STALE_ACTION_MS`) :
-le bouton « Envoyer quand même » des Réglages la libère (`Sync.releaseStale()`).
+le bouton « Envoyer quand même » de Réglages → Système la libère, après confirmation
+(`Sync.releaseStale()`).
 
 Le serveur annonce ses capacités dans `features` : `since` (lecture conditionnelle
 par révision), `batch` (lots de 20 actions au plus), `lean` (état sans
@@ -246,7 +247,9 @@ sans `conclusion`. Deux voies :
 ## Règles métier
 
 - Réactions autorisées : **👌 💪 🤏 👎 💩** — toute autre valeur est refusée,
-  côté serveur comme côté application. La liste vit dans `Core.REACTIONS`
+  côté serveur comme côté application. Depuis la 1.18.0, l'interface ne propose ni
+  n'affiche plus 💪 (« Je m'engage ») ; la valeur reste valide en données, pour ne
+  rien casser ni demander de redéploiement. La liste vit dans `Core.REACTIONS`
   (`js/state.js`) et doit être **strictement identique** dans le script Apps
   Script. Une réaction retirée de la liste est ignorée à la lecture du JSON :
   les anciennes valeurs disparaissent de l'affichage, elles ne sont jamais

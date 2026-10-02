@@ -358,6 +358,7 @@ function message(id, text, reactions) {
 
 const TOPICS = { name: "topics", raw: "#/" };
 const SETTINGS = { name: "settings", raw: "#/settings" };
+const SYSTEM = { name: "system", raw: "#/settings/system" };
 const topicRoute = (id) => ({ name: "topic", topicId: id, raw: "#/topic/" + id });
 const proposalsRoute = (id) => ({ name: "proposals", topicId: id, raw: "#/topic/" + id + "/proposals" });
 
@@ -404,8 +405,8 @@ function boot(options) {
       messages: [
         message("m1", "Premier", { [BOB]: R[0] }),
         /* m2 : ma seule réaction ; m3 : la même réaction, d'un autre, plus bas. */
-        message("m2", "Deuxième", { [ME]: R[1] }),
-        message("m3", "Troisième", { [BOB]: R[1] }),
+        message("m2", "Deuxième", { [ME]: R[2] }),
+        message("m3", "Troisième", { [BOB]: R[2] }),
       ],
       proposals: [{
         id: "p1", title: "Décaler la tournée", description: "", authorId: BOB, authorName: "Bruno",
@@ -543,7 +544,7 @@ check("BL-012 réaction : gardée, le focus reste sur elle ; retirée, il va à 
     "réaction ajoutée : focus sur " + describe(now));
   assert(now.getAttribute("aria-pressed") === "true", "le bouton focalisé n'est pas la réaction mise à jour");
 
-  const gone = rowOf(t, "m2").querySelector('[data-key="reaction-' + t.R[1] + '"]');
+  const gone = rowOf(t, "m2").querySelector('[data-key="reaction-' + t.R[2] + '"]');
   gone.focus();
   gone.click();
   now = t.active();
@@ -801,6 +802,29 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   assert(/Impossible de charger la synthèse/.test(e.app().textContent) && e.app().querySelector('[data-key="pandore-retry"]'), "erreur muette");
 });
 
+/* ===================================================== Étoile retirée ==== */
+
+check("l'étoile décorative (sparkle) n'existe plus nulle part", () => {
+  ["js/ui.js", "js/utils.js", "js/product-ui.js", "js/uxer-ui.js", "js/app.js"].forEach((file) => {
+    assert(fs.readFileSync(path.join(ROOT, file), "utf8").indexOf("sparkle") < 0, "icône « sparkle » encore présente dans " + file);
+  });
+});
+
+/* ===================================================== Réaction retirée ==== */
+
+check("« Je m'engage » (💪) n'est plus proposée, et celles déjà posées ne s'affichent plus ; les autres restent", () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  t.ctx.Core.findMessage(t.ctx.Core.findTopic(t.ctx.Store.view, "t1"), "m3").reactions["p-carla"] = "💪";
+  t.ctx.UI.force();
+  assert(!t.app().querySelector('[data-key="reaction-💪"]'), "une réaction 💪 existante ne doit plus s'afficher");
+  assert(rowOf(t, "m3").querySelector('[data-key="reaction-' + t.R[2] + '"]'), "les autres réactions restent affichées");
+  t.ctx.UI.set({ sheet: { type: "message", topicId: "t1", messageId: "m1" } });
+  const offered = t.overlay().querySelectorAll(".emoji-btn").map((b) => b.getAttribute("data-key"));
+  assert(offered.length === 4 && offered.indexOf("emoji-💪") < 0, "réactions proposées : " + JSON.stringify(offered));
+  assert(!/Je m'engage/.test(t.overlay().textContent), "le libellé « Je m'engage » ne doit plus apparaître");
+});
+
 /* ================================================ Propositions repliées ==== */
 
 check("propositions : statut, Modifier et Retirer mon vote repliés sous « Statut et actions » ; le volet ouvert le reste après un rendu", () => {
@@ -821,28 +845,92 @@ check("propositions : statut, Modifier et Retirer mon vote repliés sous « Stat
 
 /* ================================================== Réglages regroupés ==== */
 
-check("Réglages : plus de carte Réunion ; code d'espace visible ; diagnostic technique replié, dernière erreur toujours visible", () => {
+check("Réglages, niveau 1 : nom, Réunion, invitation, présentation, puis l'entrée Système ; rien de la connexion ni de la synchronisation", () => {
   const t = boot();
+  let went = null;
+  t.ctx.App.go = (hash) => { went = hash; };
+  t.ctx.App.inviteLink = () => "http://localhost/#/invitation/abc";
   t.go(SETTINGS);
   const text = t.app().textContent;
-  assert(text.indexOf("Ouvrir la synthèse") < 0, "la Réunion est un onglet : plus de carte dans les Réglages");
+  ["Votre nom", "Réunion", "Ouvrir la synthèse", "Inviter des collaborateurs", "Revoir la présentation", "Système"].forEach((needle) => {
+    assert(text.indexOf(needle) >= 0, "niveau 1 : « " + needle + " » absent");
+  });
+  ["Synchroniser maintenant", "Code d'espace", "Actions en attente", "Se déconnecter", "Modifier l'adresse"].forEach((needle) => {
+    assert(text.indexOf(needle) < 0, "niveau 1 : « " + needle + " » relève du niveau Système");
+  });
+  ["sync-now", "edit-connection", "logout", "release-stale"].forEach((key) => {
+    assert(!t.app().querySelector('[data-key="' + key + '"]'), "niveau 1 : bouton " + key + " présent");
+  });
+  assert(!t.app().querySelector("details.diag-more"), "niveau 1 : pas de diagnostic technique");
+  assert(t.app().querySelectorAll(".status-pill").length === 1, "niveau 1 : une seule pastille, dans la barre de titre");
+  const cards = t.app().querySelectorAll(".content > .card");
+  assert(cards.length && cards[cards.length - 1].getAttribute("data-key") === "system-entry", "l'entrée Système vient en dernier");
+  t.app().querySelector('[data-key="open-meeting"]').click();
+  assert(went === "#/meeting", "Ouvrir la synthèse : " + went);
+  t.app().querySelector('[data-key="open-system"]').click();
+  assert(went === "#/settings/system", "entrée Système : " + went);
+  assert(!dialog(t), "entrer dans Système ne demande aucune confirmation : ce n'est pas une action");
+});
+
+check("Système, niveau 2 : retour vers Réglages, sans barre de navigation ; code d'espace visible ; diagnostic replié, dernière erreur toujours visible", () => {
+  const t = boot();
+  let up = 0;
+  t.ctx.App.remonter = () => { up += 1; };
+  t.go(SYSTEM);
+  const text = t.app().textContent;
+  assert(!t.app().querySelector("nav.tabbar"), "Système est un écran de second niveau : pas de barre de navigation");
+  const back = t.app().querySelector('[data-key="back"]');
+  assert(back && back.getAttribute("aria-label") === "Retour vers Réglages", "bouton retour vers Réglages attendu");
+  back.click();
+  assert(up === 1, "le retour doit passer par App.remonter");
+  assert(text.indexOf("Votre nom") < 0 && text.indexOf("Inviter des collaborateurs") < 0, "le niveau 2 ne répète pas le niveau 1");
   const more = t.app().querySelector("details.diag-more");
   assert(more && !more.hasAttribute("open"), "diagnostic technique replié par défaut");
   assert(/Stockage local/.test(more.textContent) && /Révision/.test(more.textContent) && /Version/.test(more.textContent), "lignes techniques dans le volet");
   const outside = (needle) => t.app().querySelectorAll(".diag-row").some((r) => r.textContent.indexOf(needle) === 0 && !r.closest("details"));
   assert(outside("Code d'espace"), "le code d'espace reste visible (comparer deux téléphones)");
   assert(outside("Actions en attente"), "les actions en attente restent visibles");
-  assert(text.indexOf("Synchroniser maintenant") >= 0, "la synchronisation manuelle reste visible");
+  assert(text.indexOf("Synchroniser maintenant") >= 0, "la synchronisation manuelle est au niveau 2");
   more.open = true;
   more.dispatchEvent({ type: "toggle", target: more });
   t.ctx.UI.force();
   assert(t.app().querySelector("details.diag-more").hasAttribute("open"), "le volet ouvert le reste après un rendu");
+  assert(!dialog(t), "ouvrir le diagnostic ne demande aucune confirmation : il ne change rien");
   const e = boot();
   e.ctx.Sync.status = () => ({ code: "error", label: "Erreur", pending: 1, error: "Réponse illisible du serveur", lastSyncAt: null, revision: 3 });
   e.ctx.Sync.diagnostics = () => ({ revision: 3, updatedAt: null, lastSyncAt: null, lastFlushAt: null, intervalMs: 6000, failures: 2,
     pending: [], persistent: true, durability: "durable", status: { code: "error", label: "Erreur", pending: 1, error: "Réponse illisible du serveur" } });
-  e.go(SETTINGS);
+  e.go(SYSTEM);
   assert(e.app().querySelectorAll(".diag-row").some((r) => /^Dernière erreur/.test(r.textContent) && !r.closest("details")), "la dernière erreur ne doit jamais être repliée");
+});
+
+check("Système : chaque action demande confirmation ; Annuler n'exécute rien ; Confirmer exécute une seule fois", () => {
+  const cases = [
+    { key: "sync-now", title: "Synchroniser maintenant", hook: (t, hit) => { t.ctx.Sync.now = hit; } },
+    { key: "edit-connection", title: "Modifier l'adresse ou le code", hook: (t, hit) => { t.ctx.App.editConnection = hit; } },
+    /* La déconnexion garde sa propre confirmation (BL-031) : c'est App.logout qui ferme et réinitialise. */
+    { key: "logout", title: "Se déconnecter de l'équipe", hook: (t, hit) => { t.ctx.App.logout = hit; }, keepsOpen: true },
+  ];
+  cases.forEach((c) => {
+    const t = boot();
+    let calls = 0;
+    c.hook(t, () => { calls += 1; });
+    t.go(SYSTEM);
+    t.app().querySelector('[data-key="' + c.key + '"]').click();
+    assert(calls === 0, c.key + " : exécuté sans confirmation");
+    assert(dialog(t) && dialog(t).textContent.indexOf(c.title) >= 0, c.key + " : confirmation « " + c.title + " » attendue");
+    assert(dialog(t).contains(t.active()), c.key + " : le focus doit entrer dans la confirmation");
+    const cancel = dialog(t).querySelectorAll("button").filter((b) => b.textContent === "Annuler")[0];
+    assert(cancel, c.key + " : bouton Annuler absent");
+    cancel.click();
+    assert(calls === 0 && !dialog(t), c.key + " : Annuler doit fermer sans rien exécuter");
+    t.app().querySelector('[data-key="' + c.key + '"]').click();
+    const buttons = dialog(t).querySelectorAll("button").filter((b) => b.textContent !== "Annuler" && b.getAttribute("data-key") !== "close-overlay");
+    assert(buttons.length >= 1, c.key + " : bouton de confirmation absent");
+    buttons[buttons.length - 1].click();
+    assert(calls === 1, c.key + " : Confirmer doit exécuter une fois (" + calls + ")");
+    assert(c.keepsOpen || !dialog(t), c.key + " : la confirmation se ferme après exécution");
+  });
 });
 
 /* ================================================== Barre de navigation ==== */
@@ -952,23 +1040,40 @@ check("connexion : lien abîmé signalé ; « Coller l'invitation » présent si
   assert(c.app().querySelector('[data-key="invite-paste"]'), "« Coller l'invitation » absent");
 });
 
-check("Réglages : « Inviter des collaborateurs » propose SMS, Mail, WhatsApp et Copier, avec le lien et la ligne du code", () => {
+check("Réglages : « Inviter des collaborateurs » est un seul bouton Partager ; la feuille du téléphone fait le reste, sinon le message est copié", async () => {
   const LINK = "https://j-rbs91.github.io/TeamKrys/#/invitation/abc";
   const t = boot();
+  const shared = [];
+  t.ctx.navigator.share = (data) => { shared.push(data); return Promise.resolve(); };
   Object.assign(t.ctx.App, { inviteLink: () => LINK, teamHasCode: () => true });
   t.go(SETTINGS);
   const card = t.app().querySelector('[data-key="invite-settings"]');
   assert(card, "carte d'invitation absente");
-  const href = (key) => decodeURIComponent(t.app().querySelector('[data-key="' + key + '"]').getAttribute("href") || "");
-  assert(href("invite-sms").indexOf("sms:") === 0 && href("invite-sms").indexOf(LINK) > 0, "SMS : " + href("invite-sms"));
-  assert(href("invite-mail").indexOf("mailto:?subject=") === 0 && href("invite-mail").indexOf(LINK) > 0, "Mail : " + href("invite-mail"));
-  assert(href("invite-whatsapp").indexOf("https://wa.me/?text=") === 0 && href("invite-whatsapp").indexOf(LINK) > 0, "WhatsApp : " + href("invite-whatsapp"));
-  assert(/Code d'accès : $/.test(href("invite-sms")), "le message doit se terminer par la ligne du code, à compléter");
-  assert(t.app().querySelector('[data-key="invite-copy-message"]'), "« Copier » absent");
-  const free = boot();
-  Object.assign(free.ctx.App, { inviteLink: () => LINK, teamHasCode: () => false });
-  free.go(SETTINGS);
-  assert(!/Code d'accès/.test(decodeURIComponent(free.app().querySelector('[data-key="invite-sms"]').getAttribute("href"))), "sans code d'équipe, pas de ligne du code");
+  assert(card.querySelectorAll("button").length === 1 && card.querySelectorAll("a").length === 0, "un seul bouton, aucune liste de canaux");
+  assert(!/SMS|WhatsApp|Mail/.test(card.textContent), "inutile de nommer les façons de partager : " + card.textContent);
+  t.app().querySelector('[data-key="invite-share"]').click();
+  await new Promise((r) => setImmediate(r));
+  assert(shared.length === 1 && shared[0].text.indexOf(LINK) >= 0 && /Code d'accès : $/.test(shared[0].text), "message partagé : " + JSON.stringify(shared));
+  /* Sans feuille de partage : le message est copié. */
+  const c = boot();
+  const copied = [];
+  c.ctx.navigator.clipboard = { writeText: (text) => { copied.push(text); return Promise.resolve(); } };
+  Object.assign(c.ctx.App, { inviteLink: () => LINK, teamHasCode: () => false });
+  c.go(SETTINGS);
+  c.app().querySelector('[data-key="invite-share"]').click();
+  await new Promise((r) => setImmediate(r));
+  assert(copied.length === 1 && copied[0].indexOf(LINK) >= 0 && !/Code d'accès/.test(copied[0]), "repli copie, sans ligne du code pour une équipe sans code : " + JSON.stringify(copied));
+  /* Partage annulé par la personne : rien de plus. */
+  const a = boot();
+  const copiedA = [];
+  a.ctx.navigator.share = () => Promise.reject(Object.assign(new Error("annulé"), { name: "AbortError" }));
+  a.ctx.navigator.clipboard = { writeText: (text) => { copiedA.push(text); return Promise.resolve(); } };
+  Object.assign(a.ctx.App, { inviteLink: () => LINK, teamHasCode: () => false });
+  a.go(SETTINGS);
+  a.app().querySelector('[data-key="invite-share"]').click();
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert(copiedA.length === 0, "un partage annulé ne doit rien copier");
   const local = boot();
   Object.assign(local.ctx.App, { inviteLink: () => "" });
   local.go(SETTINGS);
@@ -1230,11 +1335,11 @@ check("BL-011 sans `inert` (navigateurs anciens) : fond en aria-hidden pendant l
 
 /* ======================================================= Demande WP-10 ==== */
 
-check("Réglages : le libellé court de la pastille secondaire reste lisible au lecteur d'écran", () => {
+check("Système : le libellé court de la pastille secondaire reste lisible au lecteur d'écran", () => {
   const t = boot();
-  t.go(SETTINGS);
+  t.go(SYSTEM);
   const pills = t.app().querySelectorAll(".status-pill");
-  assert(pills.length === 2, "Réglages doit garder ses deux pastilles");
+  assert(pills.length === 2, "Système doit garder ses deux pastilles");
   assert(pills[0].querySelector(".status-short").getAttribute("aria-hidden") === "true", "pastille principale : le court doit rester masqué (la région parle)");
   assert(pills[1].querySelector(".status-short").getAttribute("aria-hidden") === null, "pastille secondaire : libellé court masqué au lecteur d'écran");
   assert(pills[1].querySelector(".status-long").getAttribute("aria-hidden") === null, "pastille secondaire : libellé long masqué au lecteur d'écran");

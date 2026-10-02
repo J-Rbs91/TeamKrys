@@ -92,7 +92,7 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 - [ ] Réglages → « Revoir la présentation » → elle rejoue depuis le premier panneau.
       Un prénom en cours de saisie dans « Votre nom » **reste intact**.
 - [ ] Mode avion : la séquence s'affiche et se ferme sans erreur.
-- [ ] Aucune action n'est produite : Réglages → « Actions en attente » et
+- [ ] Aucune action n'est produite : Réglages → Système → « Actions en attente » et
       « Révision » inchangés avant et après.
 
 ### 1 ter. Présentation — accessibilité
@@ -157,12 +157,12 @@ présentation ne s'affiche pas — c'est le comportement voulu.
 
 ### 1 quinquies. Déconnexion et stockage
 
-- [ ] Réglages → « Se déconnecter » : la confirmation nomme les trois oublis **et**
+- [ ] Réglages → Système → « Se déconnecter » : la confirmation nomme les trois oublis **et**
       prévient que les messages anonymes ne seront plus modifiables depuis ce téléphone.
 - [ ] Avec des actions en attente : la confirmation les **compte** et annonce leur perte.
 - [ ] Après déconnexion : l'écran du **nom** est redemandé, et un message anonyme
       envoyé avant n'offre plus « Modifier ».
-- [ ] Réglages → **Diagnostic technique** (replié) → « Stockage local » : dit **durable** ou **évinçable**, jamais
+- [ ] Réglages → Système → **Diagnostic technique** (replié) → « Stockage local » : dit **durable** ou **évinçable**, jamais
       « IndexedDB » seul.
 - [ ] Poser une action hors ligne, puis relire le diagnostic : l'état de durabilité a
       été demandé au moins une fois.
@@ -334,7 +334,7 @@ agrandie.
       file est conservée.
 - [ ] Équipe en accès libre qui pose un code → chaque appareil affiche l'écran de
       verrouillage et demande ce code ; le saisir ; la file est conservée.
-- [ ] Réglages → « Se déconnecter de l'équipe » → retour à l'écran d'accueil,
+- [ ] Réglages → Système → « Se déconnecter de l'équipe » → confirmer → retour à l'écran d'accueil,
       adresse et vérificateur oubliés.
 
 ## 3. Sujets
@@ -516,21 +516,43 @@ agrandie.
 - [ ] Le dernier sujet de la liste et le bouton « Nouveau sujet » ne sont jamais cachés
       sous la barre.
 - [ ] Impression de la Réunion : la barre n'apparaît pas.
-- [ ] Réglages : plus de carte « Réunion » ; le code d'espace est sous la connexion ;
+- [ ] Réglages → Système : le code d'espace est sous la connexion ;
       **Diagnostic technique** est replié et reste ouvert si on l'ouvre, même pendant une
       synchronisation ; une erreur de synchronisation s'affiche hors du volet.
 - [ ] Propositions : « Statut et actions » replié ; on y trouve le statut, « Modifier »
       et « Retirer mon vote » ; ouvert, il le reste quand un collègue vote.
 - [ ] Accueil : une ligne de titre, une de repères ; le statut n'est plus répété sur
       les cartes, sauf dans « Épinglés ».
+- [ ] Feuille d'un message : quatre réactions (D'accord, Mitigé, Pas d'accord, À écarter),
+      plus de « Je m'engage ».
+- [ ] Présentation, états vides, Pandore et bandeau « Nouvelle version » : aucune étoile
+      décorative.
+
+## 5 ter. Réglages sur deux niveaux
+
+- [ ] Réglages (onglet) : Votre nom, Réunion (« Ouvrir la synthèse »), Inviter des
+      collaborateurs, Présentation, puis la carte **Système** en dernier. Rien sur la
+      connexion ni la synchronisation ; une seule pastille d'état, en haut.
+- [ ] **Ouvrir les réglages Système** : écran **Système**, sans barre du bas, bouton
+      retour « Réglages ». Aucun mot de passe demandé.
+- [ ] Système : **Synchroniser maintenant**, **Modifier l'adresse ou le code**,
+      **Envoyer quand même** (s'il y a des actions retenues) et **Se déconnecter de
+      l'équipe** ouvrent chacun une confirmation qui dit l'effet. **Annuler** ne change
+      rien (aucune requête, aucun écran quitté) ; confirmer exécute l'action une fois.
+- [ ] Ouvrir **Diagnostic technique** ne demande aucune confirmation : il ne change rien.
+- [ ] Android : Réglages → Système, puis geste retour → Réglages ; encore → Sujets.
+- [ ] VoiceOver / TalkBack : la confirmation s'annonce avec son titre ; le focus y entre
+      et revient au bouton déclencheur après **Annuler**.
 
 ## 6 bis. Lien d'invitation
 
-- [ ] Réglages, connecté à l'équipe → carte **Inviter des collaborateurs** : SMS, Mail,
-      WhatsApp, Copier. En mode local : pas de carte.
-- [ ] **SMS** ouvre Messages, **Mail** l'application de courrier, **WhatsApp** WhatsApp,
-      chacun avec le message prérempli et le lien. Équipe avec code : le message se
-      termine par « Code d'accès : ».
+- [ ] Réglages, connecté à l'équipe → carte **Inviter des collaborateurs** : un seul
+      bouton, **Partager le lien d'invitation**. En mode local : pas de carte.
+- [ ] Téléphone : le bouton ouvre la feuille de partage du système (Messages, mail,
+      WhatsApp…), avec le message prérempli et le lien. Équipe avec code : le message se
+      termine par « Code d'accès : ». Fermer la feuille sans choisir : rien ne se passe.
+- [ ] Ordinateur, ou Firefox Android (sans feuille de partage) : le message est copié et
+      « Message d'invitation copié : collez-le où vous voulez. » s'affiche.
 - [ ] iPhone, appareil neuf : le lien ouvert dans Safari montre **Rejoindre l'équipe**,
       sans champ d'adresse, avec le code d'espace. Les étapes Safari et **Copier
       l'invitation** sont là.
@@ -591,9 +613,11 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 - [ ] Action de plus de 30 jours (écrire une action hors ligne, puis avancer
       l'horloge de l'appareil de plus de 30 jours, réseau revenu) : rien n'est envoyé,
       l'indicateur reste sur **En attente (n)** et « 1 action de plus de 30 jours
-      attend : ouvrez Réglages pour l'envoyer. » s'affiche une fois. Réglages montre
+      attend : ouvrez Réglages, puis Système, pour l'envoyer. » s'affiche une fois.
+      Réglages le rappelle sur la carte Système. Système montre
       « 1 action de plus de 30 jours attend sur cet appareil. » et **Envoyer quand
-      même** ; un appui annonce « 1 action va partir. », l'action et celles qui la
+      même** ; un appui ouvre la confirmation, **Annuler** n'envoie rien ; confirmer
+      annonce « 1 action va partir. », l'action et celles qui la
       suivent partent dans l'ordre, le bloc disparaît, l'indicateur passe à
       **À jour**. Sans action retenue, le bloc est absent.
 - [ ] Action devenue impossible (sujet supprimé ailleurs) → « Action refusée :
@@ -603,19 +627,19 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
       message « Le serveur ne répond pas correctement : vos actions sont gardées et
       repartiront. », puis **À jour** une fois l'action appliquée une seule fois.
 - [ ] Code invalidé côté serveur → reverrouillage immédiat.
-- [ ] Réglages → **Code d'espace identique** sur les deux appareils. Deux codes
+- [ ] Réglages → Système → **Code d'espace identique** sur les deux appareils. Deux codes
       différents = deux scripts différents, et c'est la première explication à
       « je ne vois pas les messages des autres ».
-- [ ] Réglages → **Dernier échange** avance tout seul ; **Rythme actuel**
+- [ ] Réglages → Système → Diagnostic technique → **Dernier échange** avance tout seul ; **Rythme actuel**
       descend vers 1,8 s pendant une conversation et remonte vers 6 s au repos.
 - [ ] Ouvrir l'application depuis un lien partagé dans **WhatsApp / Instagram /
-      Messenger** (fenêtre in-app) : si Réglages → Diagnostic technique affiche « Stockage local :
+      Messenger** (fenêtre in-app) : si Réglages → Système → Diagnostic technique affiche « Stockage local :
       mémoire — non persistant », un bandeau l'a annoncé — et **les messages
       partent quand même** vers les autres appareils.
 - [ ] Laisser l'application ouverte dix minutes sans rien faire, puis écrire
       depuis l'autre appareil : le message arrive **sans** avoir à toucher
       l'écran (la boucle au repos reste vivante).
-- [ ] Réglages → « Synchroniser maintenant » sur un fil déjà à jour : **le
+- [ ] Réglages → Système → « Synchroniser maintenant » → confirmer, sur un fil déjà à jour : **le
       défilement ne saute pas** et l'écran ne clignote pas.
 
 ### 8 bis. La page qui meurt juste après un envoi
@@ -632,7 +656,7 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 - [ ] Après ce rattrapage, rouvrir l'application de l'expéditeur : le message
       n'apparaît **pas en double** (déduplication serveur), et l'indicateur
       redescend à **À jour**.
-- [ ] Réglages → « Dernier envoi de secours » apparaît après un tel envoi. S'il
+- [ ] Réglages → Système → Diagnostic technique → « Dernier envoi de secours » apparaît après un tel envoi. S'il
       apparaît à *chaque* message, la voie ordinaire ne passe plus : regarder
       « Rythme actuel » et le nombre d'échecs.
 - [ ] Un message pas encore parti affiche **« envoi… »** à la place de son

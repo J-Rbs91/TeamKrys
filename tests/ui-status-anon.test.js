@@ -412,6 +412,7 @@ const TOPICS = { name: "topics", raw: "#/" };
 const topicRoute = (id) => ({ name: "topic", topicId: id, raw: "#/topic/" + id });
 const conclusionRoute = (id) => ({ name: "conclusion", topicId: id, raw: "#/topic/" + id + "/conclusion" });
 const SETTINGS = { name: "settings", raw: "#/settings" };
+const SYSTEM = { name: "system", raw: "#/settings/system" };
 
 function accessibleText(node) {
   if (node.nodeType === 3) { return node.data; }
@@ -498,15 +499,18 @@ check("BL-008 libellé long de §12 pour chaque code d'état, libellé court int
   assert(t.app().querySelector(".status-long").textContent === "Mode local", "pastille recréée sans le libellé long");
 });
 
-check("BL-008 une seule région role=status par écran, Réglages compris", () => {
+check("BL-008 une seule région role=status par écran, Réglages et Système compris", () => {
   const t = boot();
-  [TOPICS, topicRoute("t1"), conclusionRoute("t3"), SETTINGS].forEach((route) => {
+  [TOPICS, topicRoute("t1"), conclusionRoute("t3"), SETTINGS, SYSTEM].forEach((route) => {
     t.go(route);
     const regions = t.doc.querySelectorAll("[role=status]");
     assert(regions.length === 1, route.raw + " : " + regions.length + " régions role=status");
     assert(t.doc.querySelectorAll(".status-announce").length === 1, route.raw + " : une seule région d'annonce attendue");
   });
-  assert(t.app().querySelectorAll(".status-pill").length === 2, "Réglages doit garder ses deux pastilles");
+  /* Système garde ses deux pastilles (barre de titre, carte Synchronisation) ; Réglages n'en a plus qu'une. */
+  assert(t.app().querySelectorAll(".status-pill").length === 2, "Système doit garder ses deux pastilles");
+  t.go(SETTINGS);
+  assert(t.app().querySelectorAll(".status-pill").length === 1, "Réglages : une seule pastille, dans la barre de titre");
 });
 
 check("BL-008 la région n'annonce que les transitions utiles, jamais les sondages À jour / Synchronisation", () => {
@@ -589,7 +593,8 @@ check("BL-013 un message SIGNÉ verrouillé garde son cadenas et sa mention", ()
 
 check("BL-019 la feuille de MON message anonyme ne propose aucune réaction ; « Modifier » désactivé avec sa raison", () => {
   const t = boot();
-  const R = t.ctx.Core.REACTIONS;
+  /* Réactions PROPOSÉES : toutes sauf « Je m'engage » (💪), retirée de l'interface mais gardée dans le modèle. */
+  const R = t.ctx.Core.REACTIONS.filter((e) => e !== "💪");
   t.go(topicRoute("t1"));
   t.set({ sheet: { type: "message", topicId: "t1", messageId: "m1" } });
   assert(t.overlay().querySelector(".sheet"), "feuille du message non rendue");
@@ -698,7 +703,7 @@ check("BL-030 révision 0, jamais synchronisé, mode connecté : « Pas encore d
 
 check("BL-031 avertissement de déconnexion accordé au singulier et au pluriel", () => {
   const t = boot();
-  t.go(SETTINGS);
+  t.go(SYSTEM)   // la déconnexion vit au niveau Système;
   t.st.pending = [{ type: "ADD_MESSAGE" }];
   t.set({ modal: { type: "logout" } });
   let text = t.overlay().textContent;

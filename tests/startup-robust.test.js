@@ -568,6 +568,20 @@ test("barre de navigation : quitter Sujets empile, passer d'un onglet à l'autre
   assert(w.history.replaced.map((r) => r.url).join(",") === "#/,#/meeting,#/settings", "onglets frères : remplacement : " + JSON.stringify(w.history.replaced));
 });
 
+test("Réglages > Système : descendre empile, le retour ramène à Réglages, puis à Sujets", async () => {
+  const w = makeWorld({});
+  await settle();
+  w.App.go("#/settings");
+  w.App.go("#/settings/system");
+  assert(w.App.route.name === "system" && w.App.route.raw === "#/settings/system", "Système non atteint : " + JSON.stringify(w.App.route));
+  const last = w.history.pushed[w.history.pushed.length - 1];
+  assert(last && last.url === "#/settings/system", "Réglages → Système doit empiler : " + JSON.stringify(w.history.pushed));
+  w.App.remonter();
+  assert(w.App.route.name === "settings", "le retour de Système ramène à Réglages : " + JSON.stringify(w.App.route));
+  w.App.remonter();
+  assert(w.App.route.name === "topics", "puis à Sujets : " + JSON.stringify(w.App.route));
+});
+
 test("BL-058 historique sain : mêmes appels qu'avant (descendre empile, un écran frère remplace)", async () => {
   const w = makeWorld({});
   await settle();

@@ -30,7 +30,8 @@ publicité ni service payant : les données restent sur le Google Drive de l'éq
 | **Consensus** | Chaque sujet se referme sur un consensus ; celui qui arrive en tête sert de repère pour la réunion. |
 | **Réunion** | Une synthèse de tous les sujets, prête à projeter ou à imprimer. |
 | **Pandore** | Une section à part : la zone d'**expression libre et anonyme**, où l'on dépose ce qui ne se dit pas en réunion (idées, plaintes, questions). Ce n'est pas une discussion : une IA en écrit une **synthèse automatique**, lisible par tous. |
-| **Invitation** | Depuis les Réglages, un lien envoyé par SMS, mail ou WhatsApp ouvre l'application déjà réglée sur l'équipe : il ne reste qu'à saisir le code d'accès. |
+| **Invitation** | Dans les Réglages, un bouton **Partager** : le téléphone propose SMS, mail, WhatsApp… Le lien ouvre l'application déjà réglée sur l'équipe : il ne reste qu'à saisir le code d'accès. |
+| **Réglages** | Deux niveaux. Réglages : nom, réunion, invitation, présentation. **Système** : connexion et synchronisation, chaque action y demande une confirmation. |
 | **Hors connexion** | L'application s'ouvre sans réseau ; ce qu'on écrit part tout seul au retour de la connexion. |
 
 ## Démarrer
@@ -527,7 +528,7 @@ dessinées (`Utils.reactionMark`), accompagnées de leur libellé :
 | Valeur stockée | Marque | Libellé |
 |---|---|---|
 | `👌` | coche | D'accord |
-| `💪` | éclair | Je m'engage |
+| `💪` | éclair | Je m'engage (retirée de l'interface, voir plus bas) |
 | `🤏` | onde | Mitigé |
 | `👎` | croix | Pas d'accord |
 | `💩` | sens interdit | À écarter |
@@ -540,6 +541,11 @@ sur l'emoji brut.
 > Apps Script** — sinon un appareil resté sur l'ancienne version peut encore
 > écrire cette réaction. Elle est alors ignorée à la lecture : elle disparaît de
 > l'affichage, sans jamais être convertie vers une autre réaction.
+
+> `💪` (« Je m'engage ») est retirée **de l'interface seulement** : elle n'est plus
+> proposée ni affichée (`RETIRED_REACTIONS`, dans `js/ui.js`). Elle reste dans
+> `Core.REACTIONS` et dans le backend : les données déjà écrites restent valides,
+> et le script Apps Script n'a pas à être redéployé.
 
 ## Synchronisation : écriture par actions
 
@@ -726,9 +732,9 @@ Drive, code inconnu).
 - Une action en file depuis plus de 30 jours (`CONFIG.STALE_ACTION_MS`) n'est
   jamais renvoyée en silence : elle est **retenue**. Elle reste en file et en base,
   l'indicateur la compte, un message le dit une fois par session. Celles qui la
-  suivent attendent aussi, pour garder l'ordre. Le bloc « Envoyer quand même » des
-  Réglages (`js/ui.js`), affiché seulement quand `Sync.staleCount()` n'est pas nul,
-  appelle `Sync.releaseStale()` (dans `js/sync.js`) : les actions retenues sont
+  suivent attendent aussi, pour garder l'ordre. Le bloc « Envoyer quand même » de
+  Réglages → Système (`js/ui.js`), affiché seulement quand `Sync.staleCount()` n'est
+  pas nul, appelle `Sync.releaseStale()` (dans `js/sync.js`) après confirmation : les actions retenues sont
   libérées et repartent dans l'ordre de la file. La libération est gardée en
   mémoire : si la page se ferme avant l'envoi, elles sont retenues de nouveau au
   démarrage suivant.
@@ -852,7 +858,7 @@ Au premier lancement, l'application demande :
 
 Un lien « Continuer sans connexion (mode local) » permet d'essayer
 l'application sans backend : les données restent alors sur l'appareil.
-Réglages → « Modifier l'adresse ou le code » permet d'y revenir, et
+Réglages → Système → « Modifier l'adresse ou le code » permet d'y revenir, et
 « Se déconnecter de l'équipe » oublie l'adresse, le vérificateur, l'identité locale,
 la preuve de propriété des contenus anonymes, les brouillons et le repère des
 nouveautés (liste des clés dans « Brouillons », plus haut).

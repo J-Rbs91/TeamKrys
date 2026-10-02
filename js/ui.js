@@ -1321,10 +1321,10 @@
      * premier sujet » serait faux. Une équipe vide confirmée par le serveur
      * (échange réussi) et le mode local gardent l'invitation. */
     if (!all.length && awaitingFirstData()) {
-      body = emptyState("sparkle", "Pas encore de données sur cet appareil",
+      body = emptyState("sync", "Pas encore de données sur cet appareil",
         "Elles s'afficheront à la prochaine connexion.");
     } else if (!all.length) {
-      body = emptyState("sparkle", "Aucun sujet pour l'instant",
+      body = emptyState("message", "Aucun sujet pour l'instant",
         "Lancez la préparation de la prochaine réunion en ajoutant un premier sujet.",
         el("button", {
           class: "btn btn-primary", type: "button", "data-key": "create-topic-first",
@@ -1447,6 +1447,12 @@
     ]);
   }
 
+  /* Réactions PROPOSÉES. « Je m'engage » (💪) est retirée de l'interface : elle n'est plus proposée, et celles déjà
+   * posées ne s'affichent plus. Elle reste dans Core.REACTIONS, que le serveur valide aussi : la retirer de cette
+   * liste obligerait à redéployer le backend et rendrait invalides les données existantes. */
+  var RETIRED_REACTIONS = ["💪"];
+  var OFFERED_REACTIONS = Core.REACTIONS.filter(function (emoji) { return RETIRED_REACTIONS.indexOf(emoji) < 0; });
+
   function reactionsRow(topic, message) {
     var keys = Object.keys(message.reactions);
     if (!keys.length) { return null; }
@@ -1458,7 +1464,7 @@
       if (pid === App.user.id) { byEmoji[emoji].mine = true; }
     });
     var row = el("div", { class: "reactions" });
-    Core.REACTIONS.forEach(function (emoji) {
+    OFFERED_REACTIONS.forEach(function (emoji) {
       var info = byEmoji[emoji];
       if (!info) { return; }
       var label = Utils.reactionLabel(emoji);
@@ -1473,7 +1479,7 @@
         info.count > 1 ? el("span", { class: "reaction-count", text: String(info.count) }) : null
       ]));
     });
-    return row;
+    return row.childNodes.length ? row : null;
   }
 
   /* ================================================ Gestes sur les bulles ==== */
@@ -2038,7 +2044,7 @@
       topbar({ title: waiting ? "Pas encore disponible" : "Introuvable", back: App.remonter, backLabel: "Sujets" }),
       el("div", { class: "content" }, [
         waiting
-          ? emptyState("sparkle", "Contenu pas encore disponible sur cet appareil",
+          ? emptyState("sync", "Contenu pas encore disponible sur cet appareil",
             "Il s'affichera à la prochaine connexion.", back)
           : emptyState("warning", "Ce contenu n'existe plus",
             "Il a peut-être été supprimé ou archivé par un autre membre de l'équipe.", back)
@@ -2466,7 +2472,7 @@
         reveal(deposit, 0),
         el("section", { class: "stack" }, [
           el("div", { class: "row" }, [
-            sectionTitle("sparkle", "Synthèse automatique"),
+            sectionTitle("doc", "Synthèse automatique"),
             el("div", { class: "spacer" }),
             feed.date ? el("span", { class: "hint", text: "du " + dayLabel(feed.date) }) : null
           ]),
@@ -2582,15 +2588,140 @@
     return "La présentation n'a pas encore été vue sur cet appareil.";
   }
 
+  /* Réglages sur DEUX niveaux, pour éviter les mauvaises manipulations :
+   *   - niveau 1, « Réglages » (onglet) : ce qui sert à chacun, sans risque. Le nom, la réunion, l'invitation, la
+   *     présentation. Rien n'y coupe l'appareil de l'équipe ;
+   *   - niveau 2, « Système » (#/settings/system) : la connexion et la synchronisation. Sans mot de passe, mais CHAQUE
+   *     action y demande confirmation (SYSTEM_ACTIONS, fenêtre « confirmSystem » ; la déconnexion garde la sienne).
+   *     Ouvrir le diagnostic replié n'est pas une action : il ne change rien. */
   function screenSettings() {
-    var diagnostics = Sync.diagnostics();
-
     var nameInput = el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.name,
       "aria-label": "Votre nom", "aria-required": "true",
       value: App.user.name || "", "data-draft": "settings:name"
     });
+    var connected = !(Sync.connection.localMode || !Sync.connection.url);
 
+    /* Inviter : un lien qui ouvre l'application déjà réglée sur l'équipe (Utils.inviteLink). Un seul bouton : la
+     * feuille de partage du téléphone propose d'elle-même toutes les applications (SMS, mail, WhatsApp…). Sans
+     * feuille de partage (ordinateur, certaines fenêtres intégrées), le message est copié. Le code d'accès n'est
+     * jamais gardé par l'application : le message se termine par « Code d'accès : », à compléter avant l'envoi. */
+    var inviteLink = connected && typeof App.inviteLink === "function" ? App.inviteLink() : "";
+    var inviteCard = null;
+    if (inviteLink) {
+      var withCode = typeof App.teamHasCode === "function" && App.teamHasCode();
+      inviteCard = el("div", { class: "card card-static stack", "data-key": "invite-settings" }, [
+        sectionTitle("users", "Inviter des collaborateurs"),
+        el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "invite-share",
+          onclick: function () { shareInvitation(inviteLink, withCode); } },
+        [icon("share", 17), el("span", { text: "Partager le lien d'invitation" })]),
+        withCode ? el("div", { class: "hint", text: "Ajoutez le code d'accès à la fin du message avant de l'envoyer." }) : null
+      ]);
+    }
+
+    /* Actions de plus de 30 jours retenues (BL-004) : le message de démarrage renvoie ici. Le bouton qui les
+     * envoie est au niveau Système ; ce rappel dit seulement où aller. */
+    var staleCount = typeof Sync.staleCount === "function" ? Number(Sync.staleCount()) || 0 : 0;
+
+    return el("div", { class: "screen" }, [
+      topbar({ title: "Réglages", actions: [statusPill()] }),
+      el("div", { class: "content stack-lg" }, [
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("user", "Votre nom"),
+          nameInput,
+          el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
+            "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
+        ]), 0),
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("doc", "Réunion"),
+          el("div", { class: "hint", text: "Synthèse de tous les sujets, prête à imprimer ou à projeter." }),
+          el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "open-meeting",
+            onclick: function () { App.go("#/meeting"); } },
+          [icon("print", 16), el("span", { text: "Ouvrir la synthèse" })])
+        ]), 1),
+        inviteCard ? reveal(inviteCard, 2) : null,
+        reveal(el("div", { class: "card card-static stack" }, [
+          sectionTitle("info", "Présentation"),
+          /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces fonctions n'existent pas. */
+          el("div", { class: "hint", text: typeof App.onboardingState === "function"
+            ? onboardingHint(App.onboardingState()) : onboardingHint("inconnue") }),
+          el("button", { class: "btn btn-outline btn-block", type: "button",
+            onclick: function () {
+              if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
+            } },
+          [el("span", { text: "Revoir la présentation" })])
+        ]), 3),
+        /* L'entrée du niveau Système, à part et en dernier : on n'y va que pour dépanner. */
+        reveal(el("div", { class: "card card-static stack system-entry", "data-key": "system-entry" }, [
+          sectionTitle("settings", "Système"),
+          el("div", { class: "hint", text: "Connexion et synchronisation. Chaque action y demande une confirmation." }),
+          staleCount > 0 ? el("div", { class: "note" }, [icon("info", 14), el("span", { class: "note-body",
+            text: staleCount === 1 ? "1 action de plus de 30 jours attend : elle s'envoie depuis Système."
+              : staleCount + " actions de plus de 30 jours attendent : elles s'envoient depuis Système." })]) : null,
+          el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "open-system",
+            onclick: function () { App.go("#/settings/system"); } },
+          [el("span", { text: "Ouvrir les réglages Système" }), icon("forward", 16)])
+        ]), 4)
+      ])
+    ]);
+  }
+
+  function diagRow(label, value, danger) {
+    return el("div", { class: "diag-row" }, [
+      el("span", { class: "diag-label", text: label }),
+      el("span", { class: "diag-value" + (danger ? " is-danger" : ""), text: value })
+    ]);
+  }
+
+  function releaseStaleActions() {
+    var say = function (text, kind) { UI.toast(text, kind); UI.force(); };
+    var refused = "L'envoi n'a pas pu être lancé : vos actions restent sur cet appareil.";
+    var pending;
+    try { pending = Sync.releaseStale(); } catch (error) { pending = null; }
+    if (!pending || typeof pending.then !== "function") { say(refused, "error"); return; }
+    pending.then(function (count) {
+      count = Number(count) || 0;
+      say(count === 0 ? "Plus aucune action n'attend."
+        : count === 1 ? "1 action va partir." : count + " actions vont partir.");
+    }, function () { say(refused, "error"); });
+  }
+
+  /* Niveau Système : chaque action passe par une confirmation qui dit son effet. */
+  var SYSTEM_ACTIONS = {
+    sync: {
+      title: "Synchroniser maintenant",
+      text: "L'application envoie ce qui attend sur cet appareil et relit l'espace de l'équipe.",
+      confirm: "Synchroniser",
+      run: function () { Sync.now(); UI.toast("Synchronisation lancée."); }
+    },
+    connection: {
+      title: "Modifier l'adresse ou le code",
+      text: "Vous allez changer l'équipe ou le code utilisés par cet appareil. Une adresse fausse le coupe de l'équipe jusqu'à ce qu'elle soit corrigée.",
+      confirm: "Modifier",
+      run: function () { App.editConnection(); }
+    },
+    release: {
+      title: "Envoyer les actions retenues",
+      text: "Ces actions ont plus de 30 jours. Envoyées maintenant, elles peuvent défaire un choix plus récent de l'équipe.",
+      confirm: "Envoyer quand même",
+      run: releaseStaleActions
+    }
+  };
+
+  function confirmSystem(key) { UI.set({ modal: { type: "confirmSystem", action: key } }); }
+
+  function confirmSystemModal(m) {
+    var spec = SYSTEM_ACTIONS[m.action];
+    if (!spec) { return null; }
+    return modal(spec.title, el("p", { class: "hint", text: spec.text }), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
+      el("button", { class: "btn btn-primary", type: "button", text: spec.confirm, "data-key": "confirm-system",
+        onclick: function () { closeOverlay(); spec.run(); } })
+    ]);
+  }
+
+  function screenSystem() {
+    var diagnostics = Sync.diagnostics();
     var connected = !(Sync.connection.localMode || !Sync.connection.url);
 
     var connectionRows = el("div", { class: "card card-static stack" }, [
@@ -2603,79 +2734,21 @@
         ? "Connecté à l'espace de l'équipe."
         : "Mode local : les données restent sur cet appareil." }),
       /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux codes différents = deux scripts
-       * différents, et c'est la première explication à « je ne vois pas les messages des autres ». Il vit donc
-       * avec la connexion, à la vue de tous, et non dans le diagnostic replié. */
+       * différents, et c'est la première explication à « je ne vois pas les messages des autres ». */
       connected ? el("div", { class: "diag" }, [diagRow("Code d'espace", Utils.fingerprint(Sync.connection.url))]) : null,
-      el("button", { class: "btn btn-outline btn-block", type: "button",
-        onclick: function () { App.editConnection(); } },
+      el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "edit-connection",
+        onclick: function () { confirmSystem("connection"); } },
       [icon("edit", 16), el("span", { text: "Modifier l'adresse ou le code" })]),
       el("button", { class: "btn btn-danger btn-block", type: "button",
         "data-key": "logout", onclick: function () { UI.set({ modal: { type: "logout" } }); } },
       [icon("logout", 16), el("span", { text: "Se déconnecter de l'équipe" })])
     ]);
 
-    /* Inviter : un lien qui ouvre l'application déjà réglée sur l'équipe (Utils.inviteLink). Le code d'accès n'est
-     * jamais gardé par l'application : le message se termine par « Code d'accès : », à compléter avant l'envoi. */
-    var inviteLink = connected && typeof App.inviteLink === "function" ? App.inviteLink() : "";
-    var inviteCard = null;
-    if (inviteLink) {
-      var withCode = typeof App.teamHasCode === "function" && App.teamHasCode();
-      var message = [
-        "Bonjour,",
-        "Voici le lien pour rejoindre l'équipe sur BrainstO., l'outil qui nous sert à préparer les réunions :",
-        inviteLink,
-        "Ouvrez-le dans Safari (iPhone) ou Chrome (Android)."
-      ].concat(withCode ? ["Code d'accès : "] : []).join("\n");
-      var body = encodeURIComponent(message);
-      var channel = function (key, href, iconName, label, external) {
-        return el("a", { class: "btn btn-outline", href: href, "data-key": key,
-          target: external ? "_blank" : null, rel: external ? "noopener noreferrer" : null },
-        [icon(iconName, 16), el("span", { text: label })]);
-      };
-      inviteCard = el("div", { class: "card card-static stack", "data-key": "invite-settings" }, [
-        sectionTitle("users", "Inviter des collaborateurs"),
-        el("div", { class: "hint", text: "Envoyez un lien qui ouvre BrainstO. déjà réglé sur votre équipe : la personne invitée n'aura qu'à saisir le code d'accès." }),
-        withCode ? el("div", { class: "note" }, [icon("info", 14), el("span", { class: "note-body",
-          text: "Le message se termine par « Code d'accès : ». Ajoutez le code avant d'envoyer : l'application ne le connaît pas." })]) : null,
-        el("div", { class: "invite-actions" }, [
-          channel("invite-sms", "sms:?&body=" + body, "message", "SMS"),
-          channel("invite-mail", "mailto:?subject=" + encodeURIComponent("Invitation à BrainstO.") + "&body=" + body, "mail", "Mail"),
-          channel("invite-whatsapp", "https://wa.me/?text=" + body, "send", "WhatsApp", true),
-          el("button", { class: "btn btn-outline", type: "button", "data-key": "invite-copy-message",
-            onclick: function () { copyText(message, "Message copié : collez-le où vous voulez."); } },
-          [icon("copy", 16), el("span", { text: "Copier" })])
-        ]),
-        el("div", { class: "hint", text: "Quiconque reçoit le lien et le code peut rejoindre l'équipe : envoyez-les seulement aux personnes concernées." })
-      ]);
-    }
-
-    function diagRow(label, value, danger) {
-      return el("div", { class: "diag-row" }, [
-        el("span", { class: "diag-label", text: label }),
-        el("span", { class: "diag-value" + (danger ? " is-danger" : ""), text: value })
-      ]);
-    }
-
-    /* Actions de plus de 30 jours en file (BL-004) : sync.js les retient au lieu de les renvoyer en
-     * silence (un rejeu tardif pourrait défaire un choix plus récent) et le message de démarrage
-     * renvoie ici. Bloc absent à zéro ; jamais de contenu d'action ni d'auteur, seulement le
-     * compte. Gardé pour un ancien sync.js en cache, qui n'a pas staleCount. */
+    /* Actions de plus de 30 jours en file (BL-004) : sync.js les retient au lieu de les renvoyer en silence (un
+     * rejeu tardif pourrait défaire un choix plus récent). Bloc absent à zéro ; jamais de contenu d'action ni
+     * d'auteur, seulement le compte. Gardé pour un ancien sync.js en cache, qui n'a pas staleCount. */
     var staleCount = typeof Sync.staleCount === "function" ? Number(Sync.staleCount()) || 0 : 0;
     var staleBlock = null;
-
-    function releaseStale() {
-      var say = function (text, kind) { UI.toast(text, kind); UI.force(); };
-      var refused = "L'envoi n'a pas pu être lancé : vos actions restent sur cet appareil.";
-      var pending;
-      try { pending = Sync.releaseStale(); } catch (error) { pending = null; }
-      if (!pending || typeof pending.then !== "function") { say(refused, "error"); return; }
-      pending.then(function (count) {
-        count = Number(count) || 0;
-        say(count === 0 ? "Plus aucune action n'attend."
-          : count === 1 ? "1 action va partir." : count + " actions vont partir.");
-      }, function () { say(refused, "error"); });
-    }
-
     if (staleCount > 0 && typeof Sync.releaseStale === "function") {
       var oneStale = staleCount === 1;
       staleBlock = el("div", { class: "stack" }, [
@@ -2689,19 +2762,19 @@
           class: "btn btn-outline btn-block", type: "button", "data-key": "release-stale",
           "aria-label": oneStale ? "Envoyer quand même l'action de plus de 30 jours"
             : "Envoyer quand même les actions de plus de 30 jours",
-          onclick: releaseStale
+          onclick: function () { confirmSystem("release"); }
         }, [icon("send", 16), el("span", { text: "Envoyer quand même" })])
       ]);
     }
 
-    var diagRows = el("div", { class: "card card-static stack" }, [
+    var syncCard = el("div", { class: "card card-static stack" }, [
       el("div", { class: "row" }, [
         sectionTitle("sync", "Synchronisation"),
         el("div", { class: "spacer" }),
         statusPill(true)
       ]),
       el("button", { class: "btn btn-outline btn-block", type: "button",
-        "data-key": "sync-now", onclick: function () { Sync.now(); UI.toast("Synchronisation lancée."); } },
+        "data-key": "sync-now", onclick: function () { confirmSystem("sync"); } },
       [icon("sync", 16), el("span", { text: "Synchroniser maintenant" })]),
       staleBlock,
       /* Ce qui sert à tous reste visible : ce qui attend, et la dernière erreur quand il y en a une. */
@@ -2710,7 +2783,7 @@
           (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null
       ]),
-      /* Le reste ne sert qu'au dépannage (refonte B) : replié, retenu ouvert d'un rendu à l'autre. */
+      /* Le reste ne sert qu'au dépannage : replié, retenu ouvert d'un rendu à l'autre. */
       el("details", {
         class: "diag-more", open: diagMoreOpen === true,
         ontoggle: function (e) { diagMoreOpen = e.target.open === true; }
@@ -2719,62 +2792,63 @@
           el("span", { text: "Diagnostic technique" }), icon("down", 15)
         ]),
         el("div", { class: "diag" }, [
-        diagRow("Révision", String(diagnostics.revision)),
-        diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "-"),
-        connected ? diagRow("Dernier échange",
-          diagnostics.lastSyncAt ? Utils.formatDateTime(diagnostics.lastSyncAt) : "aucun",
-          !diagnostics.lastSyncAt) : null,
-        /* Trace des envois rattrapés au moment où la page disparaissait : c'est
-         * ce qui distingue « tout va bien » d'un appareil qui ne réussit à
-         * poster qu'in extremis, à chaque fois. */
-        connected && diagnostics.lastFlushAt
-          ? diagRow("Dernier envoi de secours", Utils.formatDateTime(diagnostics.lastFlushAt))
-          : null,
-        connected ? diagRow("Rythme actuel",
-          (diagnostics.intervalMs / 1000).toFixed(1).replace(".", ",") + " s" +
-          (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,
-        /* « IndexedDB » seul se lisait comme une garantie de durabilité qui n'était
-         * pas faite : l'éviction est totale et muette. On dit donc les deux states —
-         * disponible, et durable ou non. */
-        diagRow("Stockage local", diagnostics.persistent
-          ? ("IndexedDB : " + diagnostics.durability)
-          : "mémoire : non persistant",
-        !diagnostics.persistent || diagnostics.durability === "évinçable"),
-        diagRow("Version", CONFIG.APP_VERSION)
+          diagRow("Révision", String(diagnostics.revision)),
+          diagRow("Dernière mise à jour", diagnostics.updatedAt ? Utils.formatDateTime(diagnostics.updatedAt) : "-"),
+          connected ? diagRow("Dernier échange",
+            diagnostics.lastSyncAt ? Utils.formatDateTime(diagnostics.lastSyncAt) : "aucun",
+            !diagnostics.lastSyncAt) : null,
+          /* Trace des envois rattrapés au moment où la page disparaissait : c'est ce qui distingue « tout va
+           * bien » d'un appareil qui ne réussit à poster qu'in extremis, à chaque fois. */
+          connected && diagnostics.lastFlushAt
+            ? diagRow("Dernier envoi de secours", Utils.formatDateTime(diagnostics.lastFlushAt))
+            : null,
+          connected ? diagRow("Rythme actuel",
+            (diagnostics.intervalMs / 1000).toFixed(1).replace(".", ",") + " s" +
+            (diagnostics.failures ? " (recul, " + diagnostics.failures + " échec(s))" : "")) : null,
+          /* « IndexedDB » seul se lisait comme une garantie de durabilité qui n'était pas faite : l'éviction est
+           * totale et muette. On dit donc les deux états, disponible, et durable ou non. */
+          diagRow("Stockage local", diagnostics.persistent
+            ? ("IndexedDB : " + diagnostics.durability)
+            : "mémoire : non persistant",
+          !diagnostics.persistent || diagnostics.durability === "évinçable"),
+          diagRow("Version", CONFIG.APP_VERSION)
         ])
       ])
     ]);
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Réglages", actions: [statusPill()] }),
+      topbar({ title: "Système", back: App.remonter, backLabel: "Réglages",
+        actions: [statusPill()] }),
       el("div", { class: "content stack-lg" }, [
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("user", "Votre nom"),
-          nameInput,
-          el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
-            "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
-        ]), 0),
-        /* Ordre (refonte B) : soi, l'équipe, la synchronisation, puis l'aide. La synthèse de réunion n'est plus
-         * ici : c'est un onglet de la barre du bas. */
+        reveal(el("div", { class: "note" }, [icon("warning", 14), el("span", { class: "note-body",
+          text: "Ces réglages servent au dépannage. Chaque action demande une confirmation." })]), 0),
         reveal(connectionRows, 1),
-        inviteCard ? reveal(inviteCard, 1) : null,
-        reveal(diagRows, 2),
-        /* Le rejeu de la présentation est une aide, pas un réglage : en dernier. */
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("sparkle", "Présentation"),
-          /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces
-           * fonctions n'existent pas, et l'écran des Réglages — donc le diagnostic
-           * et la synchronisation manuelle — ne se rendrait plus du tout. */
-          el("div", { class: "hint", text: typeof App.onboardingState === "function"
-            ? onboardingHint(App.onboardingState()) : onboardingHint("inconnue") }),
-          el("button", { class: "btn btn-outline btn-block", type: "button",
-            onclick: function () {
-              if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
-            } },
-          [icon("sparkle", 16), el("span", { text: "Revoir la présentation" })])
-        ]), 3)
+        reveal(syncCard, 2)
       ])
     ]);
+  }
+
+  function invitationMessage(link, withCode) {
+    return [
+      "Bonjour,",
+      "Voici le lien pour rejoindre l'équipe sur BrainstO., l'outil qui nous sert à préparer les réunions :",
+      link,
+      "Ouvrez-le dans Safari (iPhone) ou Chrome (Android)."
+    ].concat(withCode ? ["Code d'accès : "] : []).join("\n");
+  }
+
+  /* La feuille de partage du système, appelée dans le geste (elle l'exige). Annulée par la personne : rien. Absente
+   * ou refusée : le message part dans le presse-papiers, pour être collé dans n'importe quelle application. */
+  function shareInvitation(link, withCode) {
+    var message = invitationMessage(link, withCode);
+    var copy = function () { copyText(message, "Message d'invitation copié : collez-le où vous voulez."); };
+    var share = null;
+    try {
+      // qa-allow: js-navigator-share — détectée avant usage et sous try ; sans elle (Firefox Android), le message est copié.
+      share = navigator.share ? navigator.share({ title: "Invitation à BrainstO.", text: message }) : null;
+    } catch (e) { share = null; }
+    if (!share || typeof share.then !== "function") { copy(); return; }
+    share.then(null, function (error) { if (!error || error.name !== "AbortError") { copy(); } });
   }
 
   /* Volet « Diagnostic technique » des Réglages ouvert ou non, retenu d'un rendu à l'autre. */
@@ -2797,7 +2871,7 @@
      * l'identifiant de qui réagit, elle relierait le message à son auteur dans
      * les données partagées (§5). La liste reste la même pour tous les anonymes. */
     var emojiRow = mine && message.anon ? null : el("div", { class: "emoji-row" });
-    (emojiRow ? Core.REACTIONS : []).forEach(function (emoji) {
+    (emojiRow ? OFFERED_REACTIONS : []).forEach(function (emoji) {
       var isMine = message.reactions[App.user.id] === emoji;
       var label = Utils.reactionLabel(emoji);
       emojiRow.appendChild(el("button", {
@@ -3173,6 +3247,7 @@
       var m = UI.local.modal;
       if (m.type === "createTopic") { node = createTopicModal(m); }
       else if (m.type === "confirmStatus") { node = confirmStatusModal(m); }
+      else if (m.type === "confirmSystem") { node = confirmSystemModal(m); }
       else if (m.type === "signMessage") { node = signMessageModal(m); }
       else if (m.type === "editTopic") { node = editTopicModal(m); }
       else if (m.type === "editMessage") { node = editMessageModal(m); }
@@ -3219,6 +3294,7 @@
     if (route.name === "topic") { return screenTopic(route.topicId); }
     if (route.name === "proposals") { return screenProposals(route.topicId); }
     if (route.name === "conclusion") { return screenConclusion(route.topicId); }
+    if (route.name === "system") { return screenSystem(); }
     var screen = route.name === "settings" ? screenSettings()
       : route.name === "meeting" ? screenMeeting()
       : route.name === "pandore" ? screenPandore()
@@ -3300,6 +3376,7 @@
     if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
     if (route.name === "settings") { return "Réglages" + tail; }
     if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
+    if (route.name === "system") { return "Système" + tail; }
     if (route.name === "pandore") { return "Pandore" + tail; }
     return "Sujets" + tail;
   }
@@ -3917,7 +3994,7 @@
     if (document.querySelector(".update-banner")) { return; }
     bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
-      icon("sparkle", 17),
+      icon("sync", 17),
       el("span", { style: { flex: "1" }, text: UPDATE_BANNER_TEXT }),
       el("button", {
         class: "btn btn-sm btn-primary", type: "button", text: "Mettre à jour",

@@ -181,12 +181,13 @@ Les invariants existants sont à préserver :
 Le jeu actuel de réactions est conservé :
 
 - 👌 D'accord
-- 💪 Je m'engage
 - 🤏 Mitigé
 - 👎 Pas d'accord
 - 💩 À écarter
 
 Le registre culturel de ces réactions est assumé comme faisant partie de BrainstO. et de son contexte d'utilisation.
+
+💪 (« Je m'engage ») a été retirée de l'interface en 1.18.0, à la demande du responsable produit. Elle reste valide en données : les réactions déjà posées ne cassent rien.
 
 ## 13. Mode local
 

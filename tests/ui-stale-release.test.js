@@ -9,9 +9,11 @@
  * SANS Proxy tolérant : une méthode absente le reste vraiment (repli d'un ancien sync.js).
  *
  * Contrôles :
- *  - BL-004 (Réglages) : bloc absent à zéro ; présent à 1 et à 2 avec les bons accords, sans
- *    contenu d'action ; l'appui appelle Sync.releaseStale() UNE fois, annonce le résultat par un
- *    toast et met l'écran à jour ; refus de l'envoi annoncé ; aucune erreur sans staleCount ;
+ *  - BL-004 (Réglages > Système) : bloc absent à zéro ; présent à 1 et à 2 avec les bons accords,
+ *    sans contenu d'action ; l'appui ouvre une confirmation, Annuler n'envoie rien, Confirmer
+ *    appelle Sync.releaseStale() UNE fois, annonce le résultat par un toast et met l'écran à
+ *    jour ; refus de l'envoi annoncé ; aucune erreur sans staleCount ;
+ *  - niveau 1 (Réglages) : un simple rappel qui renvoie à Système, sans bouton d'envoi ;
  *  - ligne fixe de stockage refusé sur l'écran de connexion, texte repris d'App (jamais recopié).
  */
 "use strict";
@@ -297,6 +299,7 @@ function lenient(target) {
 const ME = "p-alice";
 const T0 = "2026-10-01T08:00:00.000Z";
 const SETTINGS = { name: "settings", raw: "#/settings" };
+const SYSTEM = { name: "system", raw: "#/settings/system" };
 
 function boot(options) {
   options = options || {};
@@ -367,28 +370,39 @@ function boot(options) {
     ctx, doc: document, state,
     app: () => document.getElementById("app"),
     toasts: () => document.getElementById("toast-root"),
+    overlay: () => document.getElementById("overlay-root"),
     go(route) { ctx.App.gate = () => null; ctx.App.route = route; ctx.UI.force(); },
     gate(name) { ctx.App.gate = () => name; ctx.UI.force(); },
   };
 }
 
 const release = (t) => t.app().querySelector('[data-key="release-stale"]');
+const confirmButton = (t) => t.overlay().querySelector('[data-key="confirm-system"]');
 
-/* ====================================================== Réglages : BL-004 ==== */
+/* Le bouton « Envoyer quand même » ouvre la confirmation ; c'est elle qui envoie. */
+function releaseAndConfirm(t) {
+  release(t).click();
+  const button = confirmButton(t);
+  assert(button, "la confirmation doit s'ouvrir avant tout envoi");
+  button.click();
+}
+
+/* ============================================= Réglages > Système : BL-004 ==== */
+
 
 check("aucune action retenue : ni texte ni bouton, l'écran des Réglages reste complet", () => {
   const t = boot({ stale: 0 });
-  t.go(SETTINGS);
+  t.go(SYSTEM);
   const text = t.app().textContent;
   assert(text.indexOf("30 jours") < 0, "texte d'action retenue affiché à zéro : « " + text + " »");
   assert(!release(t), "bouton « Envoyer quand même » présent à zéro");
   assert(text.indexOf("Synchroniser maintenant") >= 0 && text.indexOf("Actions en attente") >= 0,
-    "les blocs existants des Réglages doivent rester");
+    "les blocs existants de Système doivent rester");
 });
 
 check("1 action retenue : texte au singulier, bouton nommé et tactile, aucun contenu d'action", () => {
   const t = boot({ stale: 1, pending: [{ type: "CREATE_MESSAGE", payload: { text: "CONTENU-SECRET" } }] });
-  t.go(SETTINGS);
+  t.go(SYSTEM);
   const text = t.app().textContent;
   assert(text.indexOf("1 action de plus de 30 jours attend sur cet appareil.") >= 0,
     "texte attendu absent : « " + text + " »");
@@ -405,7 +419,7 @@ check("1 action retenue : texte au singulier, bouton nommé et tactile, aucun co
 
 check("2 actions retenues : texte au pluriel", () => {
   const t = boot({ stale: 2 });
-  t.go(SETTINGS);
+  t.go(SYSTEM);
   const text = t.app().textContent;
   assert(text.indexOf("2 actions de plus de 30 jours attendent sur cet appareil.") >= 0, "texte attendu absent : « " + text + " »");
   assert(text.indexOf("attend sur") < 0, "accord du singulier à tort pour deux actions");
@@ -414,8 +428,8 @@ check("2 actions retenues : texte au pluriel", () => {
 
 check("l'appui appelle releaseStale une seule fois, annonce le résultat et met l'écran à jour", async () => {
   const t = boot({ stale: 2 });
-  t.go(SETTINGS);
-  release(t).click();
+  t.go(SYSTEM);
+  releaseAndConfirm(t);
   assert(t.state.releaseCalls === 1, "releaseStale appelé " + t.state.releaseCalls + " fois");
   await flush();
   assert(t.toasts().textContent.indexOf("2 actions vont partir.") >= 0, "annonce absente : « " + t.toasts().textContent + " »");
@@ -426,22 +440,22 @@ check("l'appui appelle releaseStale une seule fois, annonce le résultat et met 
 
 check("une seule action libérée : annonce au singulier ; rien à libérer : annonce neutre", async () => {
   const one = boot({ stale: 1 });
-  one.go(SETTINGS);
-  release(one).click();
+  one.go(SYSTEM);
+  releaseAndConfirm(one);
   await flush();
   assert(one.toasts().textContent.indexOf("1 action va partir.") >= 0, "annonce : « " + one.toasts().textContent + " »");
   const none = boot({ stale: 1 });
-  none.go(SETTINGS);
+  none.go(SYSTEM);
   none.state.stale = 0;   // vidée entre-temps (autre onglet, envoi réussi) : releaseStale rend 0
-  release(none).click();
+  releaseAndConfirm(none);
   await flush();
   assert(none.toasts().textContent.indexOf("Plus aucune action n'attend.") >= 0, "annonce : « " + none.toasts().textContent + " »");
 });
 
 check("envoi refusé : message d'erreur, les actions restent, le bloc reste", async () => {
   const t = boot({ stale: 1, reject: true });
-  t.go(SETTINGS);
-  release(t).click();
+  t.go(SYSTEM);
+  releaseAndConfirm(t);
   await flush();
   assert(t.toasts().textContent.indexOf("L'envoi n'a pas pu être lancé") >= 0, "annonce d'erreur absente : « " + t.toasts().textContent + " »");
   assert(release(t), "le bloc doit rester : l'action attend toujours");
@@ -450,15 +464,50 @@ check("envoi refusé : message d'erreur, les actions restent, le bloc reste", as
 
 check("ancien sync.js en cache (sans staleCount ni releaseStale) : aucun bloc, aucune erreur", () => {
   const t = boot({ stale: 3, withStale: false });
-  t.go(SETTINGS);
+  t.go(SYSTEM);
   assert(typeof t.ctx.Sync.staleCount === "undefined", "la doublure doit être sans staleCount");
   assert(!release(t) && t.app().textContent.indexOf("30 jours") < 0, "aucun bloc attendu sans staleCount");
-  assert(t.app().textContent.indexOf("Synchroniser maintenant") >= 0, "les Réglages doivent s'afficher");
+  assert(t.app().textContent.indexOf("Synchroniser maintenant") >= 0, "Système doit s'afficher");
   /* staleCount sans releaseStale : pas de bouton qui ne ferait rien. */
   const half = boot({ stale: 2 });
   delete half.ctx.Sync.releaseStale;
-  half.go(SETTINGS);
+  half.go(SYSTEM);
   assert(!release(half), "pas de bouton sans releaseStale");
+});
+
+
+check("confirmation : Annuler n'envoie rien, l'action reste retenue", () => {
+  const t = boot({ stale: 2 });
+  t.go(SYSTEM);
+  release(t).click();
+  assert(t.state.releaseCalls === 0, "aucun envoi avant la confirmation");
+  const text = t.overlay().textContent;
+  assert(text.indexOf("Envoyer les actions retenues") >= 0, "titre de la confirmation : « " + text + " »");
+  assert(text.indexOf("plus de 30 jours") >= 0, "la confirmation doit dire l'effet : « " + text + " »");
+  const cancel = t.overlay().querySelectorAll("button").filter((b) => b.textContent === "Annuler")[0];
+  assert(cancel, "bouton Annuler absent");
+  cancel.click();
+  assert(t.state.releaseCalls === 0, "Annuler ne doit rien envoyer");
+  assert(!confirmButton(t), "la confirmation doit se fermer");
+  assert(release(t), "le bloc doit rester : rien n'a été envoyé");
+});
+
+check("niveau 1 : rappel qui renvoie à Système, sans bouton d'envoi ni compte détaillé", () => {
+  const none = boot({ stale: 0 });
+  none.go(SETTINGS);
+  assert(none.app().textContent.indexOf("30 jours") < 0, "aucun rappel à zéro");
+  const one = boot({ stale: 1 });
+  one.go(SETTINGS);
+  const text = one.app().textContent;
+  assert(text.indexOf("1 action de plus de 30 jours attend : elle s'envoie depuis Système.") >= 0, "rappel au singulier : « " + text + " »");
+  assert(!release(one), "le bouton d'envoi n'est pas au niveau 1");
+  assert(text.indexOf("Synchroniser maintenant") < 0, "la synchronisation n'est pas au niveau 1");
+  const two = boot({ stale: 2 });
+  two.go(SETTINGS);
+  assert(two.app().textContent.indexOf("2 actions de plus de 30 jours attendent : elles s'envoient depuis Système.") >= 0, "rappel au pluriel");
+  const old = boot({ stale: 3, withStale: false });
+  old.go(SETTINGS);
+  assert(old.app().textContent.indexOf("30 jours") < 0, "ancien sync.js : aucun rappel, aucune erreur");
 });
 
 /* ========================================== Connexion : stockage refusé ==== */

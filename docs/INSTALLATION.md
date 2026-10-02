@@ -62,7 +62,7 @@ rien d'irréversible n'arrive avant la vérification.
    en fait une automatiquement : la sauvegarde automatique n'a lieu qu'à la
    première écriture du nouveau code, donc *après* le point de non-retour.
 2. **Noter la révision actuelle**, lisible dans l'application : Réglages →
-   *Diagnostic technique* → *Révision*. C'est le nombre à retrouver à l'étape 5.
+   *Système* → *Diagnostic technique* → *Révision*. C'est le nombre à retrouver à l'étape 5.
 3. Coller le nouveau `Code.gs` (et le manifeste), **sans encore déployer**.
    Renseigner `ACCESS_CODE` avec le code existant de l'équipe — le même
    qu'avant, sinon tous les téléphones seront refusés.
@@ -205,7 +205,9 @@ oral) — jamais dans un dépôt public, jamais dans une capture d'écran partag
 
 **Le plus simple : le lien d'invitation.** Dans l'application, **Réglages → Inviter
 des collaborateurs** prépare un message avec un lien qui ouvre BrainstO. déjà réglé
-sur l'équipe. Il part par **SMS**, **Mail** ou **WhatsApp**, ou se copie. La personne
+sur l'équipe. Un seul bouton, **Partager le lien d'invitation** : le téléphone propose
+de lui-même SMS, mail, WhatsApp et les autres applications. Sans feuille de partage
+(ordinateur, certaines fenêtres intégrées), le message est copié. La personne
 invitée n'a plus qu'à saisir le code d'accès et son prénom.
 
 - **Le code n'est pas dans le message.**
@@ -323,17 +325,17 @@ publié.
 | « Code d'accès refusé par le serveur : saisissez le nouveau code de l'équipe. » | l'équipe a changé `ACCESS_CODE`, ou en a posé un sur un script jusque-là en accès libre | saisir le nouveau code sur l'écran de verrouillage : les actions en attente sont gardées. **Ne pas se déconnecter** : la déconnexion efface la file |
 | Modifications du script sans effet | déploiement pas mis à jour | créer une **nouvelle version** du déploiement |
 | L'application reste sur l'ancienne version | l'application installée est servie par le cache versionné du service worker : une publication sans montée de `CACHE_VERSION` n'atteint pas les appareils déjà installés | publier en incrémentant `APP_VERSION` **et** `CACHE_VERSION` ensemble, puis « Mettre à jour » dans le bandeau |
-| Les données n'apparaissent plus | déconnexion ou changement d'adresse | Réglages → Modifier l'adresse ou le code |
+| Les données n'apparaissent plus | déconnexion ou changement d'adresse | Réglages → Système → Modifier l'adresse ou le code (confirmer) |
 | Espace vide après une mise à jour du script | le script pointe vers un autre fichier que le vôtre | **ne rien écrire de plus** : exécuter `diagnoseStorage()`, puis renseigner `DATA_FILE_ID` avec le bon identifiant |
 | « Fichier de données introuvable » | aucun fichier repérable sur ce Drive | `setupProject()` pour un espace neuf, ou `DATA_FILE_ID` pour un espace existant |
 | Une erreur dit « Plusieurs fichiers « brainsto-data.json » existent et aucun n'est rattaché » | deux fichiers du même nom sur le Drive, sans rattachement | le script n'en choisit aucun : voir « Plusieurs fichiers `brainsto-data.json` sur le Drive » plus haut |
-| Une personne ne voit pas les messages des autres | les deux appareils ne visent pas le même script | comparer le **Code d'espace** dans Réglages : il doit être identique |
+| Une personne ne voit pas les messages des autres | les deux appareils ne visent pas le même script | comparer le **Code d'espace** dans Réglages → Système : il doit être identique |
 | **Erreur (n)** et le message « Le serveur ne répond pas correctement : vos actions sont gardées et repartiront. » | le script répond mal plusieurs fois de suite (verrou Drive dépassé, panne de Google Drive, plusieurs fichiers de données non rattachés, page d'erreur) | ne rien supprimer et ne pas se déconnecter : les actions restent en file et repartent toutes seules quand le script répond bien. Si cela dure, lire l'erreur dans l'éditeur (Exécutions) et exécuter `diagnoseStorage()` |
 | « Action refusée : … Texte : « … » » | le script a jugé l'action invalide (par exemple, le sujet a été supprimé entre-temps) : refus définitif | l'action est retirée de la file et le message reprend le texte saisi, pour le recopier. Un ancien script, qui ne renvoie pas de code, voit son refus réessayé trois fois avant le retrait |
 | « Enregistrement sur cet appareil impossible : l'envoi continue, gardez l'application ouverte. » | le téléphone a fermé ou refusé sa base locale (iPhone après un passage en arrière-plan, stockage plein) | garder l'application ouverte jusqu'à **À jour** : l'action part quand même au serveur |
 | « Ce navigateur refuse d'enregistrer des données sur l'appareil : ouvrez BrainstO. dans votre navigateur habituel. » | le navigateur refuse tout stockage local : fenêtre intégrée à une application (WhatsApp, Instagram, Messenger, Gmail, Teams), cookies et données de site bloqués, ou stockage plein | ouvrir l'adresse dans Chrome ou Safari. Le message s'affiche au démarrage et reste affiché dans la carte de connexion ; tant que le stockage est refusé, « Enregistrer et continuer » ne connecte pas (rien n'est enregistré ni envoyé). Le mode local reste possible, mais rien n'y survit à un rechargement |
 | « Ce navigateur ne permet pas la connexion. Ouvrez BrainstO. dans Chrome ou Safari. » | l'adresse est ouverte en `http` hors `localhost` (contexte non sécurisé), ou le navigateur n'offre pas le calcul de hachage (`crypto.subtle`) : le code d'accès ne peut pas être vérifié | ouvrir l'adresse en `https`, dans Chrome ou Safari. Le message s'affiche aussi au déverrouillage, et l'appareil reste verrouillé. Sans code d'accès, la connexion reste possible : rien n'est haché |
-| « 1 action de plus de 30 jours attend : ouvrez Réglages pour l'envoyer. » (ou « n actions de plus de 30 jours attendent : ouvrez Réglages pour les envoyer. ») | une action est en file depuis plus de 30 jours (écrite hors ligne, ou avec une horloge déréglée) : l'application ne la renvoie pas en silence, et celles écrites après elle attendent derrière, pour garder l'ordre | Réglages → **Envoyer quand même** : les actions retenues partent dans l'ordre de la file. L'indicateur reste sur **En attente (n)** tant qu'elles ne sont pas parties. Ne pas se déconnecter : la déconnexion efface la file |
+| « 1 action de plus de 30 jours attend : ouvrez Réglages, puis Système, pour l'envoyer. » (ou « n actions de plus de 30 jours attendent : ouvrez Réglages, puis Système, pour les envoyer. ») | une action est en file depuis plus de 30 jours (écrite hors ligne, ou avec une horloge déréglée) : l'application ne la renvoie pas en silence, et celles écrites après elle attendent derrière, pour garder l'ordre | Réglages → Système → **Envoyer quand même**, puis confirmer : les actions retenues partent dans l'ordre de la file. L'indicateur reste sur **En attente (n)** tant qu'elles ne sont pas parties. Ne pas se déconnecter : la déconnexion efface la file |
 
 ---
 

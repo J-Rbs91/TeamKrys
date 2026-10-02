@@ -1334,7 +1334,7 @@ async function run() {
     assert(A.Sync.flush() === false && srv.beacons.length === 0, "l'envoi de secours emporte une action retenue");
     assert(Core.findMessage(Core.findTopic(A.Store.view, "t1"), "v31"), "l'action retenue a disparu de l'écran de son auteur");
     const told = staleNotes(A);
-    assert(told.length === 1 && told[0] === "error: 1 action de plus de 30 jours attend : ouvrez Réglages pour l'envoyer.",
+    assert(told.length === 1 && told[0] === "error: 1 action de plus de 30 jours attend : ouvrez Réglages, puis Système, pour l'envoyer.",
       "message : " + JSON.stringify(told));
 
     /* « Envoyer quand même » : libérées, envoyées dans l'ordre, une seule fois. */

@@ -249,10 +249,9 @@ Toute demande future de permission doit être évaluée comme un besoin métier 
 
 # Réactions — invariant maintenu
 
-Le jeu de réactions reste inchangé :
+Le jeu de réactions reste inchangé, sauf 💪 (« Je m'engage »), retirée de l'interface en 1.18.0 (la valeur reste valide en données) :
 
 - 👌 D'accord
-- 💪 Je m'engage
 - 🤏 Mitigé
 - 👎 Pas d'accord
 - 💩 À écarter

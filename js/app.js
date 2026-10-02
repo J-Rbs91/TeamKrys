@@ -601,6 +601,8 @@
     var path = raw.replace(/^#\/?/, "");
     var parts = path.split("/").filter(Boolean);
     if (!parts.length) { return { raw: "#/", name: "topics", topicId: null }; }
+    /* Niveau 2 des Réglages : connexion et synchronisation, chaque action confirmée. */
+    if (parts[0] === "settings" && parts[1] === "system") { return { raw: raw, name: "system", topicId: null }; }
     if (parts[0] === "settings") { return { raw: raw, name: "settings", topicId: null }; }
     if (parts[0] === "meeting") { return { raw: raw, name: "meeting", topicId: null }; }
     if (parts[0] === "pandore") { return { raw: raw, name: "pandore", topicId: null }; }
@@ -670,6 +672,7 @@
     meeting: "topics",
     pandore: "topics",
     invitation: "topics",
+    system: "settings",
     topic: "topics",
     proposals: "topic",
     conclusion: "topic"

@@ -178,7 +178,6 @@ La feuille d'un message donne accès aux actions suivantes :
 | Action | Effet |
 |---|---|
 | Coche | D'accord |
-| Éclair | Je m'engage |
 | Vague | Mitigé |
 | Croix | Pas d'accord |
 | Cercle barré | À écarter |
@@ -439,13 +438,15 @@ reprend le texte saisi, pour que vous puissiez le recopier.
 Une action restée en file plus de 30 jours (écrite hors ligne, ou avec une horloge
 déréglée) n'est jamais renvoyée en silence : elle est **retenue**, et celles que
 vous avez écrites après elle attendent derrière, pour garder l'ordre. Un message le
-dit une fois par session : « 1 action de plus de 30 jours attend : ouvrez Réglages
-pour l'envoyer. » Dans **Réglages**, un bloc dit « 1 action de plus de 30 jours
-attend sur cet appareil. » (« 2 actions de plus de 30 jours attendent sur cet
-appareil. » au pluriel) et propose le bouton **Envoyer quand même**. Un appui
-libère les actions retenues : elles partent dans l'ordre de la file, et un message
-le confirme (« 1 action va partir. », « 2 actions vont partir. »). Le bloc n'existe
-que lorsqu'au moins une action est retenue. Si l'envoi ne peut pas être lancé,
+dit une fois par session : « 1 action de plus de 30 jours attend : ouvrez Réglages,
+puis Système, pour l'envoyer. » **Réglages** le rappelle sur la carte **Système**.
+Dans **Système**, un bloc dit « 1 action de plus de 30 jours attend sur cet
+appareil. » (« 2 actions de plus de 30 jours attendent sur cet appareil. » au
+pluriel) et propose le bouton **Envoyer quand même**. Une confirmation rappelle
+qu'une action ancienne peut défaire un choix plus récent de l'équipe. Une fois
+confirmé, les actions retenues partent dans l'ordre de la file, et un message le
+confirme (« 1 action va partir. », « 2 actions vont partir. »). **Annuler** n'envoie
+rien. Le bloc n'existe que lorsqu'au moins une action est retenue. Si l'envoi ne peut pas être lancé,
 « L'envoi n'a pas pu être lancé : vos actions restent sur cet appareil. » s'affiche
 et rien n'est perdu. Si l'application se ferme avant l'envoi, ces actions sont
 retenues de nouveau au démarrage suivant.
@@ -463,20 +464,29 @@ synchronisée.
 
 ## Réglages et déconnexion
 
-Les réglages permettent de modifier votre nom et la connexion, d'inviter des
-collaborateurs, de synchroniser à la main et de revoir la présentation initiale. Le
-**code d'espace**, à comparer d'un téléphone à l'autre, est affiché avec la connexion.
-Le détail technique (révision, rythme, stockage, version) est replié sous
-**Diagnostic technique** : il ne sert qu'au dépannage. La dernière erreur de
-synchronisation, elle, reste toujours visible.
+Les réglages ont deux niveaux, pour éviter les fausses manœuvres.
 
-**Inviter des collaborateurs.** Les boutons **SMS**, **Mail** et **WhatsApp** ouvrent un
-message déjà écrit, avec le lien d'invitation ; **Copier** le met dans le
-presse-papiers pour toute autre application. Si l'équipe a un code d'accès, le
-message se termine par « Code d'accès : ». Ajoutez-y le code avant d'envoyer :
-l'application ne le connaît pas. Quiconque reçoit le lien et le code peut rejoindre
-l'équipe : envoyez-les seulement aux personnes concernées. Quand des actions de plus de 30 jours attendent sur l'appareil, le
-bouton **Envoyer quand même** s'y ajoute (voir « Hors connexion »).
+**Réglages** (l'onglet) contient ce qui sert à chacun, sans risque : votre nom, la
+synthèse de **Réunion**, l'invitation des collaborateurs et la présentation, à revoir.
+Rien n'y coupe l'appareil de l'équipe.
+
+**Système** (en bas des Réglages) contient la connexion et la synchronisation. On n'y
+va que pour dépanner. Aucun mot de passe n'en garde l'entrée, mais **chaque action y
+demande une confirmation** qui dit son effet : **Synchroniser maintenant**, **Modifier
+l'adresse ou le code**, **Envoyer quand même** et **Se déconnecter de l'équipe**.
+**Annuler** ne change rien. Le **code d'espace**, à comparer d'un téléphone à l'autre,
+est affiché avec la connexion. Le détail technique (révision, rythme, stockage,
+version) est replié sous **Diagnostic technique** ; l'ouvrir ne change rien. La
+dernière erreur de synchronisation, elle, reste toujours visible. Le bouton retour
+ramène aux Réglages.
+
+**Inviter des collaborateurs.** Un seul bouton : **Partager le lien d'invitation**. Le
+téléphone propose de lui-même les applications possibles (SMS, mail, WhatsApp…), avec
+un message déjà écrit qui contient le lien. Sans feuille de partage (ordinateur,
+certaines fenêtres intégrées), le message est copié : collez-le où vous voulez. Si
+l'équipe a un code d'accès, le message se termine par « Code d'accès : ». Ajoutez-y le
+code avant d'envoyer : l'application ne le connaît pas. Quiconque reçoit le lien et le
+code peut rejoindre l'équipe : envoyez-les seulement aux personnes concernées.
 
 **Si l'équipe change de code**, ou en pose un alors qu'elle travaillait sans code,
 l'espace se verrouille avec le message « Code d'accès refusé par le serveur :
@@ -486,7 +496,7 @@ déconnexion les efface. Sans réseau, le nouveau code ne peut pas être vérifi
 (« Code d'accès incorrect, ou nouveau code impossible à vérifier sans
 connexion. ») : l'appareil reste verrouillé et rien n'est perdu.
 
-**Se déconnecter de l'équipe** oublie sur cet appareil l'adresse de l'équipe, le
+**Se déconnecter de l'équipe** (dans Système) oublie sur cet appareil l'adresse de l'équipe, le
 verrouillage, votre identité locale et la preuve de propriété de vos contenus
 anonymes, ainsi que vos brouillons de messages (avec leur choix « anonyme ») et le
 repère de ce que l'appareil avait déjà consulté : la personne qui se connecte ensuite

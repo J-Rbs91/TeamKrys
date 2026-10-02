@@ -1267,13 +1267,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .is-typing .tabbar { display: none; }
 .is-typing .has-tabbar .fab { display: none; }
 
-/* Invitation : quatre canaux côte à côte (deux par ligne sur téléphone), consignes d'installation numérotées. */
-.invite-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.invite-actions .btn { min-height: var(--tap); text-decoration: none; }
+/* Invitation : consignes d'installation numérotées, sur la page d'arrivée. */
 .install-steps {
   margin: 0;
   padding-left: 1.4em;
