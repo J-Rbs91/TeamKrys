@@ -374,6 +374,20 @@ tests.push(() => check("conclusionScores : comptage et tête de liste", () => {
 
 /* ------------------------------------------------------- Cas transverses --- */
 
+tests.push(() => check("SET_TOPIC_PIN : épingle pour tous, se rejoue sans effet, ne change ni la date ni le rang du sujet", () => {
+  const state = seed();
+  const topic = state.topics[0];
+  const before = topic.updatedAt;
+  apply(state, "SET_TOPIC_PIN", { topicId: topic.id, pinned: true });
+  equal(topic.pinned, true, "le sujet doit être épinglé");
+  equal(topic.updatedAt, before, "épingler n'est pas une activité : la date du sujet ne bouge pas");
+  apply(state, "SET_TOPIC_PIN", { topicId: topic.id, pinned: true });
+  equal(topic.pinned, true, "rejouée, l'action ne bascule rien");
+  apply(state, "SET_TOPIC_PIN", { topicId: topic.id, pinned: false });
+  equal(topic.pinned, false, "désépingler");
+  equal(Core.ensureShape({ topics: [{ id: "x", title: "t" }] }).topics[0].pinned, false, "un sujet d'avant n'est pas épinglé");
+}));
+
 tests.push(() => check("Toutes les actions du modèle sont validées et appliquées", () => {
   const covered = {};
   const state = Core.emptyState();
@@ -398,11 +412,12 @@ tests.push(() => check("Toutes les actions du modèle sont validées et appliqu�
   run("SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c1" });
   run("REMOVE_CONCLUSION_VOTE", { topicId: "t1" });
   run("DELETE_CONCLUSION", { topicId: "t1", conclusionId: "c1" });
+  run("SET_TOPIC_PIN", { topicId: "t1", pinned: true });
 
   Core.ACTION_TYPES.forEach((type) => {
     assert(covered[type], "action non couverte par les tests : " + type);
   });
-  equal(Core.ACTION_TYPES.length, 19, "le modèle compte 19 actions");
+  equal(Core.ACTION_TYPES.length, 20, "le modèle compte 20 actions");
 }));
 
 tests.push(() => check("Une action portant sur un objet disparu est refusée proprement", () => {
@@ -519,7 +534,7 @@ tests.push(() => check("PARITÉ : ensureShape rend le même état", () => {
     /* JSON malmené : champs manquants, types faux, citation orpheline,
      * réaction retirée du jeu, vote vers une conclusion supprimée. */
     { revision: "7", updatedAt: null, participants: [{ id: " u1 ", name: "  Marie  " }, { name: "sans id" }],
-      topics: [{ id: "t1", title: "", status: "inconnu", messages: [
+      topics: [{ id: "t1", title: "", status: "inconnu", pinned: "oui", messages: [
         { id: "m1", text: "a", reactions: { u1: "🤞", u2: "👌" }, quoteId: "disparu" },
         { id: "m2", text: "b", anon: true, authorId: "u1", authorName: "Marie" },
         { notAnId: true }
@@ -574,6 +589,11 @@ tests.push(() => check("PARITÉ : validateAction et applyAction, action par acti
     ["REMOVE_CONCLUSION_VOTE", { topicId: "t1" }],
     ["SET_CONCLUSION_VOTE", { topicId: "t1", conclusionId: "c2" }],
     ["DELETE_CONCLUSION", { topicId: "t1", conclusionId: "c2" }],              // retire aussi le vote
+    ["SET_TOPIC_PIN", { topicId: "t1", pinned: true }],
+    ["SET_TOPIC_PIN", { topicId: "t2", pinned: "true" }],                      // pas un booléen : non épinglé
+    ["SET_TOPIC_PIN", { topicId: "absent", pinned: true }],                    // refus
+    ["SET_TOPIC_PIN", { topicId: "t1", pinned: false }],
+    ["SET_TOPIC_PIN", { topicId: "t1", pinned: true }],
     ["UPDATE_PARTICIPANT", { participantId: "u1", name: "Marie L." }],         // propage le renommage
     ["ACTION_INVENTÉE", { topicId: "t1" }]                                     // refus
   ];
@@ -853,8 +873,8 @@ tests.push(() => check("ANONYMAT : rendu anonyme, un message ne garde aucun iden
 }));
 
 tests.push(() => check("PARITÉ : le serveur annonce le marqueur par FEATURES \"idempotent\" (drapeaux existants conservés)", () => {
-  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent"]);
-  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent"], "liste lue par Sync.supports()");
+  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins"]);
+  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins"], "liste lue par Sync.supports()");
 }));
 
 tests.push(() => check("PARITÉ : actions marquées et non marquées, action par action", () => {

@@ -674,6 +674,29 @@ check("sans frappe en cours, toucher l'interrupteur ne vole rien : il bascule, e
   assert(t.active().getAttribute("data-key") === "composer-anon", "sans champ actif, le toucher garde le comportement d'un bouton : focus sur " + describe(t.active()));
 });
 
+/* ================================================= Épingler pour l'équipe ==== */
+
+check("Détails du sujet : « Épingler pour toute l'équipe » envoie l'épingle et le dit ; désactivé avec sa raison sur un serveur trop ancien", () => {
+  const t = boot();
+  const sent = [];
+  t.ctx.App.actions.setTopicPin = (topicId, pinned) => { sent.push(topicId + ":" + pinned); };
+  t.go(topicRoute("t1"));
+  t.app().querySelector('[data-key="topic-info"]').click();
+  const pin = () => dialog(t).querySelector('[data-key="topic-pin"]');
+  assert(pin() && /toute l'équipe/.test(pin().textContent) && pin().getAttribute("aria-pressed") === "false", "commande d'épingle absente ou muette sur sa portée");
+  pin().click();
+  assert(JSON.stringify(sent) === '["t1:true"]', "épingle : " + JSON.stringify(sent));
+  assert(t.toasts().querySelectorAll(".toast").some((n) => /pour toute l'équipe/.test(n.textContent)), "aucun bandeau ne confirme la portée de l'épingle");
+
+  const old = boot();
+  old.ctx.Sync.supports = (name) => name === "since";      // serveur qui répond, sans « pins »
+  old.go(topicRoute("t1"));
+  old.app().querySelector('[data-key="topic-info"]').click();
+  const off = dialog(old).querySelector('[data-key="topic-pin"]');
+  assert(off && off.disabled, "sur un serveur sans « pins », la commande doit être désactivée");
+  assert(/mis à jour/.test(dialog(old).textContent), "la raison de l'indisponibilité n'est pas dite");
+});
+
 /* ===================================================== Gestes sur les bulles ==== */
 
 /* Un doigt, tel que le navigateur l'envoie : pointerdown, pointermove, pointerup sur le document (délégation). */

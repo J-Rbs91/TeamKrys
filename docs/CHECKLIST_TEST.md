@@ -432,6 +432,10 @@ agrandie.
       cadenas.
 - [ ] Barre compacte : compteurs Propositions / Conclusion à jour.
 - [ ] Appui sur le titre (ⓘ) → infos du sujet, changement de statut, modification.
+- [ ] Détails → **Épingler pour toute l'équipe** : bandeau de confirmation ; à
+      l'accueil, section **Épinglés** en tête, sur **un autre téléphone** aussi après
+      synchronisation. La date « Actif il y a … » ne change pas. **Désépingler** le
+      remet dans sa section. Backend non mis à jour : commande grisée avec sa raison.
 - [ ] Statut **Clôturé** ou **Archivé** → fenêtre de confirmation ; **Annuler** laisse
       le statut d'avant ; « Prêt pour la réunion » et « En discussion » partent sans
       fenêtre.

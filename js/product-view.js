@@ -34,8 +34,11 @@
     return 0;
   }
 
-  ProductView.TOPIC_GROUP_ORDER = ["ready", "open", "closed", "archived"];
+  /* « Épinglés » d'abord : un sujet épinglé l'est pour toute l'équipe et quitte son groupe de statut (une carte par
+   * sujet). Un sujet archivé reste avec les archivés, épinglé ou non : l'archive prime. */
+  ProductView.TOPIC_GROUP_ORDER = ["pinned", "ready", "open", "closed", "archived"];
   ProductView.TOPIC_GROUP_LABELS = {
+    pinned: "Épinglés",
     ready: "Prêts pour la réunion",
     open: "En discussion",
     closed: "Clôturés",
@@ -43,12 +46,13 @@
   };
 
   ProductView.groupTopics = function (topics) {
-    var groups = { ready: [], open: [], closed: [], archived: [] };
+    var groups = { pinned: [], ready: [], open: [], closed: [], archived: [] };
 
     arr(topics).forEach(function (topic) {
       if (!topic || typeof topic !== "object") { return; }
       var status = topic.status;
-      if (!Object.prototype.hasOwnProperty.call(groups, status)) { status = "open"; }
+      if (status === "pinned" || !Object.prototype.hasOwnProperty.call(groups, status)) { status = "open"; }
+      if (topic.pinned === true && status !== "archived") { status = "pinned"; }
       groups[status].push(topic);
     });
 

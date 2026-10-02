@@ -56,7 +56,8 @@
     "CREATE_MESSAGE", "UPDATE_MESSAGE", "SET_MESSAGE_SIGNATURE", "SET_REACTION",
     "CREATE_PROPOSAL", "UPDATE_PROPOSAL", "CHANGE_PROPOSAL_STATUS", "SET_VOTE", "REMOVE_VOTE",
     "ADD_CONCLUSION", "UPDATE_CONCLUSION_ITEM", "DELETE_CONCLUSION",
-    "SET_CONCLUSION_VOTE", "REMOVE_CONCLUSION_VOTE"
+    "SET_CONCLUSION_VOTE", "REMOVE_CONCLUSION_VOTE",
+    "SET_TOPIC_PIN"
   ];
 
   /* ------------------------------------------------------------- Outils --- */
@@ -127,6 +128,8 @@
         title: cut(t.title, Core.LIMITS.topicTitle) || "Sujet sans titre",
         description: cut(t.description, Core.LIMITS.topicDescription),
         status: oneOf(trim(t.status), Core.TOPIC_STATUSES, "open"),
+        /* Épinglé pour toute l'équipe : remonte en tête de l'accueil. Absent = non épinglé (données d'avant). */
+        pinned: t.pinned === true,
         createdBy: {
           id: trim(createdBy.id),
           name: cut(createdBy.name, Core.LIMITS.name) || Core.ANON_NAME
@@ -354,6 +357,11 @@
         return OK;
       }
 
+      case "SET_TOPIC_PIN": {
+        var ePin = needTopic(); if (ePin) { return ePin; }
+        return OK;
+      }
+
       case "CREATE_MESSAGE": {
         var e3 = needTopic(); if (e3) { return e3; }
         if (!trim(p.messageId)) { return fail("Message sans identifiant."); }
@@ -523,6 +531,7 @@
           title: cut(p.title, Core.LIMITS.topicTitle),
           description: cut(p.description, Core.LIMITS.topicDescription),
           status: "open",
+          pinned: false,
           createdBy: who,
           createdAt: now,
           updatedAt: now,
@@ -544,6 +553,13 @@
       case "CHANGE_TOPIC_STATUS":
         topic.status = trim(p.status);
         touch(state, topic, now);
+        return;
+
+      /* Épingler n'est pas une activité du débat : la date du sujet ne bouge pas (sinon il remonterait « actif à
+       * l'instant » et serait signalé comme nouveau). Seul l'état change. Affectation, donc rejouable sans effet. */
+      case "SET_TOPIC_PIN":
+        topic.pinned = p.pinned === true;
+        state.updatedAt = now;
         return;
 
       case "CREATE_MESSAGE": {

@@ -2549,10 +2549,34 @@
         ? el("div", { class: "pre-wrap", style: { fontSize: "var(--fs-sm)" }, text: topic.description })
         : el("div", { class: "hint", text: "Aucune description." }),
       field("Statut", selectWrap(statusSelect, true)),
+      pinControl(topic),
       el("button", { class: "btn btn-outline btn-block", type: "button",
         onclick: function () { UI.set({ sheet: null, modal: { type: "editTopic", topicId: topic.id } }); } },
       [icon("edit", 16), el("span", { text: "Modifier le sujet" })])
     ]));
+  }
+
+  /* ⚠️ Épingler vaut pour TOUTE l'équipe : le libellé le dit, et le bandeau le confirme. Un serveur qui n'annonce pas
+   * « pins » (backend d'avant 1.2.0) refuserait l'action : la commande est alors désactivée, avec sa raison, plutôt
+   * que de laisser partir une action vouée au refus. Tant que le serveur n'a jamais répondu (aucun drapeau connu), on
+   * ne présume rien. Le mode local n'a pas de serveur : toujours disponible. */
+  function pinControl(topic) {
+    var known = Sync.supports && Sync.supports("since");
+    var available = (Sync.connection && Sync.connection.localMode) || !known || Sync.supports("pins");
+    var pinned = topic.pinned === true;
+    var button = el("button", {
+      class: "btn btn-outline btn-block", type: "button", "data-key": "topic-pin",
+      "aria-pressed": pinned ? "true" : "false", disabled: !available,
+      onclick: function () {
+        App.actions.setTopicPin(topic.id, !pinned);
+        UI.toast(pinned ? "Sujet désépinglé pour toute l'équipe." : "Sujet épinglé en tête de l'accueil, pour toute l'équipe.");
+      }
+    }, [icon("pin", 16), el("span", { text: pinned ? "Désépingler" : "Épingler pour toute l'équipe" })]);
+    if (available) { return button; }
+    return el("div", { class: "stack" }, [
+      button,
+      el("p", { class: "hint", text: "Épinglage indisponible : le serveur de l'équipe doit être mis à jour." })
+    ]);
   }
 
   /* ⚠️ L'anonymat d'un sujet se décide avec le MÊME interrupteur que dans le composeur. Il se déduisait d'un champ

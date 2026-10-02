@@ -46,6 +46,24 @@ check("Accueil : la maturité crée quatre groupes explicites", () => {
   equal(groups.archived.map((x) => x.id), ["a1"]);
 });
 
+check("Accueil : un sujet épinglé passe en tête dans « Épinglés », une seule fois ; l'archive prime sur l'épingle ; la synthèse suit", () => {
+  const list = [
+    topic("o1", "open", "2026-08-30T12:00:00Z"),
+    topic("p-ancien", "closed", "2026-08-01T12:00:00Z", { pinned: true }),
+    topic("p-recent", "open", "2026-08-29T12:00:00Z", { pinned: true }),
+    topic("a1", "archived", "2026-08-30T13:00:00Z", { pinned: true }),
+    topic("faux", "open", "2026-08-31T12:00:00Z", { pinned: "true" })
+  ];
+  const groups = ProductView.groupTopics(list);
+  equal(ProductView.TOPIC_GROUP_ORDER[0], "pinned", "« Épinglés » doit ouvrir l'accueil");
+  equal(ProductView.TOPIC_GROUP_LABELS.pinned, "Épinglés");
+  equal(groups.pinned.map((x) => x.id), ["p-recent", "p-ancien"], "épinglés, les plus actifs d'abord");
+  equal(groups.open.map((x) => x.id), ["faux", "o1"], "un épinglé quitte son groupe ; « true » en texte n'épingle pas");
+  equal(groups.closed.map((x) => x.id), [], "le clôturé épinglé n'est compté qu'une fois");
+  equal(groups.archived.map((x) => x.id), ["a1"], "archivé et épinglé : reste dans les archives");
+  equal(ProductView.meetingTopics(list).map((x) => x.id), ["p-recent", "p-ancien", "faux", "o1"], "la synthèse ouvre aussi sur les épinglés");
+});
+
 check("Accueil : l'activité récente trie uniquement à l'intérieur d'un groupe", () => {
   const groups = ProductView.groupTopics([
     topic("ancien-ready", "ready", "2026-08-20T12:00:00Z"),

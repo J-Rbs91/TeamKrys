@@ -86,6 +86,13 @@ Les statuts sont :
 - **Clôturé** : le travail préparatoire est terminé ;
 - **Archivé** : le sujet quitte la vue courante sans être supprimé.
 
+**Épingler un sujet.** Dans « Détails », **Épingler pour toute l'équipe** place le
+sujet en tête de l'accueil, dans la section **Épinglés**, chez tout le monde. Tout
+membre peut épingler ou désépingler. Épingler ne change pas la date d'activité du
+sujet. Un sujet archivé reste dans les archives, même épinglé. La synthèse de réunion
+commence aussi par les sujets épinglés. Si le serveur de l'équipe n'a pas été mis à
+jour (backend 1.2.0), la commande est grisée et le dit.
+
 Appuyer sur le titre d'un sujet, dans sa discussion, ouvre ses informations :
 l'auteur (« Anonyme » pour un sujet proposé sans signature), « Créé le » et
 « Dernière activité le », chacun avec la date et l'heure.

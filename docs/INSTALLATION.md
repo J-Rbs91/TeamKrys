@@ -89,8 +89,9 @@ rien d'irréversible n'arrive avant la vérification.
 À la première écriture, le script dépose sur Drive, dans le dossier du fichier de
 données, une copie `brainsto-data.json.avant-<version>.<date>` (`<version>` est la
 valeur de `BACKEND_VERSION` du **nouveau** code). La version actuelle du backend est
-`brainsto-backend-1.1.0` : la première écriture après son déploiement dépose donc
-`brainsto-data.json.avant-brainsto-backend-1.1.0.<date>`, une seule fois par version
+`brainsto-backend-1.2.0` (épinglage des sujets, boîte à idées) : la première écriture
+après son déploiement dépose donc `brainsto-data.json.avant-brainsto-backend-1.2.0.<date>`,
+une seule fois par version
 du backend. Les autres copies portent `manuel` (créée par
 `backupNow()`) ou `avant-restauration` (créée par `restoreFromBackup`). Pour
 revenir en arrière, voir « Revenir en arrière » plus bas : `restoreFromBackup`

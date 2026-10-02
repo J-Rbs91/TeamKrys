@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.1.0";
+var BACKEND_VERSION = "brainsto-backend-1.2.0";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -21,7 +21,7 @@ var MAX_PROCESSED = 5000;
 var MAX_BATCH = 20;
 /* "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
  * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé. */
-var FEATURES = ["since", "batch", "lean", "idempotent"];
+var FEATURES = ["since", "batch", "lean", "idempotent", "pins"];
 
 var ANON_NAME = "Anonyme";
 var LIMITS = {
@@ -43,7 +43,8 @@ var ACTION_TYPES = [
   "CREATE_MESSAGE", "UPDATE_MESSAGE", "SET_MESSAGE_SIGNATURE", "SET_REACTION",
   "CREATE_PROPOSAL", "UPDATE_PROPOSAL", "CHANGE_PROPOSAL_STATUS", "SET_VOTE", "REMOVE_VOTE",
   "ADD_CONCLUSION", "UPDATE_CONCLUSION_ITEM", "DELETE_CONCLUSION",
-  "SET_CONCLUSION_VOTE", "REMOVE_CONCLUSION_VOTE"
+  "SET_CONCLUSION_VOTE", "REMOVE_CONCLUSION_VOTE",
+  "SET_TOPIC_PIN"
 ];
 
 /* =============================================================== Noyau ==== */
@@ -101,6 +102,7 @@ function ensureShape(input) {
       title: cut(t.title, LIMITS.topicTitle) || "Sujet sans titre",
       description: cut(t.description, LIMITS.topicDescription),
       status: oneOf(trim(t.status), TOPIC_STATUSES, "open"),
+      pinned: t.pinned === true,
       createdBy: {
         id: trim(createdBy.id),
         name: cut(createdBy.name, LIMITS.name) || ANON_NAME
@@ -269,6 +271,9 @@ function validateAction(state, action) {
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (TOPIC_STATUSES.indexOf(trim(p.status)) < 0) { return fail("Statut de sujet invalide."); }
       return OK;
+    case "SET_TOPIC_PIN":
+      if (needTopic()) { return fail("Ce sujet n'existe plus."); }
+      return OK;
     case "CREATE_MESSAGE":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!trim(p.messageId)) { return fail("Message sans identifiant."); }
@@ -393,7 +398,7 @@ function applyAction(state, action, now) {
       var who = author(action, p.anon === true);
       state.topics.push({
         id: trim(p.topicId), title: cut(p.title, LIMITS.topicTitle),
-        description: cut(p.description, LIMITS.topicDescription), status: "open",
+        description: cut(p.description, LIMITS.topicDescription), status: "open", pinned: false,
         createdBy: who, createdAt: now, updatedAt: now,
         messages: [], proposals: [], conclusions: [], conclusionVotes: {}
       });
@@ -405,6 +410,9 @@ function applyAction(state, action, now) {
       touch(state, topic, now); return;
     case "CHANGE_TOPIC_STATUS":
       topic.status = trim(p.status); touch(state, topic, now); return;
+    /* Épingler n'est pas une activité du débat : la date du sujet ne bouge pas. */
+    case "SET_TOPIC_PIN":
+      topic.pinned = p.pinned === true; state.updatedAt = now; return;
     case "CREATE_MESSAGE": {
       var mWho = author(action, p.anon === true);
       topic.messages.push({

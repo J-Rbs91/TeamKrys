@@ -840,6 +840,11 @@
       dispatch("CHANGE_TOPIC_STATUS", { topicId: topicId, status: status });
     },
 
+    /* Épingler vaut pour toute l'équipe (donnée partagée). Affectation, jamais bascule : rejouée, elle ne change rien. */
+    setTopicPin: function (topicId, pinned) {
+      dispatch("SET_TOPIC_PIN", { topicId: topicId, pinned: pinned === true });
+    },
+
     createMessage: function (topicId, text, quoteId, anon) {
       var messageId = Utils.uid();
       var actor = anon ? { id: "", name: Core.ANON_NAME } : App.user;
