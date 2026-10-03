@@ -307,7 +307,8 @@ publié.
 
 ## Vérifier que tout fonctionne
 
-- L'indicateur en haut à droite affiche **À jour**.
+- L'indicateur en haut à droite est un point vert plein (**À jour**). Réglages →
+  Système l'écrit en toutes lettres.
 - Un sujet créé sur un téléphone apparaît sur un autre en quelques secondes.
 - En mode avion, l'application s'ouvre quand même et les messages écrits restent
   en file : l'indicateur affiche **Hors ligne (n)** (n est le nombre d'actions en

@@ -152,8 +152,13 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       **En attente (1)**, puis **À jour**. Le lecteur d'écran annonce l'entrée en
       attente, hors ligne ou erreur et le retour à **À jour**, sans annoncer chaque
       va-et-vient entre Synchronisation et À jour : il n'y a qu'une région
-      d'annonce par écran. À 430 px et moins, le libellé court est affiché
-      (« Sync… », « Local ») ; le nom complet reste lu.
+      d'annonce par écran. **À jour** et **Synchronisation** se réduisent au point
+      (plein et vert, ou anneau qui pulse) ; les autres états gardent leurs mots, en
+      forme courte à 430 px et moins (« Local ») ; le nom complet reste lu.
+- [ ] Barre du haut stable : dans un sujet au titre long, laisser l'application ouverte
+      une minute. La pastille et le titre **ne bougent pas** à chaque sondage.
+- [ ] Réglages → Système : la pastille de la carte Synchronisation écrit l'état en
+      toutes lettres (**À jour**), la pastille du haut reste un point.
 
 ### 1 quinquies. Déconnexion et stockage
 
@@ -604,11 +609,11 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
       coupé) ; **En attente (n)** quand le réseau est là mais que l'envoi n'a pas
       abouti.
 - [ ] Rechargement hors ligne → la file **survit** (IndexedDB).
-- [ ] Retour du réseau → envoi automatique, indicateur **À jour**.
+- [ ] Retour du réseau → envoi automatique, indicateur **À jour** (point vert).
 - [ ] Jamais « À jour » tant qu'il reste des actions en attente.
 - [ ] Ouvrir l'application connectée (réseau lent, ou serveur coupé avec une action en
-      attente) : dès l'ouverture du cycle, l'indicateur dit **Synchronisation**
-      (« Sync… » à 430 px et moins), jamais **À jour** ; serveur muet avec une action
+      attente) : dès l'ouverture du cycle, l'indicateur est un anneau qui pulse
+      (**Synchronisation**), jamais le point plein de **À jour** ; serveur muet avec une action
       en attente : **En attente (1)**, jamais **À jour**.
 - [ ] Action de plus de 30 jours (écrire une action hors ligne, puis avancer
       l'horloge de l'appareil de plus de 30 jours, réseau revenu) : rien n'est envoyé,

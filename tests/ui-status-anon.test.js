@@ -321,6 +321,7 @@ function topic(id, messages, extra) {
 
 const IDLE = { code: "idle", label: "À jour", pending: 0 };
 const SYNCING = { code: "syncing", label: "Sync…", pending: 0 };
+const PENDING = { code: "pending", label: "En attente (1)", pending: 1 };
 
 /* ----------------------------------------------------------- Démarrage --- */
 
@@ -511,6 +512,29 @@ check("BL-008 une seule région role=status par écran, Réglages et Système co
   assert(t.app().querySelectorAll(".status-pill").length === 2, "Système doit garder ses deux pastilles");
   t.go(SETTINGS);
   assert(t.app().querySelectorAll(".status-pill").length === 1, "Réglages : une seule pastille, dans la barre de titre");
+});
+
+check("BL-008 seule la pastille principale (la région d'annonce) se réduit au point ; elle garde cette marque d'un rafraîchissement à l'autre", () => {
+  const t = boot();
+  t.go(SYSTEM);
+  const pills = t.app().querySelectorAll(".status-pill");
+  assert(pills.length === 2, "Système : deux pastilles attendues");
+  assert(pills[0].getAttribute("role") === "status" && pills[0].classes().has("status-main"), "la pastille principale porte status-main");
+  assert(!pills[1].classes().has("status-main") && pills[1].getAttribute("role") === null,
+    "la seconde pastille (carte Synchronisation) garde ses mots : elle ne porte pas status-main");
+  [SYNCING, PENDING, IDLE].forEach((s) => {
+    t.status(s);
+    const main = t.app().querySelectorAll(".status-pill")[0];
+    assert(main.classes().has("status-main") && main.classes().has("status-" + s.code),
+      "après un rafraîchissement en « " + s.code + " », la pastille principale perd sa marque : « " + main.className + " »");
+    assert(!t.app().querySelectorAll(".status-pill")[1].classes().has("status-main"), "la seconde pastille ne doit jamais gagner status-main");
+  });
+  /* Le point seul ne retire rien au lecteur d'écran : la région d'annonce existe toujours et dit l'état. */
+  const region = t.app().querySelector(".status-announce");
+  assert(region && region.textContent.indexOf("À jour") >= 0, "la région d'annonce doit dire « À jour » : « " + (region && region.textContent) + " »");
+  assert(pills[0].querySelector(".status-short").getAttribute("aria-hidden") === "true"
+    && pills[0].querySelector(".status-long").getAttribute("aria-hidden") === "true",
+  "les mots de la pastille principale restent masqués au lecteur d'écran (la région parle)");
 });
 
 check("BL-008 la région n'annonce que les transitions utiles, jamais les sondages À jour / Synchronisation", () => {

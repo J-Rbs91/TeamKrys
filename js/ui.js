@@ -773,8 +773,10 @@
      * role=status par écran : celle-ci n'a ni rôle ni annonce, et ses libellés se
      * lisent comme un texte ordinaire (aucun n'y est aria-hidden : à 430 px et
      * moins le long est masqué par app.css, le court est alors son seul texte). */
+    /* `status-main` : la pastille de la barre, qui porte la région d'annonce. À jour ou en synchronisation, elle se réduit au point (voir
+     * app.css) ; la seconde (carte Synchronisation de Système) garde ses mots, c'est son rôle. */
     var pill = el("div", {
-      class: "status-pill status-" + status.code, title: status.error || "",
+      class: "status-pill status-" + status.code + (secondary ? "" : " status-main"), title: status.error || "",
       role: secondary ? null : "status"
     }, [
       el("span", { class: "status-dot", "aria-hidden": "true" }),
@@ -791,7 +793,7 @@
     var said = statusAnnouncement(status);
     var nodes = document.querySelectorAll(".status-pill");
     for (var i = 0; i < nodes.length; i++) {
-      nodes[i].className = "status-pill status-" + status.code;
+      nodes[i].className = "status-pill status-" + status.code + (nodes[i].classList.contains("status-main") ? " status-main" : "");
       nodes[i].setAttribute("title", status.error || "");
       setStatusText(nodes[i].querySelector(".status-short"), status.label);
       setStatusText(nodes[i].querySelector(".status-long"), long);

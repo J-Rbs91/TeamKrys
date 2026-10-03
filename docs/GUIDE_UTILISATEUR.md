@@ -351,8 +351,8 @@ pas un ordre du jour formel, un compte rendu ou un historique de réunions.
 
 Les sujets y suivent l'ordre de l'accueil (prêts pour la réunion, en discussion,
 clôturés), les plus récemment actifs d'abord dans chaque groupe. En tête de la
-synthèse, alignée à droite, la pastille d'état (**À jour**, **Hors ligne (n)**,
-etc.) dit si l'appareil est synchronisé ; elle n'est pas imprimée, comme les barres
+synthèse, alignée à droite, la pastille d'état (le point vert quand tout est à jour,
+**Hors ligne (n)** ou **En attente (n)** sinon) dit si l'appareil est synchronisé ; elle n'est pas imprimée, comme les barres
 et les boutons.
 
 **Imprimer** ouvre l'impression du navigateur. Si le navigateur ne peut pas
@@ -414,10 +414,14 @@ BrainstO. reste utilisable lorsque le réseau disparaît :
 L'indicateur de synchronisation distingue six états : **À jour**,
 **Synchronisation**, **En attente (n)**, **Hors ligne (n)**, **Erreur (n)** et
 **Mode local**. Le nombre n est celui des actions qui attendent d'être envoyées
-(**Hors ligne** et **Erreur** l'omettent quand rien n'attend). Sur un écran étroit
-(430 px et moins), l'indicateur affiche une forme courte (« Sync… », « Local ») ;
-son nom complet reste toujours lu par le lecteur d'écran, qui n'annonce que les
-changements utiles.
+(**Hors ligne** et **Erreur** l'omettent quand rien n'attend).
+
+Dans la barre du haut, **À jour** et **Synchronisation** se réduisent à un point :
+vert et plein quand tout est à jour, un anneau qui pulse pendant une synchronisation.
+Les autres états gardent leurs mots, parce qu'ils demandent votre attention. Sur un
+écran étroit (430 px et moins), ils s'affichent en forme courte (« Local »). Le nom
+complet de l'état reste toujours lu par le lecteur d'écran, qui n'annonce que les
+changements utiles. Réglages → Système affiche l'état en toutes lettres.
 
 - **En attente (n)** : des actions n'ont pas encore été envoyées ;
 - **Hors ligne (n)** : le téléphone n'a plus de réseau ;
@@ -428,7 +432,7 @@ changements utiles.
 
 Au démarrage, dès que le cycle de synchronisation s'ouvre (la file d'actions est
 alors relue sur l'appareil, ce qui peut prendre quelques secondes), l'indicateur
-affiche **Synchronisation**, jamais **À jour**. Avec des actions en attente et un
+est un anneau qui pulse (**Synchronisation**), jamais le point plein de **À jour**. Avec des actions en attente et un
 serveur qui ne répond pas, il affiche **En attente (n)**, jamais **À jour**.
 
 Une action ne quitte la file que lorsque le serveur l'a prise en compte, ou l'a

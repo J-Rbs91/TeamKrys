@@ -208,16 +208,28 @@ check("BL-008 aucune règle ne cible la région d'annonce", function () {
     ".visually-hidden doit rester un masquage visuel (absolute + clip)");
 });
 
-check("BL-008 libellés court et long jamais visibles ensemble, seuils 431 px et 16rem", function () {
-  var shortEl = { tag: "span", classes: ["status-short"], ancestors: [{ tag: "div", classes: ["status-pill", "status-idle"] }, { tag: "div", classes: ["topbar-actions"] }, { tag: "header", classes: ["topbar"] }] };
-  var longEl = { tag: "span", classes: ["status-label", "status-long"], ancestors: shortEl.ancestors };
-  var widths = [150, 200, 255, 256, 257, 300, 320, 360, 390, 430, 430.5, 431, 480, 500, 600, 768, 1024, 1280];
+var PILL_WIDTHS = [150, 200, 255, 256, 257, 300, 320, 360, 390, 430, 430.5, 431, 480, 500, 600, 768, 1024, 1280];
+var PILL_STATES = ["idle", "syncing", "pending", "offline", "error", "local"];
+
+/* Une pastille dans la barre ; `main` : la pastille principale (classe `status-main`, qui porte la région d'annonce). */
+function pillLabels(state, main) {
+  var pill = ["status-pill", "status-" + state].concat(main ? ["status-main"] : []);
+  var ancestors = [{ tag: "div", classes: pill }, { tag: "div", classes: ["topbar-actions"] }, { tag: "header", classes: ["topbar"] }];
+  return {
+    short: { tag: "span", classes: ["status-short"], ancestors: ancestors },
+    long: { tag: "span", classes: ["status-label", "status-long"], ancestors: ancestors },
+    pill: { tag: "div", classes: pill, ancestors: ancestors.slice(1) }
+  };
+}
+
+function expectWords(state, main) {
+  var els = pillLabels(state, main);
   [16, 20.8, 32].forEach(function (rem) {
-    widths.forEach(function (width) {
+    PILL_WIDTHS.forEach(function (width) {
       var env = { width: width, rem: rem };
-      var shortShown = (declFor(shortEl, "display", env) || "inline") !== "none";
-      var longShown = (declFor(longEl, "display", env) || "inline") !== "none";
-      var where = " (largeur " + width + " px, rem " + rem + " px)";
+      var shortShown = (declFor(els.short, "display", env) || "inline") !== "none";
+      var longShown = (declFor(els.long, "display", env) || "inline") !== "none";
+      var where = " (état " + state + (main ? ", pastille principale" : ", seconde pastille") + ", largeur " + width + " px, rem " + rem + " px)";
       expect(!(shortShown && longShown), "libellé court et long visibles ensemble" + where);
       if (width <= 16 * rem) {
         expect(!shortShown && !longShown, "sous 16rem la gommette doit rester seule" + where);
@@ -228,8 +240,41 @@ check("BL-008 libellés court et long jamais visibles ensemble, seuils 431 px et
       }
     });
   });
+}
+
+check("BL-008 libellés court et long jamais visibles ensemble, seuils 431 px et 16rem", function () {
+  /* La seconde pastille (carte Synchronisation de Système) garde ses mots dans les six états ; la principale, dans
+     ceux qui demandent l'attention. */
+  PILL_STATES.forEach(function (state) { expectWords(state, false); });
+  ["pending", "offline", "error", "local"].forEach(function (state) { expectWords(state, true); });
   expect(/@media \(max-width: 16rem\)/.test(APP_TEXT), "la règle @media (max-width: 16rem) est absente de app.css");
   expect(/@media \(min-width: 431px\)/.test(APP_TEXT), "la règle @media (min-width: 431px) est absente de app.css");
+});
+
+check("BL-008 pastille principale : à jour et en synchronisation, le point seul à toute largeur, sans que la barre bouge", function () {
+  ["idle", "syncing"].forEach(function (state) {
+    var els = pillLabels(state, true);
+    [16, 20.8, 32].forEach(function (rem) {
+      PILL_WIDTHS.forEach(function (width) {
+        var env = { width: width, rem: rem };
+        var where = " (état " + state + ", largeur " + width + " px, rem " + rem + " px)";
+        expect(declFor(els.short, "display", env) === "none" && declFor(els.long, "display", env) === "none",
+          "les mots doivent disparaître de la pastille principale" + where);
+        expect(declFor(els.pill, "width", env) === "30px" && declFor(els.pill, "height", env) === "30px",
+          "le point seul garde une taille fixe de 30 px : « Synchronisation » revient à chaque sondage" + where);
+      });
+    });
+  });
+  /* Le point reste affiché, avec sa forme propre : un état ne se lit jamais à la seule couleur. */
+  ["idle", "syncing"].forEach(function (state) {
+    var dot = { tag: "span", classes: ["status-dot"], ancestors: [{ tag: "div", classes: ["status-pill", "status-main", "status-" + state] }] };
+    expect(declFor(dot, "display", BASE) !== "none", "le point de l'état " + state + " ne doit pas disparaître");
+  });
+  /* Les états qui demandent l'attention ne rétrécissent jamais en point (sauf sous 16rem, règle générale). */
+  ["pending", "offline", "error", "local"].forEach(function (state) {
+    var pill = { tag: "div", classes: ["status-pill", "status-main", "status-" + state], ancestors: [] };
+    expect(!declFor(pill, "width", BASE), "l'état " + state + " garde ses mots, donc sa largeur libre");
+  });
 });
 
 check("BL-008 une forme de gommette distincte par état (jamais la couleur seule)", function () {
