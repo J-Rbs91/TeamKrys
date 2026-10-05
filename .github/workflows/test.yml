@@ -40,6 +40,8 @@ jobs:
         run: node tests/product-integration.test.js
       - name: Contrats UXER
         run: node tests/uxer-integration.test.js
+      - name: Système de mouvement (jetons, repli, couche de continuité)
+        run: node tests/motion.test.js
       - name: Verrou, indicateur d'état, focus, formulaires, actions anciennes, produit, champs préremplis, brouillons, anonymat, nouveautés, envois idempotents
         run: |
           node tests/app-unlock.test.js

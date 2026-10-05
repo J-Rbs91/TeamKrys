@@ -851,6 +851,12 @@
    * serveur, ou aucune réponse reçue : liste vide), l'envoi reste exactement l'ancien. */
   function idempotent() { return Sync.supports("idempotent"); }
 
+  /* Annonce à la couche de mouvement l'élément qu'une action va faire apparaître (voir js/motion.js, Motion.expect).
+   * Facultative : absente, ou en échec, l'action se déroule exactement pareil. */
+  function expectMotion(key) {
+    try { if (root.Motion && typeof root.Motion.expect === "function") { root.Motion.expect(key); } } catch (e) { /* sans effet */ }
+  }
+
   function shownTopic(topicId) {
     return Store.view ? Core.findTopic(Store.view, topicId) : null;
   }
@@ -948,6 +954,9 @@
     createProposal: function (topicId, title, description) {
       var proposalId = Utils.uid();
       remember(proposalId);
+      /* À l'arrivée sur les propositions, la carte créée est désignée une fois (js/motion.js) : l'idée tirée du
+       * message vient d'atterrir là, pas dans un endroit inconnu. Sans la couche de mouvement, rien ne change. */
+      expectMotion("p:" + proposalId);
       dispatch("CREATE_PROPOSAL", {
         topicId: topicId, proposalId: proposalId, title: title, description: description
       }).then(function (result) {
@@ -985,6 +994,7 @@
     addConclusion: function (topicId, text) {
       var conclusionId = Utils.uid();
       remember(conclusionId);
+      expectMotion("c:" + conclusionId);
       dispatch("ADD_CONCLUSION", { topicId: topicId, conclusionId: conclusionId, text: text });
     },
 

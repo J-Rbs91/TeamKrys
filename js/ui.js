@@ -709,7 +709,12 @@
     var node = el("div", { class: "toast" + (kind === "error" ? " error" : ""), text: text });
     toastRoot.appendChild(node);
     setTimeout(function () {
-      if (node.parentNode) { node.parentNode.removeChild(node); }
+      if (!node.parentNode) { return; }
+      /* Il repart par où il est arrivé (css/motion.css, « Toasts »), puis quitte l'arbre. Mouvement réduit : tout de
+       * suite, la feuille ne joue rien et le délai ne ferait que le retenir. */
+      if (motionReduced()) { node.parentNode.removeChild(node); return; }
+      node.classList.add("is-leaving");
+      setTimeout(function () { if (node.parentNode) { node.parentNode.removeChild(node); } }, 200);
     }, kind === "error" ? 5200 : 2800);
   };
 
@@ -1284,7 +1289,7 @@
     }
 
     return el("button", {
-      class: "card", type: "button", "data-key": "topic-" + topic.id,
+      class: "card", type: "button", "data-key": "topic-" + topic.id, "data-motion-key": "t:" + topic.id,
       onclick: function () { App.go("#/topic/" + topic.id); }
     }, [
       el("div", { class: "row", style: { gap: "10px", alignItems: "flex-start" } }, [
@@ -2123,7 +2128,7 @@
       ])
     ]);
 
-    return el("article", { class: "card card-static stack proposal-card" }, [
+    return el("article", { class: "card card-static stack proposal-card", "data-motion-key": "p:" + proposal.id }, [
       el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
         el("div", { class: "card-title", style: { flex: "1" }, text: proposal.title }),
         toneBadge(Core.PROPOSAL_STATUS_LABELS[proposal.status], PROPOSAL_TONES[proposal.status])
@@ -2214,7 +2219,7 @@
       var isLead = scores.best > 0 && count === scores.best;
       var mine = App.ownsItem(conclusion.id, conclusion.authorId);
       var chosen = myVote === conclusion.id;
-      list.appendChild(reveal(el("article", { class: "card card-static stack" + (isLead ? " is-lead" : "") }, [
+      list.appendChild(reveal(el("article", { class: "card card-static stack" + (isLead ? " is-lead" : ""), "data-motion-key": "c:" + conclusion.id }, [
         el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
           el("div", { class: "pre-wrap", style: { flex: "1" }, text: conclusion.text }),
           isLead ? el("span", { class: "badge badge-ink lead" }, [icon("star", 13), el("span", { text: "En tête" })]) : null
@@ -2441,6 +2446,16 @@
     var feed = pandoreFeed;
     if (feed.status === "loading" && !feed.points.length) {
       list.appendChild(el("p", { class: "hint", text: "Chargement de la synthèse…" }));
+      /* Deux cartes à la forme exacte des cartes de synthèse : à l'arrivée du contenu, rien ne saute. Elles
+       * chatoient lentement tant que dure le chargement, et disparaissent avec lui (css/motion.css). Le texte
+       * ci-dessus reste le seul à être lu. */
+      [0, 1].forEach(function () {
+        list.appendChild(el("div", { class: "card card-static stack skeleton-card", "aria-hidden": "true" }, [
+          el("span", { class: "skeleton-line skeleton-title" }),
+          el("span", { class: "skeleton-line" }),
+          el("span", { class: "skeleton-line skeleton-short" })
+        ]));
+      });
     } else if (feed.status === "error" && !feed.points.length) {
       list.appendChild(el("div", { class: "note" }, [
         icon("warning", 14),
@@ -3333,7 +3348,12 @@
           class: "tabbar-item" + (here ? " is-current" : ""), type: "button", "data-key": "tab-" + tab.name,
           "aria-current": here ? "page" : null,
           onclick: function () { if (!here) { App.go(tab.hash); } }
-        }, [icon(tab.icon, 22), el("span", { class: "tabbar-label", text: tab.label })]);
+        }, [
+          /* Le trait de l'onglet courant est un élément, pas un ::before : View Transitions le fait glisser d'un
+           * onglet à l'autre (css/uxer.css). Décoratif : aria-current porte l'information. */
+          here ? el("span", { class: "tabbar-mark", "aria-hidden": "true" }) : null,
+          icon(tab.icon, 22), el("span", { class: "tabbar-label", text: tab.label })
+        ]);
       }))
     ]);
   }

@@ -3,7 +3,7 @@
  * Exécution (aucune dépendance, aucun package.json) :
  *     node tests/ui-focus.test.js
  *
- * Charge js/config.js, js/utils.js, js/state.js, js/product-view.js et js/ui.js
+ * Charge js/config.js, js/utils.js, js/state.js, js/product-view.js, js/ui.js et js/motion.js
  * dans un contexte vm, sur un DOM minimal écrit ici (pas de jsdom), même modèle
  * que tests/ui-status-anon.test.js. Store, Sync et App sont des doublures ; les
  * actions modifient les données puis rendent, comme le fait le vrai dispatch.
@@ -30,7 +30,11 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
-const SOURCES = ["js/config.js", "js/utils.js", "js/state.js", "js/product-view.js", "js/ui.js"].map((file) => ({
+/* js/motion.js enveloppe UI.render comme en production : chaque contrôle de focus ci-dessous vérifie AUSSI que la
+ * couche de mouvement ne déplace jamais le focus. Ce DOM n'a pas `Element.prototype.animate` : la couche y tourne
+ * sans rien animer, ce qui laisse visibles les deux seules choses qu'elle fait sans mouvement (calque maintenu,
+ * message désigné). */
+const SOURCES = ["js/config.js", "js/utils.js", "js/state.js", "js/product-view.js", "js/ui.js", "js/motion.js"].map((file) => ({
   file, code: fs.readFileSync(path.join(ROOT, file), "utf8"),
 }));
 
@@ -129,6 +133,7 @@ class FakeNode {
   get firstChild() { return this.childNodes[0] || null; }
   get lastChild() { return this.childNodes[this.childNodes.length - 1] || null; }
   get children() { return this.childNodes.filter((n) => n.nodeType === 1); }
+  get firstElementChild() { return this.children[0] || null; }
   get parentElement() { return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null; }
   get nextSibling() {
     const list = this.parentNode ? this.parentNode.childNodes : [];
@@ -1331,6 +1336,42 @@ check("BL-011 sans `inert` (navigateurs anciens) : fond en aria-hidden pendant l
   t.escape();
   assert(t.app().getAttribute("aria-hidden") === null, "aria-hidden laissé sur #app après la fermeture");
   assert(t.active() === bubble(t, "m1"), "focus non rendu au déclencheur : " + describe(t.active()));
+});
+
+/* ==================================================== Couche de mouvement ==== */
+
+check("mouvement : un rendu de données pendant qu'une feuille est ouverte ne rejoue pas son entrée", async () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  bubble(t, "m1").click();
+  await tick();
+  const first = t.overlay().querySelector(".overlay");
+  assert(first && !first.classList.contains("is-settled"), "à l'ouverture, la feuille doit jouer son entrée");
+  t.receive("Message reçu, feuille ouverte");
+  await tick();
+  const again = t.overlay().querySelector(".overlay");
+  assert(again && again !== first, "le rendu doit avoir reconstruit le calque");
+  assert(again.classList.contains("is-settled"), "le calque reconstruit doit être marqué is-settled (sinon il remonte sous les yeux)");
+  t.escape();
+  await tick();
+  bubble(t, "m2").click();
+  await tick();
+  assert(!t.overlay().querySelector(".overlay").classList.contains("is-settled"), "une nouvelle ouverture rejoue son entrée");
+});
+
+check("mouvement : la bulle dont la feuille est ouverte est désignée, elle seule, et le reste tant que la feuille l'est", async () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  bubble(t, "m2").click();
+  await tick();
+  assert(bubble(t, "m2").classList.contains("is-targeted"), "la bulle visée doit porter is-targeted");
+  assert(t.app().querySelectorAll(".bubble.is-targeted").length === 1, "une seule bulle désignée");
+  t.receive("Message reçu, feuille ouverte");
+  await tick();
+  assert(bubble(t, "m2").classList.contains("is-targeted"), "la désignation survit au rendu de données");
+  t.escape();
+  await tick();
+  assert(!t.app().querySelector(".bubble.is-targeted"), "feuille fermée : plus aucune bulle désignée");
 });
 
 /* ======================================================= Demande WP-10 ==== */

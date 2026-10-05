@@ -245,6 +245,35 @@ agrandie.
 - [ ] Une arrivée de nouveaux messages pendant ou juste après la bascule ne rejoue pas
       l'animation et ne fait pas perdre le texte en cours de saisie.
 
+### 1 sexies quater. Mouvement de continuité
+
+À faire sur téléphone (iPhone **et** Android), clair **et** sombre. La carte complète
+« action → mouvement » est dans [`MOUVEMENT.md`](MOUVEMENT.md).
+
+- [ ] Appui long sur un message : la feuille **monte du bord**, opaque (le fil ne se
+      lit pas au travers) ; la bulle visée reste entourée tant que la feuille est
+      ouverte.
+- [ ] Feuille ouverte, un collègue écrit ou vote : la feuille **ne remonte pas** une
+      seconde fois.
+- [ ] Fermer une feuille (bouton, fond, geste retour) : elle **redescend** au lieu de
+      disparaître.
+- [ ] Envoyer un message en bas du fil : le fil remonte d'un bloc, sans saut ; le
+      message arrive avec lui.
+- [ ] Réagir : la pastille grandit jusqu'à sa taille, sans rebond.
+- [ ] « Créer une proposition » depuis un message, puis « Créer » : on arrive sur les
+      propositions et la nouvelle carte est entourée une fois, puis plus rien.
+- [ ] Voter, changer de vote : la barre glisse d'une répartition à l'autre.
+- [ ] Supprimer un consensus : la carte s'efface à sa place, les autres remontent.
+- [ ] Changer d'onglet : la barre d'onglets ne bouge pas, seul son trait glisse ; le
+      contenu change en fondu, sans glisser vers la gauche.
+- [ ] Discussion → Propositions → Consensus : le trait du parcours glisse d'une étape
+      à l'autre ; la barre du haut reste en place, jamais deux titres superposés.
+- [ ] Les boutons s'enfoncent légèrement à l'appui ; les cartes de liste, non.
+- [ ] Téléphone d'entrée de gamme : aucun de ces mouvements ne saccade, la frappe
+      reste fluide.
+- [ ] Mouvement réduit activé : rien ne glisse ni ne s'enfonce ; la bulle visée et le
+      contour d'une carte créée restent visibles, immobiles.
+
 ### 1 septies. Lecteur d'écran : champs, erreurs, titres, mouvement réduit
 
 À faire avec VoiceOver ou TalkBack : ces contrôles ne se voient pas à l'écran.

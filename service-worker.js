@@ -8,7 +8,7 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.18.1";
+var CACHE_VERSION = "brainsto-v1.19.0";
 /* Synthèse automatique de Pandore : publiée par l'IA dans le dépôt, elle change SANS nouvelle version de
  * l'application. Réseau d'abord ; la dernière copie reçue sert hors ligne, dans un cache à part qui survit aux mises
  * à jour (il ne contient que ce fichier, public). L'ancien cache « brainsto-idees-v1 » est purgé comme les autres. */
@@ -20,6 +20,7 @@ var SHELL_CRITICAL = [
   "css/app.css",
   "css/product.css",
   "css/uxer.css",
+  "css/motion.css",
   "js/config.js",
   "js/utils.js",
   "js/state.js",
@@ -29,6 +30,7 @@ var SHELL_CRITICAL = [
   "js/product-view.js",
   "js/ui.js",
   "js/product-ui.js",
+  "js/motion.js",
   "js/uxer-ui.js",
   "js/app.js"
 ];

@@ -44,7 +44,13 @@
     return !!(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
+  /* Les quatre onglets sont des pairs à l'écran, même si Sujets reste la racine de la pile (js/app.js, PARENT) : passer
+   * de Sujets à Réunion ne « pousse » pas un écran plus profond, cela change de rubrique. Le mouvement suit ce que l'on
+   * voit — la barre d'onglets —, pas la profondeur d'historique. */
+  var TAB_PLACES = ["route:topics:", "route:meeting:", "route:pandore:", "route:settings:"];
+
   function transitionDirection(previousDepth, nextDepth, previousPlace, nextPlace) {
+    if (TAB_PLACES.indexOf(previousPlace) >= 0 && TAB_PLACES.indexOf(nextPlace) >= 0) { return "lateral"; }
     if (nextDepth > previousDepth) { return "forward"; }
     if (nextDepth < previousDepth) { return "back"; }
     if (previousPlace !== nextPlace) { return "lateral"; }
@@ -85,6 +91,13 @@
     button.appendChild(root.Utils.icon(iconName, 16));
     button.appendChild(make("span", "ux-flow-label", label));
     if (count > 0) { button.appendChild(make("span", "ux-flow-count", String(count))); }
+    /* Le trait de l'étape courante : un élément à part, pour que View Transitions le fasse glisser d'une étape à
+     * l'autre (css/uxer.css). Décoratif, l'étape est déjà annoncée par aria-current. */
+    if (current) {
+      var mark = make("span", "ux-flow-mark");
+      mark.setAttribute("aria-hidden", "true");
+      button.appendChild(mark);
+    }
     return button;
   }
 

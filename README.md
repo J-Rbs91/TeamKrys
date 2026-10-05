@@ -118,7 +118,8 @@ n'est jamais stocké (voir « Verrou » ci-dessous).
 
 ```
 index.html                 coquille de l'application
-css/app.css                thème unique, clair et sombre automatiques
+css/app.css                thème unique, clair et sombre automatiques ; jetons de mouvement
+css/motion.css             continuité : appui, calques, apparitions, réponses, repère
 js/config.js               constantes (version, rythmes, clés de stockage)
 js/utils.js                DOM sûr (texte brut), dates, SHA-256, stockage
 js/state.js                modèle de données, validation et réduction des actions
@@ -126,11 +127,13 @@ js/database.js             IndexedDB : file d'actions + dernier état connu
 js/api.js                  appels au backend (GET révision / état, POST action)
 js/sync.js                 synchronisation optimiste, file, indicateur d'état
 js/ui.js                   rendu des écrans, feuilles et fenêtres
+js/motion.js               continuité : rejoue la différence entre deux rendus (FLIP)
 js/app.js                  démarrage, navigation, verrou, actions utilisateur
 service-worker.js          hors ligne : précache de la coquille, critique et optionnel
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/IDENTITE_VISUELLE.md  le noyau d'identité : pourquoi le produit est ainsi
+docs/MOUVEMENT.md          ce qui bouge, quand, et pourquoi ; ce qui ne bouge pas
 docs/                      installation, guide utilisateur, checklist de test
 docs/captures/             captures du README (données fictives)
 tools/check-contrast.py    relit les jetons du thème et échoue sous le seuil
@@ -149,6 +152,8 @@ tests/session.test.js      verrou par inactivité : quand l'ouverture exige le c
 tests/onboarding.test.js   présentation initiale : qui la voit, qui y échappe
 tests/navigation.test.js   contrat du geste retour : profondeurs déclarées, point
                            de passage unique
+tests/motion.test.js       contrat du mouvement : jetons, repli, aucune boucle ni
+                           dépassement, couche de continuité sans effet sur le focus
 ```
 
 ---
@@ -353,7 +358,9 @@ quand l'utilisateur vit la centième.
 |---|---|---|
 | Retour à l'appui, survol | 100 ms | plusieurs fois par minute |
 | Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
-| Feuille, fenêtre | 240 ms | quotidien |
+| Feuille, fenêtre | 240 ms à l'ouverture, plus court à la fermeture | quotidien |
+| Message envoyé ou reçu, vote, réaction, carte ajoutée ou retirée | 160 à 220 ms, **depuis l'ancien état** | plusieurs fois par jour |
+| Changement d'écran | 240 ms ; barres immobiles, seuls le contenu et le trait de position bougent | plusieurs fois par jour |
 | **Séquence d'accueil** | 1060 ms, en quatre temps | une fois par ouverture |
 | Arrivée de la présentation initiale | 240 ms le voile, 220 ms la carte, chevauchés | une fois par appareil |
 | Changement de panneau de la présentation | 100 ms, **opacité seule** | quatre fois en trente secondes |
@@ -415,7 +422,20 @@ Et trois points d'implémentation :
 
 Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
 aurait été une dépendance distante de plus, contre la règle du dépôt, pour des
-transitions de propriétés que le navigateur sait déjà interpoler.
+transitions de propriétés que le navigateur sait déjà interpoler. Seule
+exception, sans dépendance : la couche de continuité (`js/motion.js`) pilote
+quelques animations par l'interface native du navigateur (`Element.animate`),
+parce que leurs valeurs de départ ne sont connues qu'à l'exécution.
+
+#### La continuité
+
+Le rendu reconstruit l'écran et le calque à chaque appel : sans précaution, une
+feuille ouverte **rejouait son entrée** à chaque donnée reçue, et tout changement
+d'état sautait d'une image à l'autre. `js/motion.js` relève l'avant, laisse le
+rendu se faire, puis rejoue la différence sur les nœuds neufs (FLIP pour ce qui
+se déplace, une classe « depuis l'ancien état » pour le reste). Les niveaux, les
+jetons, la carte complète « action → mouvement » et ce qui n'est volontairement
+pas animé : [`docs/MOUVEMENT.md`](docs/MOUVEMENT.md).
 
 #### La présentation initiale
 
@@ -964,6 +984,7 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion
+- [`docs/MOUVEMENT.md`](docs/MOUVEMENT.md) — mouvement : niveaux, jetons, carte « action → mouvement », ce qui ne bouge pas
 - [`docs/AUDIT_QA.md`](docs/AUDIT_QA.md) : rapport d'audit final du run QA (ce qui a été corrigé, conformité à la spécification, ce qui reste, ce qui n'a pas été observé)
 
 ---
