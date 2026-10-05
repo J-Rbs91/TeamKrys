@@ -118,6 +118,10 @@ bornées :
 | Supprimer un consensus | une carte disparaît | elle s'efface à sa place pendant que les autres reprennent l'espace |
 | Un sujet change de statut (accueil ouvert) | la carte change de groupe | elle glisse vers son nouveau groupe, les autres se décalent ; « Nouveau » apparaît en douceur |
 | Citer (glisser ou « Citer ») | l'aperçu se pose au-dessus du champ | il monte de 4 px ; le fil remonte d'autant |
+| « Explorer cette idée » (feuille ou lien « N réponses ») | on passe de la discussion à l'exploration du message | la feuille redescend ; la **bulle source** se déplace de sa place dans le fil jusqu'en tête de l'exploration (élément partagé, 240 ms, `--ease-move`) pendant que le reste fond ; puis le **trait** qui la relie aux réponses se trace une fois, de haut en bas (`scaleY`, 160 ms, après 120 ms) ; enfin les réponses montent de 4 px en fondu (160 ms, après 180 ms) |
+| Revenir de l'exploration | on retrouve la discussion | la bulle source **rejoint sa place** dans le fil, centrée dans la vue ; rien d'autre ne bouge |
+| Publier une réponse d'exploration | un message s'ajoute sous le trait | comme « Envoyer un message » ; le trait ne se retrace pas |
+| Le nombre de réponses change (« 3 réponses ») | le libellé du lien | **rien** : un compteur ne s'anime pas |
 | Ouvrir « Statut et actions » | le volet se déplie | son contenu se pose (4 px, 160 ms) |
 | Toast | une confirmation apparaît puis part | il descend du haut, et y remonte en partant |
 | Synthèse de Pandore en chargement | le contenu n'est pas là | deux cartes squelettes, à la forme exacte des vraies, chatoient lentement ; à l'arrivée, les cartes prennent leur place |
@@ -143,6 +147,14 @@ et ne font que fondre leur contenu. Seul le contenu remplacé se déplace.
   arrive 40 ms après et se pose sur toute la durée. Jamais de long croisement à
   mi-opacité.
 
+**Explorer est un cas à part.** L'exploration est plus profonde que la
+discussion, mais ce n'est pas un autre lieu : c'est la même idée, regardée de
+plus près. D'où un sens dédié (`branch-in` / `branch-out`) : pas de glissement
+latéral, un fondu court du reste de l'écran, et la bulle source qui **voyage**
+entre sa place dans le fil et la tête de l'exploration. C'est elle qui dit d'où
+l'on vient et où l'on revient. Sans View Transitions, l'écran entrant monte de
+4 px en fondu : aucune bulle ne voyage, rien ne manque pour comprendre.
+
 Mécanique : View Transitions, en amélioration progressive ([`../js/uxer-ui.js`](../js/uxer-ui.js),
 [`../css/uxer.css`](../css/uxer.css)). Les noms ne sont posés que pendant une
 transition. Sans View Transitions, l'écran entrant garde son repli : il glisse
@@ -162,9 +174,11 @@ de 12 px dans le bon sens.
 | Message → proposition : un marqueur sur le message d'origine | le modèle de données ne relie pas une proposition à son message, et ce travail ne touche pas au modèle. Le texte pré-rempli et la carte désignée à l'arrivée portent la continuité |
 
 Les éléments d'une messagerie d'idéation générique ne s'appliquent pas ici, faute
-d'existence dans le produit : branches, canvas, glisser-déposer, curseurs
-collaboratifs, réponse d'IA en flux. Le jour où l'un d'eux existe, il reçoit sa
-ligne dans la carte de la section 4, avec les mêmes valeurs.
+d'existence dans le produit : canvas, glisser-déposer, curseurs collaboratifs,
+réponse d'IA en flux. Le jour où l'un d'eux existe, il reçoit sa ligne dans la
+carte de la section 4, avec les mêmes valeurs. Les branches existent depuis la
+1.20.0, sous le nom **Explorer** : elles ont reçu leurs lignes (section 4) et leur
+sens de transition (section 5).
 
 ## 7. Mouvement réduit
 
@@ -231,6 +245,16 @@ sombre. Ces captures ont fait corriger trois défauts :
 été éprouvée par une mutation qui la viole). Et `tests/ui-focus.test.js`, qui
 charge désormais la couche de mouvement : ses 42 contrôles de focus passent donc
 à travers elle.
+
+**Explorer (1.20.0)**, même méthode : un scénario de 21 contrôles joué en
+mouvement normal, en mouvement réduit et en sombre (feuille et ordre des actions,
+ouverture sans écriture, sens de transition, réponses rattachées, brouillon
+propre, compteur « N réponses » sans bouton imbriqué, citation dans
+l'exploration, proposition depuis une réponse, adresse directe et adresses
+invalides, ouverture au clavier, retour d'en-tête et retour du système). L'élément
+partagé a été regardé image par image à l'aller (la bulle monte en tête) et au
+retour (elle revient à sa place, centrée). Le trait est mesuré : animé une seule
+fois à l'arrivée, pas retracé à la réponse suivante, absent en mouvement réduit.
 
 **Pas vérifié** : Safari iOS et WebKit en général, Firefox, un téléphone réel
 d'entrée de gamme, le ressenti au doigt sur un vrai écran. Ces points sont dans

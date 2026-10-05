@@ -41,7 +41,7 @@ du navigateur ouverte : **zéro erreur console** attendue.
 
 ## 0 bis. Geste retour — sur un téléphone, en comptant les appuis
 
-Ces six-là ne se vérifient pas autrement : le défaut qu'elles attrapent ne
+Ces sept-là ne se vérifient pas autrement : le défaut qu'elles attrapent ne
 produit aucune erreur, ne casse aucun test, et ne se voit pas sur un ordinateur.
 Le raisonnement est dans [`NAVIGATION.md`](NAVIGATION.md).
 
@@ -57,6 +57,10 @@ Le raisonnement est dans [`NAVIGATION.md`](NAVIGATION.md).
       du système : **même écran**.
 - [ ] Ouvrir un lien partagé vers un sujet, puis appuyer sur retour : on **monte
       dans l'arbre**, on ne sort pas de l'application au premier appui.
+- [ ] Discussion → explorer un message → retour → explorer un autre message →
+      retour : chaque retour ramène à la **discussion**, un dernier retour à
+      Sujets. Bouton « Discussion » de l'en-tête et retour du système : **même
+      écran**.
 
 ## 1. Premier lancement
 
@@ -480,6 +484,40 @@ agrandie.
       le … », chacun avec la date et l'heure.
 - [ ] Bouton **Retour** visible et fonctionnel sur chaque écran secondaire.
 
+### 4 bis. Explorer une idée
+
+Le modèle est dans [`MODELE_DONNEES.md`](MODELE_DONNEES.md), « Explorer un message ».
+Le parcours au navigateur est automatisé en local (voir [`MOUVEMENT.md`](MOUVEMENT.md),
+section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
+
+- [ ] Feuille d'un message de la discussion : **Citer**, **Explorer cette idée**,
+      **Créer une proposition**, dans cet ordre. Sur une réponse d'exploration :
+      pas d'« Explorer cette idée ».
+- [ ] Ouvrir une exploration, ne rien écrire, revenir : **rien** n'apparaît dans la
+      discussion, sur ce téléphone comme sur un autre.
+- [ ] Première réponse : sous le message source, « 1 réponse » apparaît, sur un
+      **autre téléphone** aussi après synchronisation ; la réponse n'est **pas**
+      dans le fil principal.
+- [ ] Brouillon commencé dans l'exploration, brouillon différent dans la
+      discussion : chacun revient à sa place après un rechargement ; la
+      déconnexion efface les deux.
+- [ ] Citer dans l'exploration : l'aperçu apparaît au-dessus du champ de
+      l'exploration, jamais dans celui de la discussion.
+- [ ] Réponse **anonyme** dans l'exploration : « Anonyme », à gauche, y compris
+      sur son propre téléphone ; rien dans les données ne la relie à son auteur.
+- [ ] **Hors connexion** : écrire une réponse d'exploration → elle s'affiche tout de
+      suite, part au retour du réseau, une seule fois.
+- [ ] **Serveur pas encore mis à jour** (backend antérieur à 1.3.0) : « Explorer
+      cette idée » grisé avec « le serveur de l'équipe doit être mis à jour », lien
+      et champ de l'exploration indisponibles, aucune action envoyée.
+- [ ] Lecteur d'écran (VoiceOver, TalkBack) : le lien se lit « 2 réponses :
+      explorer cette idée » ; l'exploration annonce « Message d'origine » ; le
+      champ indisponible lit sa raison.
+- [ ] Mouvement réduit activé : aucune bulle ne voyage, le trait ne se trace pas,
+      tout est en place immédiatement.
+- [ ] iPhone (Safari) et Android (Chrome) : la bulle source voyage à l'aller et au
+      retour ; sans View Transitions, l'écran apparaît en fondu, sans saut.
+
 ## 5. Propositions
 
 - [ ] Création (titre obligatoire, description facultative).
@@ -724,6 +762,10 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 - [ ] Rendre un message anonyme **après** une sauvegarde, puis restaurer cette
       sauvegarde : le message reste « Anonyme » sur tous les appareils (nom et
       identifiant de l'auteur absents des données).
+- [ ] Première écriture après le déploiement du backend 1.3.0 (Explorer) : une copie
+      `brainsto-data.json.avant-brainsto-backend-1.3.0.<date>` est déposée. C'est la
+      copie à restaurer si l'on revenait à un `Code.gs` antérieur, qui effacerait le
+      rattachement des réponses d'exploration à sa première écriture.
 - [ ] Première écriture après le déploiement du backend 1.1.0 : une copie
       `brainsto-data.json.avant-brainsto-backend-1.1.0.<date>` est déposée dans le
       dossier du fichier de données, une seule ; l'écriture suivante n'en dépose pas

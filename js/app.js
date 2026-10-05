@@ -193,6 +193,8 @@
     }).then(function (result) {
       Utils.storage.set(CONFIG.KEYS.apiUrl, clean);
       Utils.storage.set(CONFIG.KEYS.localMode, false);
+      /* Nouveau serveur : ce qu'on savait de l'ancien ne vaut plus (voir App.branchesAvailable). */
+      Utils.storage.remove(CONFIG.KEYS.branchesCapability);
       if (result.verifier) { Utils.storage.set(CONFIG.KEYS.lockVerifier, result.verifier); }
       else { Utils.storage.remove(CONFIG.KEYS.lockVerifier); }
       lockVerifier = result.verifier;
@@ -291,6 +293,7 @@
     Utils.storage.remove(CONFIG.KEYS.localMode);
     Utils.storage.remove(CONFIG.KEYS.user);
     Utils.storage.remove(CONFIG.KEYS.ownItems);
+    Utils.storage.remove(CONFIG.KEYS.branchesCapability);
     /* §5 et §11 : le marqueur des nouveautés (js/product-ui.js, SEEN_KEY) porte un condensat de mon identifiant (`by`) et des
      * comptes « sans moi » (`o`) : de quoi désigner l'auteur d'un message anonyme. Preuve locale DÉRIVÉE, effacée avec l'autre.
      * ⚠️ Même chaîne que SEEN_KEY (tests/ui-review.test.js le vérifie) ; à passer dans CONFIG.KEYS avec js/config.js. Le
@@ -611,6 +614,8 @@
     if (parts[0] === "topic" && parts[1]) {
       if (parts[2] === "proposals") { return { raw: raw, name: "proposals", topicId: parts[1] }; }
       if (parts[2] === "conclusion") { return { raw: raw, name: "conclusion", topicId: parts[1] }; }
+      /* Exploration d'un message : un sous-fil du sujet, jamais un objet. Ouvrir l'adresse n'écrit rien. */
+      if (parts[2] === "branch" && parts[3]) { return { raw: raw, name: "branch", topicId: parts[1], messageId: parts[3] }; }
       return { raw: raw, name: "topic", topicId: parts[1] };
     }
     return { raw: "#/", name: "topics", topicId: null };
@@ -675,7 +680,8 @@
     system: "settings",
     topic: "topics",
     proposals: "topic",
-    conclusion: "topic"
+    conclusion: "topic",
+    branch: "topic"
   };
 
   function profondeurEcran(name) {
@@ -851,6 +857,35 @@
    * serveur, ou aucune réponse reçue : liste vide), l'envoi reste exactement l'ancien. */
   function idempotent() { return Sync.supports("idempotent"); }
 
+  /* Explorer un message (un message de branche, rattaché par `branchRootId`) n'est possible que si le serveur de
+   * l'équipe sait le ranger : FEATURES "branches". ⚠️ Un serveur antérieur ACCEPTERAIT le message et perdrait le
+   * rattachement en silence — il atterrirait dans le fil principal. Trois cas :
+   *   - mode local : le noyau de l'appareil range lui-même ;
+   *   - le serveur a répondu (« since » annoncé, même témoin que l'épingle) : sa réponse fait foi, et elle est
+   *     retenue sur l'appareil ;
+   *   - aucune réponse encore (ouverture hors ligne) : la dernière réponse retenue, sinon non.
+   * Ce que voit la personne quand c'est non (la raison, jamais un masquage) : js/ui.js, branchesUnavailableReason. */
+  App.branchesAvailable = function () {
+    if (Sync.connection && Sync.connection.localMode) { return true; }
+    var supports = typeof Sync.supports === "function" ? Sync.supports : function () { return false; };
+    if (supports("since")) {
+      var announced = supports("branches") === true;
+      if (Utils.storage.get(CONFIG.KEYS.branchesCapability, null) !== announced) {
+        Utils.storage.set(CONFIG.KEYS.branchesCapability, announced);
+      }
+      return announced;
+    }
+    return Utils.storage.get(CONFIG.KEYS.branchesCapability, false) === true;
+  };
+
+  /* Vrai quand la réponse vient d'un serveur qui a répondu SANS la capacité (il faut le mettre à jour), faux quand on
+   * ne sait pas encore (ouverture hors ligne) : les deux ne demandent pas la même chose à la personne. */
+  App.branchesOutdatedServer = function () {
+    if (Sync.connection && Sync.connection.localMode) { return false; }
+    var supports = typeof Sync.supports === "function" ? Sync.supports : function () { return false; };
+    return supports("since") === true && supports("branches") !== true;
+  };
+
   /* Annonce à la couche de mouvement l'élément qu'une action va faire apparaître (voir js/motion.js, Motion.expect).
    * Facultative : absente, ou en échec, l'action se déroule exactement pareil. */
   function expectMotion(key) {
@@ -907,14 +942,23 @@
       dispatch("SET_TOPIC_PIN", { topicId: topicId, pinned: pinned === true });
     },
 
-    createMessage: function (topicId, text, quoteId, anon) {
+    /* `branchRootId` (facultatif) : le message part dans l'exploration de ce message source au lieu du fil principal.
+     * Absent, la charge utile est EXACTEMENT celle d'avant : un serveur antérieur ne voit aucune différence. */
+    createMessage: function (topicId, text, quoteId, anon, branchRootId) {
+      var root = Core.trim(branchRootId);
+      /* Garde en double de l'interface : un message d'exploration n'entre JAMAIS dans la file si le serveur n'est pas
+       * réputé savoir le ranger (voir App.branchesAvailable). Le texte reste dans le champ. */
+      if (root && !App.branchesAvailable()) {
+        UI.toast("Message non envoyé : explorer une idée demande la mise à jour du serveur de l'équipe.", "error");
+        return Promise.resolve({ ok: false, error: "branches" });
+      }
       var messageId = Utils.uid();
       var actor = anon ? { id: "", name: Core.ANON_NAME } : App.user;
       remember(messageId);
+      var payload = { topicId: topicId, messageId: messageId, text: text, quoteId: quoteId || null, anon: !!anon };
+      if (root) { payload.branchRootId = root; }
       /* ⚠️ Le résultat est rendu à l'appelant (BL-059) : un refus local de validation ne doit pas vider le composeur. */
-      var sent = dispatch("CREATE_MESSAGE", {
-        topicId: topicId, messageId: messageId, text: text, quoteId: quoteId || null, anon: !!anon
-      }, actor);
+      var sent = dispatch("CREATE_MESSAGE", payload, actor);
       UI.set({ quote: null });
       return sent;
     },

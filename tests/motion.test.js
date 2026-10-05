@@ -186,7 +186,7 @@ check("l'enfoncement des commandes est réservé au mouvement permis", () => {
 });
 
 check("les repères de position glissent par View Transitions, et seulement pendant une transition", () => {
-  ["ux-topbar", "ux-tabbar", "ux-flow", "ux-tab-mark", "ux-flow-mark", "ux-title", "ux-back"].forEach((name) => {
+  ["ux-topbar", "ux-tabbar", "ux-flow", "ux-tab-mark", "ux-flow-mark", "ux-title", "ux-back", "ux-branch-source"].forEach((name) => {
     const rule = UXER_RULES.find((r) => r.decls["view-transition-name"] === name);
     expect(rule, "view-transition-name « " + name + " » absent de css/uxer.css");
     expect(/^html\.ux-vt\b/.test(rule.selector), "« " + name + " » doit être posé seulement pendant une transition (html.ux-vt)");
@@ -195,6 +195,22 @@ check("les repères de position glissent par View Transitions, et seulement pend
   expect(UI_JS.indexOf('class: "tabbar-mark"') >= 0, "js/ui.js doit poser le trait de l'onglet courant comme un élément");
   expect(read("js/uxer-ui.js").indexOf('"ux-flow-mark"') >= 0, "js/uxer-ui.js doit poser le trait de l'étape courante comme un élément");
   expect(!/\.tabbar-item\.is-current::before/.test(APP), "le trait de l'onglet est revenu en ::before : il ne glisserait plus");
+});
+
+check("exploration : on y entre et on en revient sans glissement latéral ; la bulle source est l'élément partagé", () => {
+  const js = read("js/uxer-ui.js");
+  expect(/return "branch-in";/.test(js) && /return "branch-out";/.test(js), "sens dédiés à l'exploration absents de transitionDirection");
+  expect(/markShared\(shared\);[\s\S]*startViewTransition[\s\S]*enhance\(\);\s*markShared\(shared\);/.test(js),
+    "la bulle source doit être désignée AVANT la capture de l'ancien écran, puis dans le nouveau");
+  ["branch-in", "branch-out"].forEach((dir) => {
+    const old = UXER_RULES.find((r) => r.selector.indexOf('[data-ux-direction="' + dir + '"]::view-transition-old(root)') >= 0);
+    expect(old && !/ux-route-old-(forward|back)/.test(old.decls.animation || ""), dir + " : l'ancien écran ne doit pas glisser de côté");
+    expect(UXER_RULES.some((r) => r.selector.indexOf('ux-route-fallback[data-ux-direction="' + dir + '"]') >= 0), dir + " : repli sans View Transitions absent");
+  });
+  const connector = MOTION_RULES.find((r) => /\.screen--enter \.branch-connector/.test(r.selector));
+  expect(connector && /motion-connector/.test(connector.decls.animation) && /--enter-elapsed/.test(connector.decls["animation-delay"] || ""),
+    "le trait d'origine se trace une fois, à l'arrivée, en reprenant un rendu en cours");
+  expect(!MOTION_RULES.some((r) => /branch-connector/.test(r.selector) && /\binfinite\b/.test(r.decls.animation || "")), "le trait ne doit jamais boucler");
 });
 
 check("changer d'onglet est latéral, jamais une poussée vers la droite", () => {

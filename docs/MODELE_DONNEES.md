@@ -55,7 +55,8 @@ message = {
   id, authorId, authorName, text, createdAt, updatedAt,
   reactions: { participantId: emoji },   // une réaction par personne
   anon,                                  // true → authorName "Anonyme", authorId ""
-  quoteId                                // id d'un autre message du sujet, ou null
+  quoteId,                               // id d'un autre message du sujet, ou null (citation)
+  branchRootId                           // id d'un message du fil principal du sujet, ou null (exploration)
 }
 
 proposal = {
@@ -87,7 +88,7 @@ réseau n'est pas appliquée deux fois).
 | `CREATE_TOPIC` | `topicId`, `title`, `description`, `anon` |
 | `UPDATE_TOPIC` | `topicId`, `title`, `description` |
 | `CHANGE_TOPIC_STATUS` | `topicId`, `status` |
-| `CREATE_MESSAGE` | `topicId`, `messageId`, `text`, `quoteId`, `anon` |
+| `CREATE_MESSAGE` | `topicId`, `messageId`, `text`, `quoteId`, `anon`, `branchRootId` (facultatif, capacité `branches`) |
 | `UPDATE_MESSAGE` | `topicId`, `messageId`, `text` |
 | `SET_MESSAGE_SIGNATURE` | `topicId`, `messageId`, `anon` |
 | `SET_REACTION` | `topicId`, `messageId`, `emoji`, `set` (facultatif) |
@@ -285,6 +286,66 @@ sans `conclusion`. Deux voies :
 - `ensureShape()` (serveur **et** client) recrée les champs manquants : un JSON
   produit par une version antérieure ne fait jamais planter l'application.
 
+### Explorer un message (`branchRootId`)
+
+Une exploration est un **espace d'exploration d'une idée à l'intérieur d'un sujet** :
+le sous-fil ouvert depuis un message du fil principal, pour approfondir l'idée sans
+encombrer la discussion. Ce n'est **pas** un objet : il n'existe ni collection
+`branches`, ni action `CREATE_BRANCH`, ni titre, ni statut. C'est un attribut du
+message :
+
+- `branchRootId = null` : le message appartient au **fil principal** ;
+- `branchRootId = "<id>"` : le message appartient à l'exploration ouverte depuis le
+  message `<id>`.
+
+Une exploration existe dès qu'**au moins un** message la désigne. L'ouvrir n'écrit
+rien : aucune exploration vide n'est jamais enregistrée.
+
+Règles, identiques côté application (`js/state.js`) et côté serveur
+(`apps-script/Code.gs`), vérifiées vecteur par vecteur par `tests/parity.test.js` :
+
+- **Le message source** existe, dans le **même sujet**, et appartient au **fil
+  principal** (`branchRootId === null`). Il n'est pas le message lui-même.
+- **Une seule profondeur.** On n'explore pas une réponse d'exploration : une
+  exploration ne contient jamais de sous-exploration.
+- **Immuable.** Aucune action ne change `branchRootId` après la création : modifier,
+  signer ou réagir laisse le message dans son fil.
+- **Citer n'est pas explorer.** `quoteId` (« ce message répond à celui-ci ») et
+  `branchRootId` (« ce message appartient à cette exploration ») sont deux champs
+  distincts. Un message d'exploration peut citer un autre message : sa règle est
+  inchangée (tout message du sujet, sauf lui-même). La durcir ferait refuser le
+  message d'un ancien client qui cite une réponse d'exploration.
+- **Normalisation à la lecture** (`ensureShape`), en deux passes pour que le
+  résultat ne dépende jamais de l'ordre des messages : d'abord, une source absente
+  ou égale au message est neutralisée (`null`) ; ensuite, une source qui portait
+  elle-même un `branchRootId` après la première passe l'est aussi. Le message
+  reste, dans le fil principal. Relire un état normalisé ne change rien.
+- **Validation de `CREATE_MESSAGE`** : `branchRootId` absent ou `null` = fil
+  principal (exactement le comportement d'avant). Sinon, refus métier (code
+  `invalid`) si : « Le message d'origine n'existe plus. », « On n'explore pas une
+  réponse : explorez le message d'origine. », « Un message ne peut pas être sa propre
+  origine. », ou identifiant invalide (mêmes limites que les autres identifiants).
+- **Anonymat.** `branchRootId` relie un message à un message, jamais à une
+  personne. Un message anonyme d'exploration n'a ni `authorId` ni réaction de son
+  auteur, comme dans le fil principal.
+- **Une proposition reste au sujet.** Elle naît du texte d'un message (fil principal
+  ou exploration) mais ne porte aucun lien d'exploration.
+- **Aucun message n'est supprimable** dans BrainstO. : un message source ne peut pas
+  disparaître, et une réponse ne peut donc jamais devenir orpheline en usage normal.
+  La neutralisation de `ensureShape` couvre les données abîmées.
+
+**Compatibilité de versions** (le frontend et le backend se déploient séparément) :
+
+| Situation | Ce qui se passe |
+|---|---|
+| Message d'avant la 1.20.0, sans le champ | Lu `branchRootId: null` : fil principal, comme avant. Aucune migration |
+| Backend 1.3.0, application à jour | Le serveur annonce la capacité `branches` ; « Explorer » est disponible |
+| Backend antérieur, application à jour | Pas de capacité `branches` : « Explorer » reste visible mais désactivé, avec sa raison, et l'application ne met **jamais** un message d'exploration en file. Un backend antérieur l'accepterait en perdant le champ en silence (constaté et testé : `tests/sync.test.js`) |
+| Ouverture hors ligne, avant toute réponse du serveur | La dernière réponse connue du serveur, retenue sur l'appareil (`brainsto.cap.branches`, un booléen, effacé à la déconnexion et au changement de serveur). Inconnue : non |
+| Mode local | Disponible : le noyau de l'appareil range lui-même |
+| Ancien frontend (gardé en cache par la PWA) | Sa normalisation ignore le champ : il affiche **temporairement** les réponses d'exploration dans le fil principal, à leur place chronologique, jusqu'à sa mise à jour (bandeau « Nouvelle version »). Il ne peut rien corrompre : un client n'envoie jamais l'état, seulement des actions, et il ne peut pas créer de message d'exploration |
+| **Retour à un backend antérieur** après usage | À sa première écriture, il réécrit le fichier sans le champ : toutes les réponses d'exploration retombent dans le fil principal (rien n'est perdu, la structure l'est). Une copie Drive est faite automatiquement au premier enregistrement de chaque nouvelle `BACKEND_VERSION` : c'est elle qu'il faut restaurer |
+
 ## Limites de saisie
 
 | Champ | Limite |
@@ -299,7 +360,7 @@ sans `conclusion`. Deux voies :
 | Dépôt dans Pandore | 2000 |
 
 Les identifiants (`actorId`, `participantId`, `topicId`, `messageId`, `proposalId`,
-`conclusionId`, `quoteId`, `ideaId` et l'`id` d'une action) ont **120 caractères au plus** : au
+`conclusionId`, `quoteId`, `branchRootId`, `ideaId` et l'`id` d'une action) ont **120 caractères au plus** : au
 delà, l'action est refusée (« Identifiant invalide. », code `invalid`). Treize noms
 sont aussi réservés et refusés, une fois les espaces retirés : `__proto__`,
 `constructor`, `prototype`, `hasOwnProperty`, `toString`, `valueOf`,

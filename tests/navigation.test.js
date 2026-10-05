@@ -81,6 +81,17 @@ check("aucun écran déclaré n'est orphelin du routeur", () => {
   );
 });
 
+check("l'exploration d'un message est un enfant du sujet (son retour ramène à la discussion)", () => {
+  const debut = APP.indexOf("var PARENT = {");
+  const bloc = APP.slice(debut, APP.indexOf("};", debut));
+  assert(/^\s*branch:\s*"topic"/m.test(bloc), "PARENT.branch doit valoir \"topic\"");
+  assert(/parts\[2\] === "branch" && parts\[3\]/.test(APP), "parseRoute doit lire #/topic/{sujet}/branch/{message}");
+  assert(/route\.name === "branch"\) \{ return screenBranch\(route\.topicId, route\.messageId\); \}/.test(UI),
+    "l'écran d'exploration doit être servi par currentScreen");
+  assert(/function screenBranch[\s\S]*?back: App\.remonter[\s\S]*?backLabel: "Discussion"/.test(UI),
+    "le bouton retour de l'exploration doit passer par App.remonter, vers « Discussion »");
+});
+
 check("un seul écran est racine", () => {
   const debut = APP.indexOf("var PARENT = {");
   const bloc = APP.slice(debut, APP.indexOf("};", debut));

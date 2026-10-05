@@ -162,7 +162,10 @@
           updatedAt: trim(m.updatedAt) || trim(m.createdAt) || topic.createdAt,
           reactions: reactions,
           anon: anon,
-          quoteId: trim(m.quoteId) || null
+          quoteId: trim(m.quoteId) || null,
+          /* Exploration : le message appartient au sous-fil ouvert depuis ce message source (null = fil principal).
+           * Un lien de message à message, jamais vers une personne. Distinct de quoteId (citer n'est pas explorer). */
+          branchRootId: trim(m.branchRootId) || null
         });
       });
 
@@ -173,6 +176,7 @@
       topic.messages.forEach(function (m) {
         if (m.quoteId && (!messageIds[m.quoteId] || m.quoteId === m.id)) { m.quoteId = null; }
       });
+      normalizeBranches(topic.messages, messageIds);
 
       arr(t.proposals).forEach(function (p) {
         if (!isObject(p) || !trim(p.id)) { return; }
@@ -243,6 +247,23 @@
 
     return state;
   };
+
+  /* ⚠️ Exploration : une seule profondeur. Deux passes, pour que le résultat ne dépende JAMAIS de l'ordre des
+   * messages (le serveur et chaque téléphone doivent aboutir au même état) :
+   *   1. une racine absente du sujet, ou égale au message lui-même, est neutralisée ;
+   *   2. une racine qui, À L'ISSUE de la passe 1, appartient elle-même à une exploration est neutralisée — lue sur
+   *      l'instantané de la passe 1, pas au fil de la boucle, sinon A→B→C donnerait deux résultats selon l'ordre.
+   * Une valeur neutralisée ne redevient jamais valide : la sortie est stable (relire ne change rien). */
+  function normalizeBranches(messages, messageIds) {
+    messages.forEach(function (m) {
+      if (m.branchRootId && (!messageIds[m.branchRootId] || m.branchRootId === m.id)) { m.branchRootId = null; }
+    });
+    var nested = Object.create(null);
+    messages.forEach(function (m) { if (m.branchRootId) { nested[m.id] = true; } });
+    messages.forEach(function (m) {
+      if (m.branchRootId && nested[m.branchRootId]) { m.branchRootId = null; }
+    });
+  }
 
   /* ------------------------------------------------------------ Accès --- */
 
@@ -326,7 +347,7 @@
     var p = isObject(action.payload) ? action.payload : {};
     var topic = null;
     if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
-      p.conclusionId, p.quoteId, p.ideaId].some(badId)) { return fail("Identifiant invalide."); }
+      p.conclusionId, p.quoteId, p.ideaId, p.branchRootId].some(badId)) { return fail("Identifiant invalide."); }
 
     function needTopic() {
       topic = Core.findTopic(state, trim(p.topicId));
@@ -378,6 +399,14 @@
         if (Core.findMessage(topic, trim(p.messageId))) { return fail("Ce message existe déjà."); }
         if (trim(p.quoteId) && !Core.findMessage(topic, trim(p.quoteId))) {
           return fail("Le message cité n'existe plus.");
+        }
+        /* Exploration (facultatif : absent = fil principal). La source est un message du fil principal de CE sujet.
+         * La citation, elle, garde sa règle : citer n'importe quel message du sujet reste permis. */
+        if (trim(p.branchRootId)) {
+          if (trim(p.branchRootId) === trim(p.messageId)) { return fail("Un message ne peut pas être sa propre origine."); }
+          var root = Core.findMessage(topic, trim(p.branchRootId));
+          if (!root) { return fail("Le message d'origine n'existe plus."); }
+          if (root.branchRootId) { return fail("On n'explore pas une réponse : explorez le message d'origine."); }
         }
         return OK;
       }
@@ -587,7 +616,8 @@
           updatedAt: now,
           reactions: {},
           anon: p.anon === true,
-          quoteId: trim(p.quoteId) || null
+          quoteId: trim(p.quoteId) || null,
+          branchRootId: trim(p.branchRootId) || null
         });
         touch(state, topic, now);
         return;

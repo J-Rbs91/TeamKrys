@@ -140,7 +140,7 @@ déconnexion : § *Détection*, table 1.
 | **Confirmé** | `UI.render` **détruit et reconstruit** `#app` à chaque appel (`js/ui.js:1679`), avec court-circuit par `signature()` (`:1620`), capture/restauration des brouillons `[data-draft]` (`:140`), et fenêtre d'entrée `ENTER_WINDOW_MS = 1400 ms` publiée en `--enter-elapsed` (`:95-101`, `:1663-1684`). |
 | **Confirmé** | `renderOverlay` (`:1574`) est **mono-emplacement** : il vide `#overlay-root` et rend une feuille **ou** une fenêtre. Y loger la séquence la ferait disparaître au premier `UI.set`. |
 | **Confirmé** | `onHashChange` (`js/app.js:305`) et la touche Échap (`js/app.js:484`) remettent `sheet`/`modal` à `null`. Une séquence implémentée comme `modal` est tuée par un retour arrière. |
-| **Confirmé** | `apps-script/` est **gitignoré** (`.gitignore:1-5`, « Ce dépôt ne contient QUE le frontend »). Toute idée d'action serveur est hors d'atteinte et casserait `tests/parity.test.js`. |
+| **Périmé** | *Constat d'origine :* `apps-script/` était **gitignoré** (« Ce dépôt ne contient QUE le frontend »). *État actuel (1.20.0) :* `apps-script/Code.gs` est versionné et `tests/parity.test.js` le compare au client ; une action serveur reste un changement de protocole à mener des deux côtés, sous la garde de ce test. La décision « calque hors serveur » de ce cadrage n'en dépend pas. |
 | **Confirmé** | Un fichier JS nouveau doit être déclaré **deux fois** : `index.html` et `SHELL` (`service-worker.js:12-29`). Oubli du second = démarrage à froid hors ligne cassé. |
 | **À arbitrer** | Le calque vit-il dans le cycle de `UI.render` ou hors de lui ? Tranché en C : **hors**. |
 

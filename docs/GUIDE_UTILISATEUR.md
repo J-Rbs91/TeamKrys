@@ -182,8 +182,9 @@ La feuille d'un message donne accès aux actions suivantes :
 | Croix | Pas d'accord |
 | Cercle barré | À écarter |
 | **Citer** | Répondre en conservant le contexte (ou glisser le message vers la droite) |
-| **Copier le texte** | Copier le message dans le presse-papiers |
+| **Explorer cette idée** | Ouvrir un espace attaché à ce message pour creuser l'idée sans encombrer la discussion (voir ci-dessous) |
 | **Créer une proposition** | Transformer l'idée en option structurée |
+| **Copier le texte** | Copier le message dans le presse-papiers |
 | **Modifier** | Corriger votre message tant qu'il n'est pas verrouillé |
 | **Rendre anonyme / Signer avec mon nom** | Modifier la signature du message. « Signer avec mon nom » demande une confirmation : votre nom devient visible de toute l'équipe, et ce qui a été vu ne se reprend pas. « Rendre anonyme » s'applique tout de suite et se défait depuis ce téléphone. |
 
@@ -204,12 +205,43 @@ avec le texte que vous avez rédigé, et un message vous explique pourquoi : cor
 ou copiez votre texte avant d'appuyer sur **Annuler**. Cela vaut aussi pour la
 fenêtre **Modifier la proposition**.
 
+### Explorer une idée
+
+Un message de la discussion lance parfois un échange à lui seul : précisions,
+objections, variantes. **Explorer cette idée**, dans la feuille d'actions, ouvre un
+espace attaché à ce message. Ce qui s'y écrit reste rattaché à l'idée, sans
+s'intercaler dans la discussion du sujet.
+
+- **En haut**, le message d'origine, rappelé tel quel. **En dessous**, les réponses
+  de l'exploration, puis le champ d'écriture habituel (signé ou anonyme, comme dans
+  la discussion).
+- **Ouvrir ne crée rien.** Tant que personne n'a répondu, l'exploration n'existe pas
+  pour les autres : rien n'apparaît dans la discussion.
+- **Dans la discussion**, sous un message exploré, un lien **« 3 réponses »**
+  (le nombre suit) rouvre l'exploration. Les réponses n'apparaissent pas dans le fil
+  principal.
+- **Un seul niveau.** On n'explore pas une réponse d'exploration : l'action n'est pas
+  proposée sur ces messages. Pour creuser une réponse, citez-la.
+- **Citer** dans une exploration cite le message d'origine ou une réponse. Les réactions,
+  la modification, la signature et l'anonymat fonctionnent comme dans la discussion.
+- **Créer une proposition** depuis une réponse d'exploration crée une proposition du
+  sujet, comme depuis la discussion.
+- **Revenir** : le bouton « Discussion » en haut, ou le geste retour du téléphone,
+  ramène à la discussion, sur le message exploré.
+
+Chaque exploration a son propre brouillon, distinct de celui de la discussion.
+
+Si l'action est grisée avec la mention « le serveur de l'équipe doit être mis à
+jour », la personne qui gère l'équipe doit redéployer le serveur (voir le README). Avec
+la mention « disponible à la prochaine connexion au serveur de l'équipe »,
+l'application attend simplement que le serveur ait répondu une première fois.
+
 ### Message en cours d'écriture
 
 Ce que vous tapez dans le champ de message d'un sujet est gardé **sur votre
 téléphone**, sans rien envoyer à personne. Le texte revient tout seul si
 l'application se recharge (« Mettre à jour »), si le système la ferme en arrière-plan
-puis la rouvre, ou si l'onglet est restauré. Chaque sujet a son propre brouillon.
+puis la rouvre, ou si l'onglet est restauré. Chaque sujet a son propre brouillon, et chaque exploration aussi.
 Après un verrouillage par inactivité, il est toujours là une fois le code saisi ; il
 n'est jamais affiché sur l'écran de verrouillage.
 

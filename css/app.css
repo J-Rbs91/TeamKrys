@@ -1851,6 +1851,76 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .reaction.mine .reaction-count { color: var(--on-accord); }
 .reaction-count { font-size: 11px; font-weight: 700; color: var(--muted); }
 
+/* ========================================================== Exploration ==== */
+
+/* Explorer un message : un sous-fil du sujet, rattaché à son message source (js/ui.js, screenBranch). Rien de nouveau
+   dans le vocabulaire visuel : mêmes bulles, mêmes séparateurs. Seuls s'ajoutent le lien « N réponses » sous le message
+   source, l'en-tête « À partir de cette idée » et un trait qui relie l'origine aux réponses. */
+
+/* « 3 réponses » sous le message source, du même côté que la bulle : 38 px = pastille d'initiales (30) + écart (8).
+   Un bouton FRÈRE de la rangée, jamais dans la bulle, qui est déjà un bouton. 36 px de haut, comme `.btn-sm` (WCAG
+   2.2, 2.5.8 : 24 px au minimum) : plus haut, il pousserait le fil ; et la réserve des réactions est juste au-dessus. */
+.branch-row { display: flex; margin: 2px 0 4px; padding-left: 38px; }
+.branch-row.mine { justify-content: flex-end; padding-left: 0; }
+
+.branch-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 12px 4px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-chip);
+  background: var(--surface);
+  color: var(--accord);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.branch-link:active { background: var(--surface-sunken); }
+
+@media (hover: hover) and (pointer: fine) {
+  .branch-link:hover { border-color: var(--accord); background: var(--accord-bg); }
+}
+
+/* Dans l'exploration, le fil commence en haut : le message d'origine donne le contexte, les réponses s'écrivent
+   dessous. (Le fil principal, lui, reste collé en bas quand il est court.) */
+.thread-branch .thread-inner { margin-top: 0; }
+.thread-branch .empty { min-height: 0; padding: 14px 12px 6px; }
+
+.branch-origin { padding-top: 4px; }
+/* Même colonne flexible que le fil : sans elle, le séparateur de jour (`align-self: center`) se collait à gauche. */
+.branch-replies { display: flex; flex-direction: column; }
+.branch-origin .msg-row.first { margin-top: 0; }
+
+.branch-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.branch-origin.mine .branch-eyebrow { justify-content: flex-end; }
+
+/* Le trait d'origine : purement visuel, sous le bord de la bulle source. Il habille (`--line-strong`) ; aucune
+   information n'en dépend, l'en-tête « À partir de cette idée » la porte déjà. */
+.branch-connector {
+  width: 2px;
+  height: 22px;
+  margin: 8px 0 2px 52px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.branch-connector.mine { margin-left: auto; margin-right: 22px; }
+
 /* ============================================================ Composeur ==== */
 
 .composer {

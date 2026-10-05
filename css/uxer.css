@@ -298,7 +298,9 @@ html.ux-route-fallback[data-ux-direction="back"] .screen--enter {
   animation: ux-route-fallback-back var(--dur-slow) var(--ease-out) both;
 }
 
-html.ux-route-fallback[data-ux-direction="lateral"] .screen--enter {
+html.ux-route-fallback[data-ux-direction="lateral"] .screen--enter,
+html.ux-route-fallback[data-ux-direction="branch-in"] .screen--enter,
+html.ux-route-fallback[data-ux-direction="branch-out"] .screen--enter {
   animation: ux-route-fallback-lateral var(--dur-base) var(--ease-out) both;
 }
 
@@ -318,6 +320,8 @@ html.ux-route-fallback .screen--enter .reveal {
   html.ux-vt .ux-flow { view-transition-name: ux-flow; }
   html.ux-vt .tabbar-mark { view-transition-name: ux-tab-mark; }
   html.ux-vt .ux-flow-mark { view-transition-name: ux-flow-mark; }
+  /* Exploration : la bulle du message source, désignée dans les deux écrans par js/uxer-ui.js (markShared). */
+  html.ux-vt .ux-vt-source { view-transition-name: ux-branch-source; }
 
   /* Une transition ne retient jamais un toucher : le nouvel écran est actionnable dès la première image. */
   html.ux-vt::view-transition { pointer-events: none; }
@@ -356,6 +360,23 @@ html.ux-route-fallback .screen--enter .reveal {
 
   html[data-ux-direction="lateral"]::view-transition-new(root) {
     animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both, ux-route-new-lateral var(--dur-base) var(--ease-out) 40ms both;
+  }
+
+  /* Entrer dans l'exploration d'un message, et en revenir : aucun glissement latéral. Le contenu s'efface et revient
+     sur place ; seul le message source se déplace, de sa place dans le fil à la tête de l'exploration. Il est déjà
+     là : il se déplace (--ease-move), il n'entre pas. */
+  html[data-ux-direction="branch-in"]::view-transition-old(root),
+  html[data-ux-direction="branch-out"]::view-transition-old(root) {
+    animation: ux-route-fade-out var(--dur-fast) var(--ease-out) both;
+  }
+
+  html[data-ux-direction="branch-in"]::view-transition-new(root),
+  html[data-ux-direction="branch-out"]::view-transition-new(root) {
+    animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both;
+  }
+
+  html.ux-vt::view-transition-group(ux-branch-source) {
+    animation-timing-function: var(--ease-move);
   }
 
   /* Le titre et le bouton retour changent de texte : un fondu croisé de 240 ms superposait deux titres lisibles à

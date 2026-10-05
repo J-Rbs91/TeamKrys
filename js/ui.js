@@ -1522,11 +1522,87 @@
     UI.set({ sheet: { type: "message", topicId: topicId, messageId: messageId } });
   }
 
-  /* Citer : la même chose que l'action « Citer » de la feuille. Le focus va au champ, le clavier s'ouvre. */
+  /* Citer : la même chose que l'action « Citer » de la feuille. Le focus va au champ, le clavier s'ouvre.
+   * La citation appartient au fil OÙ l'on est (fil principal, ou exploration d'un message) : elle n'apparaît que dans
+   * le composeur de ce fil, et toute navigation l'efface (js/app.js, appliquer). */
   function quoteMessage(topicId, messageId) {
-    UI.set({ sheet: null, quote: { topicId: topicId, messageId: messageId } });
-    var node = findDraftNode("composer:" + topicId);
+    var root = viewBranchRoot(topicId);
+    UI.set({ sheet: null, quote: { topicId: topicId, messageId: messageId, branchRootId: root } });
+    var node = findDraftNode(composerKey(topicId, root));
     if (node) { try { node.focus(); } catch (e) { /* champ absent */ } }
+  }
+
+  /* --------------------------------------------------------------- Explorer --- */
+
+  /* Une exploration n'est PAS un objet : c'est l'ensemble des messages dont `branchRootId` désigne un message du fil
+   * principal (js/state.js). Ouvrir une exploration n'écrit rien ; elle existe dès son premier message. */
+
+  /* Message source de l'exploration affichée, ou null dans le fil principal (et partout ailleurs). */
+  function viewBranchRoot(topicId) {
+    var route = App.route || {};
+    return route.name === "branch" && route.topicId === topicId ? route.messageId : null;
+  }
+
+  /* Clé de brouillon du composeur : un brouillon par fil, jamais partagé entre le fil principal et une exploration, ni
+   * entre deux explorations. Le préfixe `composer:` est celui que l'appareil conserve (storedDraft). */
+  function composerKey(topicId, branchRootId) {
+    return "composer:" + topicId + (branchRootId ? ":branch:" + branchRootId : "");
+  }
+
+  function openBranch(topicId, messageId) {
+    App.go("#/topic/" + topicId + "/branch/" + messageId);
+  }
+
+  /* Réponses par message source, en UNE passe sur le fil : jamais un parcours complet par bulle. Index de rendu, rien
+   * de partagé ni de stocké. */
+  function branchCounts(topic) {
+    var counts = Object.create(null);
+    topic.messages.forEach(function (m) {
+      if (m.branchRootId) { counts[m.branchRootId] = (counts[m.branchRootId] || 0) + 1; }
+    });
+    return counts;
+  }
+
+  /* Pourquoi « Explorer » n'est pas disponible, ou "" s'il l'est. Jamais un masquage : comme l'épingle, la commande
+   * reste visible et dit ce qui manque (le serveur ne sait pas encore ranger une réponse d'exploration). */
+  function branchesUnavailableReason() {
+    if (typeof App.branchesAvailable !== "function" || App.branchesAvailable()) { return ""; }
+    return App.branchesOutdatedServer && App.branchesOutdatedServer()
+      ? "le serveur de l'équipe doit être mis à jour"
+      : "disponible à la prochaine connexion au serveur de l'équipe";
+  }
+
+  /* « 3 réponses » sous un message du fil principal : un bouton FRÈRE de la rangée, jamais dans la bulle (qui est déjà
+   * un bouton). Aligné du même côté que la bulle, d'après la même règle (un message anonyme se pose toujours à gauche). */
+  function branchLink(topic, message, count) {
+    var mine = App.ownsMessage(message) && !message.anon;
+    var label = Utils.plural(count, "réponse", "réponses");
+    return el("div", { class: "branch-row" + (mine ? " mine" : ""), "data-motion-key": "x:" + message.id }, [
+      el("button", {
+        class: "branch-link", type: "button", "data-key": "branch-" + message.id,
+        "aria-label": label + " : explorer cette idée",
+        onclick: function () { openBranch(topic.id, message.id); }
+      }, [icon("explore", 15), el("span", { text: label })])
+    ]);
+  }
+
+  /* Rangées d'un fil (séparateurs de jour, regroupement par auteur), partagées par le fil principal et l'exploration.
+   * `after(message)` peut rendre un nœud posé juste sous la rangée (le lien d'exploration) : il interrompt alors le
+   * regroupement, le message suivant reprend son auteur. */
+  function appendThreadRows(container, topic, messages, after) {
+    var previous = null;
+    var lastDay = null;
+    messages.forEach(function (message) {
+      if (!lastDay || !Utils.sameDay(lastDay, message.createdAt)) {
+        container.appendChild(el("div", { class: "day-sep", text: Utils.relativeDay(message.createdAt) }));
+        lastDay = message.createdAt;
+        previous = null;
+      }
+      container.appendChild(messageRow(topic, message, previous));
+      previous = message;
+      var extra = after ? after(message) : null;
+      if (extra) { container.appendChild(extra); previous = null; }
+    });
   }
 
   /* Presse-papiers : l'API moderne d'abord, puis l'ancienne commande pour les navigateurs qui ne l'ont pas. */
@@ -1680,7 +1756,7 @@
     if (Utils.storage.get(GESTURE_HINT_KEY, false) === true) { return null; }
     return el("div", { class: "note gesture-hint" }, [
       icon("info", 14),
-      el("span", { class: "note-body", text: "Appui long sur un message : réagir, citer, modifier. Glissez-le vers la droite pour le citer." }),
+      el("span", { class: "note-body", text: "Appui long sur un message : réagir, citer, explorer l'idée, modifier. Glissez-le vers la droite pour le citer." }),
       el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Compris", "data-key": "gesture-hint-ok",
         onclick: function () { Utils.storage.set(GESTURE_HINT_KEY, true); UI.force(); } })
     ]);
@@ -1847,8 +1923,18 @@
     ]);
   }
 
-  function composer(topic) {
-    var draftKey = "composer:" + topic.id;
+  /* La citation en cours, si elle appartient à CE fil (même sujet, même exploration ou fil principal). */
+  function quoteHere(topic, branchRootId) {
+    var q = UI.local.quote;
+    return q && q.topicId === topic.id && (q.branchRootId || null) === (branchRootId || null) ? q : null;
+  }
+
+  /* `branchRootId` : le composeur publie dans l'exploration de ce message (null : fil principal). Même champ, même
+   * anonymat, même envoi ; seuls la clé de brouillon et le rattachement changent. */
+  function composer(topic, branchRootId) {
+    branchRootId = branchRootId || null;
+    var draftKey = composerKey(topic.id, branchRootId);
+    var blocked = branchRootId ? branchesUnavailableReason() : "";
     var textarea = el("textarea", {
       class: "textarea grow", rows: "1", placeholder: "Votre message…", "aria-label": "Votre message",
       maxlength: Core.LIMITS.message, "data-draft": draftKey,
@@ -1863,7 +1949,7 @@
       var text = Utils.trim(typed);
       if (!text) { return; }
       dismissNote(draftKey);
-      var quote = UI.local.quote && UI.local.quote.topicId === topic.id ? UI.local.quote : null;
+      var quote = quoteHere(topic, branchRootId);
       var quoteId = quote ? quote.messageId : null;
       /* ⚠️ On vide le champ AVANT de déclencher l'action : le dispatch provoque
        * un rendu synchrone et la restauration des brouillons réinjecterait le
@@ -1880,7 +1966,7 @@
        * (sujet supprimé entre-temps, texte refusé par le noyau) : le message d'erreur est déjà à l'écran, le texte
        * reste dans le champ et dans le brouillon durable. Une publication acceptée en file efface ce brouillon.
        * Issue inconnue (js/app.js d'avant, en cache, qui ne rend rien) : comportement d'avant, le texte est parti. */
-      var sent = App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon);
+      var sent = App.actions.createMessage(topic.id, text, quoteId, UI.local.composerAnon, branchRootId);
       if (!sent || typeof sent.then !== "function") { dropDraft(draftKey, typed); return; }
       sent.then(function (result) {
         if (result && result.ok === false) {
@@ -1908,7 +1994,16 @@
     }
 
     var parts = [];
-    if (UI.local.quote && UI.local.quote.topicId === topic.id) {
+    if (blocked) {
+      parts.push(el("div", { class: "note", id: "composer-blocked" }, [
+        icon("info", 14),
+        el("span", { class: "note-body", text: "Écrire ici est momentanément impossible : " + blocked + "." })
+      ]));
+      textarea.disabled = true;
+      textarea.setAttribute("aria-describedby", "composer-blocked");
+      sendBtn.disabled = true;
+    }
+    if (quoteHere(topic, branchRootId)) {
       var quoted = Core.findMessage(topic, UI.local.quote.messageId);
       if (quoted) {
         parts.push(el("div", { class: "quote-preview" }, [
@@ -1980,20 +2075,16 @@
     var topic = Core.findTopic(Store.view, topicId);
     if (!topic) { return screenMissing(); }
 
+    /* Le fil principal ne montre que SES messages ; les réponses d'une exploration se signalent sous leur message
+     * source (« 3 réponses »), sans encombrer le fil. */
     var threadInner = el("div", { class: "thread-inner" });
-    var previous = null;
-    var lastDay = null;
-    topic.messages.forEach(function (message) {
-      if (!lastDay || !Utils.sameDay(lastDay, message.createdAt)) {
-        threadInner.appendChild(el("div", { class: "day-sep", text: Utils.relativeDay(message.createdAt) }));
-        lastDay = message.createdAt;
-        previous = null;
-      }
-      threadInner.appendChild(messageRow(topic, message, previous));
-      previous = message;
+    var replies = branchCounts(topic);
+    var main = topic.messages.filter(function (m) { return !m.branchRootId; });
+    appendThreadRows(threadInner, topic, main, function (message) {
+      return replies[message.id] ? branchLink(topic, message, replies[message.id]) : null;
     });
 
-    if (!topic.messages.length) {
+    if (!main.length) {
       threadInner.appendChild(emptyState("message", "La discussion démarre ici",
         "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer.",
         null,
@@ -2029,9 +2120,54 @@
           topic.conclusions.length ? el("span", { class: "badge tone-neutral", text: String(topic.conclusions.length) }) : null
         ])
       ]),
-      topic.messages.length ? gestureHint() : null,
+      main.length ? gestureHint() : null,
       thread,
-      composer(topic)
+      composer(topic, null)
+    ]);
+  }
+
+  /* Exploration d'un message : le message source en tête, un trait, puis les réponses et le composeur. L'adresse
+   * (#/topic/{sujet}/branch/{message}) n'écrit rien : l'exploration n'existe qu'à son premier message. */
+  function screenBranch(topicId, rootId) {
+    var topic = Core.findTopic(Store.view, topicId);
+    var root = topic ? Core.findMessage(topic, rootId) : null;
+    /* Message absent, ou réponse d'une exploration (on n'explore pas une réponse) : « introuvable », retour vers la
+     * discussion du sujet quand il existe. */
+    if (!topic) { return screenMissing(); }
+    if (!root || root.branchRootId) { return screenMissing("Discussion"); }
+
+    var replies = topic.messages.filter(function (m) { return m.branchRootId === root.id; });
+    /* Même côté que la bulle source (même règle que messageRow : un message anonyme se pose toujours à gauche). */
+    var side = App.ownsMessage(root) && !root.anon ? " mine" : "";
+    var inner = el("div", { class: "thread-inner" }, [
+      el("section", { class: "branch-origin" + side, "aria-label": "Message d'origine" }, [
+        el("div", { class: "branch-eyebrow" }, [icon("explore", 14), el("span", { text: "À partir de cette idée" })]),
+        messageRow(topic, root, null)
+      ]),
+      el("div", { class: "branch-connector" + side, "aria-hidden": "true" })
+    ]);
+    if (replies.length) {
+      var list = el("div", { class: "branch-replies" });
+      appendThreadRows(list, topic, replies, null);
+      inner.appendChild(list);
+    } else {
+      inner.appendChild(emptyState("explore", "Explorez cette idée",
+        "Ce qui s'écrit ici reste attaché à ce message, sans encombrer la discussion du sujet.",
+        null,
+        "Ensuite : une idée qui mûrit devient une proposition, depuis la feuille d'actions d'un message."));
+    }
+
+    return el("div", { class: "screen chat branch" }, [
+      /* « Exploration » et non « Explorer cette idée » : le titre doit tenir à côté de la pastille d'état à 320 px. */
+      topbar({
+        title: "Exploration",
+        sub: topic.title,
+        back: App.remonter,
+        backLabel: "Discussion",
+        actions: [statusPill()]
+      }),
+      el("div", { class: "thread thread-branch", dataset: { thread: topic.id, branch: root.id } }, [inner]),
+      composer(topic, root.id)
     ]);
   }
 
@@ -2043,12 +2179,13 @@
     return !!status && status.code !== "local" && !status.revision && !status.lastSyncAt;
   }
 
-  function screenMissing() {
+  /* `backLabel` : le parent réel de l'écran demandé (« Discussion » pour une exploration dont le sujet existe). */
+  function screenMissing(backLabel) {
     var waiting = awaitingFirstData();
     var back = el("button", { class: "btn btn-primary", type: "button", text: "Revenir aux sujets",
       onclick: function () { App.go("#/"); } });
     return el("div", { class: "screen" }, [
-      topbar({ title: waiting ? "Pas encore disponible" : "Introuvable", back: App.remonter, backLabel: "Sujets" }),
+      topbar({ title: waiting ? "Pas encore disponible" : "Introuvable", back: App.remonter, backLabel: backLabel || "Sujets" }),
       el("div", { class: "content" }, [
         waiting
           ? emptyState("sync", "Contenu pas encore disponible sur cet appareil",
@@ -2904,23 +3041,38 @@
       ]));
     });
 
+    /* Le fil affiché : le fil principal, ou l'exploration d'un message (son message source compris). */
+    var viewRoot = viewBranchRoot(topic.id);
+    var inView = function (m) { return viewRoot ? (m.id === viewRoot || m.branchRootId === viewRoot) : !m.branchRootId; };
+    var quotedMessage = message.quoteId ? Core.findMessage(topic, message.quoteId) : null;
+    /* Explorer : depuis le fil principal, sur un message du fil principal (une seule profondeur). */
+    var explorable = !viewRoot && !message.branchRootId;
+    var exploreBlocked = explorable ? branchesUnavailableReason() : "";
+
     var actions = el("div", { class: "sheet-actions" }, [
       /* Reprise de l'action que portait la citation elle-même. En tête : elle
-       * concerne le contexte du message, pas ce qu'on va en faire. */
-      message.quoteId && Core.findMessage(topic, message.quoteId)
+       * concerne le contexte du message, pas ce qu'on va en faire. Seulement si le
+       * message cité est dans CE fil : en V1, on ne saute pas d'un fil à l'autre. */
+      quotedMessage && inView(quotedMessage)
         ? sheetAction("up", "Aller au message cité", function () {
           UI.set({ sheet: null });
           UI.scrollToMessage(message.quoteId);
         })
         : null,
       sheetAction("quote", "Citer", function () { quoteMessage(topic.id, message.id); }),
+      explorable
+        ? sheetAction("explore", exploreBlocked ? "Explorer cette idée (" + exploreBlocked + ")" : "Explorer cette idée",
+          function () { if (!exploreBlocked) { openBranch(topic.id, message.id); } }, { disabled: !!exploreBlocked })
+        : null,
+      /* Faire avancer l'idée : la citer, l'explorer, en faire une proposition — dans cet ordre, du plus léger au plus
+       * engageant. Les utilitaires (copier, modifier, signature) viennent ensuite. */
+      sheetAction("idea", "Créer une proposition", function () {
+        UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
+      }),
       /* L'appui long ouvre cette feuille au lieu de sélectionner le texte (app.css) : la copie passe donc par ici. */
       sheetAction("doc", "Copier le texte", function () {
         UI.set({ sheet: null });
         copyText(message.text);
-      }),
-      sheetAction("idea", "Créer une proposition", function () {
-        UI.set({ sheet: null, modal: { type: "createProposal", topicId: topic.id, fromText: message.text } });
       }),
       /* Verrouillé : désactivé, la raison dans le libellé (le toast reste en
        * garde, mais un bouton désactivé ne le déclenche plus). */
@@ -3311,6 +3463,7 @@
     if (route.name === "topic") { return screenTopic(route.topicId); }
     if (route.name === "proposals") { return screenProposals(route.topicId); }
     if (route.name === "conclusion") { return screenConclusion(route.topicId); }
+    if (route.name === "branch") { return screenBranch(route.topicId, route.messageId); }
     if (route.name === "system") { return screenSystem(); }
     var screen = route.name === "settings" ? screenSettings()
       : route.name === "meeting" ? screenMeeting()
@@ -3396,6 +3549,12 @@
     }
     if (route.name === "proposals") { return "Propositions" + (topic ? " : " + topic.title : "") + tail; }
     if (route.name === "conclusion") { return "Consensus" + (topic ? " : " + topic.title : "") + tail; }
+    if (route.name === "branch") {
+      /* Même règle que l'écran : message source absent, ou réponse d'une exploration → introuvable. */
+      var root = topic ? Core.findMessage(topic, route.messageId) : null;
+      if (!root || root.branchRootId) { return (awaitingFirstData() ? "Pas encore disponible" : "Introuvable") + tail; }
+      return "Exploration : " + topic.title + tail;
+    }
     if (route.name === "settings") { return "Réglages" + tail; }
     if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
     if (route.name === "system") { return "Système" + tail; }
@@ -3406,6 +3565,28 @@
   function setPageTitle() {
     var title = pageTitle();
     if (document.title !== title) { document.title = title; }
+  }
+
+  function threadIdentity(node) {
+    return node.getAttribute("data-thread") + "|" + (node.getAttribute("data-branch") || "");
+  }
+
+  /* Bulle du message source quand on revient d'une de ses explorations vers le fil principal du MÊME sujet. */
+  function returningFromBranch(previousKey, newThread) {
+    if (!previousKey || newThread.getAttribute("data-branch")) { return null; }
+    var parts = previousKey.split("|");
+    if (parts[0] !== newThread.getAttribute("data-thread") || !parts[1]) { return null; }
+    var bubbles = newThread.querySelectorAll(".bubble[data-message-id]");
+    for (var i = 0; i < bubbles.length; i++) {
+      if (bubbles[i].getAttribute("data-message-id") === parts[1]) { return bubbles[i]; }
+    }
+    return null;
+  }
+
+  function centerInThread(thread, node) {
+    var box = thread.getBoundingClientRect();
+    var r = node.getBoundingClientRect();
+    thread.scrollTop = Math.max(0, thread.scrollTop + (r.top - box.top) - (thread.clientHeight - r.height) / 2);
   }
 
   UI.render = function () {
@@ -3453,10 +3634,11 @@
     var drafts = captureDrafts();
     var focus = captureFocus();
 
-    /* Position de défilement du fil de discussion. */
+    /* Position de défilement du fil de discussion. Le fil principal et l'exploration d'un message partagent le même
+     * sujet (`data-thread`) : c'est `data-branch` qui les distingue. */
     var thread = document.querySelector(".thread");
     var scrollTop = thread ? thread.scrollTop : 0;
-    var threadKey = thread ? thread.getAttribute("data-thread") : null;
+    var threadKey = thread ? threadIdentity(thread) : null;
     var atBottom = thread ? (thread.scrollHeight - thread.scrollTop - thread.clientHeight) < 80 : true;
 
     Utils.clear(appRoot);
@@ -3472,8 +3654,16 @@
 
     var newThread = document.querySelector(".thread");
     if (newThread) {
-      var sameThread = newThread.getAttribute("data-thread") === threadKey;
-      if (!sameThread || UI.local.scrollToBottom || atBottom) {
+      var sameThread = threadIdentity(newThread) === threadKey;
+      var returnTo = !sameThread ? returningFromBranch(threadKey, newThread) : null;
+      if (returnTo) {
+        /* Retour d'une exploration : le fil principal se rouvre SUR son message source, pas en bas — on revient là
+         * d'où l'on est parti. */
+        centerInThread(newThread, returnTo);
+      } else if (!sameThread && newThread.getAttribute("data-branch") && !UI.local.scrollToBottom) {
+        /* Arrivée dans une exploration : le message d'origine en tête, c'est lui qui donne le contexte. */
+        newThread.scrollTop = 0;
+      } else if (!sameThread || UI.local.scrollToBottom || atBottom) {
         newThread.scrollTop = newThread.scrollHeight;
       } else {
         newThread.scrollTop = scrollTop;

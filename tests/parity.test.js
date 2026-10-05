@@ -889,9 +889,9 @@ tests.push(() => check("ANONYMAT : rendu anonyme, un message ne garde aucun iden
   equal(finals[1], finals[0], "parité des états");
 }));
 
-tests.push(() => check("PARITÉ : le serveur annonce le marqueur par FEATURES \"idempotent\" (drapeaux existants conservés)", () => {
-  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins", "ideas"]);
-  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins", "ideas"], "liste lue par Sync.supports()");
+tests.push(() => check("PARITÉ : le serveur annonce ses marqueurs par FEATURES (\"idempotent\", \"branches\" ; drapeaux existants conservés)", () => {
+  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches"]);
+  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches"], "liste lue par Sync.supports()");
 }));
 
 tests.push(() => check("PARITÉ : actions marquées et non marquées, action par action", () => {
@@ -1174,7 +1174,8 @@ const ID_FIELDS = [
   ["messageId", (id) => ["CREATE_MESSAGE", "x4", "u1", { topicId: "t1", messageId: id, text: "Oui" }]],
   ["proposalId", (id) => ["CREATE_PROPOSAL", "x5", "u1", { topicId: "t1", proposalId: id, title: "Idée" }]],
   ["conclusionId", (id) => ["ADD_CONCLUSION", "x6", "u1", { topicId: "t1", conclusionId: id, text: "Cap" }]],
-  ["quoteId", (id) => ["CREATE_MESSAGE", "x7", "u1", { topicId: "t1", messageId: "m9", text: "Cité", quoteId: id }]]
+  ["quoteId", (id) => ["CREATE_MESSAGE", "x7", "u1", { topicId: "t1", messageId: "m9", text: "Cité", quoteId: id }]],
+  ["branchRootId", (id) => ["CREATE_MESSAGE", "x8", "u1", { topicId: "t1", messageId: "m9", text: "Exploré", branchRootId: id }]]
 ];
 
 /* Verdict des deux côtés (identiques, sinon échec) ; pour la citation, le message cité existe. */
@@ -1182,9 +1183,9 @@ function idVerdict(field, build, id) {
   const [type, actionId, actorId, payload] = build(id);
   const verdicts = SIDES.map((side) => {
     const state = sideSeed(side.impl);
-    if (field === "quoteId") {
+    if (field === "quoteId" || field === "branchRootId") {
       state.topics[0].messages.push({ id: String(id).trim(), authorId: "u2", authorName: "Alex", text: "Cible",
-        createdAt: NOW, updatedAt: NOW, reactions: {}, anon: false, quoteId: null });
+        createdAt: NOW, updatedAt: NOW, reactions: {}, anon: false, quoteId: null, branchRootId: null });
     }
     return side.impl.validateAction(state, { id: actionId, type: type, actorId: actorId, actorName: "Marie", ts: NOW, payload: payload });
   });
@@ -1288,6 +1289,126 @@ tests.push(() => check("VOCABULAIRE : les refus visibles disent « formulation d
   sources.forEach(([name, source]) => {
     equal((source.match(/fail\("[^"]*"\)/g) || []).filter((s) => /conclusion/i.test(s)), [], name);
   });
+}));
+
+
+/* ------------------------------------------------------------ Exploration --- */
+/* Une exploration (« branche ») n'est PAS un objet : c'est l'attribut `branchRootId` d'un message, qui le rattache
+ * au sous-fil ouvert depuis un message du fil principal. Distinct de `quoteId` (citer n'est pas explorer), une
+ * seule profondeur, aucune donnée tant que personne n'y écrit. Chaque vecteur est joué des DEUX côtés. */
+
+/* id → branchRootId, clés triées : la comparaison ne dépend pas de l'ordre des messages. */
+function shapedMessages(raw, label) {
+  const shaped = shapeBoth(raw, label);
+  const out = {};
+  shaped.topics[0].messages.map((m) => m.id).sort().forEach((id) => {
+    out[id] = shaped.topics[0].messages.find((m) => m.id === id).branchRootId;
+  });
+  return out;
+}
+
+tests.push(() => check("EXPLORATION : normalisation des données (historique, valide, racine absente, soi-même, imbriquée), à l'identique des deux côtés", () => {
+  const raw = { topics: [{ id: "t1", title: "T", messages: [
+    { id: "h1", text: "message d'avant, sans le champ" },
+    { id: "m0", text: "fil principal explicite", branchRootId: null },
+    { id: "r1", text: "source" },
+    { id: "b1", text: "réponse valide", branchRootId: "r1" },
+    { id: "b2", text: "racine absente", branchRootId: "disparue" },
+    { id: "b3", text: "racine = soi-même", branchRootId: "b3" },
+    { id: "b4", text: "racine qui est déjà une réponse", branchRootId: "b1" },
+    { id: "b5", text: "valeur non textuelle", branchRootId: { id: "r1" } },
+    { id: "b6", text: "espaces autour", branchRootId: "  r1  " },
+    { id: "b7", text: "chaîne vide", branchRootId: "" }
+  ] }, { id: "t2", title: "Autre sujet", messages: [{ id: "x1", text: "racine d'un AUTRE sujet", branchRootId: "r1" }] }] };
+  const got = shapedMessages(raw, "corpus");
+  equal(got, { b1: "r1", b2: null, b3: null, b4: null, b5: null, b6: "r1", b7: null, h1: null, m0: null, r1: null });
+  const other = shapeBoth(raw, "autre sujet").topics[1].messages[0];
+  equal(other.branchRootId, null, "une racine d'un autre sujet est introuvable dans CE sujet : neutralisée");
+  /* Le message historique garde tout le reste : il est lu comme avant, dans le fil principal. */
+  const h1 = shapeBoth(raw, "historique").topics[0].messages[0];
+  equal([h1.text, h1.quoteId, h1.branchRootId], ["message d'avant, sans le champ", null, null]);
+}));
+
+tests.push(() => check("EXPLORATION : profondeur 1 garantie, résultat indépendant de l'ordre des messages, normalisation stable", () => {
+  /* Chaîne : B déclare A pour racine, C déclare B, D déclare C. Seule une réponse dont la racine est du fil principal
+   * survit : B (racine A) est gardée ; C (racine B, une réponse) ne l'est pas ; D (racine C, qui DÉCLARAIT une
+   * racine) ne l'est pas non plus, même si C est neutralisée ensuite — la règle lit l'instantané de la passe 1. */
+  const messages = [
+    { id: "A", text: "a" },
+    { id: "B", text: "b", branchRootId: "A" },
+    { id: "C", text: "c", branchRootId: "B" },
+    { id: "D", text: "d", branchRootId: "C" }
+  ];
+  const forward = shapedMessages({ topics: [{ id: "t1", title: "T", messages: messages }] }, "ordre direct");
+  const backward = shapedMessages({ topics: [{ id: "t1", title: "T", messages: messages.slice().reverse() }] }, "ordre inverse");
+  equal(forward, { A: null, B: "A", C: null, D: null });
+  equal(backward, forward, "l'ordre des messages ne doit jamais changer le résultat");
+  SIDES.forEach((side) => {
+    const once = side.impl.ensureShape({ topics: [{ id: "t1", title: "T", messages: messages }] });
+    equal(side.impl.ensureShape(JSON.parse(JSON.stringify(once))), once, side.name + " : relire un état normalisé ne change rien");
+    once.topics[0].messages.forEach((m) => {
+      if (m.branchRootId) {
+        const root = once.topics[0].messages.find((r) => r.id === m.branchRootId);
+        assert(root && root.branchRootId === null, side.name + " : " + m.id + " a une racine qui n'est pas du fil principal");
+      }
+    });
+  });
+}));
+
+tests.push(() => check("EXPLORATION : CREATE_MESSAGE avec et sans branchRootId, verdicts et états identiques des deux côtés", () => {
+  const script = [
+    [{ topicId: "t1", messageId: "b1", text: "Première réponse : crée l'exploration", branchRootId: "m1" }, null],
+    [{ topicId: "t1", messageId: "b2", text: "Absent = fil principal" }, null],
+    [{ topicId: "t1", messageId: "b3", text: "null = fil principal", branchRootId: null }, null],
+    [{ topicId: "t1", messageId: "b4", text: "Racine absente", branchRootId: "disparue" }, "Le message d'origine n'existe plus."],
+    [{ topicId: "t1", messageId: "b5", text: "Sous-exploration", branchRootId: "b1" }, "On n'explore pas une réponse : explorez le message d'origine."],
+    [{ topicId: "t1", messageId: "b6", text: "Soi-même", branchRootId: "b6" }, "Un message ne peut pas être sa propre origine."],
+    [{ topicId: "t1", messageId: "b7", text: "Réservé", branchRootId: "__proto__" }, "Identifiant invalide."],
+    [{ topicId: "t1", messageId: "b8", text: "Cite une autre réponse, dans la même exploration", branchRootId: "m1", quoteId: "b1" }, null],
+    [{ topicId: "t1", messageId: "b9", text: "Anonyme dans l'exploration", branchRootId: "m1", anon: true }, null],
+    [{ topicId: "absent", messageId: "b10", text: "Sujet absent", branchRootId: "m1" }, "Ce sujet n'existe plus."]
+  ];
+  const finals = SIDES.map((side) => {
+    const state = sideSeed(side.impl);
+    script.forEach(([payload, expected], i) => {
+      const action = sideAction("CREATE_MESSAGE", payload, "u2", "e" + i);
+      const verdict = side.impl.validateAction(state, action);
+      equal(verdict, expected ? { ok: false, error: expected } : { ok: true, error: null }, side.name + " #" + i + " " + payload.messageId);
+      if (verdict.ok) { side.impl.applyAction(state, action, NOW); }
+    });
+    return state;
+  });
+  equal(finals[1], finals[0], "parité des états");
+  const byId = {};
+  finals[0].topics[0].messages.forEach((m) => { byId[m.id] = m; });
+  equal([byId.b1.branchRootId, byId.b2.branchRootId, byId.b3.branchRootId, byId.b8.branchRootId], ["m1", null, null, "m1"]);
+  equal([byId.b8.quoteId, byId.b8.branchRootId], ["b1", "m1"], "citer et explorer restent deux champs distincts");
+  equal([byId.b9.authorId, byId.b9.authorName, byId.b9.anon], ["", "Anonyme", true], "anonymat : aucun auteur partagé");
+  assert(!("branchId" in finals[0].topics[0].proposals[0]), "une proposition n'a aucun lien d'exploration");
+}));
+
+tests.push(() => check("EXPLORATION : l'appartenance ne change jamais après coup (modifier, signer, réagir), des deux côtés", () => {
+  const finals = SIDES.map((side) => {
+    const state = sideSeed(side.impl);
+    sideApply(side.impl, state, "CREATE_MESSAGE", { topicId: "t1", messageId: "b1", text: "Réponse", branchRootId: "m1" }, "u2", "f1");
+    sideApply(side.impl, state, "UPDATE_MESSAGE", { topicId: "t1", messageId: "b1", text: "Réponse corrigée", branchRootId: null }, "u2", "f2");
+    sideApply(side.impl, state, "SET_MESSAGE_SIGNATURE", { topicId: "t1", messageId: "b1", anon: true }, "u2", "f3");
+    sideApply(side.impl, state, "SET_REACTION", { topicId: "t1", messageId: "b1", emoji: "👌" }, "u1", "f4");
+    const b1 = state.topics[0].messages.find((m) => m.id === "b1");
+    equal([b1.branchRootId, b1.text, b1.authorId, b1.reactions], ["m1", "Réponse corrigée", "", { u1: "👌" }], side.name);
+    return state;
+  });
+  equal(finals[1], finals[0], "parité des états");
+}));
+
+tests.push(() => check("EXPLORATION : une action déjà appliquée n'est pas rejouée par le serveur (journal de déduplication)", () => {
+  const state = sideSeed(GS);
+  const action = sideAction("CREATE_MESSAGE", { topicId: "t1", messageId: "b1", text: "Réponse", branchRootId: "m1" }, "u2", "dup-1");
+  const first = GS.applyOne(state, action);
+  const second = GS.applyOne(state, action);
+  assert(first.ok === true && !first.duplicate, "première application refusée : " + JSON.stringify(first));
+  assert(second.duplicate === true, "seconde application non reconnue comme doublon : " + JSON.stringify(second));
+  equal(state.topics[0].messages.filter((m) => m.id === "b1").length, 1, "un seul message");
 }));
 
 /* ------------------------------------------------------------ Exécution --- */

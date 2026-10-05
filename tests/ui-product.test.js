@@ -583,7 +583,8 @@ const WAITING = "Contenu pas encore disponible sur cet appareil";
 check("BL-065 : sans copie locale (révision 0, rien reçu), « pas encore disponible » au lieu d'« Introuvable »", () => {
   const t = boot({ revision: 0, lastSyncAt: null, route: topicRoute("inconnu") });
   [topicRoute("inconnu"), { name: "proposals", topicId: "inconnu", raw: "#/topic/inconnu/proposals" },
-    { name: "conclusion", topicId: "inconnu", raw: "#/topic/inconnu/conclusion" }].forEach((route) => {
+    { name: "conclusion", topicId: "inconnu", raw: "#/topic/inconnu/conclusion" },
+    { name: "branch", topicId: "inconnu", messageId: "m1", raw: "#/topic/inconnu/branch/m1" }].forEach((route) => {
     t.go(route);
     const text = t.app().textContent;
     assert(text.indexOf(WAITING) >= 0, route.name + " : texte attendu absent : « " + text + " »");

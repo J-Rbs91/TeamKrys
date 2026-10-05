@@ -331,7 +331,7 @@
   }
 
   function markCurrentTopic(state, route) {
-    if (!route || ["topic", "proposals", "conclusion"].indexOf(route.name) < 0) { return; }
+    if (!route || ["topic", "proposals", "conclusion", "branch"].indexOf(route.name) < 0) { return; }
     if (!root.Core || !root.Core.findTopic) { return; }
     var topic = root.Core.findTopic(state, route.topicId);
     if (topic) { markTopicSeen(topic, state); }

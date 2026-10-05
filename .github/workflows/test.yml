@@ -34,6 +34,8 @@ jobs:
         run: node tests/onboarding.test.js
       - name: Navigation
         run: node tests/navigation.test.js
+      - name: Exploration d'un message (route, capacité serveur, charge utile)
+        run: node tests/branches.test.js
       - name: Contrats produit
         run: node tests/product-view.test.js
       - name: Intégration produit

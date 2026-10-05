@@ -12,7 +12,9 @@ Elle ne cherche pas à élargir BrainstO. à la gestion des réunions ou au suiv
 
 ### P0.1 — Restaurer la parité frontend/backend dans le dépôt
 
-Le frontend indique que `js/state.js` doit rester strictement équivalent au backend Apps Script, et `tests/parity.test.js` est conçu pour vérifier cette parité. Or `apps-script/Code.gs` n'est actuellement pas présent sur `main`, ce qui empêche de sécuriser les changements qui touchent le protocole ou les statuts.
+> **État constaté (version 1.20.0) : atteint.** `apps-script/Code.gs` est versionné sans secret (`.gitignore` ne laisse passer que `Code.gs` et `appsscript.json`), et `node tests/parity.test.js` s'exécute jusqu'au bout en CI. La fonctionnalité Explorer (`branchRootId`) a été la première évolution du modèle partagé livrée sous cette garde : normalisation et validation testées des deux côtés. Le paragraphe ci-dessous décrit l'état d'origine de cette priorité ; il est conservé pour l'historique.
+
+Le frontend indique que `js/state.js` doit rester strictement équivalent au backend Apps Script, et `tests/parity.test.js` est conçu pour vérifier cette parité. Au moment où cette roadmap a été écrite, `apps-script/Code.gs` n'était pas présent sur `main`, ce qui empêchait de sécuriser les changements qui touchent le protocole ou les statuts.
 
 **Objectif :** remettre le backend versionné ou rétablir un autre mécanisme de parité exécutable avant toute modification du schéma partagé.
 
@@ -165,7 +167,7 @@ Une cible plausible est :
 - **À débattre**
 - **Écartée**
 
-La migration exacte des valeurs existantes doit être décidée avec la parité frontend/backend restaurée.
+La migration exacte des valeurs existantes doit être décidée sous la garde de la parité frontend/backend, désormais restaurée (`tests/parity.test.js`).
 
 ### Critères de sortie
 
@@ -283,11 +285,11 @@ Les éléments suivants sont explicitement exclus :
 
 # Ordre d'exécution recommandé
 
-1. **P0.1** — rétablir la parité backend pour sécuriser les futures évolutions métier.
+1. ~~**P0.1** — rétablir la parité backend pour sécuriser les futures évolutions métier.~~ Atteint : `Code.gs` versionné, parité exécutée en CI.
 2. **P1.1** — accueil orienté maturité.
 3. **P1.2** — participation visible dans les votes et libellés moins ambigus.
 4. **P2.1** — « Conclusion » → « Consensus » côté produit, sans migration interne inutile.
-5. **P2.2** — simplification des statuts de propositions une fois la parité restaurée.
+5. **P2.2** — simplification des statuts de propositions (la parité, préalable, est restaurée).
 6. **P3.1** — nouveautés depuis la dernière visite.
 7. **P3.2**, **P4.1**, **P4.2** — consolidation documentaire et garde-fous.
 

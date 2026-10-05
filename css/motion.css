@@ -214,6 +214,29 @@
   .screen .bubble.flash { outline: 2px solid var(--accord); outline-offset: 2px; }
 }
 
+/* =========================================================== Exploration ==== */
+
+/* Arrivée dans l'exploration d'un message (une fois, à l'entrée) : le message source est déjà en tête — View
+   Transitions l'y a fait glisser depuis le fil (css/uxer.css) —, puis le trait d'origine se trace vers le bas, puis
+   les réponses se posent. Moins de 350 ms en tout ; le composeur, lui, ne bouge pas : on écrit dès la première image.
+   Le délai retranche le temps déjà écoulé (--enter-elapsed), comme la cascade d'arrivée : un second rendu pendant
+   l'entrée reprend l'animation au lieu de la rejouer. */
+@keyframes motion-connector { from { transform: scaleY(0); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .screen--enter .branch-connector {
+    transform-origin: top center;
+    animation: motion-connector var(--dur-base) var(--ease-out) backwards;
+    animation-delay: calc(120ms - var(--enter-elapsed, 0ms));
+  }
+
+  .screen--enter .branch-replies,
+  .screen--enter.branch .empty {
+    animation: motion-rise-soft var(--dur-base) var(--ease-out) backwards;
+    animation-delay: calc(180ms - var(--enter-elapsed, 0ms));
+  }
+}
+
 /* ============================================================== Volets ==== */
 
 @keyframes motion-unfold { from { opacity: 0; transform: translateY(-4px); } }

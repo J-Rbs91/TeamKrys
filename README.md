@@ -25,6 +25,7 @@ publicité ni service payant : les données restent sur le Google Drive de l'éq
 | **Navigation** | Quatre onglets en bas de l'écran : Sujets, Réunion, Pandore, Réglages. |
 | **Sujets** | Un sujet par point à traiter, classé par avancement : prêt pour la réunion, en discussion, clôturé. Les plus importants s'**épinglent** en tête, pour toute l'équipe. |
 | **Discussion** | Un fil de messages par sujet. **Appui long** sur un message pour réagir, copier ou en faire une proposition ; **glisser vers la droite** pour le citer. |
+| **Explorer** | Depuis un message, **Explorer cette idée** ouvre un espace d'exploration de cette idée à l'intérieur du sujet : les réponses y restent attachées au message, sans encombrer la discussion, qui n'en montre que le nombre (« 3 réponses »). Un seul niveau. |
 | **Anonymat** | Un interrupteur dans la zone d'écriture : le message part signé ou « Anonyme ». Un sujet peut aussi être proposé sans signature. |
 | **Propositions** | Pour, contre ou abstention, un vote par personne, modifiable. La barre montre où en est l'équipe. |
 | **Consensus** | Chaque sujet se referme sur un consensus ; celui qui arrive en tête sert de repère pour la réunion. |
@@ -152,6 +153,8 @@ tests/session.test.js      verrou par inactivité : quand l'ouverture exige le c
 tests/onboarding.test.js   présentation initiale : qui la voit, qui y échappe
 tests/navigation.test.js   contrat du geste retour : profondeurs déclarées, point
                            de passage unique
+tests/branches.test.js     Explorer : modèle, validation, normalisation, écran,
+                           compteur, brouillons, anonymat
 tests/motion.test.js       contrat du mouvement : jetons, repli, aucune boucle ni
                            dépassement, couche de continuité sans effet sur le focus
 ```
@@ -595,10 +598,24 @@ raccourci qu'une fois celui-ci annoncé :
 | `lean` | l'état envoyé n'emporte plus `processedActionIds` — **un tiers du poids** |
 | `pins` | épingler un sujet pour toute l'équipe (`SET_TOPIC_PIN`) |
 | `ideas` | déposer dans Pandore (`SUBMIT_IDEA` ; noms d'avant Pandore) |
+| `branches` | explorer un message (`CREATE_MESSAGE` avec `branchRootId`) — voir ci-dessous |
 
 Un serveur d'avant n'annonce rien : le client retombe sur le protocole
 d'origine. Un client d'avant ignore le champ : le serveur récent lui répond
 comme avant. Les deux sens de désaccord sont couverts par `tests/sync.test.js`.
+
+**`branches` est une garde, pas un raccourci.** Un `Code.gs` antérieur à
+`brainsto-backend-1.3.0` accepterait un message d'exploration et **perdrait son
+rattachement en silence** : la réponse tomberait dans la discussion principale.
+Tant que le serveur n'annonce pas `branches`, « Explorer cette idée » reste donc
+visible mais grisé, avec sa raison, et aucun message d'exploration n'est mis en
+file. En mode local, la fonctionnalité est disponible d'emblée. Pour l'ouvrir à
+l'équipe : recopier `apps-script/Code.gs` dans l'éditeur, puis **Déployer →
+Gérer les déploiements → Modifier → Version : Nouvelle** (voir
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md)). Le premier enregistrement dépose une
+sauvegarde `avant-brainsto-backend-1.3.0` ; c'est elle qu'il faudrait restaurer si
+l'on revenait à un `Code.gs` antérieur. Modèle et compatibilité :
+[`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md), « Explorer un message ».
 
 Mesuré sur un fil de 60 messages :
 
