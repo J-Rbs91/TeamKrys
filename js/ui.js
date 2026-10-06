@@ -3618,9 +3618,8 @@
       icon: "message",
       eyebrow: "Les sujets",
       title: "Un sujet par point à traiter",
-      text: "L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment "
-        + "actif au plus ancien. Le bouton + en ajoute un, signé ou anonyme. Épinglez "
-        + "les plus importants : ils restent en tête, pour tous.",
+      text: "« Nouveau sujet » en ajoute un, signé ou anonyme. Épinglez les plus "
+        + "importants : ils restent en tête, pour tous.",
       textLocal: "En mode local, rien n'est partagé avec l'équipe. Le vote et les "
         + "réactions prennent leur sens à plusieurs."
     },
@@ -3628,37 +3627,34 @@
       icon: "users",
       eyebrow: "Le débat",
       title: "On en discute, chacun à son rythme",
-      text: "La discussion se lit comme un fil de messages. Appui long sur une bulle : "
-        + "réagir, copier, en tirer une proposition. Glissez-la vers la droite pour la "
-        + "citer.",
+      text: "Appui long sur une bulle : réagir, citer, en tirer une proposition. "
+        + "Le masque, à gauche du champ, publie en anonyme.",
       textJoining: "L'équipe a déjà lancé des sujets : ouvrez-en un pour lire la "
         + "discussion. Appui long sur une bulle pour réagir ou en tirer une "
-        + "proposition ; glissez-la vers la droite pour la citer."
+        + "proposition."
     },
     proposals: {
       icon: "idea",
       eyebrow: "Propositions",
       title: "Les idées deviennent des propositions",
-      text: "Une proposition se vote pour, contre ou abstention, un vote par "
-        + "personne, modifiable. La barre montre où en est l'équipe.",
+      text: "Chacun vote pour, contre ou abstention. La barre montre où en est "
+        + "l'équipe.",
       extra: "votebar"
     },
     conclusion: {
       icon: "checkCircle",
       eyebrow: "Le consensus",
       title: "Quand toute l'équipe est d'accord",
-      text: "Une proposition votée de la même façon par toute l'équipe, pour ou contre, "
-        + "passe dans l'onglet Consensus. Pour la réunion, l'onglet Réunion : tout "
-        + "tient sur une page."
+      text: "Si toute l'équipe vote la même chose, pour ou contre, la proposition "
+        + "passe dans Consensus. L'onglet Réunion rassemble tout sur une page."
     },
     pandore: {
       icon: "inbox",
       eyebrow: "Pandore",
       title: "Ce qui ne se dit pas en réunion",
-      text: "Pandore n'est pas une discussion : c'est une zone d'expression libre et "
-        + "anonyme. Une idée, une plainte, une question : déposez-la depuis l'onglet "
-        + "Pandore. Une synthèse, lisible par tous, regroupe ce qui en ressort. Vous pourrez "
-        + "revoir cette présentation depuis les Réglages.",
+      text: "Une idée, une plainte, une question : déposez-la, anonymement. Un message "
+        + "déposé ne se modifie plus. Ce qui en ressort est regroupé dans une "
+        + "synthèse. Cette présentation se revoit depuis les Réglages.",
       extra: "logo"
     }
   };

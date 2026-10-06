@@ -509,35 +509,37 @@ Surtitre commun : `icône + NOM DE LA PARTIE + « n / 5 »`, en capitales, gris
 saute pas d'un panneau à l'autre, et six caractères remplacent une rangée de
 pastilles. Il satisfait aussi P2 : la longueur est visible dès le premier panneau.
 
+Textes en vigueur (version 1.22.4, `ONBOARD_TEXT` dans `js/ui.js`, qui fait foi) :
+
 **1 / 5 — LES SUJETS**
 Titre : « Un sujet par point à traiter »
-Corps : « L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment
-actif au plus ancien. Le bouton + en ajoute un ; vous pouvez le proposer sans le
-signer. »
+Corps : « « Nouveau sujet » en ajoute un, signé ou anonyme. Épinglez les plus
+importants : ils restent en tête, pour tous. »
 
 **2 / 5 — LE DÉBAT**
 Titre : « On en discute, chacun à son rythme »
-Corps : « La discussion se lit comme un fil de messages. Appuyez sur une bulle
-pour réagir, la citer, ou en tirer une proposition. »
+Corps : « Appui long sur une bulle : réagir, citer, en tirer une proposition. Le
+masque, à gauche du champ, publie en anonyme. »
 
 **3 / 5 — PROPOSITIONS**
 Titre : « Les idées deviennent des propositions »
-Corps : « Une proposition se vote pour, contre ou abstention — un vote par
-personne, modifiable. La barre montre où en est l'équipe. »
+Corps : « Chacun vote pour, contre ou abstention. La barre montre où en est
+l'équipe. »
 Appui visuel : la vraie `.vote-bar` en miniature dans un `.note`, jamais une
 flèche vers l'écran.
 
-**4 / 5 — LA CONCLUSION**
-Titre : « Ce que vous présenterez »
-Corps : « Chaque sujet se referme sur une conclusion. Chacun en choisit une
-seule ; la mieux votée porte la mention En tête. »
+**4 / 5 — LE CONSENSUS**
+Titre : « Quand toute l'équipe est d'accord »
+Corps : « Si toute l'équipe vote la même chose, pour ou contre, la proposition
+passe dans Consensus. L'onglet Réunion rassemble tout sur une page. »
 
-**5 / 5 — LA RÉUNION**
-Titre : « Tout tient sur une page »
-Corps : « Réglages, puis Ouvrir la synthèse : sujets, votes et conclusions,
-prêts à projeter. Vous pourrez revoir cette présentation depuis les Réglages. »
-Ornement : `Utils.logoMark(44)` **au repos** — anneau et point, sans animation.
-Bouton unique : « Commencer ». Plus de « Passer » : il n'y a plus rien à passer.
+**5 / 5 — PANDORE**
+Titre : « Ce qui ne se dit pas en réunion »
+Corps : « Une idée, une plainte, une question : déposez-la, anonymement. Un message
+déposé ne se modifie plus. Ce qui en ressort est regroupé dans une synthèse. Cette
+présentation se revoit depuis les Réglages. »
+Ornement : `Utils.logoMark(40)` **au repos** — anneau et point, sans animation.
+Bouton : « Commencer ».
 
 **Le libellé de la sortie dit la suite** (P3) : « Passer » sur les panneaux 1 à 4,
 « Commencer » sur le dernier. Jamais « Fermer », qui ne dit rien de ce qui arrive.
@@ -556,12 +558,13 @@ version précédente de ce document.
 Le compteur s'adapte : « 1 / 2 », « 1 / 3 », « 1 / 5 » selon le segment. Il ne
 promet jamais plus d'étapes qu'il n'en reste.
 
-**Variante de corps en mode local**, panneau *Les sujets* : « En mode local, les
-données restent sur cet appareil. Le vote et les réactions prennent leur sens à
+**Variante de corps en mode local**, panneau *Les sujets* : « En mode local, rien
+n'est partagé avec l'équipe. Le vote et les réactions prennent leur sens à
 plusieurs. »
 
 **Variante de corps sur espace peuplé**, panneau *Le débat* : « L'équipe a déjà
-lancé des sujets. Ouvrez-en un : la discussion s'y trouve. »
+lancé des sujets : ouvrez-en un pour lire la discussion. Appui long sur une bulle
+pour réagir ou en tirer une proposition. »
 
 ### 9.3 Machine à états
 
