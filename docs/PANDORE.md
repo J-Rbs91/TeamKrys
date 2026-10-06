@@ -65,7 +65,8 @@ Elle couvre **tous les dépôts présents** dans `pandore/depots/`, et remplace 
   destinataire, par urgence. Un seul axe à la fois. L'écran ne nomme pas l'axe (épure) :
   il montre les catégories dans l'ordre où l'IA les a écrites.
 - **Un point par sujet.** Plusieurs dépôts qui disent la même chose forment un seul
-  point. « 3 dépôts d'origine » dit le poids du sujet.
+  point. L'application affiche toute la synthèse en un seul bloc de texte ; le nombre
+  de dépôts d'origine reste dans le fichier (`sources`) mais n'est pas affiché.
 - **Une plainte reste une plainte.** Elle est synthétisée comme un constat, sans être
   adoucie. Une plainte contre l'encadrement ou la direction n'est jamais écartée : elle
   est gardée, sans nommer ni désigner personne.

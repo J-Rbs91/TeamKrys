@@ -420,8 +420,7 @@ personne ne relit un dépôt dans l'application, pas même vous, et il ne se ret
 2. Une IA en écrit ensuite une **synthèse automatique** : sujets proches regroupés,
    détails qui trahiraient l'auteur retirés, sens conservé, plaintes comprises.
 3. La synthèse s'ouvre avec le bouton **Voir la synthèse**, sous le champ de dépôt. Elle est **pour tous**, regroupée par les
-   catégories que l'IA a choisies (par nature, par thème…). « 3 dépôts d'origine »
-   signifie que trois dépôts disaient la même chose.
+   catégories que l'IA a choisies (par nature, par thème…), en un seul bloc de texte.
 
 Un dépôt n'apparaît donc pas tout de suite : il faut la collecte du jour, puis le
 passage de l'IA.

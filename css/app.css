@@ -1321,16 +1321,19 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   gap: 6px;
 }
 
-/* Pandore : une catégorie de la synthèse automatique. Le libellé vient de l'IA (axe choisi par elle) ; seule sa
-   place dans la hiérarchie est fixée ici, un cran sous le titre de section, au-dessus des cartes. */
+/* Pandore : la synthèse est UN bloc de texte (une seule carte). Les catégories (libellés venus de l'IA) et les titres
+   de points n'y sont que des repères de lecture : un cran au-dessus du corps, sans carte ni bordure propre. */
+.pandore-card { display: grid; gap: 14px; }
 .pandore-group {
-  margin: 10px 0 0;
+  margin: 8px 0 -6px;
   font-size: var(--fs-sm);
   font-weight: 650;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.pandore-group:first-child { margin-top: 0; }
+.pandore-card > .pandore-group:first-child { margin-top: 0; }
+.pandore-point { display: grid; gap: 2px; }
+.pandore-point-title { font-size: var(--fs-body); font-weight: 650; letter-spacing: -0.011em; overflow-wrap: anywhere; }
 
 /* Pandore : composeur à la façon d'une messagerie IA. Une seule boîte arrondie, le champ sans bord propre,
    l'envoi rond dans le coin bas-droit. Le bord de la boîte porte le repère du champ (`--line-field`, 3:1). */

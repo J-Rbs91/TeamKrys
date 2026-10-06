@@ -662,8 +662,8 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
       de Pages peut ajouter une dizaine de minutes) : **Voir la synthèse** ouvre l'écran
       Synthèse (bouton retour « Pandore », sans barre du bas) ; la synthèse apparaît sans
       mise à jour de l'application ; titre « Synthèse », sa date dessous,
-      résumé s'il y en a un, catégories dans l'ordre du fichier (l'axe de classement
-      n'est pas affiché), « N dépôts d'origine ».
+      un seul bloc de texte : résumé s'il y en a un, puis catégories dans l'ordre du
+      fichier et leurs points (ni axe de classement, ni nombre de dépôts d'origine).
 - [ ] Après une remise à zéro publiée : la même synthèse reste affichée, avec la note
       « Remise à zéro le … ». Un dépôt fait ensuite n'apparaît qu'à la synthèse suivante,
       qui remplace toute l'actuelle.

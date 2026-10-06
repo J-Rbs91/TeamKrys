@@ -2606,54 +2606,55 @@
     if (pandoreFeed.status === "idle" || (pandoreFeed.status !== "loading" && Utils.now() - pandoreFeed.loadedAt > PANDORE_STALE_MS)) {
       loadSynthesis();
     }
-    var list = el("div", { class: "stack" });
     var feed = pandoreFeed;
-    if (feed.status === "loading" && !feed.points.length) {
-      list.appendChild(el("p", { class: "hint", text: "Chargement…" }));
-      /* Deux cartes à la forme exacte des cartes de synthèse : à l'arrivée du contenu, rien ne saute. Elles
-       * chatoient lentement tant que dure le chargement, et disparaissent avec lui (css/motion.css). Le texte
-       * ci-dessus reste le seul à être lu. */
-      [0, 1].forEach(function () {
-        list.appendChild(el("div", { class: "card card-static stack skeleton-card", "aria-hidden": "true" }, [
+    var filled = feed.points.length > 0 || !!feed.resume;
+    var body;
+    if (feed.status === "loading" && !filled) {
+      /* Un bloc à la forme du bloc de synthèse : à l'arrivée du contenu, rien ne saute. Il chatoie lentement tant
+       * que dure le chargement, et disparaît avec lui (css/motion.css). « Chargement… » reste le seul texte lu. */
+      body = el("div", { class: "stack" }, [
+        el("p", { class: "hint", text: "Chargement…" }),
+        el("div", { class: "card card-static stack skeleton-card", "aria-hidden": "true" }, [
+          el("span", { class: "skeleton-line" }),
+          el("span", { class: "skeleton-line" }),
+          el("span", { class: "skeleton-line skeleton-short" }),
           el("span", { class: "skeleton-line skeleton-title" }),
           el("span", { class: "skeleton-line" }),
           el("span", { class: "skeleton-line skeleton-short" })
-        ]));
-      });
-    } else if (feed.status === "error" && !feed.points.length) {
-      list.appendChild(el("div", { class: "note" }, [
+        ])
+      ]);
+    } else if (feed.status === "error" && !filled) {
+      body = el("div", { class: "note" }, [
         icon("warning", 14),
         el("div", { class: "note-body" }, [
           el("div", { text: "Impossible de charger la synthèse." }),
           el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "pandore-retry",
             onclick: function () { pandoreFeed.status = "idle"; UI.force(); } }, [icon("sync", 15), el("span", { text: "Réessayer" })])
         ])
-      ]));
-    } else if (!feed.points.length) {
-      list.appendChild(el("p", { class: "hint", text: "Pas encore de synthèse." }));
-    }
-    var index = 0;
-    groupPoints(feed.points).forEach(function (group) {
-      if (group.label) { list.appendChild(el("h2", { class: "pandore-group", text: group.label })); }
-      group.points.forEach(function (point) {
-        index += 1;
-        list.appendChild(reveal(el("article", { class: "card card-static stack pandore-card" }, [
-          el("h3", { class: "card-title", text: point.titre }),
-          el("p", { class: "pre-wrap", text: point.texte }),
-          point.sources ? el("div", { class: "card-meta" }, [
-            el("span", { text: Utils.plural(point.sources, "dépôt d'origine", "dépôts d'origine") })
-          ]) : null
-        ]), index));
+      ]);
+    } else if (!filled) {
+      body = el("p", { class: "hint", text: "Pas encore de synthèse." });
+    } else {
+      /* Un seul bloc de texte : le résumé, puis chaque catégorie et ses points, à la suite. Pas une carte par point. */
+      var parts = [feed.resume ? el("p", { class: "pre-wrap", text: feed.resume }) : null];
+      groupPoints(feed.points).forEach(function (group) {
+        if (group.label) { parts.push(el("h2", { class: "pandore-group", text: group.label })); }
+        group.points.forEach(function (point) {
+          parts.push(el("div", { class: "pandore-point" }, [
+            el("h3", { class: "pandore-point-title", text: point.titre }),
+            el("p", { class: "pre-wrap", text: point.texte })
+          ]));
+        });
       });
-    });
+      body = reveal(el("article", { class: "card card-static pandore-card" }, parts), 0);
+    }
 
     return el("div", { class: "screen" }, [
       topbar({ title: "Synthèse", sub: feed.date ? "Du " + dayLabel(feed.date) : null, back: App.remonter, backLabel: "Pandore" }),
       el("div", { class: "content stack" }, [
         feed.resetOn ? el("p", { class: "hint", "data-key": "pandore-reset-note",
           text: "Remise à zéro le " + dayLabel(feed.resetOn) + ". Les nouveaux dépôts iront dans la prochaine synthèse." }) : null,
-        feed.resume ? el("p", { class: "pre-wrap pandore-resume", text: feed.resume }) : null,
-        list
+        body
       ])
     ]);
   }

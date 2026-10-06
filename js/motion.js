@@ -387,8 +387,7 @@
     if (quote && !snap.quote) { quote.classList.add("motion-enter"); }
   }
 
-  /* Le squelette de la synthèse a laissé place au contenu : les cartes arrivent ensemble, à la place exacte des
-   * blocs gris. C'est la seule arrivée groupée que cette couche anime : elle remplace une attente, elle ne
+  /* Le squelette de la synthèse a laissé place au contenu : le bloc arrive à la place exacte du bloc gris. C'est la seule arrivée groupée que cette couche anime : elle remplace une attente, elle ne
    * s'ajoute pas à une lecture. */
   function settleSkeleton(snap, appRoot) {
     if (!snap.skeleton || appRoot.querySelector(".skeleton-card")) { return; }

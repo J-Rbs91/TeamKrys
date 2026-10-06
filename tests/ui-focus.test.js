@@ -782,7 +782,7 @@ check("Pandore : la synthèse a son propre écran, ouvert par un bouton ; l'écr
   assert(!t.app().querySelector("nav.tabbar"), "écran de niveau 2 : pas de barre d'onglets");
 });
 
-check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'IA l'a choisi, en TEXTE (jamais en HTML) ; erreur avec « Réessayer »", async () => {
+check("synthèse automatique : lue dans pandore/synthese.json, un seul bloc classé comme l'IA l'a choisi, en TEXTE (jamais en HTML) ; erreur avec « Réessayer »", async () => {
   const t = boot();
   let calls = 0;
   t.ctx.fetch = (url, opts) => {
@@ -799,17 +799,19 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   t.go(synthesisRoute);
   await tick(); await tick();
   const cards = t.app().querySelectorAll(".pandore-card");
-  assert(cards.length === 3, cards.length + " carte(s), 3 attendues (le point sans titre est écarté)");
+  assert(cards.length === 1, cards.length + " bloc(s) : la synthèse est un seul bloc de texte");
+  const points = cards[0].querySelectorAll(".pandore-point");
+  assert(points.length === 3, points.length + " point(s), 3 attendus (le point sans titre est écarté)");
   const groups = t.app().querySelectorAll("h2.pandore-group");
   assert(groups.length === 2 && groups[0].textContent === "Plaintes" && groups[1].textContent === "Idées",
     "catégories dans l'ordre de l'IA, chacune une fois : " + Array.prototype.map.call(groups, (g) => g.textContent).join(", "));
-  const titles = Array.prototype.map.call(cards, (c) => c.querySelector(".card-title").textContent);
+  const titles = Array.prototype.map.call(points, (c) => c.querySelector(".pandore-point-title").textContent);
   assert(JSON.stringify(titles) === JSON.stringify(["<img src=x onerror=alert(1)>", "Pauses écourtées", "Afficher le planning le jeudi"]),
     "les points d'une catégorie sont regroupés sous elle : " + JSON.stringify(titles));
   assert(!t.app().querySelector("img") && !t.app().querySelector("b"), "du HTML venu du fichier a été interprété");
   const text = t.app().textContent;
-  assert(/2 dépôts d'origine/.test(cards[0].textContent) && /03\/10\/2026/.test(text), "métadonnées");
-  assert(/Deux sujets reviennent\./.test(text) && !/Classement choisi/.test(text), "résumé affiché, axe de classement masqué (épure)");
+  assert(/03\/10\/2026/.test(text) && !/dépôts? d'origine/.test(text), "date affichée, décompte des dépôts retiré");
+  assert(/Deux sujets reviennent\./.test(cards[0].textContent) && !/Classement choisi/.test(text), "résumé dans le bloc, axe de classement masqué (épure)");
   assert(!t.app().querySelector('[data-key="pandore-reset-note"]'), "pas de remise à zéro : aucune note");
   t.go(synthesisRoute);
   assert(calls === 1, "un rendu de plus ne doit pas relire le fichier (" + calls + " lectures)");
@@ -820,7 +822,8 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
     points: [{ id: "p1", titre: "Un", texte: "x", sources: ["aaaaaa"] }, { id: "p2", titre: "Deux", texte: "y", sources: ["bbbbbb"] }] }) });
   flat.go(synthesisRoute);
   await tick(); await tick();
-  assert(flat.app().querySelectorAll(".pandore-card").length === 2 && !flat.app().querySelector("h2.pandore-group"), "liste sans catégorie");
+  assert(flat.app().querySelectorAll(".pandore-card").length === 1 && flat.app().querySelectorAll(".pandore-point").length === 2
+    && !flat.app().querySelector("h2.pandore-group"), "liste sans catégorie");
 
   /* Remise à zéro : la synthèse reste affichée, avec la date. */
   const z = boot();
