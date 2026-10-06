@@ -730,9 +730,9 @@ check("Pandore : entrée depuis l'accueil ; composeur épuré, dépôt anonyme, 
   assert(!/GitHub|\bIA\b|Expression libre|Personne ne le relit|Ce que vous voulez dire/.test(text), "écran épuré : aucune explication à l'écran : " + text);
   t.app().querySelector('[data-key="pandore-info"]').click();
   const info = dialog(t);
-  assert(info && /GitHub public/.test(info.textContent) && /aucun nom/i.test(info.textContent) && /ni modifié ni retiré/.test(info.textContent),
-    "la feuille « i » doit porter le principe et l'avertissement de publication publique");
-  assert(!/\bIA\b|intelligence/i.test(info.textContent), "la feuille ne parle pas de la façon dont la synthèse est écrite");
+  assert(info && /sans nom/.test(info.textContent) && /ni modifié ni retiré/.test(info.textContent),
+    "la feuille « i » doit porter le principe : anonyme, ni modifié ni retiré");
+  assert(!/\bIA\b|intelligence|GitHub|synthèse/i.test(info.textContent), "la feuille s'en tient à deux phrases : " + info.textContent);
   t.ctx.UI.set({ sheet: null });
   assert(!/reformul|bo[iî]te à idées/i.test(text), "vocabulaire d'avant Pandore à l'écran : " + text);
   const area = () => t.app().querySelector('[data-draft="pandore:new"]');

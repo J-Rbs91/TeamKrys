@@ -2538,8 +2538,8 @@
   function screenPandore() {
     var unavailable = pandoreUnavailableReason();
     /* Composeur à la façon d'une messagerie IA : un seul champ, l'envoi dans son coin, une seule ligne dessous.
-     * Le principe et l'avertissement de publication publique vivent dans la feuille « i » de la barre du haut
-     * (pandoreInfoSheet) : rien d'autre ne s'explique à l'écran. */
+     * Le principe vit dans la feuille « i » de la barre du haut (pandoreInfoSheet) : rien d'autre ne s'explique à
+     * l'écran. */
     var area = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Une idée, une plainte, une question…", "aria-required": "true",
       "aria-label": "Ce que vous voulez dire", rows: "3", "data-draft": "pandore:new", disabled: !!unavailable
@@ -2663,9 +2663,7 @@
   function pandoreInfoSheet() {
     return sheet("Comment ça marche", el("div", { class: "stack" }, [
       el("p", { text: "Une idée, une plainte, une question, une remarque : déposez-la ici." }),
-      el("p", { text: "Votre message part sans nom. Une fois envoyé, il ne peut être ni modifié ni retiré." }),
-      el("p", { text: "Il est publié tel quel sur le GitHub public du projet. N'y mettez aucun nom ni rien de confidentiel." }),
-      el("p", { text: "Ce qui ressort des messages est regroupé dans la synthèse." })
+      el("p", { text: "Votre message part sans nom. Une fois envoyé, il ne peut être ni modifié ni retiré." })
     ]));
   }
 
