@@ -508,38 +508,36 @@ check("BL-009 fenêtres et feuille (nouveau sujet, modifier le sujet, le message
   });
 });
 
-check("Nouveau sujet : l'anonymat se choisit avec l'interrupteur « Publier en anonyme », jamais en vidant le champ nom", () => {
+check("Nouveau sujet : plus de champ nom (épure) ; l'anonymat se choisit avec l'interrupteur, le nom signé est celui de l'appareil", () => {
   const t = boot();
   const created = [];
   t.ctx.App.actions.createTopic = (title, desc, name) => { created.push({ title, name }); };
   t.go(TOPICS);
   t.set({ modal: { type: "createTopic" } });
-  const input = () => t.overlay().querySelector('input[data-draft="newTopic:name"]');
   const sw = () => t.overlay().querySelector('[data-key="newTopic-anon"]');
   const create = () => t.overlay().querySelectorAll("button").find((b) => b.textContent === "Créer").click();
-  assert(input() && nameOf(t.doc, input()) === "Votre nom", "champ « Votre nom » absent ou mal nommé");
+  assert(!t.overlay().querySelector('[data-draft="newTopic:name"]'), "le champ « Votre nom » doit disparaître");
   assert(sw() && sw().getAttribute("role") === "switch" && sw().getAttribute("aria-checked") === "false", "interrupteur absent ou allumé au départ");
   assert(sw().textContent === "Publier en anonyme", "libellé de l'interrupteur : « " + sw().textContent + " »");
-  assert(/Signé/.test(describedText(t.doc, sw())), "l'état signé n'est pas exposé : « " + describedText(t.doc, sw()) + " »");
+  assert(describedText(t.doc, sw()).indexOf("Signé : " + t.ctx.App.user.name) >= 0, "l'état signé n'est pas exposé : « " + describedText(t.doc, sw()) + " »");
 
   t.overlay().querySelector('[data-draft="newTopic:title"]').value = "Sujet";
-  input().value = "";
   create();
-  assert(created.length === 0, "un nom vidé, interrupteur éteint, a créé un sujet (anonyme par accident)");
-  assert(input().getAttribute("aria-invalid") === "true", "le refus n'est pas relié au champ nom");
+  assert(created.length === 1 && created[0].name === t.ctx.App.user.name, "création signée : nom transmis « " + (created[0] && created[0].name) + " »");
 
-  input().value = "Alice";
+  t.set({ modal: { type: "createTopic" } });
   sw().click();
-  assert(sw().getAttribute("aria-checked") === "true", "l'interrupteur ne s'allume pas");
-  assert(/aucune identité/i.test(describedText(t.doc, sw())), "l'effet de l'anonymat n'est pas exposé : « " + describedText(t.doc, sw()) + " »");
-  assert(input().closest(".field").hasAttribute("hidden"), "le champ nom reste visible en anonyme");
+  assert(sw().getAttribute("aria-checked") === "true" && /Anonyme/.test(describedText(t.doc, sw())), "l'interrupteur ne s'allume pas");
+  t.overlay().querySelector('[data-draft="newTopic:title"]').value = "Sujet";
   create();
-  assert(created.length === 1 && created[0].name === "", "création anonyme : nom transmis « " + (created[0] && created[0].name) + " »");
+  assert(created.length === 2 && created[1].name === "", "création anonyme : nom transmis « " + (created[1] && created[1].name) + " »");
 
-  sw().click();
-  assert(!input().closest(".field").hasAttribute("hidden") && input().value === "Alice", "le nom tapé ne revient pas à l'extinction : « " + input().value + " »");
+  /* Signé sans nom connu : refus, jamais d'anonymat par accident. */
+  t.ctx.App.user.name = "";
+  t.set({ modal: { type: "createTopic" } });
+  t.overlay().querySelector('[data-draft="newTopic:title"]').value = "Sujet";
   create();
-  assert(created.length === 2 && created[1].name === "Alice", "création signée : nom transmis « " + (created[1] && created[1].name) + " »");
+  assert(created.length === 2, "un sujet signé sans nom est parti (anonyme par accident)");
 });
 
 check("BL-009 erreur de saisie : aria-invalid et message relié au champ, focus au champ, effacés à la frappe", () => {
@@ -565,7 +563,7 @@ check("BL-009 erreur de saisie : aria-invalid et message relié au champ, focus 
   assert(!input.hasAttribute("aria-describedby"), "aria-describedby ne doit garder que ce qui existait avant l'erreur");
 });
 
-check("BL-009 UI.fieldError relie un refus venu de js/app.js au champ, sans perdre l'indication d'origine", () => {
+check("BL-009 UI.fieldError relie un refus venu de js/app.js au champ", () => {
   const t = boot();
   t.gate("connection");
   t.ctx.UI.fieldError("setup:url", "Collez l'adresse de l'équipe.");
@@ -573,7 +571,6 @@ check("BL-009 UI.fieldError relie un refus venu de js/app.js au champ, sans perd
   assert(input.getAttribute("aria-invalid") === "true", "aria-invalid absent");
   const text = describedText(t.doc, input);
   assert(text.indexOf("Collez l'adresse de l'équipe.") >= 0, "message non relié : « " + text + " »");
-  assert(text.indexOf("Cette adresse, ou le lien d'invitation entier") >= 0, "l'indication d'origine doit rester reliée");
   t.ctx.UI.fieldError("absent:cle", "sans effet");   // aucune exception
 });
 

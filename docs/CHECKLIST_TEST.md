@@ -238,8 +238,12 @@ agrandie.
 - [ ] Glisser depuis le **bord gauche** de l'écran : c'est le geste « retour » du
       système, la citation ne s'active pas.
 - [ ] **Copier le texte** dans la feuille : le texte est dans le presse-papiers.
-- [ ] Rappel « Appui long sur un message… » visible une fois, retiré par **Compris**,
-      absent après rechargement.
+- [ ] Aucun bandeau au-dessus du fil ; le rappel « Appui long sur un message… » est
+      dans les détails du sujet (toucher le titre).
+- [ ] Bouton masque à gauche du champ : il bascule signé / anonyme ; en anonyme, bouton
+      plein, champ en tirets, « Message anonyme… ». Plus de ligne « Signé : … ».
+- [ ] Bulles sans heure (elle est dans la feuille du message) ; « envoi… », « modifié »
+      et le cadenas restent.
 - [ ] Clavier : Entrée sur un message ouvre la feuille. Souris : clic ou clic droit.
       VoiceOver / TalkBack : double toucher.
 - [ ] **Clavier ouvert**, en pleine frappe : toucher l'interrupteur, **Envoyer** ou la
@@ -377,8 +381,9 @@ agrandie.
 
 ## 3. Sujets
 
-- [ ] Espace vide : l'état vide propose « Ajouter un sujet » **et** une ligne
-      « Ensuite : … » qui annonce le reste du cycle.
+- [ ] Espace vide : l'état vide propose « Ajouter un sujet », sans ligne « Ensuite : … ».
+- [ ] Carte de sujet : titre et dernière activité (et « Nouveau » s'il y a du neuf),
+      sans compteurs, extrait, auteur ni flèche.
 - [ ] Recherche sans résultat : le terme cherché est rappelé, et un bouton
       « Effacer la recherche » ramène la liste. Ce n'est **pas** le même écran que
       l'espace vide.
@@ -591,8 +596,17 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
 - [ ] Réglages → Système : le code d'espace est sous la connexion ;
       **Diagnostic technique** est replié et reste ouvert si on l'ouvre, même pendant une
       synchronisation ; une erreur de synchronisation s'affiche hors du volet.
-- [ ] Propositions : « Statut et actions » replié ; on y trouve le statut, « Modifier »
-      et « Retirer mon vote » ; ouvert, il le reste quand un collègue vote.
+- [ ] Propositions : barre et « n pour · n contre · n abstention » seulement ; « ••• »
+      replié en bas à droite : pourcentage, participation, auteur et date, statut,
+      « Modifier » et « Retirer mon vote » ; ouvert, il le reste quand un collègue vote.
+      « En vote » n'est pas affiché (état normal).
+- [ ] Consensus : pas de bandeau « Choix unique » ; ni auteur ni date ; le nombre de
+      votes seulement s'il y en a ; ajout par un champ avec flèche d'envoi.
+- [ ] Réunion : titre « Préparation de réunion », chaque sujet suivi de ses propositions
+      (« 3 pour, 1 contre ») et consensus ; la date d'édition n'apparaît qu'à l'impression.
+- [ ] Pastille d'état invisible quand tout va bien (à jour, local) ; visible en attente,
+      hors ligne ou en erreur.
+- [ ] Compteurs de caractères invisibles sous 90 % de la limite.
 - [ ] Accueil : une ligne de titre, une de repères ; le statut n'est plus répété sur
       les cartes, sauf dans « Épinglés ».
 - [ ] Feuille d'un message : quatre réactions (D'accord, Mitigé, Pas d'accord, À écarter),
@@ -602,10 +616,10 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
 
 ## 5 ter. Réglages sur deux niveaux
 
-- [ ] Réglages (onglet) : Votre nom, Réunion (« Ouvrir la synthèse »), Inviter des
-      collaborateurs, Présentation, puis la carte **Système** en dernier. Rien sur la
-      connexion ni la synchronisation ; une seule pastille d'état, en haut.
-- [ ] **Ouvrir les réglages Système** : écran **Système**, sans barre du bas, bouton
+- [ ] Réglages (onglet) : Votre nom (champ + Enregistrer), puis une liste de lignes :
+      Inviter des collaborateurs, Revoir la présentation, **Système** en dernier. Ni
+      cartes ni paragraphes. Rien sur la connexion ni la synchronisation.
+- [ ] Ligne **Système** : écran **Système**, sans barre du bas, bouton
       retour « Réglages ». Aucun mot de passe demandé.
 - [ ] Système : **Synchroniser maintenant**, **Modifier l'adresse ou le code**,
       **Envoyer quand même** (s'il y a des actions retenues) et **Se déconnecter de

@@ -1158,17 +1158,16 @@
       }) : null,
       el("div", { class: "content stack-lg" }, [
         heroBlock("Préparer les réunions de l'équipe, ensemble.", !App.connectionConfigured()),
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("link", "Rejoindre l'espace de l'équipe"),
+        /* Épure : plus de carte, de surtitre ni de paragraphes d'aide. Les indications des champs disent ce qu'on y
+         * met ; le code n'est jamais enregistré, l'adresse reste sur l'appareil (docs/GUIDE_UTILISATEUR.md). */
+        reveal(el("div", { class: "stack" }, [
           storageNote(),
           invitation ? el("div", { class: "note", "data-key": "invite-broken" }, [icon("warning", 14), el("span", { class: "note-body",
             text: "Ce lien d'invitation est incomplet : demandez-en un nouveau, ou saisissez l'adresse." })]) : null,
           canPaste() ? el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "invite-paste",
             onclick: pasteInvitation }, [icon("copy", 16), el("span", { text: "Coller l'invitation" })]) : null,
-          field("Adresse de l'équipe", urlInput,
-            "Cette adresse, ou le lien d'invitation entier, vous est envoyée par la personne qui gère l'équipe. Elle reste sur cet appareil."),
-          field("Code d'accès", codeInput,
-            "Laissez vide si aucun code n'a été configuré. Le code n'est jamais enregistré sur l'appareil."),
+          field("Adresse de l'équipe", urlInput),
+          field("Code d'accès", codeInput),
           el("button", { class: "btn btn-primary btn-block", type: "button", onclick: submit },
             [el("span", { text: "Enregistrer et continuer" }), icon("forward", 18)])
         ]), 1),
@@ -1187,22 +1186,22 @@
     var nameInput = bindCounter(el("input", {
       class: "input", type: "text", maxlength: Core.LIMITS.name,
       autocomplete: "name", placeholder: "Votre prénom", "aria-required": "true",
-      "aria-labelledby": "setup-name-question", "aria-describedby": "setup-name-hint",
+      "aria-labelledby": "setup-name-question",
       "data-draft": "setup:name",
       value: App.user.name || ""
     }), "setup:name", Core.LIMITS.name);
 
+    /* Épure : une question, un champ, un bouton. La barre ne garde que le retour, sans titre qui doublerait la
+     * question. */
     return el("div", { class: "screen" }, [
-      topbar({
-        title: "Votre nom",
-        back: App.connectionConfigured() ? function () { App.editConnection(); } : null,
+      App.connectionConfigured() ? topbar({
+        title: "", heading: false,
+        back: function () { App.editConnection(); },
         backLabel: "Connexion"
-      }),
+      }) : null,
       el("div", { class: "content stack-lg" }, [
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("user", "Votre identité"),
-          el("h2", { id: "setup-name-question", text: "Comment vous appelez-vous ?" }),
-          el("p", { class: "hint", id: "setup-name-hint", text: "Votre nom apparaît à côté de vos messages. Vous pourrez le changer et publier des messages anonymes à tout moment." }),
+        reveal(el("div", { class: "stack" }, [
+          el("h1", { class: "setup-question", id: "setup-name-question", text: "Comment vous appelez-vous ?" }),
           nameInput,
           counterFor("setup:name", Core.LIMITS.name),
           el("button", {
@@ -3130,26 +3129,16 @@
       placeholder: "Description (facultative)", "data-draft": "newTopic:desc"
     });
 
-    var nameInput = el("input", {
-      class: "input", type: "text", maxlength: Core.LIMITS.name, "aria-required": "true",
-      value: App.user.name || "", "data-draft": "newTopic:name"
-    });
-
-    var nameField = field("Votre nom", nameInput, "Le nom affiché sur ce sujet.");
-    if (anon) { nameField.setAttribute("hidden", ""); }
-
+    /* Épure : plus de champ « Votre nom » (le nom est connu, il se change dans Réglages) ni de « (obligatoire) ».
+     * Reste le choix signé / anonyme, dit avec le nom qui sera affiché. */
     return modal("Nouveau sujet", el("div", { class: "stack" }, [
-      field("Titre (obligatoire)", titleInput),
+      field("Titre", titleInput),
       counterFor("newTopic:title", Core.LIMITS.topicTitle),
       field("Description", descInput),
       signatureRow({
-        anon: anon, key: "newTopic-anon", whoId: "newTopic-who", whoText: anon ? "Anonyme" : "Signé",
-        describedBy: anon ? "newTopic-anon-hint" : null,
+        anon: anon, key: "newTopic-anon", whoId: "newTopic-who", whoText: anon ? "Anonyme" : "Signé : " + (App.user.name || "moi"),
         onToggle: function () { UI.set({ modal: Object.assign({}, spec, { anon: !anon }) }); }
-      }),
-      /* La ligne est étroite dans une fenêtre : l'effet de l'anonymat se dit dessous, en entier. */
-      anon ? el("p", { class: "hint", id: "newTopic-anon-hint", text: "Aucune identité ne sera enregistrée avec ce sujet." }) : null,
-      nameField
+      })
     ]), [
       el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
       el("button", {
@@ -3157,8 +3146,10 @@
         onclick: function () {
           var title = Utils.trim(titleInput.value);
           if (!title) { invalid(titleInput, "Le titre du sujet est obligatoire."); return; }
-          var name = anon ? "" : Utils.trim(nameInput.value);
-          if (!anon && !name) { invalid(nameInput, "Indiquez votre nom, ou allumez « Publier en anonyme »."); return; }
+          /* ⚠️ Un nom vide vaut anonymat pour createTopic : signé sans nom connu, on refuse plutôt que de publier en
+           * anonyme par accident. */
+          var name = anon ? "" : Utils.trim(App.user.name || "");
+          if (!anon && !name) { UI.toast("Indiquez votre nom dans Réglages, ou allumez « Publier en anonyme ».", "error"); return; }
           App.actions.createTopic(title, descInput.value, name);
         }
       })

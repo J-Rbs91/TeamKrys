@@ -3010,3 +3010,6 @@ html.has-layer body { overflow: hidden; }
 .settings-row > .icon { color: var(--muted); }
 .settings-row:active { background: var(--surface-sunken); }
 .settings-row-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+
+/* Écran « Votre nom » : la question tient lieu de titre. */
+.setup-question { font-size: var(--page-title); margin: 12px 0 4px; }

@@ -93,11 +93,11 @@ date (« Actif le 12/09/2026 ») à partir de sept jours.
 
 Un sujet possède un titre obligatoire et une description facultative. Il peut être
 proposé sans signature : dans « Nouveau sujet », allumez l'interrupteur **Publier en
-anonyme**, le même que sous le champ de message. Aucune identité n'est alors
-enregistrée dans les données partagées pour son auteur. Interrupteur éteint, le nom
-est obligatoire : un nom effacé ne publie jamais en anonyme par accident.
+anonyme**. Aucune identité n'est alors enregistrée dans les données partagées pour
+son auteur. Interrupteur éteint, le sujet est signé du nom choisi dans les Réglages.
 
-**Clôturer** ou **archiver** un sujet (dans « Détails ») demande une confirmation :
+Toucher le titre d'un sujet (avec son chevron) ouvre ses détails. **Clôturer** ou
+**archiver** un sujet, depuis ces détails, demande une confirmation :
 le changement vaut pour toute l'équipe. Il se rattrape en rechoisissant le statut.
 
 Les statuts sont :
@@ -107,7 +107,7 @@ Les statuts sont :
 - **Clôturé** : le travail préparatoire est terminé ;
 - **Archivé** : le sujet quitte la vue courante sans être supprimé.
 
-**Épingler un sujet.** Dans « Détails », **Épingler pour toute l'équipe** place le
+**Épingler un sujet.** Dans les détails du sujet, **Épingler pour toute l'équipe** place le
 sujet en tête de l'accueil, dans la section **Épinglés**, chez tout le monde. Tout
 membre peut épingler ou désépingler. Épingler ne change pas la date d'activité du
 sujet. Un sujet archivé reste dans les archives, même épinglé. La synthèse de réunion
@@ -167,8 +167,12 @@ sur votre propre téléphone.
   apparaît au-dessus du champ, et le clavier s'ouvre.
 
 Au clavier, Entrée sur un message ouvre la feuille. À la souris, un clic ou un clic
-droit. Avec un lecteur d'écran, le double toucher. Un rappel de ces gestes s'affiche
-au-dessus de la conversation tant que vous n'avez pas touché « Compris ».
+droit. Avec un lecteur d'écran, le double toucher. Le rappel de ces gestes est dans
+les détails du sujet (toucher son titre).
+
+**Écrire en anonyme.** Le bouton masque, à gauche du champ, bascule entre signé et
+anonyme. En anonyme, le bouton est plein, le champ a un bord en tirets et indique
+« Message anonyme… ».
 
 Le texte d'un message ne se sélectionne plus au doigt : l'appui long ouvre les
 actions. Utilisez **Copier le texte**.
