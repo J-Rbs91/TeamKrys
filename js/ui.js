@@ -2541,9 +2541,9 @@
     }
     var unavailable = pandoreUnavailableReason();
 
-    /* Composeur à la façon d'une messagerie IA : un seul champ, l'envoi dans son coin, aucun texte d'explication
-     * (la présentation initiale explique Pandore). Seul l'avertissement de publication publique reste à l'écran :
-     * c'est la seule chose à savoir AVANT d'écrire, et un dépôt ne se retire pas. */
+    /* Composeur à la façon d'une messagerie IA : un seul champ, l'envoi dans son coin, une seule ligne dessous.
+     * Le principe et l'avertissement de publication publique vivent dans la feuille « i » de la barre du haut
+     * (pandoreInfoSheet) : rien d'autre ne s'explique à l'écran. */
     var area = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Une idée, une plainte, une question…", "aria-required": "true",
       "aria-label": "Ce que vous voulez dire", rows: "3", "data-draft": "pandore:new", disabled: !!unavailable
@@ -2587,8 +2587,8 @@
         ])
       ]),
       el("p", { class: "pandore-notice" }, [
-        icon("warning", 13),
-        el("span", { text: unavailable || "Anonyme, mais publié tel quel sur le GitHub public. Aucun nom, rien de confidentiel." })
+        icon(unavailable ? "warning" : "lock", 13),
+        el("span", { text: unavailable || "Message anonyme non modifiable." })
       ])
     ]);
 
@@ -2634,7 +2634,10 @@
     });
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Pandore" }),
+      topbar({ title: "Pandore", sub: "Dites ce que vous avez à dire", actions: [
+        el("button", { class: "btn-icon", type: "button", "aria-label": "Comment fonctionne Pandore", "aria-haspopup": "dialog",
+          "data-key": "pandore-info", onclick: function () { UI.set({ sheet: { type: "pandoreInfo" } }); } }, [icon("info", 20)])
+      ] }),
       el("div", { class: "content stack-lg" }, [
         reveal(deposit, 0),
         el("section", { class: "stack" }, [
@@ -2650,6 +2653,17 @@
         ])
       ])
     ]);
+  }
+
+  /* Le principe de Pandore, à la demande. Aucun mot sur la façon dont la synthèse est écrite : seulement ce qu'il
+   * faut savoir pour déposer sans regret. */
+  function pandoreInfoSheet() {
+    return sheet("Comment ça marche", el("div", { class: "stack" }, [
+      el("p", { text: "Une idée, une plainte, une question, une remarque : déposez-la ici." }),
+      el("p", { text: "Votre message part sans nom. Une fois envoyé, il ne peut être ni modifié ni retiré." }),
+      el("p", { text: "Il est publié tel quel sur le GitHub public du projet. N'y mettez aucun nom ni rien de confidentiel." }),
+      el("p", { text: "Ce qui ressort des messages apparaît dans la synthèse, sous le champ." })
+    ]));
   }
 
   function screenMeeting() {
@@ -3424,6 +3438,7 @@
     if (spec) {
       if (spec.type === "message") { node = messageSheet(spec); }
       else if (spec.type === "topicInfo") { node = topicInfoSheet(spec); }
+      else if (spec.type === "pandoreInfo") { node = pandoreInfoSheet(); }
     } else if (UI.local.modal) {
       var m = UI.local.modal;
       if (m.type === "createTopic") { node = createTopicModal(m); }

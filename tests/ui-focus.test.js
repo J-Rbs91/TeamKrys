@@ -725,9 +725,14 @@ check("Pandore : entrée depuis l'accueil ; composeur épuré, dépôt anonyme, 
   t.ctx.App.actions.submitIdea = (text) => { sent.push(text); return Promise.resolve({ ok: true }); };
   t.go(pandoreRoute);
   const text = t.app().textContent;
-  assert(/GitHub public/.test(text) && /aucun nom/i.test(text), "l'avertissement de publication publique manque");
-  assert(/Synthèse/.test(text), "la synthèse doit avoir sa section");
-  assert(!/Expression libre|Personne ne le relit|Ce que vous voulez dire/.test(text), "écran épuré : plus de paragraphe d'explication ni de libellé visible : " + text);
+  assert(/Message anonyme non modifiable\./.test(text), "la ligne sous le champ manque");
+  assert(!/GitHub|\bIA\b|Expression libre|Personne ne le relit|Ce que vous voulez dire/.test(text), "écran épuré : aucune explication à l'écran : " + text);
+  t.app().querySelector('[data-key="pandore-info"]').click();
+  const info = dialog(t);
+  assert(info && /GitHub public/.test(info.textContent) && /aucun nom/i.test(info.textContent) && /ni modifié ni retiré/.test(info.textContent),
+    "la feuille « i » doit porter le principe et l'avertissement de publication publique");
+  assert(!/\bIA\b|intelligence/i.test(info.textContent), "la feuille ne parle pas de la façon dont la synthèse est écrite");
+  t.ctx.UI.set({ sheet: null });
   assert(!/reformul|bo[iî]te à idées/i.test(text), "vocabulaire d'avant Pandore à l'écran : " + text);
   const area = () => t.app().querySelector('[data-draft="pandore:new"]');
   const submit = () => t.app().querySelector('[data-key="pandore-submit"]');
@@ -971,11 +976,15 @@ check("barre de navigation : quatre onglets sur les écrans de premier niveau, l
   assert(went === null, "toucher l'onglet courant ne navigue pas");
 });
 
-check("Pandore : section à part, barre du haut réduite à son nom, l'anonymat dit sous le champ", () => {
+check("Pandore : section à part, titre et invitation, bouton « i », l'anonymat dit sous le champ", () => {
   const t = boot();
   t.go(pandoreRoute);
-  assert(t.app().querySelector(".topbar").textContent.trim() === "Pandore", "barre du haut : « " + t.app().querySelector(".topbar").textContent + " »");
-  assert(/^Anonyme/.test(t.app().querySelector(".pandore-notice").textContent), "l'anonymat doit être dit sous le champ");
+  const bar = t.app().querySelector(".topbar");
+  assert(bar.querySelector(".topbar-title").textContent === "Pandore" && bar.querySelector(".topbar-sub").textContent === "Dites ce que vous avez à dire",
+    "barre du haut : « " + bar.textContent + " »");
+  const info = bar.querySelector('[data-key="pandore-info"]');
+  assert(info && info.getAttribute("aria-label") === "Comment fonctionne Pandore", "bouton « i » absent ou sans nom");
+  assert(t.app().querySelector(".pandore-notice").textContent === "Message anonyme non modifiable.", "l'anonymat doit être dit sous le champ");
   assert(!t.app().querySelector('[data-key="back"]'), "Pandore n'est pas un écran enfant des sujets");
 });
 

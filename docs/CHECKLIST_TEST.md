@@ -645,10 +645,13 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
 Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 ([`PANDORE.md`](PANDORE.md), « Vérifier la mise en place »).
 
-- [ ] Onglet **Pandore** (barre du bas) → écran **Pandore** épuré : titre seul, un
-      champ arrondi avec la flèche d'envoi dans son coin, sans bouton retour : c'est une section à part. Nulle part « boîte à idées » ni « reformulation ».
-- [ ] Une seule ligne sous le champ : « Anonyme, mais publié tel quel sur le GitHub
-      public. Aucun nom, rien de confidentiel. » Aucun autre paragraphe d'explication.
+- [ ] Onglet **Pandore** (barre du bas) → écran **Pandore** épuré : titre « Pandore »,
+      sous-titre « Dites ce que vous avez à dire », bouton « i » à droite, un champ
+      arrondi avec la flèche d'envoi dans son coin, sans bouton retour : c'est une section à part. Nulle part « boîte à idées » ni « reformulation ».
+- [ ] Une seule ligne sous le champ : « Message anonyme non modifiable. » Aucune autre
+      explication à l'écran, aucune mention de l'IA.
+- [ ] Bouton « i » → feuille « Comment ça marche » : dépôt sans nom, ni modifié ni retiré,
+      publié tel quel sur le GitHub public, aucun nom ni rien de confidentiel.
 - [ ] Compteur de caractères invisible sous 1 800 caractères, visible au-delà.
 - [ ] Champ vide → la flèche (**Déposer anonymement**) affiche l'erreur sous le champ, rien ne part.
 - [ ] Dépôt → bandeau « Déposé anonymement. » ; champ vidé ; le texte **n'apparaît nulle part** dans

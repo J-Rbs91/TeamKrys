@@ -405,7 +405,8 @@ l'est jamais.
 Pandore est la zone d'**expression libre et anonyme** de l'équipe et de la direction.
 Ce n'est pas une discussion : on y dépose ce qu'on veut dire, une idée, une plainte,
 une question, une remarque, sans attendre de réponse. On l'ouvre avec l'onglet
-**Pandore**, dans la barre du bas.
+**Pandore**, dans la barre du bas. Le bouton **i**, en haut à droite, en rappelle le
+principe.
 
 **Déposer.** Écrivez votre texte, puis touchez la flèche ronde (**Déposer anonymement**). Il part **sans nom ni
 identifiant**, même si vous signez vos messages ailleurs. C'est une boîte aux lettres :
