@@ -16,14 +16,9 @@
  * pas « où l'on est », elle signifie « il reste du désaccord ».
  */
 
-:root {
-  --ux-motion-fast: 120ms;
-  --ux-motion-base: 180ms;
-  --ux-motion-route: 240ms;
-  --ux-motion-sheet: 220ms;
-  --ux-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --ux-ease-route: cubic-bezier(0.2, 0.8, 0.2, 1);
-}
+/* Aucune durée ni courbe propre à cette feuille : elles viennent des jetons de css/app.css (« Mouvement »). Les
+   anciennes variables propres à UXER doublaient ces jetons avec des valeurs voisines ; deux courbes presque
+   identiques finissent toujours par être réglées séparément. */
 
 /* =================================================== Parcours du sujet ==== */
 
@@ -60,10 +55,10 @@
   line-height: 1.15;
   cursor: pointer;
   transition:
-    border-color var(--ux-motion-fast) linear,
-    background var(--ux-motion-fast) linear,
-    color var(--ux-motion-fast) linear,
-    box-shadow var(--ux-motion-base) var(--ux-ease);
+    border-color var(--dur-fast) linear,
+    background var(--dur-fast) linear,
+    color var(--dur-fast) linear,
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
 .ux-flow-step:disabled {
@@ -75,7 +70,20 @@
   border-color: var(--accord);
   background: var(--accord-bg);
   color: var(--accord);
-  box-shadow: inset 0 -2px 0 var(--accord);
+}
+
+/* Le trait de l'étape courante est un ÉLÉMENT (posé par js/uxer-ui.js), et non plus une ombre interne : pendant un
+   changement d'étape, View Transitions le fait glisser d'une étape à l'autre (« Transitions de contexte », plus
+   bas). Même dessin qu'avant : 2 px au bas de l'étape, dans l'arrondi. */
+.ux-flow-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) / 0 0 2px 2px;
+  background: var(--accord);
+  pointer-events: none;
 }
 
 .ux-flow-step .icon { flex: 0 0 auto; }
@@ -109,9 +117,9 @@
 .ux-topic-card {
   border-color: var(--line-strong);
   transition:
-    border-color var(--ux-motion-fast) linear,
-    box-shadow var(--ux-motion-base) var(--ux-ease),
-    background var(--ux-motion-fast) linear;
+    border-color var(--dur-fast) linear,
+    box-shadow var(--dur-base) var(--ease-out),
+    background var(--dur-fast) linear;
 }
 
 .ux-card-action {
@@ -126,7 +134,7 @@
 }
 
 .ux-card-action .icon {
-  transition: transform var(--ux-motion-base) var(--ux-ease);
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
 .ux-legacy-forward { display: none; }
@@ -136,7 +144,7 @@
   width: calc(100% + 12px) !important;
   padding: 4px 6px !important;
   border-radius: var(--radius-sm) !important;
-  transition: background var(--ux-motion-fast) linear, box-shadow var(--ux-motion-fast) linear;
+  transition: background var(--dur-fast) linear, box-shadow var(--dur-fast) linear;
 }
 
 .ux-title-hint {
@@ -161,8 +169,8 @@
 
 .bubble {
   transition:
-    background var(--ux-motion-fast) linear,
-    box-shadow var(--ux-motion-base) var(--ux-ease);
+    background var(--dur-fast) linear,
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
 /* ======================================================= Vote / statut ==== */
@@ -187,9 +195,9 @@
 .ux-proposal-card,
 .ux-choice-selected {
   transition:
-    border-color var(--ux-motion-base) var(--ux-ease),
-    box-shadow var(--ux-motion-base) var(--ux-ease),
-    background var(--ux-motion-base) var(--ux-ease);
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
 }
 
 .ux-proposal-card.ux-has-my-vote {
@@ -201,28 +209,15 @@
   box-shadow: inset 3px 0 0 var(--accord), var(--shadow-card);
 }
 
-.vote-bar > span {
-  transition: width 220ms var(--ux-ease);
-}
-
 .ux-pressed {
   border-color: var(--accord) !important;
 }
 
 /* ========================================================== Micro-états ==== */
 
-.btn,
-.btn-icon,
-.btn-back,
-.fab,
-.send-btn,
-.sheet-action {
-  transition:
-    background var(--ux-motion-fast) linear,
-    border-color var(--ux-motion-fast) linear,
-    color var(--ux-motion-fast) linear,
-    box-shadow var(--ux-motion-base) var(--ux-ease);
-}
+/* Les transitions des commandes (fond, bord, couleur, enfoncement) sont déclarées en UN seul endroit,
+   css/motion.css, « Appui » : de deux listes `transition` concurrentes, la dernière chargée gagne en silence, et
+   la propriété oubliée cesse de s'animer sans que personne l'ait décidé. */
 
 @media (hover: hover) and (pointer: fine) {
   .ux-flow-step:not(:disabled):hover,
@@ -247,56 +242,35 @@
 
 /* ======================================================== Superpositions ==== */
 
-@keyframes ux-overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes ux-sheet-in {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes ux-modal-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.overlay { animation: ux-overlay-in var(--ux-motion-base) var(--ux-ease); }
-.sheet { animation: ux-sheet-in var(--ux-motion-sheet) var(--ux-ease); transform-origin: center bottom; }
-.modal { animation: ux-modal-in 200ms var(--ux-ease); transform-origin: center center; }
+/* Entrée, sortie, passage d'une feuille à une fenêtre et maintien à l'ouverture : css/motion.css, « Calques ». */
 
 /* ================================================ Transitions de contexte ==== */
 
-@keyframes ux-route-old-forward {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0.18; transform: translateX(-14px); }
-}
+/* Ce qui bouge pendant un changement d'écran, et ce qui ne bouge PAS.
 
-@keyframes ux-route-new-forward {
-  from { opacity: 0.2; transform: translateX(18px); }
-  to { opacity: 1; transform: translateX(0); }
-}
+   La barre du haut, la barre d'onglets et le parcours du sujet sont la charpente : ils restent en place et ne
+   font que fondre leur contenu (titre, onglet courant). Seul le contenu remplacé se déplace — animer la page
+   entière, barres comprises, faisait trembler précisément ce qui ne change pas.
 
-@keyframes ux-route-old-back {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0.18; transform: translateX(14px); }
-}
+   Les deux repères de position (trait de l'onglet courant, trait de l'étape courante) GLISSENT de l'ancienne
+   position à la nouvelle. C'est le seul mouvement qui dit où l'on est allé ; tout le reste dit seulement que
+   quelque chose a changé.
 
-@keyframes ux-route-new-back {
-  from { opacity: 0.2; transform: translateX(-18px); }
-  to { opacity: 1; transform: translateX(0); }
-}
+   Fondu et déplacement sont séparés. L'ancien contenu s'efface vite (--dur-fast), le nouveau arrive un peu après
+   et se pose sur toute la durée. Deux contenus qui se croisent longtemps à mi-opacité se lisent comme une
+   superposition, pas comme un passage.
 
-@keyframes ux-route-old-lateral {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-5px); }
-}
+   Sens : vers un niveau plus profond, le contenu vient de la droite ; en remontant, de la gauche ; entre deux
+   onglets, ni l'un ni l'autre — un fondu et 4 px de vertical (js/uxer-ui.js, transitionDirection). */
 
-@keyframes ux-route-new-lateral {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+@keyframes ux-route-fade-out { to { opacity: 0; } }
+@keyframes ux-route-fade-in { from { opacity: 0; } }
+@keyframes ux-route-old-forward { to { transform: translateX(-12px); } }
+@keyframes ux-route-new-forward { from { transform: translateX(16px); } }
+@keyframes ux-route-old-back { to { transform: translateX(12px); } }
+@keyframes ux-route-new-back { from { transform: translateX(-16px); } }
+@keyframes ux-route-old-lateral { to { transform: translateY(-4px); } }
+@keyframes ux-route-new-lateral { from { transform: translateY(4px); } }
 
 /* Repli des moteurs sans View Transitions : l'ancien écran disparaît comme
    avant, mais le nouvel écran garde le sens du déplacement. Ce repli est
@@ -312,20 +286,22 @@
 }
 
 @keyframes ux-route-fallback-lateral {
-  from { opacity: 0; transform: translateY(5px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 html.ux-route-fallback[data-ux-direction="forward"] .screen--enter {
-  animation: ux-route-fallback-forward 210ms var(--ux-ease-route) both;
+  animation: ux-route-fallback-forward var(--dur-slow) var(--ease-out) both;
 }
 
 html.ux-route-fallback[data-ux-direction="back"] .screen--enter {
-  animation: ux-route-fallback-back 210ms var(--ux-ease-route) both;
+  animation: ux-route-fallback-back var(--dur-slow) var(--ease-out) both;
 }
 
-html.ux-route-fallback[data-ux-direction="lateral"] .screen--enter {
-  animation: ux-route-fallback-lateral 180ms var(--ux-ease-route) both;
+html.ux-route-fallback[data-ux-direction="lateral"] .screen--enter,
+html.ux-route-fallback[data-ux-direction="branch-in"] .screen--enter,
+html.ux-route-fallback[data-ux-direction="branch-out"] .screen--enter {
+  animation: ux-route-fallback-lateral var(--dur-base) var(--ease-out) both;
 }
 
 html.ux-route-fallback .screen--enter .reveal {
@@ -335,33 +311,105 @@ html.ux-route-fallback .screen--enter .reveal {
 }
 
 @supports (view-transition-name: none) {
-  html.ux-vt::view-transition-group(root) {
-    animation-duration: var(--ux-motion-route);
-    animation-timing-function: var(--ux-ease-route);
+  /* Les noms ne sont posés QUE pendant une transition (`ux-vt`, posé par js/uxer-ui.js) : au repos, un élément
+     nommé forme un contexte d'empilement à part, ce qui n'a aucune raison d'exister hors transition. */
+  html.ux-vt .topbar { view-transition-name: ux-topbar; }
+  html.ux-vt .topbar-titles { view-transition-name: ux-title; }
+  html.ux-vt .topbar .btn-back { view-transition-name: ux-back; }
+  html.ux-vt .tabbar { view-transition-name: ux-tabbar; }
+  html.ux-vt .ux-flow { view-transition-name: ux-flow; }
+  html.ux-vt .tabbar-mark { view-transition-name: ux-tab-mark; }
+  html.ux-vt .ux-flow-mark { view-transition-name: ux-flow-mark; }
+  /* Exploration : la bulle du message source, désignée dans les deux écrans par js/uxer-ui.js (markShared). */
+  html.ux-vt .ux-vt-source { view-transition-name: ux-branch-source; }
+
+  /* Une transition ne retient jamais un toucher : le nouvel écran est actionnable dès la première image. */
+  html.ux-vt::view-transition { pointer-events: none; }
+
+  html.ux-vt::view-transition-group(*) {
+    animation-duration: var(--dur-slow);
+    animation-timing-function: var(--ease-out);
+  }
+
+  /* Le contenu : fondu court qui sort, fondu un peu retardé qui entre, et un seul déplacement par sens. Mélange
+     normal (et non additif) : l'ancien contenu passe dessous, le fond reste le fond. */
+  html.ux-vt::view-transition-old(root),
+  html.ux-vt::view-transition-new(root) {
+    mix-blend-mode: normal;
   }
 
   html[data-ux-direction="forward"]::view-transition-old(root) {
-    animation: ux-route-old-forward var(--ux-motion-route) var(--ux-ease-route) both;
+    animation: ux-route-fade-out var(--dur-fast) var(--ease-out) both, ux-route-old-forward var(--dur-slow) var(--ease-out) both;
   }
 
   html[data-ux-direction="forward"]::view-transition-new(root) {
-    animation: ux-route-new-forward var(--ux-motion-route) var(--ux-ease-route) both;
+    animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both, ux-route-new-forward var(--dur-slow) var(--ease-out) both;
   }
 
   html[data-ux-direction="back"]::view-transition-old(root) {
-    animation: ux-route-old-back var(--ux-motion-route) var(--ux-ease-route) both;
+    animation: ux-route-fade-out var(--dur-fast) var(--ease-out) both, ux-route-old-back var(--dur-slow) var(--ease-out) both;
   }
 
   html[data-ux-direction="back"]::view-transition-new(root) {
-    animation: ux-route-new-back var(--ux-motion-route) var(--ux-ease-route) both;
+    animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both, ux-route-new-back var(--dur-slow) var(--ease-out) both;
   }
 
   html[data-ux-direction="lateral"]::view-transition-old(root) {
-    animation: ux-route-old-lateral var(--ux-motion-route) var(--ux-ease-route) both;
+    animation: ux-route-fade-out var(--dur-fast) var(--ease-out) both, ux-route-old-lateral var(--dur-exit) var(--ease-out) both;
   }
 
   html[data-ux-direction="lateral"]::view-transition-new(root) {
-    animation: ux-route-new-lateral var(--ux-motion-route) var(--ux-ease-route) both;
+    animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both, ux-route-new-lateral var(--dur-base) var(--ease-out) 40ms both;
+  }
+
+  /* Entrer dans l'exploration d'un message, et en revenir : aucun glissement latéral. Le contenu s'efface et revient
+     sur place ; seul le message source se déplace, de sa place dans le fil à la tête de l'exploration. Il est déjà
+     là : il se déplace (--ease-move), il n'entre pas. */
+  html[data-ux-direction="branch-in"]::view-transition-old(root),
+  html[data-ux-direction="branch-out"]::view-transition-old(root) {
+    animation: ux-route-fade-out var(--dur-fast) var(--ease-out) both;
+  }
+
+  html[data-ux-direction="branch-in"]::view-transition-new(root),
+  html[data-ux-direction="branch-out"]::view-transition-new(root) {
+    animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both;
+  }
+
+  html.ux-vt::view-transition-group(ux-branch-source) {
+    animation-timing-function: var(--ease-move);
+  }
+
+  /* Le titre et le bouton retour changent de texte : un fondu croisé de 240 ms superposait deux titres lisibles à
+     la fois. L'ancien s'efface en 100 ms, le nouveau arrive ensuite, sur place et sans être étiré (object-fit) — la
+     barre elle-même, identique d'un écran à l'autre, ne bouge pas. */
+  html.ux-vt::view-transition-old(ux-title),
+  html.ux-vt::view-transition-new(ux-title),
+  html.ux-vt::view-transition-old(ux-back),
+  html.ux-vt::view-transition-new(ux-back) {
+    width: 100%;
+    height: 100%;
+    object-fit: none;
+    object-position: left center;
+    mix-blend-mode: normal;
+  }
+
+  html.ux-vt::view-transition-old(ux-title),
+  html.ux-vt::view-transition-old(ux-back) {
+    animation: ux-route-fade-out var(--dur-fast) var(--ease-out) both;
+  }
+
+  html.ux-vt::view-transition-new(ux-title),
+  html.ux-vt::view-transition-new(ux-back) {
+    animation: ux-route-fade-in var(--dur-base) var(--ease-out) 40ms both;
+  }
+
+  /* Une barre qui part (on entre dans un sujet) ou qui revient (on en sort) ne glisse pas avec le contenu : elle
+     s'efface ou apparaît sur place, plus vite que lui. */
+  html.ux-vt::view-transition-old(ux-tabbar):only-child,
+  html.ux-vt::view-transition-old(ux-flow):only-child,
+  html.ux-vt::view-transition-old(ux-tab-mark):only-child,
+  html.ux-vt::view-transition-old(ux-flow-mark):only-child {
+    animation-duration: var(--dur-exit);
   }
 
   /* Le rendu historique possède déjà ses entrées de cartes. Pendant un vrai
@@ -442,7 +490,6 @@ html.ux-route-fallback .screen--enter .reveal {
   .bubble,
   .ux-proposal-card,
   .ux-choice-selected,
-  .vote-bar > span,
   .btn,
   .btn-icon,
   .btn-back,
@@ -461,8 +508,9 @@ html.ux-route-fallback .screen--enter .reveal {
     transform: none !important;
   }
 
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     animation: none !important;
   }
 }

@@ -55,7 +55,8 @@ message = {
   id, authorId, authorName, text, createdAt, updatedAt,
   reactions: { participantId: emoji },   // une réaction par personne
   anon,                                  // true → authorName "Anonyme", authorId ""
-  quoteId                                // id d'un autre message du sujet, ou null
+  quoteId,                               // id d'un autre message du sujet, ou null (citation)
+  branchRootId                           // id d'un message du fil principal du sujet, ou null (exploration)
 }
 
 proposal = {
@@ -87,7 +88,7 @@ réseau n'est pas appliquée deux fois).
 | `CREATE_TOPIC` | `topicId`, `title`, `description`, `anon` |
 | `UPDATE_TOPIC` | `topicId`, `title`, `description` |
 | `CHANGE_TOPIC_STATUS` | `topicId`, `status` |
-| `CREATE_MESSAGE` | `topicId`, `messageId`, `text`, `quoteId`, `anon` |
+| `CREATE_MESSAGE` | `topicId`, `messageId`, `text`, `quoteId`, `anon`, `branchRootId` (facultatif, capacité `branches`) |
 | `UPDATE_MESSAGE` | `topicId`, `messageId`, `text` |
 | `SET_MESSAGE_SIGNATURE` | `topicId`, `messageId`, `anon` |
 | `SET_REACTION` | `topicId`, `messageId`, `emoji`, `set` (facultatif) |
@@ -285,6 +286,112 @@ sans `conclusion`. Deux voies :
 - `ensureShape()` (serveur **et** client) recrée les champs manquants : un JSON
   produit par une version antérieure ne fait jamais planter l'application.
 
+### Explorer un message (`branchRootId`)
+
+Une exploration est un **espace d'exploration d'une idée à l'intérieur d'un sujet** :
+le sous-fil ouvert depuis un message du fil principal, pour approfondir l'idée sans
+encombrer la discussion. Ce n'est **pas** un objet : il n'existe ni collection
+`branches`, ni action `CREATE_BRANCH`, ni titre, ni statut. C'est un attribut du
+message :
+
+- `branchRootId = null` : le message appartient au **fil principal** ;
+- `branchRootId = "<id>"` : le message appartient à l'exploration ouverte depuis le
+  message `<id>`.
+
+Une exploration existe dès qu'**au moins un** message la désigne. L'ouvrir n'écrit
+rien : aucune exploration vide n'est jamais enregistrée.
+
+Règles, identiques côté application (`js/state.js`) et côté serveur
+(`apps-script/Code.gs`), vérifiées vecteur par vecteur par `tests/parity.test.js` :
+
+- **Le message source** existe, dans le **même sujet**, et appartient au **fil
+  principal** (`branchRootId === null`). Il n'est pas le message lui-même.
+- **Une seule profondeur.** On n'explore pas une réponse d'exploration : une
+  exploration ne contient jamais de sous-exploration.
+- **Immuable.** Aucune action ne change `branchRootId` après la création : modifier,
+  signer ou réagir laisse le message dans son fil.
+- **Citer n'est pas explorer.** `quoteId` (« ce message répond à celui-ci ») et
+  `branchRootId` (« ce message appartient à cette exploration ») sont deux champs
+  distincts. Un message d'exploration peut citer un autre message : sa règle est
+  inchangée (tout message du sujet, sauf lui-même). La durcir ferait refuser le
+  message d'un ancien client qui cite une réponse d'exploration.
+- **Normalisation à la lecture** (`ensureShape`), en deux passes pour que le
+  résultat ne dépende jamais de l'ordre des messages : d'abord, une source absente
+  ou égale au message est neutralisée (`null`) ; ensuite, une source qui portait
+  elle-même un `branchRootId` après la première passe l'est aussi. Le message
+  reste, dans le fil principal. Relire un état normalisé ne change rien.
+- **Validation de `CREATE_MESSAGE`** : `branchRootId` absent ou `null` = fil
+  principal (exactement le comportement d'avant). Sinon, refus métier (code
+  `invalid`) si : « Le message d'origine n'existe plus. », « On n'explore pas une
+  réponse : explorez le message d'origine. », « Un message ne peut pas être sa propre
+  origine. », ou identifiant invalide (mêmes limites que les autres identifiants).
+- **Anonymat.** `branchRootId` relie un message à un message, jamais à une
+  personne. Un message anonyme d'exploration n'a ni `authorId` ni réaction de son
+  auteur, comme dans le fil principal.
+- **Une proposition reste au sujet.** Elle naît du texte d'un message (fil principal
+  ou exploration) mais ne porte aucun lien d'exploration.
+- **Aucun message n'est supprimable** dans BrainstO. : un message source ne peut pas
+  disparaître, et une réponse ne peut donc jamais devenir orpheline en usage normal.
+  La neutralisation de `ensureShape` couvre les données abîmées.
+
+**Compatibilité de versions** (le frontend et le backend se déploient séparément) :
+
+| Situation | Ce qui se passe |
+|---|---|
+| Message d'avant la 1.20.0, sans le champ | Lu `branchRootId: null` : fil principal, comme avant. Aucune migration |
+| Backend 1.3.0, application à jour | Le serveur annonce la capacité `branches` ; « Explorer » est disponible |
+| Backend antérieur, application à jour | Pas de capacité `branches` : « Explorer » reste visible mais désactivé, avec sa raison, et l'application ne met **jamais** un message d'exploration en file. Un backend antérieur l'accepterait en perdant le champ en silence (constaté et testé : `tests/sync.test.js`) |
+| Ouverture hors ligne, avant toute réponse du serveur | La dernière réponse connue du serveur, retenue sur l'appareil (`brainsto.cap.branches`, un booléen, effacé à la déconnexion et au changement de serveur). Inconnue : non |
+| Mode local | Disponible : le noyau de l'appareil range lui-même |
+| Ancien frontend (gardé en cache par la PWA) | Sa normalisation ignore le champ : il affiche **temporairement** les réponses d'exploration dans le fil principal, à leur place chronologique, jusqu'à sa mise à jour (bandeau « Nouvelle version »). Il ne peut rien corrompre : un client n'envoie jamais l'état, seulement des actions, et il ne peut pas créer de message d'exploration |
+| **Retour forcé vers un backend antérieur à 1.3.0** après usage | Il ne comprend pas `branchRootId` : la première action enregistrée supprime les rattachements du fichier de données, les textes restent. `backupNow()` **avant** de redéployer : voir « Retour arrière après le backend 1.3.0 », scénario 2 |
+
+#### Retour arrière après le backend 1.3.0
+
+Trois scénarios, à ne pas confondre. Appliquer le premier qui suffit.
+
+**Scénario 1 — Problème côté application (frontend).**
+
+- Revenir sur le changement applicatif sur `main` (commit d'annulation), publié
+  comme une nouvelle version : `APP_VERSION` et `CACHE_VERSION` incrémentés
+  ensemble (README, « Publier une nouvelle version »).
+- **Conserver le backend 1.3.0** en service. Ne pas recopier `Code.gs` depuis
+  `main` après l'annulation : le dépôt reviendrait à un `Code.gs` antérieur, et le
+  déployer ferait passer au scénario 2.
+- **Aucune restauration de données.**
+- **Aucune perte** : messages, votes, consensus et explorations restent intacts,
+  car le backend 1.3.0 sert aussi les anciennes versions de l'application. Seul
+  effet visible : une application qui ne connaît pas `branchRootId` affiche les
+  réponses d'exploration dans le fil principal. Leur rattachement reste dans les
+  données et réapparaît avec une version qui le connaît.
+
+**Scénario 2 — Retour forcé vers un backend antérieur à 1.3.0.**
+
+- **D'abord**, exécuter `backupNow()` dans l'éditeur Apps Script. La copie
+  `brainsto-data.json.manuel.<date>` est un instantané récent : elle contient
+  toutes les données actuelles et les `branchRootId`.
+- **Seulement ensuite**, redéployer l'ancien backend.
+- L'ancien backend ne comprend pas `branchRootId`. Dès son déploiement, il sert un
+  état sans ces rattachements : les réponses d'exploration s'affichent dans le fil
+  principal. Il réécrit l'état complet à chaque enregistrement : la première action
+  enregistrée supprime donc ces rattachements du fichier de données, pour tous les
+  messages. Les textes restent.
+- Pour retrouver les rattachements : redéployer le backend 1.3.0, puis
+  `restoreFromBackup` sur la copie `manuel`. Les écritures faites entre cette copie
+  et la restauration sont alors perdues.
+
+**Scénario 3 — Dernier recours : la copie `avant-brainsto-backend-1.3.0`.**
+
+- Le backend 1.3.0 la dépose automatiquement juste avant sa première écriture
+  (`brainsto-data.json.avant-brainsto-backend-1.3.0.<date>`). Elle représente
+  l'**état antérieur au déploiement 1.3.0**.
+- La restaurer ramène **TOUT l'état partagé** à cette date. Elle peut donc
+  supprimer **tous** les messages, votes, consensus, explorations et autres
+  écritures créés depuis, pas seulement les explorations.
+- À n'utiliser que si les scénarios 1 et 2 ne suffisent pas, par exemple des
+  données abîmées sans copie plus récente utilisable. `restoreFromBackup` garde
+  l'état remplacé dans une copie `avant-restauration`, mais ne le refusionne pas.
+
 ## Limites de saisie
 
 | Champ | Limite |
@@ -299,7 +406,7 @@ sans `conclusion`. Deux voies :
 | Dépôt dans Pandore | 2000 |
 
 Les identifiants (`actorId`, `participantId`, `topicId`, `messageId`, `proposalId`,
-`conclusionId`, `quoteId`, `ideaId` et l'`id` d'une action) ont **120 caractères au plus** : au
+`conclusionId`, `quoteId`, `branchRootId`, `ideaId` et l'`id` d'une action) ont **120 caractères au plus** : au
 delà, l'action est refusée (« Identifiant invalide. », code `invalid`). Treize noms
 sont aussi réservés et refusés, une fois les espaces retirés : `__proto__`,
 `constructor`, `prototype`, `hasOwnProperty`, `toString`, `valueOf`,

@@ -29,6 +29,7 @@ Si la réponse est non, la fonctionnalité est probablement hors périmètre de 
 
 2. **Qu'en pense l'équipe ?**
    - La discussion, les citations et les réactions permettent à chacun d'apporter son point de vue à son rythme.
+   - **Explorer** une idée permet de la creuser sans encombrer la discussion du sujet (voir section 11 bis).
 
 3. **Quelles options émergent ?**
    - Les propositions transforment les idées issues du débat en options explicites.
@@ -175,6 +176,21 @@ Les invariants existants sont à préserver :
 - l'identité d'un message anonyme n'est pas conservée dans les données partagées ;
 - un message anonyme ne doit pas être visuellement identifiable comme « le mien » par une personne regardant l'écran ;
 - les droits locaux permettant de modifier un contenu anonyme ne doivent pas être transmis après déconnexion.
+
+## 11 bis. Explorer : creuser une idée, pas ouvrir un second fil
+
+Explorer est **un espace d'exploration d'une idée à l'intérieur d'un sujet**. Ce n'est pas une messagerie secondaire, ni un sous-sujet.
+
+Elle sert la question 2 (« Qu'en pense l'équipe ? ») : une idée qui suscite précisions, objections ou variantes peut être creusée sans que cet échange recouvre le reste de la discussion. Ce qui en sort de mûr rejoint la chaîne habituelle : une réponse peut devenir une **proposition du sujet**, comme n'importe quel message.
+
+Les limites sont des décisions produit, pas des manques :
+
+- **un seul niveau** : on n'explore pas une réponse d'exploration. Au-delà, l'arborescence disperserait la discussion au lieu de la concentrer ;
+- **pas d'objet « branche »** : une exploration n'a ni titre, ni statut, ni auteur. Elle existe dès sa première réponse, et pas avant ; l'ouvrir ne laisse aucune trace ;
+- **une proposition reste attachée au sujet**, jamais à une exploration : on vote sur le sujet, pas sur un recoin de la discussion ;
+- **l'anonymat est intact** : le rattachement relie un message à un message, jamais à une personne.
+
+Une demande qui ferait d'une exploration un lieu autonome (la nommer, la clore, la déplacer, la suivre à part) relève de la section 16 : elle change de catégorie de logiciel.
 
 ## 12. Réactions : décision assumée
 

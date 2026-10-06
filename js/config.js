@@ -10,7 +10,7 @@
     APP_NAME: "BrainstO.",
 
     /* À incrémenter EN MÊME TEMPS que CACHE_VERSION dans service-worker.js. */
-    APP_VERSION: "1.18.1",
+    APP_VERSION: "1.20.0",
 
     /* Révision de la SÉQUENCE de présentation, volontairement DISTINCTE de
      * APP_VERSION. Indexer le rejeu sur la version de l'application ferait revoir
@@ -118,7 +118,10 @@
       ownItems: "brainsto.ownItems",
       localMode: "brainsto.localMode",
       showArchived: "brainsto.showArchived",
-      onboarding: "brainsto.onboarding"
+      onboarding: "brainsto.onboarding",
+      /* Dernière réponse connue du serveur sur la capacité « branches » (exploration d'un message). Un booléen sur
+       * le SERVEUR, rien de la personne : il ne sert qu'à l'ouverture hors ligne (voir App.branchesAvailable). */
+      branchesCapability: "brainsto.cap.branches"
     }
   };
 

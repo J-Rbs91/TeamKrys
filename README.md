@@ -25,6 +25,7 @@ publicité ni service payant : les données restent sur le Google Drive de l'éq
 | **Navigation** | Quatre onglets en bas de l'écran : Sujets, Réunion, Pandore, Réglages. |
 | **Sujets** | Un sujet par point à traiter, classé par avancement : prêt pour la réunion, en discussion, clôturé. Les plus importants s'**épinglent** en tête, pour toute l'équipe. |
 | **Discussion** | Un fil de messages par sujet. **Appui long** sur un message pour réagir, copier ou en faire une proposition ; **glisser vers la droite** pour le citer. |
+| **Explorer** | Depuis un message, **Explorer cette idée** ouvre un espace d'exploration de cette idée à l'intérieur du sujet : les réponses y restent attachées au message, sans encombrer la discussion, qui n'en montre que le nombre (« 3 réponses »). Un seul niveau. |
 | **Anonymat** | Un interrupteur dans la zone d'écriture : le message part signé ou « Anonyme ». Un sujet peut aussi être proposé sans signature. |
 | **Propositions** | Pour, contre ou abstention, un vote par personne, modifiable. La barre montre où en est l'équipe. |
 | **Consensus** | Chaque sujet se referme sur un consensus ; celui qui arrive en tête sert de repère pour la réunion. |
@@ -118,7 +119,8 @@ n'est jamais stocké (voir « Verrou » ci-dessous).
 
 ```
 index.html                 coquille de l'application
-css/app.css                thème unique, clair et sombre automatiques
+css/app.css                thème unique, clair et sombre automatiques ; jetons de mouvement
+css/motion.css             continuité : appui, calques, apparitions, réponses, repère
 js/config.js               constantes (version, rythmes, clés de stockage)
 js/utils.js                DOM sûr (texte brut), dates, SHA-256, stockage
 js/state.js                modèle de données, validation et réduction des actions
@@ -126,11 +128,13 @@ js/database.js             IndexedDB : file d'actions + dernier état connu
 js/api.js                  appels au backend (GET révision / état, POST action)
 js/sync.js                 synchronisation optimiste, file, indicateur d'état
 js/ui.js                   rendu des écrans, feuilles et fenêtres
+js/motion.js               continuité : rejoue la différence entre deux rendus (FLIP)
 js/app.js                  démarrage, navigation, verrou, actions utilisateur
 service-worker.js          hors ligne : précache de la coquille, critique et optionnel
 manifest.webmanifest       installation sur l'écran d'accueil
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/IDENTITE_VISUELLE.md  le noyau d'identité : pourquoi le produit est ainsi
+docs/MOUVEMENT.md          ce qui bouge, quand, et pourquoi ; ce qui ne bouge pas
 docs/                      installation, guide utilisateur, checklist de test
 docs/captures/             captures du README (données fictives)
 tools/check-contrast.py    relit les jetons du thème et échoue sous le seuil
@@ -149,6 +153,10 @@ tests/session.test.js      verrou par inactivité : quand l'ouverture exige le c
 tests/onboarding.test.js   présentation initiale : qui la voit, qui y échappe
 tests/navigation.test.js   contrat du geste retour : profondeurs déclarées, point
                            de passage unique
+tests/branches.test.js     Explorer : modèle, validation, normalisation, écran,
+                           compteur, brouillons, anonymat
+tests/motion.test.js       contrat du mouvement : jetons, repli, aucune boucle ni
+                           dépassement, couche de continuité sans effet sur le focus
 ```
 
 ---
@@ -353,7 +361,9 @@ quand l'utilisateur vit la centième.
 |---|---|---|
 | Retour à l'appui, survol | 100 ms | plusieurs fois par minute |
 | Révélation des cartes à l'arrivée sur un écran | 220 ms, 8 px, décalage 18 ms **plafonné à six crans** | plusieurs fois par jour |
-| Feuille, fenêtre | 240 ms | quotidien |
+| Feuille, fenêtre | 240 ms à l'ouverture, plus court à la fermeture | quotidien |
+| Message envoyé ou reçu, vote, réaction, carte ajoutée ou retirée | 160 à 220 ms, **depuis l'ancien état** | plusieurs fois par jour |
+| Changement d'écran | 240 ms ; barres immobiles, seuls le contenu et le trait de position bougent | plusieurs fois par jour |
 | **Séquence d'accueil** | 1060 ms, en quatre temps | une fois par ouverture |
 | Arrivée de la présentation initiale | 240 ms le voile, 220 ms la carte, chevauchés | une fois par appareil |
 | Changement de panneau de la présentation | 100 ms, **opacité seule** | quatre fois en trente secondes |
@@ -415,7 +425,20 @@ Et trois points d'implémentation :
 
 Le mouvement est en **CSS**, sans bibliothèque. Une bibliothèque d'animation
 aurait été une dépendance distante de plus, contre la règle du dépôt, pour des
-transitions de propriétés que le navigateur sait déjà interpoler.
+transitions de propriétés que le navigateur sait déjà interpoler. Seule
+exception, sans dépendance : la couche de continuité (`js/motion.js`) pilote
+quelques animations par l'interface native du navigateur (`Element.animate`),
+parce que leurs valeurs de départ ne sont connues qu'à l'exécution.
+
+#### La continuité
+
+Le rendu reconstruit l'écran et le calque à chaque appel : sans précaution, une
+feuille ouverte **rejouait son entrée** à chaque donnée reçue, et tout changement
+d'état sautait d'une image à l'autre. `js/motion.js` relève l'avant, laisse le
+rendu se faire, puis rejoue la différence sur les nœuds neufs (FLIP pour ce qui
+se déplace, une classe « depuis l'ancien état » pour le reste). Les niveaux, les
+jetons, la carte complète « action → mouvement » et ce qui n'est volontairement
+pas animé : [`docs/MOUVEMENT.md`](docs/MOUVEMENT.md).
 
 #### La présentation initiale
 
@@ -575,10 +598,68 @@ raccourci qu'une fois celui-ci annoncé :
 | `lean` | l'état envoyé n'emporte plus `processedActionIds` — **un tiers du poids** |
 | `pins` | épingler un sujet pour toute l'équipe (`SET_TOPIC_PIN`) |
 | `ideas` | déposer dans Pandore (`SUBMIT_IDEA` ; noms d'avant Pandore) |
+| `branches` | explorer un message (`CREATE_MESSAGE` avec `branchRootId`) — voir ci-dessous |
 
 Un serveur d'avant n'annonce rien : le client retombe sur le protocole
 d'origine. Un client d'avant ignore le champ : le serveur récent lui répond
 comme avant. Les deux sens de désaccord sont couverts par `tests/sync.test.js`.
+
+**`branches` est une garde, pas un raccourci.** Un `Code.gs` antérieur à
+`brainsto-backend-1.3.0` accepterait un message d'exploration et **perdrait son
+rattachement en silence** : la réponse tomberait dans la discussion principale.
+Tant que le serveur n'annonce pas `branches`, « Explorer cette idée » reste donc
+visible mais grisé, avec sa raison, et aucun message d'exploration n'est mis en
+file. En mode local, la fonctionnalité est disponible d'emblée. Pour l'ouvrir à
+l'équipe : recopier `apps-script/Code.gs` dans l'éditeur, puis **Déployer →
+Gérer les déploiements → Modifier → Version : Nouvelle** (voir
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md)). Modèle et compatibilité :
+[`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md), « Explorer un message ».
+
+#### Retour arrière après le backend 1.3.0
+
+Trois scénarios, à ne pas confondre. Appliquer le premier qui suffit.
+
+**Scénario 1 — Problème côté application (frontend).**
+
+- Revenir sur le changement applicatif sur `main` (commit d'annulation), publié
+  comme une nouvelle version : `APP_VERSION` et `CACHE_VERSION` incrémentés
+  ensemble (README, « Publier une nouvelle version »).
+- **Conserver le backend 1.3.0** en service. Ne pas recopier `Code.gs` depuis
+  `main` après l'annulation : le dépôt reviendrait à un `Code.gs` antérieur, et le
+  déployer ferait passer au scénario 2.
+- **Aucune restauration de données.**
+- **Aucune perte** : messages, votes, consensus et explorations restent intacts,
+  car le backend 1.3.0 sert aussi les anciennes versions de l'application. Seul
+  effet visible : une application qui ne connaît pas `branchRootId` affiche les
+  réponses d'exploration dans le fil principal. Leur rattachement reste dans les
+  données et réapparaît avec une version qui le connaît.
+
+**Scénario 2 — Retour forcé vers un backend antérieur à 1.3.0.**
+
+- **D'abord**, exécuter `backupNow()` dans l'éditeur Apps Script. La copie
+  `brainsto-data.json.manuel.<date>` est un instantané récent : elle contient
+  toutes les données actuelles et les `branchRootId`.
+- **Seulement ensuite**, redéployer l'ancien backend.
+- L'ancien backend ne comprend pas `branchRootId`. Dès son déploiement, il sert un
+  état sans ces rattachements : les réponses d'exploration s'affichent dans le fil
+  principal. Il réécrit l'état complet à chaque enregistrement : la première action
+  enregistrée supprime donc ces rattachements du fichier de données, pour tous les
+  messages. Les textes restent.
+- Pour retrouver les rattachements : redéployer le backend 1.3.0, puis
+  `restoreFromBackup` sur la copie `manuel`. Les écritures faites entre cette copie
+  et la restauration sont alors perdues.
+
+**Scénario 3 — Dernier recours : la copie `avant-brainsto-backend-1.3.0`.**
+
+- Le backend 1.3.0 la dépose automatiquement juste avant sa première écriture
+  (`brainsto-data.json.avant-brainsto-backend-1.3.0.<date>`). Elle représente
+  l'**état antérieur au déploiement 1.3.0**.
+- La restaurer ramène **TOUT l'état partagé** à cette date. Elle peut donc
+  supprimer **tous** les messages, votes, consensus, explorations et autres
+  écritures créés depuis, pas seulement les explorations.
+- À n'utiliser que si les scénarios 1 et 2 ne suffisent pas, par exemple des
+  données abîmées sans copie plus récente utilisable. `restoreFromBackup` garde
+  l'état remplacé dans une copie `avant-restauration`, mais ne le refusionne pas.
 
 Mesuré sur un fil de 60 messages :
 
@@ -964,6 +1045,7 @@ dix agents QA spécialisés par moteur de rendu
 - [`docs/CHECKLIST_TEST.md`](docs/CHECKLIST_TEST.md) — recette avant publication
 - [`docs/QA_NAVIGATEURS.md`](docs/QA_NAVIGATEURS.md) — recette navigateur par navigateur (mobile)
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — présentation initiale : cadrage, plan-séquence, détection de la première connexion
+- [`docs/MOUVEMENT.md`](docs/MOUVEMENT.md) — mouvement : niveaux, jetons, carte « action → mouvement », ce qui ne bouge pas
 - [`docs/AUDIT_QA.md`](docs/AUDIT_QA.md) : rapport d'audit final du run QA (ce qui a été corrigé, conformité à la spécification, ce qui reste, ce qui n'a pas été observé)
 
 ---

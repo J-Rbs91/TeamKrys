@@ -1,0 +1,283 @@
+/* BrainstO. — continuité : le mouvement des changements d'état.
+ *
+ * Une règle tient toute la feuille : L'INTERFACE RESTE IMMOBILE TANT QUE RIEN NE CHANGE ; QUAND QUELQUE CHOSE
+ * CHANGE, LE MOUVEMENT DIT CE QUI VIENT DE SE PASSER. Aucune boucle, aucun ornement, aucune animation qui retarde
+ * une action ou une lecture. Le seul geste expressif du produit reste la séquence du monogramme (css/app.css) ;
+ * l'identité est portée par la couleur, pas par le mouvement (docs/IDENTITE_VISUELLE.md, « Interdits »).
+ *
+ * Trois niveaux, et la carte complète « action → changement → mouvement » : docs/MOUVEMENT.md.
+ *   0 — lecture : rien ne bouge.
+ *   1 — interaction : l'appui, la réaction, le vote, l'ouverture d'un calque répondent en moins de 200 ms.
+ *   2 — transformation : un message devient une proposition, l'accord se déplace sur une barre, un élément change
+ *       de place. C'est le seul niveau qui se laisse voir, et il ne dure jamais plus de 240 ms.
+ *
+ * Le rendu reconstruit l'écran à chaque appel : les classes `motion-*` et `is-*` ci-dessous sont posées sur les
+ * nœuds NEUFS par js/motion.js, et chaque animation part de l'ANCIEN état vers l'état au repos. Sans animation —
+ * mouvement réduit, moteur ancien, script absent —, l'état au repos est l'état final : rien ne reste caché ni décalé.
+ *
+ * Valeurs : uniquement les jetons de css/app.css (« Mouvement »). Propriétés animées : `transform` et `opacity`,
+ * plus le contour d'un repère et la largeur d'un segment de vote (js/motion.js), qui ne déplacent rien autour d'eux.
+ */
+
+/* =============================================================== Appui ==== */
+
+/* Les listes `transition` des commandes vivent ICI et nulle part ailleurs (voir css/uxer.css, « Micro-états »). La
+   dernière déclarée gagne en silence : une propriété oubliée dans une seconde liste cesserait de s'animer. */
+.btn,
+.btn-icon,
+.btn-back,
+.fab,
+.send-btn,
+.sheet-action {
+  transition:
+    background var(--dur-fast) linear,
+    border-color var(--dur-fast) linear,
+    color var(--dur-fast) linear,
+    opacity var(--dur-fast) linear,
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.ux-flow-step {
+  transition:
+    border-color var(--dur-fast) linear,
+    background var(--dur-fast) linear,
+    color var(--dur-fast) linear,
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.tabbar-item { transition: color var(--dur-fast) linear, transform var(--dur-fast) var(--ease-out); }
+
+/* Tout ce qui s'enfonce le montre. Compact : 0,96. Grande surface (pleine largeur, action de feuille, bouton de
+   fenêtre) : 0,985 — la même échelle sur 340 px se lirait comme un défaut de rendu. Les cartes de liste n'en ont
+   aucune : leur fond change, et c'est assez. */
+@media (prefers-reduced-motion: no-preference) {
+  .btn:not(:disabled):active,
+  .btn-icon:not(:disabled):active,
+  .btn-back:active,
+  .fab:active,
+  .send-btn:not(:disabled):active,
+  .tabbar-item:active,
+  .ux-flow-step:not(:disabled):active {
+    transform: scale(var(--press-scale));
+  }
+
+  .btn-block:not(:disabled):active,
+  .modal-actions .btn:not(:disabled):active,
+  .onboard-foot .btn:not(:disabled):active,
+  .sheet-action:not(:disabled):active {
+    transform: scale(var(--press-scale-soft));
+  }
+}
+
+/* ============================================================= Calques ==== */
+
+/* Feuille du bas : elle monte DEPUIS le bord, opaque, sur la courbe des tiroirs — une proportion de sa propre
+   hauteur, pas des pixels, pour qu'une feuille courte et une feuille haute disent la même chose. Elle ne fond
+   pas : à mi-opacité, le fil se lisait à travers. Fenêtre : elle n'est ancrée à rien, elle s'ouvre donc depuis son
+   centre. Le voile accompagne en teinte seule (sa couleur, pas son opacité, sans quoi il ferait fondre ce qu'il
+   porte). La sortie reprend le chemin de l'entrée, plus vite : on renvoie ce qui est venu. */
+@keyframes motion-scrim-in { from { background-color: transparent; } }
+@keyframes motion-scrim-out { to { background-color: transparent; } }
+@keyframes motion-sheet-in { from { transform: translateY(100%); } }
+@keyframes motion-sheet-out { to { transform: translateY(100%); } }
+@keyframes motion-modal-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
+@keyframes motion-modal-out { to { opacity: 0; transform: scale(0.98); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .overlay { animation: motion-scrim-in var(--dur-slow) var(--ease-out); }
+  .sheet { animation: motion-sheet-in var(--dur-slow) var(--ease-drawer); }
+  .modal { transform-origin: center center; animation: motion-modal-in var(--dur-slow) var(--ease-out); }
+
+  /* Même calque qu'au rendu précédent : des données sont arrivées pendant qu'il était ouvert. Il ne rejoue PAS son
+     entrée — il remontait sous les yeux à chaque vote reçu. */
+  .overlay.is-settled,
+  .overlay.is-settled > .sheet,
+  .overlay.is-settled > .modal { animation: none; }
+
+  /* Feuille remplacée par une fenêtre (« Créer une proposition » depuis un message) : le voile était déjà là. */
+  .overlay.is-continued { animation: none; }
+
+  /* Le calque qui part (posé hors de #overlay-root par js/motion.js, inerte et sans identité). */
+  .overlay.is-leaving { animation: motion-scrim-out var(--dur-exit) var(--ease-out) forwards; }
+  .overlay.is-leaving > .sheet { animation: motion-sheet-out var(--dur-move) var(--ease-out) forwards; }
+  .overlay.is-leaving > .modal { animation: motion-modal-out var(--dur-exit) var(--ease-out) forwards; }
+  .overlay.is-handoff { background: transparent; }
+}
+
+/* ============================================================== Toasts ==== */
+
+/* Ils vivent en haut de l'écran : ils en descendent, et y remontent en partant. */
+@keyframes motion-toast-in { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes motion-toast-out { to { opacity: 0; transform: translateY(-6px); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: motion-toast-in var(--dur-base) var(--ease-out); }
+  .toast.is-leaving { animation: motion-toast-out var(--dur-exit) var(--ease-out) forwards; }
+}
+
+/* ============================================================== Bulles ==== */
+
+/* Le relâchement d'un appui long revient vite (l'appui, lui, est linéaire sur 450 ms : css/app.css). */
+.bubble {
+  transition:
+    background var(--dur-fast) linear,
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+/* Le message dont la feuille d'actions est ouverte : désigné, pas alarmé. L'anneau est celui du champ actif
+   (css/app.css, `.input:focus`) — le froid sur ce qu'on est en train de manipuler. */
+.bubble.is-targeted { box-shadow: 0 0 0 3px var(--accord-bg); border-color: var(--accord); }
+.msg-row.mine .bubble.is-targeted { border-color: transparent; }
+
+@keyframes motion-target-in { from { transform: scale(0.97); box-shadow: 0 0 0 0 var(--accord-bg); } }
+@keyframes motion-target-out { from { box-shadow: 0 0 0 3px var(--accord-bg); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .bubble.motion-target-in { animation: motion-target-in var(--dur-slow) var(--ease-out); }
+  .bubble.motion-target-out { animation: motion-target-out var(--dur-slow) var(--ease-out); }
+}
+
+/* ========================================================= Apparitions ==== */
+
+/* Ce qui arrive dans un écran déjà ouvert : un message reçu loin du bas du fil, une carte ajoutée, une citation qui
+   se pose au-dessus du champ. La même montée de 8 px que la cascade d'arrivée sur un écran (css/app.css,
+   « Révélation ») : l'application n'a qu'un vocabulaire d'apparition. Un message monte moins : il est plus petit,
+   et il arrive dans une lecture. */
+@keyframes motion-rise { from { opacity: 0; transform: translateY(var(--reveal-distance)); } }
+@keyframes motion-rise-soft { from { opacity: 0; transform: translateY(4px); } }
+@keyframes motion-leave { to { opacity: 0; transform: scale(0.98); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .screen .motion-enter,
+  .motion-enter {
+    animation: motion-rise var(--reveal-duration) var(--ease-out) backwards;
+    animation-delay: calc(min(var(--motion-index, 0), 6) * 30ms);
+  }
+
+  .msg-row.motion-enter,
+  .quote-preview.motion-enter { animation-name: motion-rise-soft; }
+
+  /* Ce qui part d'une liste s'efface à sa place pendant que les autres reprennent l'espace (js/motion.js, FLIP). */
+  .motion-leaving { animation: motion-leave var(--dur-exit) var(--ease-out) forwards; }
+}
+
+.motion-ghosts { pointer-events: none; }
+
+/* ============================================================ Réponses ==== */
+
+/* La réaction posée ou comptée, le vote ou le choix qui vient d'être enfoncé, le repère « En tête » ou « Nouveau »
+   qui apparaît. Aucun dépassement : la pastille grandit jusqu'à sa taille et s'y arrête. Un rebond se lirait comme
+   un réglage laissé au hasard, et la doctrine du fichier le réserve au point du monogramme. */
+@keyframes motion-bump { from { transform: scale(0.8); } }
+@keyframes motion-press-in { from { transform: scale(var(--press-scale)); } }
+@keyframes motion-mark-in { from { opacity: 0; transform: scale(0.85); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .reaction.motion-bump { animation: motion-bump var(--dur-base) var(--ease-out); }
+  .motion-press-in { animation: motion-press-in var(--dur-base) var(--ease-out); }
+  .motion-mark-in { animation: motion-mark-in var(--dur-base) var(--ease-out); }
+}
+
+/* ============================================================== Repère ==== */
+
+/* « C'est ici » : l'élément qu'on vient de créer (proposition tirée d'un message, consensus ajouté), le message cité
+   qu'on vient de retrouver. Un contour au froid de l'accord, qui s'écarte de 3 px et s'efface — le vocabulaire de
+   l'anneau de focus, pas celui d'une alerte. Animé sur `outline` : l'ombre des cartes et leur liseré d'accent restent
+   intacts dessous. La classe est retirée à la fin (js/motion.js, js/ui.js) : posée à demeure, elle masquerait
+   l'anneau de focus. */
+@keyframes motion-highlight {
+  from { outline: 2px solid var(--accord); outline-offset: 0; }
+  20% { outline: 2px solid var(--accord); outline-offset: 3px; }
+  to { outline: 2px solid transparent; outline-offset: 3px; }
+}
+
+/* `.screen` en tête : une carte arrivée avec l'écran porte aussi `.reveal`, et `.screen--enter .reveal` (css/app.css)
+   l'emportait — le repère d'une proposition créée ne se jouait jamais. */
+@media (prefers-reduced-motion: no-preference) {
+  .screen .motion-highlight,
+  .screen .bubble.flash { animation: motion-highlight var(--dur-highlight) var(--ease-out); }
+
+  .screen .motion-enter.motion-highlight {
+    animation:
+      motion-rise var(--reveal-duration) var(--ease-out) backwards,
+      motion-highlight var(--dur-highlight) var(--ease-out);
+  }
+}
+
+/* Mouvement réduit : le repère reste, immobile, le temps qu'il dure — c'est une information (où est l'élément), pas
+   un ornement. Seul le déplacement du contour disparaît. */
+@media (prefers-reduced-motion: reduce) {
+  .screen .motion-highlight,
+  .screen .bubble.flash { outline: 2px solid var(--accord); outline-offset: 2px; }
+}
+
+/* =========================================================== Exploration ==== */
+
+/* Arrivée dans l'exploration d'un message (une fois, à l'entrée) : le message source est déjà en tête — View
+   Transitions l'y a fait glisser depuis le fil (css/uxer.css) —, puis le trait d'origine se trace vers le bas, puis
+   les réponses se posent. Moins de 350 ms en tout ; le composeur, lui, ne bouge pas : on écrit dès la première image.
+   Le délai retranche le temps déjà écoulé (--enter-elapsed), comme la cascade d'arrivée : un second rendu pendant
+   l'entrée reprend l'animation au lieu de la rejouer. */
+@keyframes motion-connector { from { transform: scaleY(0); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .screen--enter .branch-connector {
+    transform-origin: top center;
+    animation: motion-connector var(--dur-base) var(--ease-out) backwards;
+    animation-delay: calc(120ms - var(--enter-elapsed, 0ms));
+  }
+
+  .screen--enter .branch-replies,
+  .screen--enter.branch .empty {
+    animation: motion-rise-soft var(--dur-base) var(--ease-out) backwards;
+    animation-delay: calc(180ms - var(--enter-elapsed, 0ms));
+  }
+}
+
+/* ============================================================== Volets ==== */
+
+@keyframes motion-unfold { from { opacity: 0; transform: translateY(-4px); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  details.motion-unfold[open] > :not(summary) { animation: motion-unfold var(--dur-base) var(--ease-out); }
+}
+
+/* =========================================================== Chargement ==== */
+
+/* Squelette de la synthèse de Pandore : la forme exacte des cartes qui vont arriver, pour que rien ne saute. Il
+   chatoie lentement — un indicateur immobile ressemble à un blocage —, en neutre, sans aucune couleur, et disparaît
+   avec le chargement. Jamais sur un contenu déjà là. */
+.card.skeleton-card { position: relative; overflow: hidden; gap: 10px; }
+
+.skeleton-line {
+  display: block;
+  width: 100%;
+  height: 10px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-sunken);
+}
+
+.skeleton-title { width: 55%; height: 14px; margin-bottom: 4px; }
+.skeleton-short { width: 72%; }
+
+@keyframes motion-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(90deg, transparent, var(--surface) 50%, transparent);
+    opacity: 0.7;
+    animation: motion-shimmer var(--dur-loading) var(--ease-in-out) infinite;
+  }
+}

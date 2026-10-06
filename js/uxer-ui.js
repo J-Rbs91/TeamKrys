@@ -26,7 +26,9 @@
     var gate = typeof currentApp.gate === "function" ? currentApp.gate() : null;
     if (gate) { return "gate:" + gate; }
     var route = currentApp.route || {};
-    return "route:" + (route.name || "topics") + ":" + (route.topicId || "");
+    var place = "route:" + (route.name || "topics") + ":" + (route.topicId || "");
+    /* Deux explorations d'un même sujet sont deux endroits distincts. */
+    return route.name === "branch" ? place + ":" + (route.messageId || "") : place;
   }
 
   function currentDepth() {
@@ -34,7 +36,7 @@
     if (!currentApp) { return 0; }
     if (typeof currentApp.gate === "function" && currentApp.gate()) { return 0; }
     var name = currentApp.route && currentApp.route.name;
-    if (name === "proposals" || name === "conclusion") { return 2; }
+    if (name === "proposals" || name === "conclusion" || name === "branch") { return 2; }
     if (name === "topic" || name === "settings" || name === "meeting" || name === "pandore") { return 1; }
     if (name === "system") { return 2; }
     return 0;
@@ -44,11 +46,42 @@
     return !!(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
+  /* Les quatre onglets sont des pairs à l'écran, même si Sujets reste la racine de la pile (js/app.js, PARENT) : passer
+   * de Sujets à Réunion ne « pousse » pas un écran plus profond, cela change de rubrique. Le mouvement suit ce que l'on
+   * voit — la barre d'onglets —, pas la profondeur d'historique. */
+  var TAB_PLACES = ["route:topics:", "route:meeting:", "route:pandore:", "route:settings:"];
+
+  /* Message source d'une exploration (« route:branch:<sujet>:<message> »), sinon null. */
+  function branchSource(place) {
+    var match = /^route:branch:([^:]*):(.+)$/.exec(place || "");
+    return match ? { topicId: match[1], messageId: match[2] } : null;
+  }
+
   function transitionDirection(previousDepth, nextDepth, previousPlace, nextPlace) {
+    if (TAB_PLACES.indexOf(previousPlace) >= 0 && TAB_PLACES.indexOf(nextPlace) >= 0) { return "lateral"; }
+    /* Entrer dans l'exploration d'un message, et en revenir : rien ne glisse de côté. Le message source passe de sa
+     * place dans le fil à la tête de l'exploration (et retour), le reste s'efface et revient sur place. Le mouvement
+     * raconte « cette discussion vient de ce message », pas « on est allé ailleurs ». */
+    var into = branchSource(nextPlace);
+    if (into && previousPlace === "route:topic:" + into.topicId) { return "branch-in"; }
+    var from = branchSource(previousPlace);
+    if (from && nextPlace === "route:topic:" + from.topicId) { return "branch-out"; }
     if (nextDepth > previousDepth) { return "forward"; }
     if (nextDepth < previousDepth) { return "back"; }
     if (previousPlace !== nextPlace) { return "lateral"; }
     return "none";
+  }
+
+  /* Pose la marque d'élément partagé sur la bulle du message source (une seule à la fois : un nom de View Transition
+   * en double annulerait la transition), ou la retire partout. */
+  function markShared(source) {
+    var marked = document.querySelectorAll(".ux-vt-source");
+    for (var i = 0; i < marked.length; i++) { marked[i].classList.remove("ux-vt-source"); }
+    if (!source) { return; }
+    var bubbles = document.querySelectorAll("#app .bubble[data-message-id]");
+    for (var j = 0; j < bubbles.length; j++) {
+      if (bubbles[j].getAttribute("data-message-id") === source.messageId) { bubbles[j].classList.add("ux-vt-source"); return; }
+    }
   }
 
   function make(tag, className, text) {
@@ -85,6 +118,13 @@
     button.appendChild(root.Utils.icon(iconName, 16));
     button.appendChild(make("span", "ux-flow-label", label));
     if (count > 0) { button.appendChild(make("span", "ux-flow-count", String(count))); }
+    /* Le trait de l'étape courante : un élément à part, pour que View Transitions le fasse glisser d'une étape à
+     * l'autre (css/uxer.css). Décoratif, l'étape est déjà annoncée par aria-current. */
+    if (current) {
+      var mark = make("span", "ux-flow-mark");
+      mark.setAttribute("aria-hidden", "true");
+      button.appendChild(mark);
+    }
     return button;
   }
 
@@ -283,17 +323,24 @@
     html.setAttribute("data-ux-direction", direction);
     html.classList.add("ux-vt");
     transitionRunning = true;
+    /* Élément partagé : la bulle du message source, désignée dans l'ancien écran AVANT la capture, puis dans le
+     * nouveau juste après le rendu. Sans elle (adresse ouverte directement), la transition reste un fondu. */
+    var shared = direction === "branch-in" ? branchSource(nextPlace)
+      : direction === "branch-out" ? branchSource(lastPlace) : null;
+    markShared(shared);
 
     try {
       var transition = document.startViewTransition(function () {
         var result = originalRender.apply(UI, args);
         enhance();
+        markShared(shared);
         commitPlace();
         return result;
       });
 
       var cleanup = function () {
         transitionRunning = false;
+        markShared(null);
         html.classList.remove("ux-vt");
         html.removeAttribute("data-ux-direction");
       };
@@ -301,6 +348,7 @@
       return transition;
     } catch (error) {
       transitionRunning = false;
+      markShared(null);
       html.classList.remove("ux-vt");
       html.removeAttribute("data-ux-direction");
       return renderFallback(args, direction);

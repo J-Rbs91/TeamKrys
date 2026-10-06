@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.2.0";
+var BACKEND_VERSION = "brainsto-backend-1.3.0";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -27,8 +27,10 @@ var IDEAS_SECRET_MIN = 24;
 var MAX_PROCESSED = 5000;
 var MAX_BATCH = 20;
 /* "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
- * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé. */
-var FEATURES = ["since", "batch", "lean", "idempotent", "pins", "ideas"];
+ * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé.
+ * "branches" : CREATE_MESSAGE accepte branchRootId (exploration d'un message). Sans ce drapeau, le client ne propose
+ * pas « Explorer » : un backend antérieur accepterait le message et PERDRAIT le champ en silence. */
+var FEATURES = ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches"];
 
 var ANON_NAME = "Anonyme";
 var LIMITS = {
@@ -87,6 +89,20 @@ function emptyState() {
   };
 }
 
+/* Exploration : une seule profondeur, résultat indépendant de l'ordre des messages. Strictement équivalent à
+ * normalizeBranches dans js/state.js (voir le commentaire là-bas) : racine absente ou égale au message → null ;
+ * puis racine qui, à l'issue de la première passe, est elle-même une réponse d'exploration → null. */
+function normalizeBranches(messages, messageIds) {
+  messages.forEach(function (m) {
+    if (m.branchRootId && (!messageIds[m.branchRootId] || m.branchRootId === m.id)) { m.branchRootId = null; }
+  });
+  var nested = Object.create(null);
+  messages.forEach(function (m) { if (m.branchRootId) { nested[m.id] = true; } });
+  messages.forEach(function (m) {
+    if (m.branchRootId && nested[m.branchRootId]) { m.branchRootId = null; }
+  });
+}
+
 function ensureShape(input) {
   var data = isObject(input) ? input : {};
   var state = {
@@ -142,7 +158,8 @@ function ensureShape(input) {
         updatedAt: trim(m.updatedAt) || trim(m.createdAt) || topic.createdAt,
         reactions: reactions,
         anon: anon,
-        quoteId: trim(m.quoteId) || null
+        quoteId: trim(m.quoteId) || null,
+        branchRootId: trim(m.branchRootId) || null
       });
     });
 
@@ -151,6 +168,7 @@ function ensureShape(input) {
     topic.messages.forEach(function (m) {
       if (m.quoteId && (!messageIds[m.quoteId] || m.quoteId === m.id)) { m.quoteId = null; }
     });
+    normalizeBranches(topic.messages, messageIds);
 
     arr(t.proposals).forEach(function (p) {
       if (!isObject(p) || !trim(p.id)) { return; }
@@ -253,7 +271,7 @@ function validateAction(state, action) {
   var p = isObject(action.payload) ? action.payload : {};
   var topic = null;
   if ([action.id, action.actorId, p.participantId, p.topicId, p.messageId, p.proposalId,
-    p.conclusionId, p.quoteId, p.ideaId].some(badId)) { return fail("Identifiant invalide."); }
+    p.conclusionId, p.quoteId, p.ideaId, p.branchRootId].some(badId)) { return fail("Identifiant invalide."); }
 
   function needTopic() {
     topic = findTopic(state, trim(p.topicId));
@@ -294,6 +312,12 @@ function validateAction(state, action) {
       if (!trim(p.text)) { return fail("Le message est vide."); }
       if (findMessage(topic, trim(p.messageId))) { return fail("Ce message existe déjà."); }
       if (trim(p.quoteId) && !findMessage(topic, trim(p.quoteId))) { return fail("Le message cité n'existe plus."); }
+      if (trim(p.branchRootId)) {
+        if (trim(p.branchRootId) === trim(p.messageId)) { return fail("Un message ne peut pas être sa propre origine."); }
+        var root = findMessage(topic, trim(p.branchRootId));
+        if (!root) { return fail("Le message d'origine n'existe plus."); }
+        if (root.branchRootId) { return fail("On n'explore pas une réponse : explorez le message d'origine."); }
+      }
       return OK;
     case "UPDATE_MESSAGE": {
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
@@ -435,7 +459,8 @@ function applyAction(state, action, now) {
       topic.messages.push({
         id: trim(p.messageId), authorId: mWho.id, authorName: mWho.name,
         text: cut(p.text, LIMITS.message), createdAt: now, updatedAt: now,
-        reactions: {}, anon: p.anon === true, quoteId: trim(p.quoteId) || null
+        reactions: {}, anon: p.anon === true, quoteId: trim(p.quoteId) || null,
+        branchRootId: trim(p.branchRootId) || null
       });
       touch(state, topic, now); return;
     }

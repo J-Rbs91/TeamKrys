@@ -77,6 +77,12 @@ function makeServer(options) {
     if (srv.rejectWhen && srv.rejectWhen(action)) {
       return refusal(action.id, "Refus simulé côté serveur.");
     }
+    /* srv.legacyFields : backend ANTÉRIEUR qui ne connaît pas certains champs. Son applyAction construit le message
+     * champ par champ : un champ inconnu n'est pas refusé, il est PERDU (cas réel de branchRootId avant la 1.3.0). */
+    if (srv.legacyFields) {
+      action = clone(action);
+      srv.legacyFields.forEach((field) => { if (action.payload) { delete action.payload[field]; } });
+    }
     if (srv.data.processedActionIds.indexOf(action.id) >= 0) {
       return { id: action.id, ok: true, duplicate: true };
     }
@@ -1407,6 +1413,91 @@ async function run() {
     await settle();
     assert(B.Sync.status().label === "En attente (1)", "serveur muet : « " + B.Sync.status().label + " » au lieu de « En attente (1) »");
     B.Sync.stop();
+  });
+
+
+  /* ------------------------------------------------------- Exploration --- */
+  /* Un message d'exploration (branchRootId) suit EXACTEMENT le chemin d'un message du fil principal : vue
+   * optimiste, file IndexedDB, envoi, réconciliation. Aucune seconde file. */
+
+  const BRANCHES = MODERN.concat(["branches"]);
+
+  await check("exploration : message optimiste, en file hors connexion, envoyé à la reprise, reçu ailleurs avec son rattachement", async () => {
+    const srv = makeServer({ features: BRANCHES });
+    const A = makeClient("A", srv, { indexedDB: false });
+    const B = makeClient("B", srv, { indexedDB: false });
+    await A.Sync.boot(); await B.Sync.boot(); await settle();
+    await say(B, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(B, { topicId: "t1", messageId: "r1", text: "Ouvrir à 9h ?" });
+    await A.Sync.now(); await settle();
+    assert(A.Sync.supports("branches") === true, "la capacité annoncée n'est pas lue");
+
+    srv.down = true;
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "b1", text: "Et les livraisons ?", branchRootId: "r1" }, A.user));
+    await settle();
+    const local = Core.findMessage(Core.findTopic(A.Store.view, "t1"), "b1");
+    assert(local && local.branchRootId === "r1", "le message d'exploration n'apparaît pas tout de suite, rattaché, chez son auteur");
+    assert(A.Store.pendingMessageIds()["b1"] === true, "le message d'exploration en file n'est pas repéré comme « en envoi »");
+    await A.Sync.now(); await settle();
+    assert(A.Sync.pendingCount() === 1, "la panne a vidé la file");
+
+    srv.down = false;
+    await A.Sync.now(); await settle();
+    assert(A.Sync.pendingCount() === 0, "la file ne repart pas au retour du réseau");
+    const stored = Core.findMessage(Core.findTopic(srv.data, "t1"), "b1");
+    assert(stored && stored.branchRootId === "r1", "le serveur n'a pas gardé le rattachement");
+    await B.Sync.now(); await settle();
+    const seen = Core.findMessage(Core.findTopic(B.Store.view, "t1"), "b1");
+    assert(seen && seen.branchRootId === "r1" && seen.quoteId === null, "l'autre client ne voit pas la réponse dans l'exploration");
+
+    /* Rejouée (réponse perdue), l'action n'écrit rien de plus : journal de déduplication. */
+    const before = srv.data.topics[0].messages.length;
+    srv.post({ id: srv.data.processedActionIds[srv.data.processedActionIds.length - 1], type: "CREATE_MESSAGE", actorId: "u-A", actorName: "A",
+      ts: new Date().toISOString(), payload: { topicId: "t1", messageId: "b1", text: "Et les livraisons ?", branchRootId: "r1" } });
+    assert(srv.data.topics[0].messages.length === before, "une action rejouée a dupliqué le message d'exploration");
+  });
+
+  await check("exploration : reprise après coupure — la file IndexedDB survit au redémarrage de l'application", async () => {
+    const srv = makeServer({ features: BRANCHES });
+    const idb = makeIDB();
+    const A = makeClient("A", srv, { indexedDB: idb });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(A, { topicId: "t1", messageId: "r1", text: "Source" });
+    srv.down = true;
+    await A.Sync.dispatch(A.Sync.makeAction("CREATE_MESSAGE",
+      { topicId: "t1", messageId: "b1", text: "Écrit hors ligne", branchRootId: "r1" }, A.user));
+    await settle();
+    A.Sync.stop();
+
+    /* L'application est fermée puis rouverte, toujours hors ligne, puis le réseau revient. */
+    const A2 = makeClient("A", srv, { indexedDB: idb });
+    await A2.Sync.boot(); await settle();
+    const restored = Core.findMessage(Core.findTopic(A2.Store.view, "t1"), "b1");
+    assert(restored && restored.branchRootId === "r1", "après redémarrage, la réponse en attente a perdu son rattachement");
+    srv.down = false;
+    await A2.Sync.now(); await settle();
+    const stored = Core.findMessage(Core.findTopic(srv.data, "t1"), "b1");
+    assert(stored && stored.branchRootId === "r1", "la réponse écrite hors ligne n'est pas arrivée rattachée");
+    A2.Sync.stop();
+  });
+
+  await check("exploration : backend antérieur — le rattachement serait perdu en silence (d'où la capacité « branches »)", async () => {
+    const srv = makeServer({ features: MODERN });
+    srv.legacyFields = ["branchRootId"];
+    const A = makeClient("A", srv, { indexedDB: false });
+    await A.Sync.boot(); await settle();
+    await say(A, { topicId: "t1", title: "Sujet" }, "CREATE_TOPIC");
+    await say(A, { topicId: "t1", messageId: "r1", text: "Source" });
+    assert(A.Sync.supports("since") === true && A.Sync.supports("branches") === false,
+      "un serveur antérieur ne doit pas passer pour capable d'explorer");
+    /* Ce que l'interface empêche (js/app.js, App.branchesAvailable ; tests/branches.test.js) : si le message partait
+     * quand même, il serait ACCEPTÉ et atterrirait dans le fil principal. Aucun refus ne préviendrait personne. */
+    await say(A, { topicId: "t1", messageId: "b1", text: "Réponse", branchRootId: "r1" });
+    const stored = Core.findMessage(Core.findTopic(srv.data, "t1"), "b1");
+    assert(stored && stored.branchRootId === null, "simulation fausse : un backend antérieur ne garde pas le champ");
+    assert(A.Sync.pendingCount() === 0 && A.messages.every((m) => m.indexOf("refusée") < 0), "le backend antérieur aurait dû accepter sans rien dire");
   });
 
   console.log(failures.length

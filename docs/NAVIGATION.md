@@ -68,6 +68,7 @@ C'est la ligne du milieu qu'on oublie, et c'est elle qui produisait le défaut.
 ```
 Sujets  (racine, onglet)
 ├── Sujet
+│   ├── Exploration
 │   ├── Propositions
 │   └── Conclusion
 ├── Réunion   (onglet)
@@ -90,6 +91,18 @@ synchronisation), à l'adresse `#/settings/system`.
 - Conséquence : son bouton retour (« Réglages ») et le geste retour ramènent aux
   Réglages, puis à Sujets. Il n'a pas de barre du bas : comme un sujet, l'écran
   appartient à sa tâche, ce qui éloigne aussi le pouce des actions sensibles.
+
+**Exploration, sous Sujet.** C'est la vue d'un message exploré (fonctionnalité
+Explorer), à l'adresse `#/topic/{topicId}/branch/{messageId}`.
+- Cause : elle est déclarée enfant du sujet (`PARENT.branch = "topic"`), à la même
+  profondeur que Propositions et Conclusion. L'ouvrir depuis la discussion
+  **empile** ; passer d'une exploration à une autre, ou d'une exploration aux
+  propositions, se fait à profondeur égale et **remplace**.
+- Conséquence : depuis une exploration, le bouton retour (« Discussion ») et le
+  geste retour du système ramènent à la discussion du sujet, puis à Sujets. Aucune
+  interception du retour : la ligne de `PARENT` suffit. Ouvrir une exploration
+  n'écrit rien dans les données ; une adresse qui désigne un message absent ou une
+  réponse affiche « Introuvable », avec le même retour.
 
 La table `PARENT`, en tête de la section navigation de `js/app.js`, est **le
 seul endroit** où cette structure est écrite. Ajouter un écran, c'est y ajouter
@@ -153,7 +166,7 @@ titre de l'écran garde la place. Le seuil suit la taille de police de l'apparei
 
 ## 5. Comment le vérifier
 
-Six vérifications, sur un téléphone, dans cet ordre. Elles sont reprises dans
+Sept vérifications, sur un téléphone, dans cet ordre. Elles sont reprises dans
 `docs/CHECKLIST_TEST.md`.
 
 1. **Compter les appuis.** Sujets → un sujet → ses propositions, puis retour
@@ -168,6 +181,9 @@ Six vérifications, sur un téléphone, dans cet ordre. Elles sont reprises dans
    l'en-tête et le bouton du système doivent mener au même écran.
 6. **Arriver directement en profondeur** par un lien partagé vers un sujet, puis
    appuyer sur retour. On doit monter dans l'arbre, pas sortir au premier appui.
+7. **Explorer deux messages à la file.** Discussion → explorer un message → retour
+   → explorer un autre message → retour. Chaque retour ramène à la discussion, et
+   un dernier retour à Sujets : les explorations ne s'empilent pas entre elles.
 
 `node tests/navigation.test.js` ne vérifie pas ce comportement — il ne le
 pourrait pas sans navigateur. Il protège les deux conditions structurelles sans
@@ -183,4 +199,4 @@ en un seul endroit, et la navigation qui passe par un seul point.
 3. Y mettre un bouton retour d'en-tête branché sur `App.remonter`, jamais sur
    `App.go`.
 4. Naviguer vers lui par `App.go`, jamais en écrivant `location.hash`.
-5. Refaire les six vérifications ci-dessus.
+5. Refaire les sept vérifications ci-dessus.

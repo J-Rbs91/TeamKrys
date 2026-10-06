@@ -3,7 +3,7 @@
  * Exécution (aucune dépendance, aucun package.json) :
  *     node tests/ui-focus.test.js
  *
- * Charge js/config.js, js/utils.js, js/state.js, js/product-view.js et js/ui.js
+ * Charge js/config.js, js/utils.js, js/state.js, js/product-view.js, js/ui.js et js/motion.js
  * dans un contexte vm, sur un DOM minimal écrit ici (pas de jsdom), même modèle
  * que tests/ui-status-anon.test.js. Store, Sync et App sont des doublures ; les
  * actions modifient les données puis rendent, comme le fait le vrai dispatch.
@@ -30,7 +30,11 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
-const SOURCES = ["js/config.js", "js/utils.js", "js/state.js", "js/product-view.js", "js/ui.js"].map((file) => ({
+/* js/motion.js enveloppe UI.render comme en production : chaque contrôle de focus ci-dessous vérifie AUSSI que la
+ * couche de mouvement ne déplace jamais le focus. Ce DOM n'a pas `Element.prototype.animate` : la couche y tourne
+ * sans rien animer, ce qui laisse visibles les deux seules choses qu'elle fait sans mouvement (calque maintenu,
+ * message désigné). */
+const SOURCES = ["js/config.js", "js/utils.js", "js/state.js", "js/product-view.js", "js/ui.js", "js/motion.js"].map((file) => ({
   file, code: fs.readFileSync(path.join(ROOT, file), "utf8"),
 }));
 
@@ -129,6 +133,7 @@ class FakeNode {
   get firstChild() { return this.childNodes[0] || null; }
   get lastChild() { return this.childNodes[this.childNodes.length - 1] || null; }
   get children() { return this.childNodes.filter((n) => n.nodeType === 1); }
+  get firstElementChild() { return this.children[0] || null; }
   get parentElement() { return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null; }
   get nextSibling() {
     const list = this.parentNode ? this.parentNode.childNodes : [];
@@ -1331,6 +1336,210 @@ check("BL-011 sans `inert` (navigateurs anciens) : fond en aria-hidden pendant l
   t.escape();
   assert(t.app().getAttribute("aria-hidden") === null, "aria-hidden laissé sur #app après la fermeture");
   assert(t.active() === bubble(t, "m1"), "focus non rendu au déclencheur : " + describe(t.active()));
+});
+
+/* ==================================================== Couche de mouvement ==== */
+
+check("mouvement : un rendu de données pendant qu'une feuille est ouverte ne rejoue pas son entrée", async () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  bubble(t, "m1").click();
+  await tick();
+  const first = t.overlay().querySelector(".overlay");
+  assert(first && !first.classList.contains("is-settled"), "à l'ouverture, la feuille doit jouer son entrée");
+  t.receive("Message reçu, feuille ouverte");
+  await tick();
+  const again = t.overlay().querySelector(".overlay");
+  assert(again && again !== first, "le rendu doit avoir reconstruit le calque");
+  assert(again.classList.contains("is-settled"), "le calque reconstruit doit être marqué is-settled (sinon il remonte sous les yeux)");
+  t.escape();
+  await tick();
+  bubble(t, "m2").click();
+  await tick();
+  assert(!t.overlay().querySelector(".overlay").classList.contains("is-settled"), "une nouvelle ouverture rejoue son entrée");
+});
+
+check("mouvement : la bulle dont la feuille est ouverte est désignée, elle seule, et le reste tant que la feuille l'est", async () => {
+  const t = boot();
+  t.go(topicRoute("t1"));
+  bubble(t, "m2").click();
+  await tick();
+  assert(bubble(t, "m2").classList.contains("is-targeted"), "la bulle visée doit porter is-targeted");
+  assert(t.app().querySelectorAll(".bubble.is-targeted").length === 1, "une seule bulle désignée");
+  t.receive("Message reçu, feuille ouverte");
+  await tick();
+  assert(bubble(t, "m2").classList.contains("is-targeted"), "la désignation survit au rendu de données");
+  t.escape();
+  await tick();
+  assert(!t.app().querySelector(".bubble.is-targeted"), "feuille fermée : plus aucune bulle désignée");
+});
+
+
+/* ============================================================ Exploration ==== */
+/* Explorer un message : un sous-fil du sujet, porté par l'attribut `branchRootId` des messages (js/state.js). Ici, ce
+ * que l'interface en montre : l'action « Explorer cette idée », le compteur sous le message source, l'écran
+ * d'exploration, le composeur contextuel, la sémantique (aucun bouton dans un bouton) et le focus. */
+
+const branchRoute = (id, root) => ({ name: "branch", topicId: id, messageId: root, raw: "#/topic/" + id + "/branch/" + root });
+
+/* o : { available (défaut vrai), outdated, replies: [[id, racine, texte]] } */
+function branchWorld(o) {
+  o = o || {};
+  const t = boot();
+  t.ctx.App.branchesAvailable = () => o.available !== false;
+  t.ctx.App.branchesOutdatedServer = () => o.outdated === true;
+  t.went = [];
+  t.ctx.App.go = (hash) => { t.went.push(hash); };
+  t.sent = [];
+  t.ctx.App.actions.createMessage = function () { t.sent.push([].slice.call(arguments)); return Promise.resolve({ ok: true }); };
+  const topic = t.ctx.Core.findTopic(t.ctx.Store.view, "t1");
+  (o.replies || []).forEach(([id, root, text]) => {
+    const m = message(id, text);
+    m.branchRootId = root;
+    topic.messages.push(m);
+  });
+  topic.messages.forEach((m) => { if (m.branchRootId === undefined) { m.branchRootId = null; } });
+  t.ctx.Store.version += 1;
+  return t;
+}
+
+function sheetLabels(t) {
+  return dialog(t).querySelectorAll(".sheet-action").map((b) => b.textContent.trim());
+}
+
+function nestedButtons(root) {
+  return root.querySelectorAll("button").filter((b) => b.parentNode && b.parentNode.closest && b.parentNode.closest("button"));
+}
+
+check("exploration : « Explorer cette idée » sur un message du fil principal, entre « Citer » et « Créer une proposition »", () => {
+  const t = branchWorld();
+  t.go(topicRoute("t1"));
+  bubble(t, "m1").click();
+  const labels = sheetLabels(t);
+  const at = labels.indexOf("Explorer cette idée");
+  assert(at > 0 && labels[at - 1] === "Citer" && labels[at + 1] === "Créer une proposition", "ordre des actions : " + JSON.stringify(labels));
+  const action = dialog(t).querySelectorAll(".sheet-action")[at];
+  assert(!action.disabled && action.getAttribute("data-key") === "action-explore", "action indisponible ou sans clé : " + describe(action));
+  action.click();
+  assert(t.went.join() === "#/topic/t1/branch/m1", "l'action doit ouvrir l'exploration de CE message : " + JSON.stringify(t.went));
+});
+
+check("exploration : serveur à mettre à jour, ou pas encore joint — l'action reste visible, désactivée, avec sa raison", () => {
+  [[{ available: false, outdated: true }, /serveur de l'équipe doit être mis à jour/], [{ available: false }, /prochaine connexion/]].forEach(([o, reason]) => {
+    const t = branchWorld(o);
+    t.go(topicRoute("t1"));
+    bubble(t, "m1").click();
+    const action = dialog(t).querySelectorAll(".sheet-action").find((b) => /Explorer cette idée/.test(b.textContent));
+    assert(action && action.disabled && reason.test(action.textContent), "raison absente : " + (action && action.textContent));
+    action.click();
+    assert(t.went.length === 0, "une action désactivée a navigué");
+  });
+});
+
+check("exploration : le fil principal ne montre pas les réponses ; « 2 réponses » sous le message source, rien à zéro", () => {
+  const t = branchWorld({ replies: [["b1", "m1", "Et les livraisons ?"], ["b2", "m1", "Le jeudi, 8h45."]] });
+  t.go(topicRoute("t1"));
+  assert(!bubble(t, "b1") && !bubble(t, "b2"), "une réponse d'exploration apparaît dans le fil principal");
+  const links = t.app().querySelectorAll(".branch-link");
+  assert(links.length === 1 && links[0].textContent === "2 réponses", "compteur : " + links.map((l) => l.textContent).join(" | "));
+  const row = links[0].closest(".branch-row");
+  const siblings = row.parentNode.children;
+  assert(siblings[siblings.indexOf(row) - 1] === rowOf(t, "m1"), "le compteur doit suivre la rangée du message source");
+  assert(/^2 réponses/.test(links[0].getAttribute("aria-label")), "nom accessible sans le texte visible : " + links[0].getAttribute("aria-label"));
+  assert(!links[0].closest(".bubble") && nestedButtons(t.app()).length === 0, "bouton dans un bouton : " + nestedButtons(t.app()).map(describe).join(", "));
+  links[0].click();
+  assert(t.went.join() === "#/topic/t1/branch/m1", "le compteur doit ouvrir l'exploration : " + JSON.stringify(t.went));
+});
+
+check("exploration : écran vide — message source en tête, trait, invitation ; aucune donnée écrite", () => {
+  const t = branchWorld();
+  const before = JSON.stringify(t.ctx.Store.view);
+  t.go(branchRoute("t1", "m1"));
+  const origin = t.app().querySelector(".branch-origin");
+  assert(origin && origin.querySelectorAll(".bubble").length === 1 && bubble(t, "m1").closest(".branch-origin") === origin, "message source absent de l'en-tête");
+  assert(t.app().querySelector(".branch-connector[aria-hidden=\"true\"]"), "trait d'origine absent (ou annoncé au lecteur d'écran)");
+  assert(t.app().querySelector(".thread-branch .empty"), "invitation absente d'une exploration vide");
+  assert(t.app().querySelector(".topbar-title").textContent === "Exploration", "titre : " + t.app().querySelector(".topbar-title").textContent);
+  assert(/Discussion/.test(t.app().querySelector(".btn-back").getAttribute("aria-label")), "retour vers la discussion");
+  assert(JSON.stringify(t.ctx.Store.view) === before, "ouvrir une exploration a modifié les données");
+});
+
+check("exploration : réponses dans l'ordre, sans « Explorer » (une seule profondeur), « Créer une proposition » identique", () => {
+  const t = branchWorld({ replies: [["b1", "m1", "Et les livraisons ?"], ["b2", "m1", "Le jeudi, 8h45."], ["x1", "m3", "Autre exploration"]] });
+  t.go(branchRoute("t1", "m1"));
+  const shown = t.app().querySelectorAll(".branch-replies .bubble").map((b) => b.getAttribute("data-message-id"));
+  assert(shown.join() === "b1,b2", "réponses affichées : " + shown.join());
+  assert(!bubble(t, "m2") && !bubble(t, "x1"), "un message d'un autre fil apparaît dans l'exploration");
+  bubble(t, "b1").click();
+  let labels = sheetLabels(t);
+  assert(labels.indexOf("Explorer cette idée") < 0, "on n'explore pas une réponse : " + JSON.stringify(labels));
+  dialog(t).querySelectorAll(".sheet-action").find((b) => b.textContent === "Créer une proposition").click();
+  const modal = t.ctx.UI.local.modal;
+  assert(modal && modal.type === "createProposal" && modal.topicId === "t1" && modal.fromText === "Et les livraisons ?",
+    "la proposition naît du texte de la réponse, dans le sujet : " + JSON.stringify(modal));
+  t.escape();
+  bubble(t, "m1").click();
+  labels = sheetLabels(t);
+  assert(labels.indexOf("Explorer cette idée") < 0, "le message source, vu dans SON exploration, ne la propose pas une seconde fois");
+});
+
+check("exploration : adresse invalide — message absent ou réponse d'exploration → « Introuvable », retour vers la discussion", () => {
+  const t = branchWorld({ replies: [["b1", "m1", "Réponse"]] });
+  [branchRoute("t1", "absent"), branchRoute("t1", "b1")].forEach((route) => {
+    t.go(route);
+    assert(t.app().querySelector(".topbar-title").textContent === "Introuvable", route.raw + " : " + t.app().querySelector(".topbar-title").textContent);
+    assert(/Discussion/.test(t.app().querySelector(".btn-back").getAttribute("aria-label")), route.raw + " : retour attendu vers la discussion");
+    assert(t.doc.title === "Introuvable - BrainstO.", route.raw + " : titre du document « " + t.doc.title + " »");
+  });
+  t.go(branchRoute("t1", "m1"));
+  assert(t.doc.title === "Exploration : Livraisons du matin - BrainstO.", "titre du document : « " + t.doc.title + " »");
+});
+
+check("exploration : composeur — brouillon propre, envoi rattaché ; fil principal non rattaché", async () => {
+  const t = branchWorld();
+  t.go(branchRoute("t1", "m1"));
+  const box = t.app().querySelector(".composer textarea");
+  assert(box.getAttribute("data-draft") === "composer:t1:branch:m1", "clé de brouillon : " + box.getAttribute("data-draft"));
+  box.value = "Dans l'exploration";
+  t.app().querySelector(".send-btn").click();
+  await tick();
+  t.go(topicRoute("t1"));
+  const main = t.app().querySelector(".composer textarea");
+  assert(main.getAttribute("data-draft") === "composer:t1", "le fil principal garde sa clé : " + main.getAttribute("data-draft"));
+  assert(main.value === "", "un brouillon d'exploration est apparu dans le fil principal");
+  main.value = "Dans le fil";
+  t.app().querySelector(".send-btn").click();
+  await tick();
+  assert(t.sent.length === 2 && t.sent[0][4] === "m1" && t.sent[1][4] === null,
+    "rattachement des envois : " + JSON.stringify(t.sent.map((a) => a[4])));
+});
+
+check("exploration : une citation n'apparaît que dans le composeur du fil où elle a été faite", () => {
+  const t = branchWorld({ replies: [["b1", "m1", "Réponse"]] });
+  t.go(branchRoute("t1", "m1"));
+  t.ctx.UI.set({ quote: { topicId: "t1", messageId: "m2", branchRootId: null } });
+  assert(!t.app().querySelector(".composer .quote-preview"), "une citation du fil principal s'affiche dans l'exploration");
+  t.ctx.UI.set({ quote: { topicId: "t1", messageId: "b1", branchRootId: "m1" } });
+  assert(t.app().querySelector(".composer .quote-preview"), "la citation faite dans l'exploration n'y est pas");
+});
+
+check("exploration : serveur antérieur — le composeur de l'exploration dit pourquoi il est fermé ; la lecture reste possible", () => {
+  const t = branchWorld({ available: false, outdated: true, replies: [["b1", "m1", "Réponse"]] });
+  t.go(branchRoute("t1", "m1"));
+  const box = t.app().querySelector(".composer textarea");
+  const note = t.app().querySelector("#composer-blocked");
+  assert(box.disabled && t.app().querySelector(".send-btn").disabled, "composeur ouvert sur un serveur qui perdrait le rattachement");
+  assert(note && /mis à jour/.test(note.textContent) && /composer-blocked/.test(box.getAttribute("aria-describedby")), "raison absente ou non reliée au champ");
+  assert(bubble(t, "b1"), "la lecture des réponses doit rester possible");
+});
+
+check("exploration : le focus posé sur « N réponses » y reste quand un message arrive", () => {
+  const t = branchWorld({ replies: [["b1", "m1", "Réponse"]] });
+  t.go(topicRoute("t1"));
+  const link = t.app().querySelector(".branch-link");
+  link.focus();
+  t.receive("Un message de plus");
+  assert(t.active() !== link && t.active().getAttribute("data-key") === "branch-m1", "focus après rendu : " + describe(t.active()));
 });
 
 /* ======================================================= Demande WP-10 ==== */

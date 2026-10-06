@@ -38,6 +38,7 @@ const SOURCES = [
   "css/app.css",
   "css/product.css",
   "css/uxer.css",
+  "css/motion.css",
   "js/config.js",
   "js/utils.js",
   "js/state.js",
@@ -47,6 +48,7 @@ const SOURCES = [
   "js/product-view.js",
   "js/ui.js",
   "js/product-ui.js",
+  "js/motion.js",
   "js/uxer-ui.js",
   "js/app.js",
   "service-worker.js"

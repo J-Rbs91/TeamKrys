@@ -377,6 +377,27 @@
       "severity": "high"
     },
     {
+      "id": "css-view-transitions",
+      "label": "View Transitions (même document)",
+      "kind": "css",
+      "detect": [
+        "view-transition-name\\s*:",
+        "::view-transition"
+      ],
+      "support": {
+        "webkit": "18",
+        "chromium": "111",
+        "firefox": "144"
+      },
+      "verify": true,
+      "failure": "rule-dropped",
+      "severity": "low",
+      "guard": [
+        "@supports\\s*\\(view-transition-name"
+      ],
+      "impact": "Amélioration progressive : js/uxer-ui.js n'appelle startViewTransition que s'il existe, et css/uxer.css garde un repli animé pour les autres moteurs. Une règle rejetée ne retire qu'un mouvement de changement d'écran."
+    },
+    {
       "id": "css-text-wrap-balance",
       "label": "text-wrap: balance / pretty",
       "kind": "css",
@@ -893,6 +914,25 @@
       },
       "failure": "throws",
       "severity": "medium"
+    },
+    {
+      "id": "js-web-animations",
+      "label": "Element.animate() (Web Animations)",
+      "kind": "js",
+      "detect": [
+        "\\.animate\\(\\s*\\["
+      ],
+      "support": {
+        "webkit": "13.1",
+        "chromium": "36",
+        "firefox": "48"
+      },
+      "failure": "throws",
+      "severity": "low",
+      "guard": [
+        "typeof root\\.Element\\.prototype\\.animate === \"function\""
+      ],
+      "impact": "Seule la couche de continuité (js/motion.js) s'en sert, et elle vérifie sa présence avant tout appel : sans elle, rien ne s'anime et rien ne casse."
     },
     {
       "id": "js-requestidlecallback",

@@ -89,8 +89,8 @@ rien d'irréversible n'arrive avant la vérification.
 À la première écriture, le script dépose sur Drive, dans le dossier du fichier de
 données, une copie `brainsto-data.json.avant-<version>.<date>` (`<version>` est la
 valeur de `BACKEND_VERSION` du **nouveau** code). La version actuelle du backend est
-`brainsto-backend-1.2.0` (épinglage des sujets, boîte à idées) : la première écriture
-après son déploiement dépose donc `brainsto-data.json.avant-brainsto-backend-1.2.0.<date>`,
+`brainsto-backend-1.3.0` (Explorer : `branchRootId`) : la première écriture
+après son déploiement dépose donc `brainsto-data.json.avant-brainsto-backend-1.3.0.<date>`,
 une seule fois par version
 du backend. Les autres copies portent `manuel` (créée par
 `backupNow()`) ou `avant-restauration` (créée par `restoreFromBackup`). Pour
@@ -116,6 +116,9 @@ aucune).
 Si c'est le code qui est en cause, remettre l'ancien code. Si le fichier de
 données a été abîmé, **restaurer une copie avec `restoreFromBackup`**.
 
+**Depuis le backend 1.3.0, remettre l'ancien code n'est plus sans effet sur les
+données** : suivre d'abord « Retour arrière après le backend 1.3.0 », à la fin de
+cette section.
 Ne renommez pas la copie et ne supprimez pas le fichier fautif. Cause : le script
 lit et écrit le fichier **par son identifiant** (propriété `BRAINSTO_FILE_ID`
 posée par `setupProject()`), pas par son nom. Conséquence : renommer une copie en
@@ -174,6 +177,52 @@ service échoue (« No item with the given ID could be found ») et la dernière
 révision servie est perdue : un numéro pourrait alors se répéter, et un téléphone
 resté sur ce numéro garderait un état faux. Une restauration faite à la main
 (renommer ou recopier un fichier) n'a pas ces garanties.
+
+#### Retour arrière après le backend 1.3.0
+
+Trois scénarios, à ne pas confondre. Appliquer le premier qui suffit.
+
+**Scénario 1 — Problème côté application (frontend).**
+
+- Revenir sur le changement applicatif sur `main` (commit d'annulation), publié
+  comme une nouvelle version : `APP_VERSION` et `CACHE_VERSION` incrémentés
+  ensemble (README, « Publier une nouvelle version »).
+- **Conserver le backend 1.3.0** en service. Ne pas recopier `Code.gs` depuis
+  `main` après l'annulation : le dépôt reviendrait à un `Code.gs` antérieur, et le
+  déployer ferait passer au scénario 2.
+- **Aucune restauration de données.**
+- **Aucune perte** : messages, votes, consensus et explorations restent intacts,
+  car le backend 1.3.0 sert aussi les anciennes versions de l'application. Seul
+  effet visible : une application qui ne connaît pas `branchRootId` affiche les
+  réponses d'exploration dans le fil principal. Leur rattachement reste dans les
+  données et réapparaît avec une version qui le connaît.
+
+**Scénario 2 — Retour forcé vers un backend antérieur à 1.3.0.**
+
+- **D'abord**, exécuter `backupNow()` dans l'éditeur Apps Script. La copie
+  `brainsto-data.json.manuel.<date>` est un instantané récent : elle contient
+  toutes les données actuelles et les `branchRootId`.
+- **Seulement ensuite**, redéployer l'ancien backend.
+- L'ancien backend ne comprend pas `branchRootId`. Dès son déploiement, il sert un
+  état sans ces rattachements : les réponses d'exploration s'affichent dans le fil
+  principal. Il réécrit l'état complet à chaque enregistrement : la première action
+  enregistrée supprime donc ces rattachements du fichier de données, pour tous les
+  messages. Les textes restent.
+- Pour retrouver les rattachements : redéployer le backend 1.3.0, puis
+  `restoreFromBackup` sur la copie `manuel`. Les écritures faites entre cette copie
+  et la restauration sont alors perdues.
+
+**Scénario 3 — Dernier recours : la copie `avant-brainsto-backend-1.3.0`.**
+
+- Le backend 1.3.0 la dépose automatiquement juste avant sa première écriture
+  (`brainsto-data.json.avant-brainsto-backend-1.3.0.<date>`). Elle représente
+  l'**état antérieur au déploiement 1.3.0**.
+- La restaurer ramène **TOUT l'état partagé** à cette date. Elle peut donc
+  supprimer **tous** les messages, votes, consensus, explorations et autres
+  écritures créés depuis, pas seulement les explorations.
+- À n'utiliser que si les scénarios 1 et 2 ne suffisent pas, par exemple des
+  données abîmées sans copie plus récente utilisable. `restoreFromBackup` garde
+  l'état remplacé dans une copie `avant-restauration`, mais ne le refusionne pas.
 
 ### Plusieurs fichiers `brainsto-data.json` sur le Drive
 
