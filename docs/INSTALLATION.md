@@ -288,6 +288,16 @@ secret partagé par l'équipe, pas une authentification individuelle.
 
 ## 1 ter. Remettre l'espace à zéro (effacer les essais)
 
+**Le plus simple (backend 1.4.2 ou plus)** : supprimer `brainsto-data.json` dans
+Drive (et ses copies si on le souhaite). Le script n'a besoin de rien d'autre : il
+oublie le fichier disparu et en crée un neuf, vide, à la première action de
+l'équipe. C'est aussi ce qui se passe pour une équipe toute neuve. Les téléphones
+récupèrent l'espace vide à leur prochaine synchronisation. Si la ligne
+`DATA_FILE_ID` désigne le fichier supprimé, elle est ignorée ; mieux vaut la
+remettre à `""`.
+
+**Sans rien supprimer** :
+
 Ne **jamais** vider ou modifier `brainsto-data.json` à la main : le numéro de
 révision repartirait de zéro, et un téléphone resté sur un ancien numéro pourrait
 garder l'ancien contenu en se croyant « À jour ».

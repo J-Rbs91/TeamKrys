@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.4.1";
+var BACKEND_VERSION = "brainsto-backend-1.4.2";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -692,21 +692,82 @@ function findExistingDataFile() {
   return found.length ? found[0] : null;
 }
 
-function getDataFile() {
-  var id = configuredFileId();
-  if (id) { return DriveApp.getFileById(id); }
-  var found = findExistingDataFile();
-  if (found) { return found; }
-  throw new Error("Fichier de données introuvable. Exécutez setupProject() pour un espace neuf.");
+/* Un identifiant mène-t-il encore à un fichier utilisable ? Supprimé définitivement ou à la corbeille : non (null).
+ * Toute autre erreur de Drive remonte (code retry) : on ne crée JAMAIS un espace neuf sur une panne passagère. */
+var MISSING_FILE_RX = /no item with the given id|not found|introuvable|aucun élément|n'existe pas|does not exist/i;
+
+function liveFile(id) {
+  var file;
+  try { file = DriveApp.getFileById(id); }
+  catch (error) {
+    if (MISSING_FILE_RX.test(String(error && error.message ? error.message : error))) { return null; }
+    throw error;
+  }
+  return file.isTrashed() ? null : file;
 }
 
+/* Le fichier de données de l'équipe : DATA_FILE_ID, sinon le fichier rattaché (propriété du script), sinon le seul
+ * « brainsto-data.json » hors corbeille. Un rattachement vers un fichier supprimé est oublié. Sans aucun fichier :
+ * `create` vrai (une écriture, sous verrou) en crée un neuf — c'est le cas d'une nouvelle équipe, ou d'un espace remis
+ * à zéro en supprimant le fichier ; `create` faux (une lecture) renvoie null. Plusieurs homonymes : erreur, jamais de
+ * choix (§23). */
+function getDataFile(create) {
+  var props = PropertiesService.getScriptProperties();
+  var explicit = trim(DATA_FILE_ID);
+  if (explicit) {
+    var pinned = liveFile(explicit);
+    if (pinned) { return pinned; }
+  }
+  var attachedId = trim(props.getProperty(PROP_FILE_ID));
+  if (attachedId) {
+    var attached = liveFile(attachedId);
+    if (attached) { return attached; }
+    props.deleteProperty(PROP_FILE_ID);
+  }
+  var found = findExistingDataFile();
+  if (found) { return found; }
+  return create ? createDataFile(props, true) : null;
+}
+
+/* Espace neuf. Installation (setupProject) : révision 0. Recréation automatique, après la suppression du fichier
+ * (`replacing`) : révision de départ = horodatage en secondes, pour qu'un téléphone resté sur l'ancien espace (révision
+ * 47, par exemple) ne retombe jamais sur un numéro déjà vu et recharge donc toujours l'état ; et pas de copie
+ * « avant-version » d'un fichier qui vient de naître. */
+function createDataFile(props, replacing) {
+  var fresh = emptyState();
+  if (replacing) {
+    fresh.revision = Math.floor(Date.now() / 1000);
+    fresh.updatedAt = new Date().toISOString();
+  }
+  var created = getOrCreateFolder().createFile(FILE_NAME, JSON.stringify(fresh, null, 2), "application/json");
+  props.setProperty(PROP_FILE_ID, created.getId());
+  if (replacing) {
+    props.setProperty(PROP_BACKUP_VERSION, BACKEND_VERSION);
+    logResult("Fichier de données recréé : " + created.getId());
+  }
+  return created;
+}
+
+/* Pour les fonctions de maintenance (sauvegarde, restauration, remise à zéro) : un fichier doit exister. */
+function requireDataFile() {
+  var file = getDataFile(false);
+  if (!file) { throw new Error("Aucun fichier de données : il sera créé à la première action de l'équipe."); }
+  return file;
+}
+
+/* Mise en place depuis l'éditeur. Facultative : sans fichier, la première action de l'équipe en crée un. */
 function setupProject() {
   var props = PropertiesService.getScriptProperties();
-  var id = configuredFileId();
-  if (id) {
-    var configured = DriveApp.getFileById(id);
-    props.setProperty(PROP_FILE_ID, configured.getId());
-    return logResult("Fichier déjà configuré : " + configured.getName() + " (" + configured.getId() + ")");
+  var explicit = trim(DATA_FILE_ID);
+  var live = explicit ? liveFile(explicit) : null;
+  var attachedId = trim(props.getProperty(PROP_FILE_ID));
+  if (!live && attachedId) {
+    live = liveFile(attachedId);
+    if (!live) { props.deleteProperty(PROP_FILE_ID); }
+  }
+  if (live) {
+    props.setProperty(PROP_FILE_ID, live.getId());
+    return logResult("Fichier déjà configuré : " + live.getName() + " (" + live.getId() + ")");
   }
   var existing = activeDataFiles();
   /* Plusieurs homonymes : rien n'est rattaché, le journal dit lesquels et comment choisir. */
@@ -715,14 +776,14 @@ function setupProject() {
     props.setProperty(PROP_FILE_ID, existing[0].getId());
     return logResult("Fichier existant réutilisé : " + describeFile(existing[0]));
   }
-  var folder = getOrCreateFolder();
-  var created = folder.createFile(FILE_NAME, JSON.stringify(emptyState(), null, 2), "application/json");
-  props.setProperty(PROP_FILE_ID, created.getId());
-  return logResult("Fichier créé : " + created.getId());
+  return logResult("Fichier créé : " + createDataFile(props, false).getId());
 }
 
-function readDataFile() {
-  var file = getDataFile();
+/* `create` : vrai pour une écriture (doPost, sous verrou) — le fichier absent est créé AVANT d'appliquer les actions,
+ * pour que la révision de départ (horodatage) soit celle sur laquelle elles s'appliquent. */
+function readDataFile(create) {
+  var file = getDataFile(create === true);
+  if (!file) { return ensureShape(emptyState()); }
   var content = file.getBlob().getDataAsString("UTF-8");
   return ensureShape(content ? JSON.parse(content) : emptyState());
 }
@@ -735,7 +796,7 @@ function maybeBackupBeforeWrite(file) {
 }
 
 function writeDataFile(state) {
-  var file = getDataFile();
+  var file = getDataFile(true);
   maybeBackupBeforeWrite(file);
   file.setContent(JSON.stringify(state, null, 2));
 }
@@ -750,7 +811,7 @@ function createBackup(file, reason) {
 }
 
 function backupNow() {
-  var backup = createBackup(getDataFile(), "manuel");
+  var backup = createBackup(requireDataFile(), "manuel");
   return logResult("Sauvegarde créée : " + backup.getName() + " (" + backup.getId() + ")");
 }
 
@@ -765,7 +826,7 @@ function restoreFromBackup(backupFileId) {
   var lock = LockService.getScriptLock();
   lock.waitLock(45000);
   try {
-    var file = getDataFile();
+    var file = requireDataFile();
     var backup = DriveApp.getFileById(backupId);
     if (backup.getId() === file.getId()) {
       throw new Error("Ce fichier est déjà le fichier de données utilisé : indiquez une copie de sauvegarde.");
@@ -828,7 +889,7 @@ function resetSpace() {
   var lock = LockService.getScriptLock();
   lock.waitLock(45000);
   try {
-    var file = getDataFile();
+    var file = requireDataFile();
     var raw = file.getBlob().getDataAsString("UTF-8");
     var current;
     try { current = ensureShape(raw ? JSON.parse(raw) : emptyState()); }
@@ -877,7 +938,7 @@ function diagnoseStorage() {
     candidates: []
   };
   var usedFile = null;
-  try { usedFile = getDataFile(); }
+  try { usedFile = getDataFile(false); }
   catch (error) { result.usedError = String(error && error.message ? error.message : error); }
   var usedId = usedFile ? usedFile.getId() : "";
   var active = 0;
@@ -921,8 +982,9 @@ function ideaEntry(action) {
 
 function ideasFolder() {
   try {
-    var parents = getDataFile().getParents();
-    if (parents.hasNext()) { return parents.next(); }
+    var file = getDataFile(false);
+    var parents = file ? file.getParents() : null;
+    if (parents && parents.hasNext()) { return parents.next(); }
   } catch (ignore) { /* pas encore de fichier de données : dossier par défaut */ }
   return getOrCreateFolder();
 }
@@ -1070,7 +1132,7 @@ function doPost(e) {
     if (actions.length > MAX_BATCH) { return createJsonResponse(retryFailure("Lot trop volumineux.")); }
 
     lock.waitLock(45000);
-    var state = readDataFile();
+    var state = readDataFile(true);
     var results = [];
     var changed = false;
     var ideas = [];

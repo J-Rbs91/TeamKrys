@@ -340,6 +340,52 @@ function twoHomonyms() {
   return { drive, real, stale, trashed };
 }
 
+/* ------------------------------------- Fichier absent : l'espace se recrée --- */
+
+check("nouvelle équipe, aucun fichier : la lecture rend un espace vide sans rien créer, la 1re action crée le fichier", () => {
+  const be = loadBackend();
+  const r = be.get({});
+  assert(r.ok && r.state && r.state.topics.length === 0, "lecture d'un espace vide : " + JSON.stringify(r));
+  equal(be.drive.calls.createFile, 0, "une lecture ne crée rien");
+  const w = be.post(topic("a1", 1));
+  assert(w.ok, "la première action passe : " + JSON.stringify(w));
+  const files = be.drive.named(FILE_NAME);
+  equal(files.length, 1, "un seul fichier créé");
+  equal(be.props.store.BRAINSTO_FILE_ID, files[0].id, "et rattaché");
+  equal(be.data().topics.map((t) => t.id), ["t1"], "l'action y est écrite");
+  assert(be.data().revision > 1000000000, "révision de départ = horodatage (jamais un numéro déjà vu) : " + be.data().revision);
+  equal(be.drive.matching(/\.avant-/).length, 0, "pas de copie « avant-version » d'un fichier neuf");
+});
+
+check("fichier supprimé (rattaché, ou désigné par DATA_FILE_ID) : rattachement oublié, espace neuf à la 1re action", () => {
+  ["propriété", "corbeille", "DATA_FILE_ID"].forEach((how) => {
+    const be = fresh();
+    be.post(topic("a1", 1));
+    const old = be.dataRec();
+    if (how === "corbeille") { old.trashed = true; } else { be.drive.files.delete(old.id); }
+    if (how === "DATA_FILE_ID") { be.ctx.DATA_FILE_ID = old.id; }
+    const r = be.get({});
+    assert(r.ok && r.state.topics.length === 0, how + " : lecture d'un espace vide : " + JSON.stringify(r));
+    const w = be.post(topic("b1", 2));
+    assert(w.ok, how + " : écriture acceptée : " + JSON.stringify(w));
+    const live = be.drive.named(FILE_NAME).filter((f) => !f.trashed);
+    equal(live.length, 1, how + " : un fichier neuf");
+    assert(live[0].id !== old.id && be.props.store.BRAINSTO_FILE_ID === live[0].id, how + " : nouveau rattachement");
+    equal(JSON.parse(live[0].content).topics.map((t) => t.id), ["t2"], how + " : seule la nouvelle action y figure");
+  });
+});
+
+check("panne passagère de Drive sur le fichier rattaché : code retry, jamais d'espace neuf", () => {
+  const be = fresh();
+  be.post(topic("a1", 1));
+  const real = be.drive.api.getFileById;
+  be.drive.api.getFileById = () => { throw new Error("Service error: Drive"); };
+  equal(be.post(topic("b1", 2)).code, "retry", "retry");
+  equal(be.drive.named(FILE_NAME).length, 1, "aucun fichier créé");
+  be.drive.api.getFileById = real;
+  equal(be.data().topics.map((t) => t.id), ["t1"], "l'espace d'origine est intact");
+});
+
 check("homonymes sans rattachement : erreur qui liste chaque fichier, aucun choix, rien d'écrit", () => {
   [false, true].forEach((reverse) => {
     const h = twoHomonyms();
