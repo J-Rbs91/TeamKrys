@@ -2696,25 +2696,9 @@
 
   /* ------------------------------------------------------------ Réglages --- */
 
-  /* Ce que l'appareil sait de la présentation, dit sans horodatage : afficher une
-   * date inviterait à en tirer des conclusions que cet enregistrement ne porte pas.
-   * « migrée » est volontairement lisible — c'est ce qui explique à quelqu'un qui
-   * utilisait déjà l'application pourquoi il ne l'a jamais vue. */
-  function onboardingHint(state) {
-    if (state === "vue") { return "Vous avez vu la présentation de l'application."; }
-    if (state === "passée") { return "Vous avez passé la présentation."; }
-    if (state === "en cours") { return "Présentation commencée, pas terminée."; }
-    if (state === "migrée") { return "Vous utilisiez déjà l'application : la présentation ne vous a pas été montrée."; }
-    if (state === "sans-mémoire") {
-      return "Cet appareil n'enregistre rien : la présentation ne peut pas être mémorisée, "
-        + "et elle réapparaîtra à la prochaine ouverture.";
-    }
-    return "La présentation n'a pas encore été vue sur cet appareil.";
-  }
-
   /* Réglages sur DEUX niveaux, pour éviter les mauvaises manipulations :
-   *   - niveau 1, « Réglages » (onglet) : ce qui sert à chacun, sans risque. Le nom, la réunion, l'invitation, la
-   *     présentation. Rien n'y coupe l'appareil de l'équipe ;
+   *   - niveau 1, « Réglages » (onglet) : ce qui sert à chacun, sans risque. Le nom, l'invitation, la présentation.
+   *     Rien n'y coupe l'appareil de l'équipe ;
    *   - niveau 2, « Système » (#/settings/system) : la connexion et la synchronisation. Sans mot de passe, mais CHAQUE
    *     action y demande confirmation (SYSTEM_ACTIONS, fenêtre « confirmSystem » ; la déconnexion garde la sienne).
    *     Ouvrir le diagnostic replié n'est pas une action : il ne change rien. */
@@ -2731,62 +2715,50 @@
      * feuille de partage (ordinateur, certaines fenêtres intégrées), le message est copié. Le code d'accès n'est
      * jamais gardé par l'application : le message se termine par « Code d'accès : », à compléter avant l'envoi. */
     var inviteLink = connected && typeof App.inviteLink === "function" ? App.inviteLink() : "";
-    var inviteCard = null;
-    if (inviteLink) {
-      var withCode = typeof App.teamHasCode === "function" && App.teamHasCode();
-      inviteCard = el("div", { class: "card card-static stack", "data-key": "invite-settings" }, [
-        sectionTitle("users", "Inviter des collaborateurs"),
-        el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "invite-share",
-          onclick: function () { shareInvitation(inviteLink, withCode); } },
-        [icon("share", 17), el("span", { text: "Partager le lien d'invitation" })]),
-        withCode ? el("div", { class: "hint", text: "Ajoutez le code d'accès à la fin du message avant de l'envoyer." }) : null
-      ]);
-    }
+    var withCode = !!inviteLink && typeof App.teamHasCode === "function" && App.teamHasCode();
 
     /* Actions de plus de 30 jours retenues (BL-004) : le message de démarrage renvoie ici. Le bouton qui les
-     * envoie est au niveau Système ; ce rappel dit seulement où aller. */
+     * envoie est au niveau Système ; la ligne Système le signale seulement. */
     var staleCount = typeof Sync.staleCount === "function" ? Number(Sync.staleCount()) || 0 : 0;
 
+    /* Épure : une liste de lignes, comme les réglages d'une messagerie IA. Plus de cartes, de surtitres ni de
+     * paragraphes ; la synthèse de réunion a son onglet et n'est plus doublée ici. */
     return el("div", { class: "screen" }, [
       topbar({ title: "Réglages", actions: [statusPill()] }),
       el("div", { class: "content stack-lg" }, [
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("user", "Votre nom"),
+        reveal(field("Votre nom", el("div", { class: "settings-name" }, [
           nameInput,
-          el("button", { class: "btn btn-primary btn-block", type: "button", text: "Enregistrer",
+          el("button", { class: "btn btn-primary", type: "button", text: "Enregistrer",
             "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
-        ]), 0),
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("doc", "Réunion"),
-          el("div", { class: "hint", text: "Synthèse de tous les sujets, prête à imprimer ou à projeter." }),
-          el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "open-meeting",
-            onclick: function () { App.go("#/meeting"); } },
-          [icon("print", 16), el("span", { text: "Ouvrir la synthèse" })])
-        ]), 1),
-        inviteCard ? reveal(inviteCard, 2) : null,
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("info", "Présentation"),
-          /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, ces fonctions n'existent pas. */
-          el("div", { class: "hint", text: typeof App.onboardingState === "function"
-            ? onboardingHint(App.onboardingState()) : onboardingHint("inconnue") }),
-          el("button", { class: "btn btn-outline btn-block", type: "button",
-            onclick: function () {
-              if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
-            } },
-          [el("span", { text: "Revoir la présentation" })])
-        ]), 3),
-        /* L'entrée du niveau Système, à part et en dernier : on n'y va que pour dépanner. */
-        reveal(el("div", { class: "card card-static stack system-entry", "data-key": "system-entry" }, [
-          sectionTitle("settings", "Système"),
-          el("div", { class: "hint", text: "Connexion et synchronisation. Chaque action y demande une confirmation." }),
-          staleCount > 0 ? el("div", { class: "note" }, [icon("info", 14), el("span", { class: "note-body",
-            text: staleCount === 1 ? "1 action de plus de 30 jours attend : elle s'envoie depuis Système."
-              : staleCount + " actions de plus de 30 jours attendent : elles s'envoient depuis Système." })]) : null,
-          el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "open-system",
-            onclick: function () { App.go("#/settings/system"); } },
-          [el("span", { text: "Ouvrir les réglages Système" }), icon("forward", 16)])
-        ]), 4)
+        ])), 0),
+        reveal(el("div", { class: "settings-list" }, [
+          inviteLink ? el("div", { "data-key": "invite-settings" }, [
+            settingsRow("share", "Inviter des collaborateurs", "invite-share", function () { shareInvitation(inviteLink, withCode); },
+              withCode ? "Ajoutez le code d'accès à la fin du message." : null)
+          ]) : null,
+          settingsRow("info", "Revoir la présentation", "replay-onboarding", function () {
+            /* Garde de chargement mixte : avec un `js/app.js` de cache ancien, cette fonction n'existe pas. */
+            if (typeof App.replayOnboarding === "function") { App.replayOnboarding(); }
+          }),
+          /* L'entrée du niveau Système, en dernier : on n'y va que pour dépanner. */
+          el("div", { "data-key": "system-entry" }, [
+            settingsRow("settings", "Système", "open-system", function () { App.go("#/settings/system"); },
+              staleCount > 0 ? Utils.plural(staleCount, "action de plus de 30 jours en attente", "actions de plus de 30 jours en attente") : null, true)
+          ])
+        ]), 1)
       ])
+    ]);
+  }
+
+  /* Ligne de réglage : icône, libellé, une précision facultative dessous, chevron si elle mène à un autre écran. */
+  function settingsRow(iconName, label, key, onclick, detail, chevron) {
+    return el("button", { class: "settings-row", type: "button", "data-key": key, onclick: onclick }, [
+      icon(iconName, 18),
+      el("span", { class: "settings-row-text" }, [
+        el("span", { text: label }),
+        detail ? el("span", { class: "hint", text: detail }) : null
+      ]),
+      chevron ? icon("forward", 16) : null
     ]);
   }
 
@@ -2849,11 +2821,8 @@
     var connected = !(Sync.connection.localMode || !Sync.connection.url);
 
     var connectionRows = el("div", { class: "card card-static stack" }, [
-      el("div", { class: "row" }, [
-        sectionTitle("link", "Connexion"),
-        el("div", { class: "spacer" }),
-        toneBadge(connected ? "Équipe" : "Local", connected ? "tone-success" : "tone-neutral")
-      ]),
+      /* Épure : plus de pastille « Équipe / Local » ici, la phrase dessous le dit déjà. */
+      sectionTitle("link", "Connexion"),
       el("div", { class: "hint", text: connected
         ? "Connecté à l'espace de l'équipe."
         : "Mode local : les données restent sur cet appareil." }),
@@ -2903,8 +2872,9 @@
       staleBlock,
       /* Ce qui sert à tous reste visible : ce qui attend, et la dernière erreur quand il y en a une. */
       el("div", { class: "diag" }, [
-        diagRow("Actions en attente", String(diagnostics.pending.length) +
-          (diagnostics.pending.length ? " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")" : "")),
+        /* Rien en attente : rien à dire (épure). */
+        diagnostics.pending.length ? diagRow("Actions en attente", String(diagnostics.pending.length) +
+          " (" + diagnostics.pending.map(function (p) { return p.type; }).join(", ") + ")") : null,
         diagnostics.status.error ? diagRow("Dernière erreur", diagnostics.status.error, true) : null
       ]),
       /* Le reste ne sert qu'au dépannage : replié, retenu ouvert d'un rendu à l'autre. */
@@ -2944,10 +2914,8 @@
       topbar({ title: "Système", back: App.remonter, backLabel: "Réglages",
         actions: [statusPill()] }),
       el("div", { class: "content stack-lg" }, [
-        reveal(el("div", { class: "note" }, [icon("warning", 14), el("span", { class: "note-body",
-          text: "Ces réglages servent au dépannage. Chaque action demande une confirmation." })]), 0),
-        reveal(connectionRows, 1),
-        reveal(syncCard, 2)
+        reveal(connectionRows, 0),
+        reveal(syncCard, 1)
       ])
     ]);
   }

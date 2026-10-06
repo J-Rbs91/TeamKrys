@@ -396,8 +396,7 @@ check("aucune action retenue : ni texte ni bouton, l'écran des Réglages reste 
   const text = t.app().textContent;
   assert(text.indexOf("30 jours") < 0, "texte d'action retenue affiché à zéro : « " + text + " »");
   assert(!release(t), "bouton « Envoyer quand même » présent à zéro");
-  assert(text.indexOf("Synchroniser maintenant") >= 0 && text.indexOf("Actions en attente") >= 0,
-    "les blocs existants de Système doivent rester");
+  assert(text.indexOf("Synchroniser maintenant") >= 0, "les blocs existants de Système doivent rester");
 });
 
 check("1 action retenue : texte au singulier, bouton nommé et tactile, aucun contenu d'action", () => {
@@ -499,12 +498,12 @@ check("niveau 1 : rappel qui renvoie à Système, sans bouton d'envoi ni compte 
   const one = boot({ stale: 1 });
   one.go(SETTINGS);
   const text = one.app().textContent;
-  assert(text.indexOf("1 action de plus de 30 jours attend : elle s'envoie depuis Système.") >= 0, "rappel au singulier : « " + text + " »");
+  assert(text.indexOf("1 action de plus de 30 jours en attente") >= 0, "rappel au singulier : « " + text + " »");
   assert(!release(one), "le bouton d'envoi n'est pas au niveau 1");
   assert(text.indexOf("Synchroniser maintenant") < 0, "la synchronisation n'est pas au niveau 1");
   const two = boot({ stale: 2 });
   two.go(SETTINGS);
-  assert(two.app().textContent.indexOf("2 actions de plus de 30 jours attendent : elles s'envoient depuis Système.") >= 0, "rappel au pluriel");
+  assert(two.app().textContent.indexOf("2 actions de plus de 30 jours en attente") >= 0, "rappel au pluriel");
   const old = boot({ stale: 3, withStale: false });
   old.go(SETTINGS);
   assert(old.app().textContent.indexOf("30 jours") < 0, "ancien sync.js : aucun rappel, aucune erreur");

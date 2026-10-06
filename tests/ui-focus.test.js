@@ -883,14 +883,14 @@ check("propositions : statut, Modifier et Retirer mon vote repliés sous « Stat
 
 /* ================================================== Réglages regroupés ==== */
 
-check("Réglages, niveau 1 : nom, Réunion, invitation, présentation, puis l'entrée Système ; rien de la connexion ni de la synchronisation", () => {
+check("Réglages, niveau 1 : nom, invitation, présentation, puis l'entrée Système, en lignes ; rien de la connexion ni de la synchronisation", () => {
   const t = boot();
   let went = null;
   t.ctx.App.go = (hash) => { went = hash; };
   t.ctx.App.inviteLink = () => "http://localhost/#/invitation/abc";
   t.go(SETTINGS);
   const text = t.app().textContent;
-  ["Votre nom", "Réunion", "Ouvrir la synthèse", "Inviter des collaborateurs", "Revoir la présentation", "Système"].forEach((needle) => {
+  ["Votre nom", "Inviter des collaborateurs", "Revoir la présentation", "Système"].forEach((needle) => {
     assert(text.indexOf(needle) >= 0, "niveau 1 : « " + needle + " » absent");
   });
   ["Synchroniser maintenant", "Code d'espace", "Actions en attente", "Se déconnecter", "Modifier l'adresse"].forEach((needle) => {
@@ -901,10 +901,9 @@ check("Réglages, niveau 1 : nom, Réunion, invitation, présentation, puis l'en
   });
   assert(!t.app().querySelector("details.diag-more"), "niveau 1 : pas de diagnostic technique");
   assert(t.app().querySelectorAll(".status-pill").length === 1, "niveau 1 : une seule pastille, dans la barre de titre");
-  const cards = t.app().querySelectorAll(".content > .card");
-  assert(cards.length && cards[cards.length - 1].getAttribute("data-key") === "system-entry", "l'entrée Système vient en dernier");
-  t.app().querySelector('[data-key="open-meeting"]').click();
-  assert(went === "#/meeting", "Ouvrir la synthèse : " + went);
+  assert(!t.app().querySelector(".content > .card") && !t.app().querySelector('[data-key="open-meeting"]'), "épure : ni cartes, ni doublon de l'onglet Réunion");
+  const rows = t.app().querySelector(".settings-list").childNodes;
+  assert(rows.length && rows[rows.length - 1].getAttribute("data-key") === "system-entry", "l'entrée Système vient en dernier");
   t.app().querySelector('[data-key="open-system"]').click();
   assert(went === "#/settings/system", "entrée Système : " + went);
   assert(!dialog(t), "entrer dans Système ne demande aucune confirmation : ce n'est pas une action");
@@ -927,7 +926,8 @@ check("Système, niveau 2 : retour vers Réglages, sans barre de navigation ; co
   assert(/Stockage local/.test(more.textContent) && /Révision/.test(more.textContent) && /Version/.test(more.textContent), "lignes techniques dans le volet");
   const outside = (needle) => t.app().querySelectorAll(".diag-row").some((r) => r.textContent.indexOf(needle) === 0 && !r.closest("details"));
   assert(outside("Code d'espace"), "le code d'espace reste visible (comparer deux téléphones)");
-  assert(outside("Actions en attente"), "les actions en attente restent visibles");
+  const pending = t.ctx.Sync.diagnostics().pending.length;
+  assert(pending ? outside("Actions en attente") : !outside("Actions en attente"), "les actions en attente : visibles s'il y en a, absentes à zéro (épure)");
   assert(text.indexOf("Synchroniser maintenant") >= 0, "la synchronisation manuelle est au niveau 2");
   more.open = true;
   more.dispatchEvent({ type: "toggle", target: more });

@@ -2980,3 +2980,33 @@ html.has-layer body { overflow: hidden; }
 /* Ce qui ne sert que sur papier (date d'édition de la synthèse de réunion). */
 .print-only { display: none; }
 @media print { .print-only { display: block; } }
+
+/* Réglages : le nom (champ + Enregistrer sur une ligne) puis une liste de lignes, sans cartes. */
+.settings-name { display: flex; gap: 8px; align-items: stretch; }
+.settings-name .input { flex: 1 1 auto; min-width: 0; }
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.settings-list > * + * { border-top: 1px solid var(--line); }
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.settings-row > .icon { color: var(--muted); }
+.settings-row:active { background: var(--surface-sunken); }
+.settings-row-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
