@@ -486,6 +486,26 @@ check("restoreFromBackup : révision max+1, sauvegarde de sécurité, rien suppr
   equal(be.post(topic("n1", 9)).revision, 8, "les écritures reprennent après la restauration");
 });
 
+check("resetSpace : tout est effacé (sujets, membres), révision +1, journal gardé, sauvegarde réversible, rien supprimé", () => {
+  const be = fresh();
+  for (let i = 0; i < 3; i++) { be.post(topic("g" + i, i)); }
+  const before = be.dataRec().content;
+  const idsBefore = Array.from(be.drive.files.keys());
+  const out = String(be.ctx.resetSpace());
+  const data = be.data();
+  equal([data.topics.length, data.participants.length], [0, 0], "espace vide");
+  equal(data.revision, 4, "révision = 3 + 1, jamais répétée");
+  assert(data.processedActionIds.indexOf("g0") >= 0, "journal de déduplication gardé");
+  const safety = be.drive.matching(/^brainsto-data\.json\.avant-remise-a-zero\./);
+  assert(safety.length === 1 && safety[0].content === before, "état effacé sauvegardé");
+  idsBefore.forEach((id) => assert(be.drive.files.has(id), "rien n'est supprimé : " + id));
+  assert(out.indexOf("restoreFromBackup") >= 0 && !be.lock.held, "journal lisible, verrou relâché : " + out);
+  assert(be.get({ since: "3" }).state, "un appareil en révision 3 recharge l'état vide");
+  equal(be.post(topic("g0", 0)).duplicate, true, "une action déjà appliquée renvoyée par un téléphone ne revient pas");
+  be.ctx.restoreFromBackup(safety[0].id);
+  equal(be.data().topics.length, 3, "la remise à zéro se défait par restoreFromBackup");
+});
+
 check("restoreFromBackup : copie plus récente, journal borné aux plus récents", () => {
   const be = fresh();
   be.post(topic("a1", 1));

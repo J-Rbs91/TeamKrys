@@ -381,7 +381,7 @@ pas depuis Consensus : l'onglet liste ce que toute l'équipe a accepté ou rejet
 Les « membres » sont toutes les personnes connues de l'espace (chaque appareil qui a
 choisi un nom). Un membre arrivé après un consensus ne le défait pas.
 
-Ce consensus automatique demande le serveur de l'équipe en version 1.4.0 (fichier
+Ce consensus automatique demande le serveur de l'équipe en version 1.4.0 ou plus (fichier
 `apps-script/Code.gs`, à redéployer). Avec un serveur plus ancien, une proposition
 unanime s'affiche bien dans Consensus, mais rien n'empêche encore un vote de la
 modifier.

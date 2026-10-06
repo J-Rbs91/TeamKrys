@@ -446,6 +446,22 @@
     UI.force();
   };
 
+  /* Membre de l'équipe : un appareil nommé qui ne figure pas (ou plus) dans la liste des participants s'y réinscrit,
+   * une fois par session, après un échange réussi avec le serveur. C'est le cas après une remise à zéro de l'espace
+   * (resetSpace, apps-script/Code.gs) : sans cela, la liste resterait vide jusqu'à ce que chacun réenregistre son nom,
+   * et le consensus (« toute l'équipe a voté pareil ») se calculerait sur une équipe incomplète. */
+  var registerAsked = false;
+  function ensureRegistered() {
+    if (registerAsked || !App.user || !App.user.name || App.gate()) { return; }
+    var diagnostics = typeof Sync.diagnostics === "function" ? Sync.diagnostics() : null;
+    if (!diagnostics || !diagnostics.lastSyncAt) { return; }
+    var participants = (Store.view && Store.view.participants) || [];
+    var known = participants.some(function (p) { return p && p.id === App.user.id; });
+    registerAsked = true;
+    if (known) { return; }
+    Sync.dispatch(Sync.makeAction("REGISTER_PARTICIPANT", { participantId: App.user.id, name: App.user.name }, App.user));
+  }
+
   /* ------------------------------------------ Présentation initiale --- */
 
   /* La règle qui décide est pure et vit dans js/config.js, testée par
@@ -1229,7 +1245,7 @@
     remplacer(App.route.raw);
 
     Sync.setHooks({
-      onChange: function () { UI.render(); UI.refreshStatus(); },
+      onChange: function () { UI.render(); UI.refreshStatus(); ensureRegistered(); },
       onMessage: function (text, kind) { UI.toast(text, kind); },
       onAuthError: function () {
         UI.toast("Code d'accès refusé par le serveur : saisissez le nouveau code de l'équipe.", "error");

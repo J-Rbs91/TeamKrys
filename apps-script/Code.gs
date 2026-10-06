@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.4.0";
+var BACKEND_VERSION = "brainsto-backend-1.4.1";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -814,6 +814,36 @@ function restoreFromBackup(backupFileId) {
     return logResult("Copie " + backup.getName() + " (" + backup.getId() + ") restaurée dans " + file.getName() +
       " (" + file.getId() + "), révision " + restored.revision + ". État remplacé sauvegardé : " +
       safety.getName() + " (" + safety.getId() + "). Aucun fichier supprimé.");
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) { /* verrou non acquis */ }
+  }
+}
+
+/* Remise à zéro de l'espace, depuis l'éditeur : resetSpace(). Efface sujets, messages, propositions, votes et la
+ * liste des membres (chaque appareil nommé s'y réinscrit seul à sa prochaine synchronisation). Pandore (fichier à
+ * part) n'est pas touchée. L'état effacé est d'abord sauvegardé ; rien n'est supprimé.
+ * ⚠️ revision = courante + 1 : un numéro ne se répète jamais (même raison que restoreFromBackup) ; le journal de
+ * déduplication est gardé, pour qu'une action déjà appliquée et renvoyée par un téléphone ne revienne pas. */
+function resetSpace() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(45000);
+  try {
+    var file = getDataFile();
+    var raw = file.getBlob().getDataAsString("UTF-8");
+    var current;
+    try { current = ensureShape(raw ? JSON.parse(raw) : emptyState()); }
+    catch (damaged) {
+      var found = /"revision"\s*:\s*(\d+)/.exec(raw);
+      current = { revision: found ? Number(found[1]) : 0, processedActionIds: [] };
+    }
+    var safety = createBackup(file, "avant-remise-a-zero");
+    var fresh = emptyState();
+    fresh.revision = current.revision + 1;
+    fresh.updatedAt = new Date().toISOString();
+    fresh.processedActionIds = arr(current.processedActionIds).slice(-MAX_PROCESSED);
+    file.setContent(JSON.stringify(fresh, null, 2));
+    return logResult("Espace remis à zéro (révision " + fresh.revision + "). État effacé sauvegardé : " +
+      safety.getName() + " (" + safety.getId() + "). Pour revenir en arrière : restoreFromBackup(\"" + safety.getId() + "\").");
   } finally {
     try { lock.releaseLock(); } catch (ignore) { /* verrou non acquis */ }
   }

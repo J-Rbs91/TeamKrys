@@ -286,6 +286,21 @@ propriétaire du script. La page n'envoie son adresse à aucun autre site
 (`no-referrer`) et applique une politique de sécurité du contenu. Cela reste un
 secret partagé par l'équipe, pas une authentification individuelle.
 
+## 1 ter. Remettre l'espace à zéro (effacer les essais)
+
+Ne **jamais** vider ou modifier `brainsto-data.json` à la main : le numéro de
+révision repartirait de zéro, et un téléphone resté sur un ancien numéro pourrait
+garder l'ancien contenu en se croyant « À jour ».
+
+Dans l'éditeur Apps Script, choisir **`resetSpace`** dans la liste des fonctions,
+puis **Exécuter**. Elle efface sujets, messages, propositions, votes et la liste
+des membres ; Pandore n'est pas touchée. L'état effacé est d'abord sauvegardé
+(`brainsto-data.json.avant-remise-a-zero.<date>`) et le journal donne la commande
+`restoreFromBackup("…")` pour revenir en arrière. Chaque téléphone récupère
+l'espace vide à sa prochaine synchronisation, et s'inscrit de nouveau comme membre
+tout seul (application 1.22.2 ou plus). Aucun redéploiement n'est nécessaire pour
+lancer la fonction.
+
 ---
 
 ## 2. Le site (GitHub Pages)
