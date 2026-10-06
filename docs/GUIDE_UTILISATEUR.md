@@ -407,7 +407,7 @@ Ce n'est pas une discussion : on y dépose ce qu'on veut dire, une idée, une pl
 une question, une remarque, sans attendre de réponse. On l'ouvre avec l'onglet
 **Pandore**, dans la barre du bas.
 
-**Déposer.** Écrivez votre texte, puis **Déposer anonymement**. Il part **sans nom ni
+**Déposer.** Écrivez votre texte, puis touchez la flèche ronde (**Déposer anonymement**). Il part **sans nom ni
 identifiant**, même si vous signez vos messages ailleurs. C'est une boîte aux lettres :
 personne ne relit un dépôt dans l'application, pas même vous, et il ne se retire pas.
 
@@ -418,15 +418,15 @@ personne ne relit un dépôt dans l'application, pas même vous, et il ne se ret
    **aucun nom ni rien de confidentiel**.
 2. Une IA en écrit ensuite une **synthèse automatique** : sujets proches regroupés,
    détails qui trahiraient l'auteur retirés, sens conservé, plaintes comprises.
-3. La synthèse s'affiche sous le champ de dépôt, **pour tous**. L'IA choisit comment la
-   classer (par nature, par thème…) et l'écran l'indique. « 3 dépôts d'origine »
+3. La synthèse s'affiche sous le champ de dépôt, **pour tous**, regroupée par les
+   catégories que l'IA a choisies (par nature, par thème…). « 3 dépôts d'origine »
    signifie que trois dépôts disaient la même chose.
 
 Un dépôt n'apparaît donc pas tout de suite : il faut la collecte du jour, puis le
 passage de l'IA.
 
-Ce qui s'affiche est **la dernière synthèse automatique**, datée (« Synthèse
-automatique du … »). Quand Pandore a été remise à zéro après cette synthèse, une note
+Ce qui s'affiche est **la dernière synthèse automatique**, datée à droite du titre
+« Synthèse ». Quand Pandore a été remise à zéro après cette synthèse, une note
 le dit : la synthèse reste affichée, et ce qui a été déposé depuis figurera dans la
 suivante, qui la remplacera.
 

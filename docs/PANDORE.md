@@ -62,8 +62,8 @@ Elle couvre **tous les dépôts présents** dans `pandore/depots/`, et remplace 
 
 - **Classement choisi par l'IA.** À chaque synthèse, l'IA choisit l'axe le plus utile
   pour ces dépôts-là : par nature (idées, plaintes, questions…), par thème, par
-  destinataire, par urgence. Un seul axe à la fois. L'écran l'affiche (« Classement
-  choisi par l'IA : … ») et montre les catégories dans l'ordre où l'IA les a écrites.
+  destinataire, par urgence. Un seul axe à la fois. L'écran ne nomme pas l'axe (épure) :
+  il montre les catégories dans l'ordre où l'IA les a écrites.
 - **Un point par sujet.** Plusieurs dépôts qui disent la même chose forment un seul
   point. « 3 dépôts d'origine » dit le poids du sujet.
 - **Une plainte reste une plainte.** Elle est synthétisée comme un constat, sans être

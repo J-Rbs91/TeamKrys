@@ -645,21 +645,21 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
 Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 ([`PANDORE.md`](PANDORE.md), « Vérifier la mise en place »).
 
-- [ ] Onglet **Pandore** (barre du bas) → écran **Pandore**, sous-titre « Expression
-      libre et anonyme », sans bouton retour : c'est une section à part. Nulle part « boîte à idées » ni « reformulation ».
-- [ ] Message de prudence visible avant le champ : publication telle quelle sur le
-      GitHub public, une fois par jour, aucun nom.
-- [ ] Champ vide → **Déposer anonymement** affiche l'erreur sous le champ, rien ne part.
-- [ ] Dépôt → bandeau « Déposé, sans votre nom. Ce sera pris en compte dans la prochaine
-      synthèse automatique. » ; champ vidé ; le texte **n'apparaît nulle part** dans
+- [ ] Onglet **Pandore** (barre du bas) → écran **Pandore** épuré : titre seul, un
+      champ arrondi avec la flèche d'envoi dans son coin, sans bouton retour : c'est une section à part. Nulle part « boîte à idées » ni « reformulation ».
+- [ ] Une seule ligne sous le champ : « Anonyme, mais publié tel quel sur le GitHub
+      public. Aucun nom, rien de confidentiel. » Aucun autre paragraphe d'explication.
+- [ ] Compteur de caractères invisible sous 1 800 caractères, visible au-delà.
+- [ ] Champ vide → la flèche (**Déposer anonymement**) affiche l'erreur sous le champ, rien ne part.
+- [ ] Dépôt → bandeau « Déposé anonymement. » ; champ vidé ; le texte **n'apparaît nulle part** dans
       l'application, ni chez soi ni sur un autre téléphone.
 - [ ] Hors connexion : le dépôt part en file comme un message, puis au retour du réseau.
 - [ ] Après la collecte : le texte est dans `pandore/depots/<jour>.md`, sans nom, sans heure.
 - [ ] Après une synthèse publiée sur `main` et le déploiement de GitHub Pages (le cache
       de Pages peut ajouter une dizaine de minutes) : en revenant sur l'écran, la
-      synthèse apparaît sans mise à jour de l'application ; « Synthèse automatique du
-      … », résumé s'il y en a un, « Classement choisi par l'IA : … », catégories dans
-      l'ordre du fichier, « N dépôts d'origine ».
+      synthèse apparaît sans mise à jour de l'application ; « Synthèse » et sa date,
+      résumé s'il y en a un, catégories dans l'ordre du fichier (l'axe de classement
+      n'est pas affiché), « N dépôts d'origine ».
 - [ ] Après une remise à zéro publiée : la même synthèse reste affichée, avec la note
       « Remise à zéro le … ». Un dépôt fait ensuite n'apparaît qu'à la synthèse suivante,
       qui remplace toute l'actuelle.

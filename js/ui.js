@@ -2459,13 +2459,13 @@
    *     par GitHub Pages à côté de l'application. Affichée en TEXTE seulement : rien n'y est interprété comme du HTML.
    *     Chaque synthèse remplace la précédente. Une remise à zéro la laisse affichée telle quelle, et la date
    *     (`remiseAZero`) pour dire que ce qui a été déposé depuis viendra dans la suivante.
-   *   - CLASSEMENT : l'IA choisit l'axe (`classement`) et les catégories (`categorie` de chaque point). L'écran les
-   *     montre dans l'ordre du fichier, sans les réinterpréter.
+   *   - CLASSEMENT : l'IA choisit l'axe (`classement`) et les catégories (`categorie` de chaque point). L'écran montre
+   *     les catégories dans l'ordre du fichier, sans les réinterpréter ; l'axe lui-même n'est pas affiché (épure).
    * Le fichier est relu en arrivant sur l'écran, puis au plus toutes les deux minutes (le service worker le prend sur
    * le réseau d'abord, avec repli hors ligne). */
   var PANDORE_URL = "pandore/synthese.json";
   var PANDORE_STALE_MS = 2 * 60 * 1000;
-  var pandoreFeed = { status: "idle", points: [], date: "", resetOn: "", classement: "", resume: "", loadedAt: 0 };
+  var pandoreFeed = { status: "idle", points: [], date: "", resetOn: "", resume: "", loadedAt: 0 };
 
   function isDay(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")); }
 
@@ -2495,7 +2495,6 @@
         points: (Array.isArray(data.points) ? data.points : []).map(cleanPoint).filter(Boolean),
         date: isDay(data.date) ? data.date : "",
         resetOn: isDay(data.remiseAZero) ? data.remiseAZero : "",
-        classement: Utils.limit(Utils.trim(data.classement), 60),
         resume: Utils.limit(Utils.trim(data.resume), 1500),
         loadedAt: Utils.now()
       };
@@ -2542,10 +2541,21 @@
     }
     var unavailable = pandoreUnavailableReason();
 
-    var area = bindCounter(el("textarea", {
+    /* Composeur à la façon d'une messagerie IA : un seul champ, l'envoi dans son coin, aucun texte d'explication
+     * (la présentation initiale explique Pandore). Seul l'avertissement de publication publique reste à l'écran :
+     * c'est la seule chose à savoir AVANT d'écrire, et un dépôt ne se retire pas. */
+    var area = el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Une idée, une plainte, une question…", "aria-required": "true",
-      "data-draft": "pandore:new", disabled: !!unavailable
-    }), "pandore:new", Core.LIMITS.idea);
+      "aria-label": "Ce que vous voulez dire", rows: "3", "data-draft": "pandore:new", disabled: !!unavailable
+    });
+    /* Le compteur ne paraît qu'à l'approche de la limite : sous 90 %, il ne dit rien d'utile. */
+    var counter = counterFor("pandore:new", Core.LIMITS.idea);
+    var syncCounter = function () {
+      counter.textContent = area.value.length + " / " + Core.LIMITS.idea;
+      counter.hidden = area.value.length < Core.LIMITS.idea * 0.9;
+    };
+    syncCounter();
+    area.addEventListener("input", syncCounter);
 
     function submit() {
       var text = Utils.trim(area.value);
@@ -2553,6 +2563,7 @@
       var typed = area.value;
       /* Vidé AVANT l'envoi : le rendu qui suit réinjecterait sinon le texte déjà parti (même piège que le composeur). */
       area.value = "";
+      syncCounter();
       var sent = App.actions.submitIdea(text);
       var settle = function (result) {
         if (result && result.ok === false) {
@@ -2560,29 +2571,31 @@
           if (node) { node.value = typed; }
           return;
         }
-        UI.toast("Déposé, sans votre nom. Ce sera pris en compte dans la prochaine synthèse automatique.");
+        UI.toast("Déposé anonymement.");
       };
       if (sent && typeof sent.then === "function") { sent.then(settle, function () { settle(null); }); } else { settle(sent); }
     }
 
-    var deposit = el("div", { class: "card card-static stack" }, [
-      sectionTitle("inbox", "Déposer"),
-      el("p", { class: "hint", text: "Idée, plainte, question, remarque : tout peut s'y déposer. Votre texte part sans nom ni identifiant. Personne ne le relit ici, pas même vous : une IA en tire une synthèse automatique, affichée plus bas pour tous." }),
-      el("div", { class: "note pandore-public" }, [
-        icon("warning", 14),
-        el("span", { class: "note-body", text: "Ce que vous déposez est publié tel quel, une fois par jour, sur le GitHub public du projet. N'y mettez aucun nom ni rien de confidentiel. Un dépôt ne se retire pas." })
+    var deposit = el("div", { class: "pandore-deposit" }, [
+      el("div", { class: "pandore-composer" }, [
+        area,
+        el("div", { class: "pandore-composer-bar" }, [
+          counter,
+          el("div", { class: "spacer" }),
+          el("button", { class: "send-btn", type: "button", "aria-label": "Déposer anonymement", "data-key": "pandore-submit",
+            disabled: !!unavailable, onclick: submit }, [icon("send", 20)])
+        ])
       ]),
-      field("Ce que vous voulez dire", area),
-      counterFor("pandore:new", Core.LIMITS.idea),
-      unavailable ? el("p", { class: "hint", text: unavailable }) : null,
-      el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "pandore-submit", disabled: !!unavailable, onclick: submit },
-        [icon("send", 17), el("span", { text: "Déposer anonymement" })])
+      el("p", { class: "pandore-notice" }, [
+        icon("warning", 13),
+        el("span", { text: unavailable || "Anonyme, mais publié tel quel sur le GitHub public. Aucun nom, rien de confidentiel." })
+      ])
     ]);
 
     var list = el("div", { class: "stack" });
     var feed = pandoreFeed;
     if (feed.status === "loading" && !feed.points.length) {
-      list.appendChild(el("p", { class: "hint", text: "Chargement de la synthèse…" }));
+      list.appendChild(el("p", { class: "hint", text: "Chargement…" }));
       /* Deux cartes à la forme exacte des cartes de synthèse : à l'arrivée du contenu, rien ne saute. Elles
        * chatoient lentement tant que dure le chargement, et disparaissent avec lui (css/motion.css). Le texte
        * ci-dessus reste le seul à être lu. */
@@ -2597,13 +2610,13 @@
       list.appendChild(el("div", { class: "note" }, [
         icon("warning", 14),
         el("div", { class: "note-body" }, [
-          el("div", { text: "Impossible de charger la synthèse pour l'instant." }),
+          el("div", { text: "Impossible de charger la synthèse." }),
           el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "pandore-retry",
             onclick: function () { pandoreFeed.status = "idle"; UI.force(); } }, [icon("sync", 15), el("span", { text: "Réessayer" })])
         ])
       ]));
     } else if (!feed.points.length) {
-      list.appendChild(el("p", { class: "hint", text: "Pas encore de synthèse. Elle apparaîtra ici après le passage de l'IA." }));
+      list.appendChild(el("p", { class: "hint", text: "Pas encore de synthèse." }));
     }
     var index = 0;
     groupPoints(feed.points).forEach(function (group) {
@@ -2621,19 +2634,18 @@
     });
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Pandore", sub: "Expression libre et anonyme" }),
+      topbar({ title: "Pandore" }),
       el("div", { class: "content stack-lg" }, [
         reveal(deposit, 0),
         el("section", { class: "stack" }, [
           el("div", { class: "row" }, [
-            sectionTitle("doc", "Synthèse automatique"),
+            sectionTitle("doc", "Synthèse"),
             el("div", { class: "spacer" }),
-            feed.date ? el("span", { class: "hint", text: "du " + dayLabel(feed.date) }) : null
+            feed.date ? el("span", { class: "hint", text: dayLabel(feed.date) }) : null
           ]),
           feed.resetOn ? el("p", { class: "hint", "data-key": "pandore-reset-note",
-            text: "Remise à zéro le " + dayLabel(feed.resetOn) + " : ce qui a été déposé depuis figurera dans la prochaine synthèse, qui remplacera celle-ci." }) : null,
+            text: "Remise à zéro le " + dayLabel(feed.resetOn) + ". Les nouveaux dépôts iront dans la prochaine synthèse." }) : null,
           feed.resume ? el("p", { class: "pre-wrap pandore-resume", text: feed.resume }) : null,
-          feed.classement && feed.points.length ? el("p", { class: "hint", text: "Classement choisi par l'IA : " + feed.classement }) : null,
           list
         ])
       ])
