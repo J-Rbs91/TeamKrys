@@ -326,9 +326,9 @@ check("BL-038 plus d'opacité de groupe sur les sujets clôturés et archivés",
   }), "le titre des cartes archivées doit passer au jeton --muted");
 });
 
-check("BL-039 le bord du composeur est sur --line-field", function () {
+check("BL-039 (révisé, douceur) le composeur signé est un aplat sans contour ; le bord --line-field n'est plus que le repère de l'anonymat", function () {
   var field = { tag: "textarea", classes: ["textarea", "grow"], ancestors: [{ tag: "div", classes: ["composer"] }] };
-  expect(declFor(field, "border-color", BASE) === "var(--line-field)", ".composer .textarea doit avoir border-color: var(--line-field)");
+  expect(declFor(field, "border-color", BASE) === "transparent" && declFor(field, "background", BASE) === "var(--fill)", ".composer .textarea : aplat --fill, bord transparent");
 });
 
 check("gestes au doigt : la bulle laisse le défilement vertical au navigateur, ne sélectionne pas son texte au doigt, et l'ancien repère « ••• » a disparu", function () {

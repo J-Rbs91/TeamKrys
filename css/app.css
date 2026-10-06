@@ -137,10 +137,10 @@
      fois étalé sur la largeur d'un bouton.
      8,56:1 sur blanc, 7,79:1 sur le canvas, 5,93:1 pour l'encre secondaire
      posée dessus. */
-  --accord: #23479c;
-  --accord-surface: #23479c;
-  --accord-surface-hover: #1b3878;
-  --accord-bg: #e7ebf7;
+  --accord: #3a5085;
+  --accord-surface: #3a5085;
+  --accord-surface-hover: #2d3f66;
+  --accord-bg: #eaedf4;
   /* L'encre posée sur un aplat est le papier, pas du blanc pur : un blanc pur
      y rouvrirait exactement le trou froid que le palier 0 vient de fermer. */
   --on-accord: #fdfaf4;
@@ -148,7 +148,7 @@
      choisie). Une couleur explicite, pas une opacité : un texte à 55 % sur un
      aplat teinté tombe sous le seuil, et c'est invisible tant qu'on ne mesure
      pas. Celle-ci tient 5,93:1. */
-  --on-accord-soft: #ccd7f0;
+  --on-accord-soft: #d3dae9;
 
   /* — Voix 2 : la divergence ------------------------------------------ */
   /* Terre cuite. Elle ne signifie qu'une chose : il reste du désaccord. Elle
@@ -157,8 +157,8 @@
      `--voix` est l'encre et le trait (6,76:1 sur blanc, 6,15:1 sur canvas) ;
      `--voix-strong` est le seul aplat qu'elle se permet, celui du segment de
      vote, et il tient le seuil de 3:1 des composants sur son fond (4,14:1). */
-  --voix: #9a3f22;
-  --voix-strong: #b4522c;
+  --voix: #834b39;
+  --voix-strong: #9a5d46;
   --voix-bg: #f7e8e0;
   --on-voix: #fdfaf4;
 
@@ -189,8 +189,8 @@
      aplat doit être CLAIR pour tenir 3:1 sur le fond de la barre, alors que le
      bouton principal doit rester sombre pour porter du texte clair. Les deux
      besoins divergent, donc les deux jetons se séparent. */
-  --vote-accord: #23479c;
-  --vote-voix: #b4522c;
+  --vote-accord: #3a5085;
+  --vote-voix: #9a5d46;
   --vote-abstention: #7b7262;
 
   /* — Traits ---------------------------------------------------------- */
@@ -393,19 +393,19 @@
        l'accord en aplat reste sombre et porte de l'encre claire (6,60:1), ce
        que le bleu clair ne permettrait pas — il plafonnerait bien en dessous
        et interdirait l'encre secondaire, qui tient ici 4,76:1. */
-    --accord: #8fb2f2;
-    --accord-surface: #2a4d9e;
-    --accord-surface-hover: #355cb4;
-    --accord-bg: rgba(143, 178, 242, 0.14);
+    --accord: #a2b8df;
+    --accord-surface: #374b7d;
+    --accord-surface-hover: #435a90;
+    --accord-bg: rgba(162, 184, 223, 0.12);
     --on-accord: #eeeae3;
     --on-accord-soft: #b8c9ee;
 
     /* La terre cuite ne porte jamais de texte : elle n'a donc qu'une valeur
        claire ici, et le segment de vote l'emploie telle quelle — un aplat
        sombre ne tiendrait pas 3:1 sur le fond de la barre. */
-    --voix: #e0906a;
-    --voix-strong: #e0906a;
-    --voix-bg: rgba(224, 144, 106, 0.14);
+    --voix: #ca9880;
+    --voix-strong: #ca9880;
+    --voix-bg: rgba(202, 152, 128, 0.12);
     --on-voix: #0f0d0b;
 
     /* Couche technique : désaturée pour ne pas vibrer sur du sombre, et le
@@ -421,8 +421,8 @@
     --info-bg: var(--accord-bg);
     --neutral-bg: rgba(238, 234, 227, 0.07);
 
-    --vote-accord: #8fb2f2;
-    --vote-voix: #e0906a;
+    --vote-accord: #a2b8df;
+    --vote-voix: #ca9880;
     --vote-abstention: #8a8071;
 
     --line: #2b2721;
@@ -966,9 +966,11 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   width: 100%;
   min-height: var(--field-h);
   padding: 11px 14px;
-  border: 1px solid var(--line-field);
-  border-radius: var(--radius);
-  background: var(--surface);
+  /* Champ « Apple » : un aplat, sans contour. Il se reconnaît à son aplat, à son libellé et à son indication ;
+     le bord ne paraît qu'au focus (accord). */
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--fill);
   color: var(--text);
   font-size: var(--fs-body);
   /* Indication (placeholder) ou valeur trop longue pour le champ : points de suspension plutôt qu'une coupe
@@ -1078,8 +1080,8 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   font-size: var(--fs-body);
   font-weight: 600;
   border-radius: var(--radius-chip);
-  background: transparent;
-  border-color: var(--line-field);
+  background: var(--fill);
+  border-color: transparent;
 }
 
 .card-foot .select-wrap { min-width: 168px; }
@@ -1352,14 +1354,14 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .pandore-point-title { font-size: var(--fs-body); font-weight: 650; letter-spacing: -0.011em; overflow-wrap: anywhere; }
 
 /* Composeur en ligne (Pandore, ajout d'un consensus), à la façon d'une messagerie IA. Une seule boîte arrondie, le champ sans bord propre,
-   l'envoi rond dans le coin bas-droit. Le bord de la boîte porte le repère du champ (`--line-field`, 3:1). */
+   l'envoi rond dans le coin bas-droit. La boîte est un aplat sans contour ; l'anneau d'accord paraît au focus. */
 .pandore-deposit { display: grid; gap: 8px; }
 .inline-composer {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--line-field);
+  border: 1px solid transparent;
   border-radius: 24px;
-  background: var(--surface-strong);
+  background: var(--fill);
   padding: 6px 8px 8px;
   transition: border-color var(--dur-fast) linear, box-shadow var(--dur-base) var(--ease-out);
 }
@@ -2021,10 +2023,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   max-height: 140px;
   border-radius: 24px;
   padding: 12px 18px;
-  background: var(--surface-strong);
-  /* `--line-field` : le bord est le SEUL signe visible du champ (le remplissage vaut celui du
-     parent). `--glass-line` ne le donnait qu'à 1,40:1, le seuil des composants est 3:1. */
-  border-color: var(--line-field);
+  /* Aplat sans contour, comme les autres champs (douceur) : le champ se reconnaît à son aplat, à sa place en bas
+     de l'écran et à son indication « Votre message… ». */
+  background: var(--fill);
+  border-color: transparent;
   resize: none;
   /* 16 px minimum : en dessous, iOS zoome toute la page au focus et le zoom ne
      se défait pas au retour — la barre du haut sort de l'écran et il faut
@@ -2033,7 +2035,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   font-size: var(--fs-body);
 }
 
-.composer .textarea:focus { border-color: var(--line-field); box-shadow: none; }
+.composer .textarea:focus { border-color: transparent; box-shadow: none; background: var(--fill); }
 
 .send-btn {
   flex: 0 0 auto;
@@ -2058,10 +2060,12 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 /* ⚠️ Écrire en anonyme se voit DANS la zone d'écriture, là où le regard est pendant la frappe : masque à
    l'entrée du champ, bord en tirets, fond creusé, et (js/ui.js) indication « Message anonyme… » et envoi nommé
-   « Envoyer en anonyme ». Jamais la teinte seule. Le bord reste `--line-field` (3:1, BL-039) : seul son trait change.
-   `--text` et `--faint` sont mesurés sur `--surface-sunken` (tools/check-contrast.py). */
-.composer.is-anon .textarea {
+   « Envoyer en anonyme ». Jamais la teinte seule. En anonyme, et en anonyme seulement, le bord paraît, en tirets sur
+   `--line-field` (3:1, BL-039). `--text` et `--faint` sont mesurés sur `--surface-sunken` (tools/check-contrast.py). */
+.composer.is-anon .textarea,
+.composer.is-anon .textarea:focus {
   border-style: dashed;
+  border-color: var(--line-field);
   background: var(--surface-sunken);
   padding-left: 44px;
 }
