@@ -416,8 +416,8 @@
     var counters = document.querySelectorAll("[data-counter]");
     for (var i = 0; i < counters.length; i++) {
       if (counters[i].getAttribute("data-counter") !== key) { continue; }
-      var max = counters[i].textContent.split(" / ")[1];
-      if (max) { counters[i].textContent = node.value.length + " / " + max; }
+      var max = Number(counters[i].textContent.split(" / ")[1]);
+      if (max) { setCounter(counters[i], node.value.length, max); }
     }
   }
 
@@ -990,16 +990,25 @@
     }, [icon(iconName, 20), el("span", { text: label })]);
   }
 
+  /* Compteur de caractères : il ne paraît qu'à l'approche de la limite (90 %). Plus tôt, il ne dit rien d'utile et
+   * charge l'écran ; la limite elle-même reste tenue par `maxlength`. */
+  var COUNTER_SHOW_RATIO = 0.9;
+
+  function setCounter(node, length, max) {
+    node.textContent = length + " / " + max;
+    node.hidden = length < max * COUNTER_SHOW_RATIO;
+  }
+
   function counterFor(key, max) {
-    return el("div", { class: "counter", dataset: { counter: key }, text: "0 / " + max });
+    var node = el("div", { class: "counter", dataset: { counter: key } });
+    setCounter(node, 0, max);
+    return node;
   }
 
   function bindCounter(input, key, max) {
     input.addEventListener("input", function () {
       var nodes = document.querySelectorAll('[data-counter="' + key + '"]');
-      for (var i = 0; i < nodes.length; i++) {
-        nodes[i].textContent = input.value.length + " / " + max;
-      }
+      for (var i = 0; i < nodes.length; i++) { setCounter(nodes[i], input.value.length, max); }
     });
     return input;
   }
@@ -2540,18 +2549,11 @@
     /* Composeur à la façon d'une messagerie IA : un seul champ, l'envoi dans son coin, une seule ligne dessous.
      * Le principe vit dans la feuille « i » de la barre du haut (pandoreInfoSheet) : rien d'autre ne s'explique à
      * l'écran. */
-    var area = el("textarea", {
+    var area = bindCounter(el("textarea", {
       class: "textarea", maxlength: Core.LIMITS.idea, placeholder: "Une idée, une plainte, une question…", "aria-required": "true",
       "aria-label": "Ce que vous voulez dire", rows: "3", "data-draft": "pandore:new", disabled: !!unavailable
-    });
-    /* Le compteur ne paraît qu'à l'approche de la limite : sous 90 %, il ne dit rien d'utile. */
+    }), "pandore:new", Core.LIMITS.idea);
     var counter = counterFor("pandore:new", Core.LIMITS.idea);
-    var syncCounter = function () {
-      counter.textContent = area.value.length + " / " + Core.LIMITS.idea;
-      counter.hidden = area.value.length < Core.LIMITS.idea * 0.9;
-    };
-    syncCounter();
-    area.addEventListener("input", syncCounter);
 
     function submit() {
       var text = Utils.trim(area.value);
@@ -2559,7 +2561,7 @@
       var typed = area.value;
       /* Vidé AVANT l'envoi : le rendu qui suit réinjecterait sinon le texte déjà parti (même piège que le composeur). */
       area.value = "";
-      syncCounter();
+      setCounter(counter, 0, Core.LIMITS.idea);
       var sent = App.actions.submitIdea(text);
       var settle = function (result) {
         if (result && result.ok === false) {

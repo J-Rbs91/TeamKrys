@@ -1522,20 +1522,22 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   .card-foot .select-wrap { width: 100%; min-width: 0; }
 }
 
-/* Quand rien n'est à signaler, la pastille de la barre se réduit au point : « À jour » est l'état le plus fréquent,
-   et « Synchronisation » n'est que le passage d'un sondage (toutes les deux à six secondes, sa durée est celle de la
-   réponse du serveur). Avec les mots, la pastille passait de 78 à 30 px à chaque sondage et le titre, à côté, de
-   184 à 232 px : la barre sautait toutes les deux secondes. Le texte revient dès qu'un état demande l'attention :
-   en attente, hors ligne, erreur, mode local. Le point garde sa forme propre (disque plein, ou anneau creux qui
-   pulse) et la région d'annonce, masquée visuellement et non retirée de l'arbre d'accessibilité, continue de
-   parler : rien ne se lit à la seule couleur. La seconde pastille (carte Synchronisation de Système) n'a pas
-   `status-main` et garde ses mots. */
-.status-pill.status-main.status-idle .status-short,
-.status-pill.status-main.status-idle .status-long,
-.status-pill.status-main.status-syncing .status-short,
-.status-pill.status-main.status-syncing .status-long { display: none; }
+/* Quand rien n'est à signaler, la pastille de la barre disparaît : « À jour », « Synchronisation » (le passage d'un
+   sondage) et « Local » (un choix fait à la connexion, rappelé dans Système) ne demandent rien à personne. Elle
+   revient, avec ses mots, dès qu'un état demande l'attention : en attente, hors ligne, erreur. Elle est masquée
+   VISUELLEMENT seulement : la région d'annonce reste dans l'arbre d'accessibilité et continue de parler. La seconde
+   pastille (carte Synchronisation de Système) n'a pas `status-main` et reste toujours visible. */
 .status-pill.status-main.status-idle,
-.status-pill.status-main.status-syncing { width: 30px; height: 30px; padding: 0; justify-content: center; }
+.status-pill.status-main.status-syncing,
+.status-pill.status-main.status-local {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Sous 16rem (256 px à 100 %, 333 px à 130 %, 512 px à 200 % de police) : plus de place pour
    un mot, la gommette reste seule, en cercle de 30 px. La forme porte toujours l'état et le
