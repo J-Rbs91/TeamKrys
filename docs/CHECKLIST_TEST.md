@@ -763,13 +763,39 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
       sauvegarde : le message reste « Anonyme » sur tous les appareils (nom et
       identifiant de l'auteur absents des données).
 - [ ] Première écriture après le déploiement du backend 1.3.0 (Explorer) : une copie
-      `brainsto-data.json.avant-brainsto-backend-1.3.0.<date>` est déposée. C'est la
-      copie à restaurer si l'on revenait à un `Code.gs` antérieur, qui effacerait le
-      rattachement des réponses d'exploration à sa première écriture.
+      `brainsto-data.json.avant-brainsto-backend-1.3.0.<date>` est déposée, une seule.
+      Elle représente l'état antérieur au déploiement 1.3.0 : c'est le scénario 3
+      ci-dessous, un dernier recours.
 - [ ] Première écriture après le déploiement du backend 1.1.0 : une copie
       `brainsto-data.json.avant-brainsto-backend-1.1.0.<date>` est déposée dans le
       dossier du fichier de données, une seule ; l'écriture suivante n'en dépose pas
       d'autre.
+
+#### Retour arrière après le backend 1.3.0
+
+La procédure est décrite dans [`INSTALLATION.md`](INSTALLATION.md),
+[`MODELE_DONNEES.md`](MODELE_DONNEES.md) et le README, sous ce même titre et avec les
+mêmes trois scénarios. Les scénarios 2 et 3 se vérifient **sur un espace de test**,
+jamais sur les données de l'équipe.
+
+- [ ] **Scénario 1 — Problème côté application (frontend).** Publier une version de
+      l'application sans Explorer, backend 1.3.0 conservé : aucune restauration de
+      données ; messages, votes, consensus et explorations intacts ; les réponses
+      d'exploration s'affichent dans le fil principal. Republier une version avec
+      Explorer : elles retrouvent leur exploration.
+- [ ] **Scénario 2 — Retour forcé vers un backend antérieur à 1.3.0.** D'abord
+      `backupNow()` : la copie `manuel` contient les `branchRootId`. Seulement
+      ensuite, redéployer l'ancien backend : « Explorer » est grisé, les réponses
+      d'exploration s'affichent dans le fil principal ; après la première action
+      enregistrée, le fichier de données ne contient plus aucun `branchRootId`, les
+      textes sont là. Redéployer le backend 1.3.0, puis `restoreFromBackup` sur la
+      copie `manuel` : les rattachements reviennent, les écritures faites entre la
+      copie et la restauration sont perdues.
+- [ ] **Scénario 3 — Dernier recours : la copie `avant-brainsto-backend-1.3.0`.**
+      `restoreFromBackup` sur cette copie ramène TOUT l'état partagé à l'état
+      antérieur au déploiement 1.3.0 : tous les messages, votes, consensus,
+      explorations et autres écritures créés depuis disparaissent ; l'état remplacé
+      est dans la copie `avant-restauration`.
 
 ## 9. PWA
 

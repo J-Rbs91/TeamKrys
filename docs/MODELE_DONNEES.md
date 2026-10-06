@@ -344,7 +344,53 @@ Règles, identiques côté application (`js/state.js`) et côté serveur
 | Ouverture hors ligne, avant toute réponse du serveur | La dernière réponse connue du serveur, retenue sur l'appareil (`brainsto.cap.branches`, un booléen, effacé à la déconnexion et au changement de serveur). Inconnue : non |
 | Mode local | Disponible : le noyau de l'appareil range lui-même |
 | Ancien frontend (gardé en cache par la PWA) | Sa normalisation ignore le champ : il affiche **temporairement** les réponses d'exploration dans le fil principal, à leur place chronologique, jusqu'à sa mise à jour (bandeau « Nouvelle version »). Il ne peut rien corrompre : un client n'envoie jamais l'état, seulement des actions, et il ne peut pas créer de message d'exploration |
-| **Retour à un backend antérieur** après usage | À sa première écriture, il réécrit le fichier sans le champ : toutes les réponses d'exploration retombent dans le fil principal (rien n'est perdu, la structure l'est). Une copie Drive est faite automatiquement au premier enregistrement de chaque nouvelle `BACKEND_VERSION` : c'est elle qu'il faut restaurer |
+| **Retour forcé vers un backend antérieur à 1.3.0** après usage | Il ne comprend pas `branchRootId` : la première action enregistrée supprime les rattachements du fichier de données, les textes restent. `backupNow()` **avant** de redéployer : voir « Retour arrière après le backend 1.3.0 », scénario 2 |
+
+#### Retour arrière après le backend 1.3.0
+
+Trois scénarios, à ne pas confondre. Appliquer le premier qui suffit.
+
+**Scénario 1 — Problème côté application (frontend).**
+
+- Revenir sur le changement applicatif sur `main` (commit d'annulation), publié
+  comme une nouvelle version : `APP_VERSION` et `CACHE_VERSION` incrémentés
+  ensemble (README, « Publier une nouvelle version »).
+- **Conserver le backend 1.3.0** en service. Ne pas recopier `Code.gs` depuis
+  `main` après l'annulation : le dépôt reviendrait à un `Code.gs` antérieur, et le
+  déployer ferait passer au scénario 2.
+- **Aucune restauration de données.**
+- **Aucune perte** : messages, votes, consensus et explorations restent intacts,
+  car le backend 1.3.0 sert aussi les anciennes versions de l'application. Seul
+  effet visible : une application qui ne connaît pas `branchRootId` affiche les
+  réponses d'exploration dans le fil principal. Leur rattachement reste dans les
+  données et réapparaît avec une version qui le connaît.
+
+**Scénario 2 — Retour forcé vers un backend antérieur à 1.3.0.**
+
+- **D'abord**, exécuter `backupNow()` dans l'éditeur Apps Script. La copie
+  `brainsto-data.json.manuel.<date>` est un instantané récent : elle contient
+  toutes les données actuelles et les `branchRootId`.
+- **Seulement ensuite**, redéployer l'ancien backend.
+- L'ancien backend ne comprend pas `branchRootId`. Dès son déploiement, il sert un
+  état sans ces rattachements : les réponses d'exploration s'affichent dans le fil
+  principal. Il réécrit l'état complet à chaque enregistrement : la première action
+  enregistrée supprime donc ces rattachements du fichier de données, pour tous les
+  messages. Les textes restent.
+- Pour retrouver les rattachements : redéployer le backend 1.3.0, puis
+  `restoreFromBackup` sur la copie `manuel`. Les écritures faites entre cette copie
+  et la restauration sont alors perdues.
+
+**Scénario 3 — Dernier recours : la copie `avant-brainsto-backend-1.3.0`.**
+
+- Le backend 1.3.0 la dépose automatiquement juste avant sa première écriture
+  (`brainsto-data.json.avant-brainsto-backend-1.3.0.<date>`). Elle représente
+  l'**état antérieur au déploiement 1.3.0**.
+- La restaurer ramène **TOUT l'état partagé** à cette date. Elle peut donc
+  supprimer **tous** les messages, votes, consensus, explorations et autres
+  écritures créés depuis, pas seulement les explorations.
+- À n'utiliser que si les scénarios 1 et 2 ne suffisent pas, par exemple des
+  données abîmées sans copie plus récente utilisable. `restoreFromBackup` garde
+  l'état remplacé dans une copie `avant-restauration`, mais ne le refusionne pas.
 
 ## Limites de saisie
 

@@ -612,10 +612,54 @@ visible mais grisé, avec sa raison, et aucun message d'exploration n'est mis en
 file. En mode local, la fonctionnalité est disponible d'emblée. Pour l'ouvrir à
 l'équipe : recopier `apps-script/Code.gs` dans l'éditeur, puis **Déployer →
 Gérer les déploiements → Modifier → Version : Nouvelle** (voir
-[`docs/INSTALLATION.md`](docs/INSTALLATION.md)). Le premier enregistrement dépose une
-sauvegarde `avant-brainsto-backend-1.3.0` ; c'est elle qu'il faudrait restaurer si
-l'on revenait à un `Code.gs` antérieur. Modèle et compatibilité :
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md)). Modèle et compatibilité :
 [`docs/MODELE_DONNEES.md`](docs/MODELE_DONNEES.md), « Explorer un message ».
+
+#### Retour arrière après le backend 1.3.0
+
+Trois scénarios, à ne pas confondre. Appliquer le premier qui suffit.
+
+**Scénario 1 — Problème côté application (frontend).**
+
+- Revenir sur le changement applicatif sur `main` (commit d'annulation), publié
+  comme une nouvelle version : `APP_VERSION` et `CACHE_VERSION` incrémentés
+  ensemble (README, « Publier une nouvelle version »).
+- **Conserver le backend 1.3.0** en service. Ne pas recopier `Code.gs` depuis
+  `main` après l'annulation : le dépôt reviendrait à un `Code.gs` antérieur, et le
+  déployer ferait passer au scénario 2.
+- **Aucune restauration de données.**
+- **Aucune perte** : messages, votes, consensus et explorations restent intacts,
+  car le backend 1.3.0 sert aussi les anciennes versions de l'application. Seul
+  effet visible : une application qui ne connaît pas `branchRootId` affiche les
+  réponses d'exploration dans le fil principal. Leur rattachement reste dans les
+  données et réapparaît avec une version qui le connaît.
+
+**Scénario 2 — Retour forcé vers un backend antérieur à 1.3.0.**
+
+- **D'abord**, exécuter `backupNow()` dans l'éditeur Apps Script. La copie
+  `brainsto-data.json.manuel.<date>` est un instantané récent : elle contient
+  toutes les données actuelles et les `branchRootId`.
+- **Seulement ensuite**, redéployer l'ancien backend.
+- L'ancien backend ne comprend pas `branchRootId`. Dès son déploiement, il sert un
+  état sans ces rattachements : les réponses d'exploration s'affichent dans le fil
+  principal. Il réécrit l'état complet à chaque enregistrement : la première action
+  enregistrée supprime donc ces rattachements du fichier de données, pour tous les
+  messages. Les textes restent.
+- Pour retrouver les rattachements : redéployer le backend 1.3.0, puis
+  `restoreFromBackup` sur la copie `manuel`. Les écritures faites entre cette copie
+  et la restauration sont alors perdues.
+
+**Scénario 3 — Dernier recours : la copie `avant-brainsto-backend-1.3.0`.**
+
+- Le backend 1.3.0 la dépose automatiquement juste avant sa première écriture
+  (`brainsto-data.json.avant-brainsto-backend-1.3.0.<date>`). Elle représente
+  l'**état antérieur au déploiement 1.3.0**.
+- La restaurer ramène **TOUT l'état partagé** à cette date. Elle peut donc
+  supprimer **tous** les messages, votes, consensus, explorations et autres
+  écritures créés depuis, pas seulement les explorations.
+- À n'utiliser que si les scénarios 1 et 2 ne suffisent pas, par exemple des
+  données abîmées sans copie plus récente utilisable. `restoreFromBackup` garde
+  l'état remplacé dans une copie `avant-restauration`, mais ne le refusionne pas.
 
 Mesuré sur un fil de 60 messages :
 
