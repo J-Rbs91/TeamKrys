@@ -666,29 +666,18 @@ check("« Signer avec mon nom » se confirme AVANT l'envoi ; « Rendre anonyme �
 
 /* ============================================================ BL-029 ==== */
 
-check("BL-029 accueil, cartes, noms accessibles et toasts du consensus : jamais « conclusion »", () => {
+check("BL-029 accueil et écran Consensus : jamais « conclusion », plus de formulation libre", () => {
   const t = boot();
   t.go(TOPICS);
   let leaks = conclusionLeaks(t.app(), true);
   assert(!leaks.length, "accueil : " + JSON.stringify(leaks));
 
   t.go(conclusionRoute("t3"));
-  /* Le placeholder « Nouvelle conclusion… » est un texte VISIBLE que product-ui.js
-   * réécrit (et retrouve par ce texte exact) : hors de ce test, comme les titres. */
-  leaks = conclusionLeaks(t.app(), false).filter((x) => x.indexOf("[placeholder]") !== 0);
+  leaks = conclusionLeaks(t.app(), false);
   assert(!leaks.length, "écran Consensus (noms accessibles) : " + JSON.stringify(leaks));
-  const names = t.app().querySelectorAll("button").map((b) => b.getAttribute("aria-label")).filter(Boolean);
-  assert(names.includes("Modifier la formulation du consensus") && names.includes("Supprimer la formulation du consensus"),
-    "noms accessibles : " + JSON.stringify(names));
-  const add = t.app().querySelector('[data-key="conclusion-add"]');
-  assert(add, "bouton « Ajouter » introuvable");
-  add.click();
-  t.set({ modal: { type: "editConclusion", topicId: "t3", conclusionId: "c1" } });
-  const area = t.overlay().querySelector("textarea");
-  area.value = "";
-  t.overlay().querySelectorAll("button").find((b) => b.textContent === "Enregistrer").click();
-  const toasts = t.toasts().querySelectorAll(".toast").map((n) => n.textContent);
-  assert(toasts.length === 2 && toasts.every((x) => x === "La formulation du consensus est vide."), "toasts : " + JSON.stringify(toasts));
+  assert(/consensus/i.test(t.app().textContent), "l'écran Consensus parle de consensus");
+  assert(!t.app().querySelector("textarea") && !t.app().querySelectorAll("button").some((b) => /^conclusion-/.test(b.getAttribute("data-key") || "")),
+    "plus de formulation libre : on n'écrit ni ne choisit rien dans Consensus");
 
   const e = boot({ empty: true });
   e.go(TOPICS);

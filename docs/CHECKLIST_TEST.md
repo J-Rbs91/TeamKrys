@@ -600,8 +600,14 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
       replié en bas à droite : pourcentage, participation, auteur et date, statut,
       « Modifier » et « Retirer mon vote » ; ouvert, il le reste quand un collègue vote.
       « En vote » n'est pas affiché (état normal).
-- [ ] Consensus : pas de bandeau « Choix unique » ; ni auteur ni date ; le nombre de
-      votes seulement s'il y en a ; ajout par un champ avec flèche d'envoi.
+- [ ] Consensus (backend 1.4.0 déployé) : deux téléphones, deux noms. Les deux votent
+      **Pour** la même proposition : au second vote, message « Toute l'équipe est pour :
+      la proposition passe en Consensus. », la carte quitte Propositions et apparaît dans
+      Consensus avec **Acceptée**. Même chose avec **Contre** → **Rejetée**.
+- [ ] Un **Pour** et une **Abstention** (ou un membre qui n'a pas voté) : la proposition
+      reste dans Propositions.
+- [ ] Dans Consensus : aucun bouton de vote ni champ ; Réunion liste la proposition
+      sous « Consensus », acceptée ou rejetée par toute l'équipe.
 - [ ] Réunion : titre « Préparation de réunion », chaque sujet suivi de ses propositions
       (« 3 pour, 1 contre ») et consensus ; la date d'édition n'apparaît qu'à l'impression.
 - [ ] Pastille d'état invisible quand tout va bien (à jour, local) ; visible en attente,

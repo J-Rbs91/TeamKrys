@@ -2,8 +2,9 @@
 
 BrainstO. sert à préparer les réunions **avant** la réunion. L'équipe fait remonter
 les sujets au fil du travail, en discute à son rythme, transforme les idées en
-propositions, se positionne par le vote puis formule un **Consensus** : le cap que
-l'équipe souhaite porter sur le sujet lorsqu'il sera abordé.
+propositions et se positionne par le vote. Une proposition sur laquelle **toute
+l'équipe** vote la même chose devient un **Consensus** : acceptée ou rejetée par
+tous.
 
 BrainstO. ne gère ni l'ordre du jour, ni le compte rendu, ni le suivi des actions
 après la réunion.
@@ -342,8 +343,9 @@ toute l'équipe : « 6 participants sur 8 ont voté », « 1 participant sur 8 a
 connues de l'espace, augmenté de celles qui ont voté sans y figurer : il n'est
 jamais inférieur au nombre de votants. Aucun quorum n'est appliqué.
 
-Le mot **Consensus** n'est pas utilisé pour qualifier automatiquement un vote de
-proposition. Il est réservé à l'étape collective suivante.
+Quand **tous les membres** ont voté la même chose sur une proposition (tous
+**Pour**, ou tous **Contre**), elle passe dans **Consensus** (voir plus bas). Une
+abstention empêche le consensus : ce n'est pas un accord.
 
 ### Statuts des propositions
 
@@ -362,25 +364,35 @@ mise en oeuvre après la réunion.
 
 ## Consensus
 
-Le **Consensus** est le cap que l'équipe souhaite porter sur un sujet après la
-discussion, les propositions et les votes.
+Un **Consensus**, c'est une proposition sur laquelle **toute l'équipe** est du même
+avis :
 
-Plusieurs formulations peuvent être proposées. Chacun choisit une seule
-formulation ; choisir une autre déplace le vote. Celle qui reçoit le plus de choix
-porte la mention **En tête**.
+- **tous les membres** de l'espace ont voté ;
+- ils ont tous voté **Pour** (la proposition est **Acceptée**) ou tous **Contre**
+  (elle est **Rejetée**) ;
+- une seule abstention, un seul avis différent ou un seul membre qui n'a pas voté,
+  et il n'y a pas de consensus.
 
-Le Consensus n'est pas un compte rendu et n'enregistre pas une décision prise après
-la réunion. Il sert uniquement à arriver avec un cap collectif déjà préparé.
+Au vote qui fait l'unanimité, la proposition **quitte l'onglet Propositions** et
+apparaît dans **Consensus**, avec un message qui le dit. Elle y est **figée** : on
+ne peut plus voter, retirer son vote, la modifier ni changer son statut. On ne vote
+pas depuis Consensus : l'onglet liste ce que toute l'équipe a accepté ou rejeté.
 
-Vous pouvez modifier ou supprimer les Consensus que vous avez créés. Supprimer une
-formulation supprime aussi les votes qui la visaient.
+Les « membres » sont toutes les personnes connues de l'espace (chaque appareil qui a
+choisi un nom). Un membre arrivé après un consensus ne le défait pas.
+
+Ce consensus automatique demande le serveur de l'équipe en version 1.4.0 (fichier
+`apps-script/Code.gs`, à redéployer). Avec un serveur plus ancien, une proposition
+unanime s'affiche bien dans Consensus, mais rien n'empêche encore un vote de la
+modifier.
 
 ---
 
 ## Synthèse à projeter ou imprimer
 
 Dans l'onglet **Réunion**, BrainstO. rassemble les sujets non archivés,
-leurs propositions, les résultats de vote et les Consensus.
+leurs propositions encore en vote et leurs Consensus (acceptés ou rejetés par toute
+l'équipe).
 
 Cette page sert de support de préparation à projeter ou imprimer. Elle ne constitue
 pas un ordre du jour formel, un compte rendu ou un historique de réunions.

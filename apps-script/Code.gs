@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.3.0";
+var BACKEND_VERSION = "brainsto-backend-1.4.0";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -26,11 +26,13 @@ var PROP_IDEAS_SECRET = "BRAINSTO_IDEAS_SECRET";
 var IDEAS_SECRET_MIN = 24;
 var MAX_PROCESSED = 5000;
 var MAX_BATCH = 20;
-/* "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
+/* "consensus" : une proposition votée de la même façon (pour ou contre) par tous les participants est figée
+ * (`consensus`, `consensusAt`) et refuse ensuite tout vote, retrait, modification ou changement de statut.
+ * "idempotent" : SET_VOTE, SET_REACTION et SET_CONCLUSION_VOTE marquées set:true AFFECTENT
  * au lieu de basculer (voir applyAction) ; le client ne les marque que si ce drapeau est annoncé.
  * "branches" : CREATE_MESSAGE accepte branchRootId (exploration d'un message). Sans ce drapeau, le client ne propose
  * pas « Explorer » : un backend antérieur accepterait le message et PERDRAIT le champ en silence. */
-var FEATURES = ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches"];
+var FEATURES = ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches", "consensus"];
 
 var ANON_NAME = "Anonyme";
 var LIMITS = {
@@ -187,7 +189,9 @@ function ensureShape(input) {
         authorName: cut(p.authorName, LIMITS.name) || ANON_NAME,
         createdAt: trim(p.createdAt) || topic.createdAt,
         status: oneOf(trim(p.status), PROPOSAL_STATUSES, "voting"),
-        votes: votes
+        votes: votes,
+        consensus: oneOf(trim(p.consensus), ["for", "against"], ""),
+        consensusAt: oneOf(trim(p.consensus), ["for", "against"], "") ? trim(p.consensusAt) : ""
       });
     });
 
@@ -251,6 +255,27 @@ function findIn(list, id) {
 }
 function findMessage(topic, id) { return topic ? findIn(arr(topic.messages), id) : null; }
 function findProposal(topic, id) { return topic ? findIn(arr(topic.proposals), id) : null; }
+
+/* CONSENSUS : toute l'équipe (chaque participant inscrit) a voté, et tout le monde la même chose, « pour » ou
+ * « contre ». Une abstention empêche le consensus. Renvoie "for", "against" ou "". Même code que js/state.js. */
+function unanimousVote(proposal, participants) {
+  if (!proposal || !isObject(proposal.votes) || !Array.isArray(participants) || !participants.length) { return ""; }
+  var value = "";
+  for (var i = 0; i < participants.length; i++) {
+    var v = ownValue(proposal.votes, trim(participants[i] && participants[i].id));
+    if (v !== "for" && v !== "against") { return ""; }
+    if (!value) { value = v; } else if (v !== value) { return ""; }
+  }
+  var keys = Object.keys(proposal.votes);
+  for (var k = 0; k < keys.length; k++) { if (proposal.votes[keys[k]] !== value) { return ""; } }
+  return value;
+}
+
+function proposalConsensus(proposal, participants) {
+  if (!proposal) { return ""; }
+  if (proposal.consensus === "for" || proposal.consensus === "against") { return proposal.consensus; }
+  return unanimousVote(proposal, participants);
+}
 function findConclusion(topic, id) { return topic ? findIn(arr(topic.conclusions), id) : null; }
 
 function isMessageLocked(message, participantId) {
@@ -276,6 +301,11 @@ function validateAction(state, action) {
   function needTopic() {
     topic = findTopic(state, trim(p.topicId));
     return topic ? null : fail("Ce sujet n'existe plus.");
+  }
+
+  /* Une proposition en Consensus est figée : plus de vote, de retrait, de modification ni de statut. */
+  function locked() {
+    return !!proposalConsensus(findProposal(topic, trim(p.proposalId)), state.participants);
   }
 
   switch (type) {
@@ -349,22 +379,26 @@ function validateAction(state, action) {
     case "UPDATE_PROPOSAL":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+      if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
       if (!trim(p.title)) { return fail("Le titre de la proposition est obligatoire."); }
       return OK;
     case "CHANGE_PROPOSAL_STATUS":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+      if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
       if (PROPOSAL_STATUSES.indexOf(trim(p.status)) < 0) { return fail("Statut de proposition invalide."); }
       return OK;
     case "SET_VOTE":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+      if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
       if (!trim(action.actorId)) { return fail("Vote sans participant."); }
       if (VOTE_VALUES.indexOf(trim(p.value)) < 0) { return fail("Vote invalide."); }
       return OK;
     case "REMOVE_VOTE":
       if (needTopic()) { return fail("Ce sujet n'existe plus."); }
       if (!findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+      if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
       if (!trim(action.actorId)) { return fail("Vote sans participant."); }
       return OK;
     case "ADD_CONCLUSION":
@@ -506,7 +540,7 @@ function applyAction(state, action, now) {
         id: trim(p.proposalId), title: cut(p.title, LIMITS.proposalTitle),
         description: cut(p.description, LIMITS.proposalDescription),
         authorId: pWho.id, authorName: pWho.name, createdAt: now,
-        status: "voting", votes: {}
+        status: "voting", votes: {}, consensus: "", consensusAt: ""
       });
       touch(state, topic, now); return;
     }
@@ -530,6 +564,9 @@ function applyAction(state, action, now) {
       }
       else if (ownValue(pv.votes, voter) === value) { delete pv.votes[voter]; }
       else { pv.votes[voter] = value; }
+      /* Le vote qui fait l'unanimité de toute l'équipe fige la proposition en Consensus. */
+      var reached = unanimousVote(pv, state.participants);
+      if (reached && !pv.consensus) { pv.consensus = reached; pv.consensusAt = now; }
       touch(state, topic, now); return;
     }
     case "REMOVE_VOTE":

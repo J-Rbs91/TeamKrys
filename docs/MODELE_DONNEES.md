@@ -62,8 +62,15 @@ message = {
 proposal = {
   id, title, description, authorId, authorName, createdAt,
   status,                 // voting | selected | debate | implemented | rejected
-  votes: { participantId: "for" | "against" | "abstain" }
+  votes: { participantId: "for" | "against" | "abstain" },
+  consensus,              // "" | "for" | "against" — posé par SET_VOTE quand TOUS les participants ont voté
+                          // la même chose (pour ou contre ; une abstention l'empêche). Figée ensuite :
+                          // SET_VOTE, REMOVE_VOTE, UPDATE_PROPOSAL, CHANGE_PROPOSAL_STATUS sont refusées.
+  consensusAt             // date du vote qui a fait l'unanimité ("" sans consensus)
 }
+
+// Une proposition déjà unanime avant le backend 1.4.0 (consensus "") est lue comme en consensus
+// (Core.proposalConsensus) et figée de la même façon. Les `conclusion` ci-dessous ne s'affichent plus.
 
 conclusion = { id, text, source: "manual", authorId, authorName, createdAt, updatedAt }
 ```

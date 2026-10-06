@@ -297,9 +297,64 @@ tests.push(() => check("SET_VOTE : un vote par personne, re-clic = retrait", () 
 tests.push(() => check("REMOVE_VOTE retire uniquement mon vote", () => {
   const state = seed();
   apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" });
-  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" }, { id: "p2", name: "Bruno" });
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "against" }, { id: "p2", name: "Bruno" });
   apply(state, "REMOVE_VOTE", { topicId: "t1", proposalId: "pr1" });
-  equal(Core.findProposal(Core.findTopic(state, "t1"), "pr1").votes, { p2: "for" });
+  equal(Core.findProposal(Core.findTopic(state, "t1"), "pr1").votes, { p2: "against" });
+}));
+
+/* ------------------------------------------------------------- Consensus --- */
+
+const asBruno = { id: "p2", name: "Bruno" };
+const pr1 = (state) => Core.findProposal(Core.findTopic(state, "t1"), "pr1");
+
+tests.push(() => check("CONSENSUS : toute l'équipe vote « pour » → la proposition est figée « for », datée", () => {
+  const state = seed();
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" });
+  equal(pr1(state).consensus, "", "un seul vote sur deux participants : pas de consensus");
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" }, asBruno);
+  equal(pr1(state).consensus, "for");
+  assert(pr1(state).consensusAt, "date du consensus absente");
+}));
+
+tests.push(() => check("CONSENSUS : toute l'équipe vote « contre » → figée « against »", () => {
+  const state = seed();
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "against" });
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "against" }, asBruno);
+  equal(pr1(state).consensus, "against");
+}));
+
+tests.push(() => check("CONSENSUS : une abstention ou un avis différent l'empêche", () => {
+  const a = seed();
+  apply(a, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" });
+  apply(a, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "abstain" }, asBruno);
+  equal(pr1(a).consensus, "", "abstention");
+  const b = seed();
+  apply(b, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" });
+  apply(b, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "against" }, asBruno);
+  equal(pr1(b).consensus, "", "avis partagés");
+}));
+
+tests.push(() => check("CONSENSUS : figée, la proposition refuse vote, retrait, modification et statut ; un nouveau membre n'y change rien", () => {
+  const state = seed();
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" });
+  apply(state, "SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" }, asBruno);
+  [["SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "against" }],
+    ["REMOVE_VOTE", { topicId: "t1", proposalId: "pr1" }],
+    ["UPDATE_PROPOSAL", { topicId: "t1", proposalId: "pr1", title: "Autre" }],
+    ["CHANGE_PROPOSAL_STATUS", { topicId: "t1", proposalId: "pr1", status: "rejected" }]].forEach(([type, payload]) => {
+    const verdict = Core.validateAction(state, action(type, payload));
+    assert(!verdict.ok && /Consensus/.test(verdict.error), type + " devrait être refusée : " + JSON.stringify(verdict));
+  });
+  apply(state, "REGISTER_PARTICIPANT", { participantId: "p3", name: "Chloé" }, { id: "p3", name: "Chloé" });
+  equal(Core.proposalConsensus(pr1(state), state.participants), "for", "un membre arrivé après ne défait pas le consensus");
+}));
+
+tests.push(() => check("CONSENSUS : une proposition déjà unanime avant l'enregistrement du consensus est lue comme telle", () => {
+  const state = seed();
+  const p = pr1(state);
+  p.votes = { p1: "against", p2: "against" };
+  equal(Core.proposalConsensus(p, state.participants), "against");
+  assert(!Core.validateAction(state, action("SET_VOTE", { topicId: "t1", proposalId: "pr1", value: "for" })).ok, "doit être figée aussi");
 }));
 
 tests.push(() => check("CHANGE_PROPOSAL_STATUS : les 5 statuts", () => {
@@ -406,6 +461,8 @@ tests.push(() => check("Toutes les actions du modèle sont validées et appliqu�
   const run = (type, payload, actor) => { apply(state, type, payload, actor); covered[type] = true; };
 
   run("REGISTER_PARTICIPANT", { participantId: "p1", name: "Alice" });
+  /* Deux participants : un vote seul ne fait pas l'unanimité, la proposition reste votable. */
+  run("REGISTER_PARTICIPANT", { participantId: "p2", name: "Bruno" }, { id: "p2", name: "Bruno" });
   run("UPDATE_PARTICIPANT", { participantId: "p1", name: "Alice B." });
   run("CREATE_TOPIC", { topicId: "t1", title: "Sujet", description: "d" });
   run("UPDATE_TOPIC", { topicId: "t1", title: "Sujet 2", description: "d2" });
@@ -890,13 +947,14 @@ tests.push(() => check("ANONYMAT : rendu anonyme, un message ne garde aucun iden
 }));
 
 tests.push(() => check("PARITÉ : le serveur annonce ses marqueurs par FEATURES (\"idempotent\", \"branches\" ; drapeaux existants conservés)", () => {
-  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches"]);
-  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches"], "liste lue par Sync.supports()");
+  equal(GS.FEATURES, ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches", "consensus"]);
+  equal(GS.envelope({}).features, ["since", "batch", "lean", "idempotent", "pins", "ideas", "branches", "consensus"], "liste lue par Sync.supports()");
 }));
 
 tests.push(() => check("PARITÉ : actions marquées et non marquées, action par action", () => {
   const script = [
     ["REGISTER_PARTICIPANT", { participantId: "u1", name: "Marie" }],
+    ["REGISTER_PARTICIPANT", { participantId: "u2", name: "Paul" }],                    // u2 ne vote pas : pas de consensus
     ["CREATE_TOPIC", { topicId: "t1", title: "Rayon" }],
     ["CREATE_MESSAGE", { topicId: "t1", messageId: "m1", text: "Premier" }],
     ["CREATE_PROPOSAL", { topicId: "t1", proposalId: "p1", title: "Proposition" }],
@@ -940,6 +998,41 @@ tests.push(() => check("PARITÉ : actions marquées et non marquées, action par
   const topic = front.topics[0];
   equal([topic.proposals[0].votes, topic.conclusionVotes, topic.messages[0].reactions, topic.messages[0].authorId],
     [{}, {}, {}, "u1"], "état final attendu");
+}));
+
+tests.push(() => check("PARITÉ : consensus — même unanimité, même gel, même forme des deux côtés", () => {
+  const script = [
+    ["u1", "REGISTER_PARTICIPANT", { participantId: "u1", name: "Marie" }],
+    ["u2", "REGISTER_PARTICIPANT", { participantId: "u2", name: "Paul" }],
+    ["u1", "CREATE_TOPIC", { topicId: "t1", title: "Rayon" }],
+    ["u1", "CREATE_PROPOSAL", { topicId: "t1", proposalId: "p1", title: "A" }],
+    ["u1", "CREATE_PROPOSAL", { topicId: "t1", proposalId: "p2", title: "B" }],
+    ["u1", "SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for", set: true }],
+    ["u2", "SET_VOTE", { topicId: "t1", proposalId: "p1", value: "for", set: true }],      // unanimité : figée
+    ["u2", "SET_VOTE", { topicId: "t1", proposalId: "p1", value: "against", set: true }],  // refus
+    ["u1", "REMOVE_VOTE", { topicId: "t1", proposalId: "p1" }],                             // refus
+    ["u1", "SET_VOTE", { topicId: "t1", proposalId: "p2", value: "against" }],
+    ["u2", "SET_VOTE", { topicId: "t1", proposalId: "p2", value: "abstain" }],              // pas de consensus
+    ["u2", "SET_VOTE", { topicId: "t1", proposalId: "p2", value: "against" }],              // unanimité « contre »
+    ["u1", "UPDATE_PROPOSAL", { topicId: "t1", proposalId: "p2", title: "C" }]              // refus
+  ];
+  const front = Core.emptyState();
+  const back = GS.emptyState();
+  script.forEach(([who, type, payload], index) => {
+    const now = new Date(Date.UTC(2026, 1, 3, 9, 0, index)).toISOString();
+    const act = { id: "c" + index, type, actorId: who, actorName: who, ts: NOW, payload };
+    const frontVerdict = Core.validateAction(front, act);
+    equal(GS.validateAction(back, act), frontVerdict, "verdict divergent sur #" + index + " " + type);
+    if (frontVerdict.ok) {
+      Core.applyAction(front, act, now);
+      GS.applyAction(back, act, now);
+      equal(back, front, "état divergent après #" + index + " " + type);
+    }
+  });
+  const ps = front.topics[0].proposals;
+  equal([ps[0].consensus, ps[1].consensus], ["for", "against"], "consensus attendus");
+  equal(GS.ensureShape(JSON.parse(JSON.stringify(front))), Core.ensureShape(JSON.parse(JSON.stringify(front))), "ensureShape garde le consensus");
+  equal(Core.ensureShape(JSON.parse(JSON.stringify(front))).topics[0].proposals[0].consensus, "for", "relu tel quel");
 }));
 
 /* ==========================================================================

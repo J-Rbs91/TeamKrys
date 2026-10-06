@@ -195,7 +195,9 @@
           authorName: cut(p.authorName, Core.LIMITS.name) || Core.ANON_NAME,
           createdAt: trim(p.createdAt) || topic.createdAt,
           status: oneOf(trim(p.status), Core.PROPOSAL_STATUSES, "voting"),
-          votes: votes
+          votes: votes,
+          consensus: oneOf(trim(p.consensus), ["for", "against"], ""),
+          consensusAt: oneOf(trim(p.consensus), ["for", "against"], "") ? trim(p.consensusAt) : ""
         });
       });
 
@@ -280,6 +282,30 @@
 
   Core.findMessage = function (topic, id) { return topic ? findIn(arr(topic.messages), id) : null; };
   Core.findProposal = function (topic, id) { return topic ? findIn(arr(topic.proposals), id) : null; };
+
+  /* CONSENSUS : toute l'équipe (chaque participant inscrit) a voté, et tout le monde la même chose, « pour » ou
+   * « contre ». Une abstention n'est pas un accord : elle empêche le consensus. Renvoie "for", "against" ou "".
+   * ⚠️ Même code dans apps-script/Code.gs (tests/parity.test.js). */
+  Core.unanimousVote = function (proposal, participants) {
+    if (!proposal || !isObject(proposal.votes) || !Array.isArray(participants) || !participants.length) { return ""; }
+    var value = "";
+    for (var i = 0; i < participants.length; i++) {
+      var v = ownValue(proposal.votes, trim(participants[i] && participants[i].id));
+      if (v !== "for" && v !== "against") { return ""; }
+      if (!value) { value = v; } else if (v !== value) { return ""; }
+    }
+    var keys = Object.keys(proposal.votes);
+    for (var k = 0; k < keys.length; k++) { if (proposal.votes[keys[k]] !== value) { return ""; } }
+    return value;
+  };
+
+  /* Consensus d'une proposition : celui qui a été FIGÉ au vote qui l'a fait naître (`consensus`), sinon l'unanimité
+   * constatée maintenant (propositions déjà unanimes avant que le consensus ne soit enregistré). */
+  Core.proposalConsensus = function (proposal, participants) {
+    if (!proposal) { return ""; }
+    if (proposal.consensus === "for" || proposal.consensus === "against") { return proposal.consensus; }
+    return Core.unanimousVote(proposal, participants);
+  };
   Core.findConclusion = function (topic, id) { return topic ? findIn(arr(topic.conclusions), id) : null; };
 
   /* Un message n'est plus modifiable dès qu'une AUTRE personne y a réagi.
@@ -352,6 +378,11 @@
     function needTopic() {
       topic = Core.findTopic(state, trim(p.topicId));
       return topic ? null : fail("Ce sujet n'existe plus.");
+    }
+
+    /* Une proposition en Consensus est figée : plus de vote, de retrait, de modification ni de statut. */
+    function locked() {
+      return !!Core.proposalConsensus(Core.findProposal(topic, trim(p.proposalId)), state.participants);
     }
 
     switch (type) {
@@ -450,6 +481,7 @@
       case "UPDATE_PROPOSAL": {
         var e8 = needTopic(); if (e8) { return e8; }
         if (!Core.findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+        if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
         if (!trim(p.title)) { return fail("Le titre de la proposition est obligatoire."); }
         return OK;
       }
@@ -457,6 +489,7 @@
       case "CHANGE_PROPOSAL_STATUS": {
         var e9 = needTopic(); if (e9) { return e9; }
         if (!Core.findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+        if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
         if (Core.PROPOSAL_STATUSES.indexOf(trim(p.status)) < 0) { return fail("Statut de proposition invalide."); }
         return OK;
       }
@@ -464,6 +497,7 @@
       case "SET_VOTE": {
         var e10 = needTopic(); if (e10) { return e10; }
         if (!Core.findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+        if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
         if (!trim(action.actorId)) { return fail("Vote sans participant."); }
         if (Core.VOTE_VALUES.indexOf(trim(p.value)) < 0) { return fail("Vote invalide."); }
         return OK;
@@ -472,6 +506,7 @@
       case "REMOVE_VOTE": {
         var e11 = needTopic(); if (e11) { return e11; }
         if (!Core.findProposal(topic, trim(p.proposalId))) { return fail("Cette proposition n'existe plus."); }
+        if (locked()) { return fail("Toute l'équipe s'est prononcée : cette proposition est en Consensus et ne se modifie plus."); }
         if (!trim(action.actorId)) { return fail("Vote sans participant."); }
         return OK;
       }
@@ -680,7 +715,9 @@
           authorName: pWho.name,
           createdAt: now,
           status: "voting",
-          votes: {}
+          votes: {},
+          consensus: "",
+          consensusAt: ""
         });
         touch(state, topic, now);
         return;
@@ -712,6 +749,9 @@
         /* Un vote par personne ; re-cliquer le même vote le retire. */
         else if (ownValue(pv.votes, voter) === value) { delete pv.votes[voter]; }
         else { pv.votes[voter] = value; }
+        /* Le vote qui fait l'unanimité de toute l'équipe fige la proposition en Consensus. */
+        var reached = Core.unanimousVote(pv, state.participants);
+        if (reached && !pv.consensus) { pv.consensus = reached; pv.consensusAt = now; }
         touch(state, topic, now);
         return;
       }

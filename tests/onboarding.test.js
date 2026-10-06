@@ -338,12 +338,10 @@ check("chaque panneau annoncé a son texte dans js/ui.js (sinon il retomberait e
   const ids = new Set([].concat(...Object.values(CONFIG.ONBOARDING_PANELS)));
   ids.forEach((id) => assert(new RegExp("\\n    " + id + ": \\{").test(block), "panneau sans texte : " + id));
   assert(!/Appuyez sur une bulle/.test(block), "un simple toucher n'ouvre plus rien : le texte doit parler d'appui long");
-  /* La couche produit (js/product-ui.js) remplace le corps du panneau « conclusion » par sa version « consensus »,
-   * en reconnaissant le texte EXACT. Un texte modifié d'un seul côté laisserait « conclusion » à l'écran. */
-  const body = /conclusion: \{[\s\S]*?text: ([\s\S]*?)\n    \}/.exec(block);
-  const text = body[1].split("\n").map((l) => (/"((?:[^"\\]|\\.)*)"/.exec(l) || [, ""])[1]).join("");
-  const product = require("fs").readFileSync(path.join(ROOT, "js/product-ui.js"), "utf8");
-  assert(product.indexOf(JSON.stringify(text)) >= 0, "js/product-ui.js ne reconnaît pas le corps du panneau « conclusion » : " + text);
+  /* Le panneau « conclusion » (nom technique) parle directement de consensus : plus de renommage par product-ui. */
+  const body = /conclusion: \{[\s\S]*?\n    \}/.exec(block)[0];
+  assert(/Le consensus/.test(body) && /toute l'équipe/.test(body) && !/[Cc]onclusion :|une conclusion/.test(body),
+    "le panneau consensus doit dire la règle de l'unanimité : " + body);
 });
 
 /* ------------------------------------------------------------ Rapport --- */

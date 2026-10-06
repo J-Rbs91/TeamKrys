@@ -145,8 +145,13 @@
     var nav = make("nav", "ux-flow");
     nav.setAttribute("aria-label", "Parcours du sujet");
     nav.appendChild(flowStep("Discussion", "message", "#/topic/" + topic.id, route.name === "topic", topic.messages.length));
-    nav.appendChild(flowStep("Propositions", "idea", "#/topic/" + topic.id + "/proposals", route.name === "proposals", topic.proposals.length));
-    nav.appendChild(flowStep("Consensus", "checkCircle", "#/topic/" + topic.id + "/conclusion", route.name === "conclusion", topic.conclusions.length));
+    /* Une proposition en consensus (toute l'équipe a voté la même chose) quitte Propositions pour Consensus. */
+    var participants = (store() && store().view && store().view.participants) || [];
+    var agreed = topic.proposals.filter(function (p) {
+      return root.Core.proposalConsensus ? !!root.Core.proposalConsensus(p, participants) : false;
+    }).length;
+    nav.appendChild(flowStep("Propositions", "idea", "#/topic/" + topic.id + "/proposals", route.name === "proposals", topic.proposals.length - agreed));
+    nav.appendChild(flowStep("Consensus", "checkCircle", "#/topic/" + topic.id + "/conclusion", route.name === "conclusion", agreed));
     topbar.parentNode.insertBefore(nav, topbar.nextSibling);
 
     /* L'ancienne quickbar ne couvre que deux étapes et uniquement l'écran de
@@ -209,19 +214,6 @@
     }
   }
 
-  function enhanceConsensus() {
-    var currentApp = app();
-    if (!currentApp || !currentApp.route || currentApp.route.name !== "conclusion") { return; }
-
-    var cards = document.querySelectorAll("article.card.card-static");
-    for (var i = 0; i < cards.length; i++) {
-      if (cards[i].querySelector('[aria-pressed="true"]')) { cards[i].classList.add("ux-choice-selected"); }
-    }
-
-    var add = document.querySelector('[data-key="conclusion-add"]');
-    if (add && add.getAttribute("aria-label") === "Ajouter") { add.setAttribute("aria-label", "Ajouter le consensus"); }
-  }
-
   function enhancePressedState() {
     var pressed = document.querySelectorAll('[aria-pressed="true"]');
     for (var i = 0; i < pressed.length; i++) { pressed[i].classList.add("ux-pressed"); }
@@ -248,7 +240,6 @@
     enhanceTopicCards();
     enhanceTopicTitle();
     enhanceProposals();
-    enhanceConsensus();
     enhancePressedState();
     restoreFocus(focused);
   }

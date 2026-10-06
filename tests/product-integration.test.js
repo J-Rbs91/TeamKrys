@@ -60,7 +60,6 @@ check("Version : application et cache annoncent ensemble le même numéro", () =
 check("Consensus : aucun renommage global aveugle du contenu utilisateur", () => {
   assert(!ui.includes("document.body.innerHTML"), "remplacement global HTML interdit");
   assert(!ui.includes("replaceAll(\"Conclusion\""), "remplacement global du mot Conclusion interdit");
-  assert(ui.includes('route.name !== "conclusion"'), "renommage Consensus non borné à son écran");
 });
 
 check("Réactions : la couche produit ne modifie pas le jeu métier", () => {

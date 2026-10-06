@@ -43,6 +43,15 @@
     rejected: "tone-neutral"
   };
 
+  /* Consensus d'une proposition (Core.proposalConsensus) : "for" (acceptée par toute l'équipe), "against" (rejetée
+   * par toute l'équipe) ou "". Une proposition en consensus quitte Propositions pour l'onglet Consensus. */
+  function consensusOf(proposal) {
+    return typeof Core.proposalConsensus === "function" ? Core.proposalConsensus(proposal, Store.view.participants) : "";
+  }
+
+  function openProposals(topic) { return topic.proposals.filter(function (p) { return !consensusOf(p); }); }
+  function agreedProposals(topic) { return topic.proposals.filter(function (p) { return !!consensusOf(p); }); }
+
   function toneBadge(label, tone, extra) {
     return el("span", { class: "badge " + (tone || "tone-neutral") + (extra ? " " + extra : "") }, [
       el("span", { class: "dot", "aria-hidden": "true" }),
@@ -2089,7 +2098,7 @@
         }, [
           icon("checkCircle", 17),
           el("span", { text: "Conclusion" }),
-          topic.conclusions.length ? el("span", { class: "badge tone-neutral", text: String(topic.conclusions.length) }) : null
+          agreedProposals(topic).length ? el("span", { class: "badge tone-neutral", text: String(agreedProposals(topic).length) }) : null
         ])
       ]),
       thread,
@@ -2205,7 +2214,16 @@
          * couleur une fois choisi (cf. app.css, .vote-actions .btn.active). */
         "data-vote": value, "data-key": "vote-" + proposal.id + "-" + value,
         "aria-pressed": myVote === value ? "true" : "false",
-        onclick: function () { App.actions.setVote(topic.id, proposal.id, value); }
+        onclick: function () {
+          App.actions.setVote(topic.id, proposal.id, value);
+          /* Le vote qui fait l'unanimité fait disparaître la carte : on dit où elle est allée. */
+          var now = Core.findProposal(Core.findTopic(Store.view, topic.id), proposal.id);
+          var reached = consensusOf(now);
+          if (reached) {
+            UI.toast(reached === "for" ? "Toute l'équipe est pour : la proposition passe en Consensus."
+              : "Toute l'équipe est contre : la proposition passe en Consensus.");
+          }
+        }
       }, [icon(VOTE_ICONS[value], 15), el("span", { text: Core.VOTE_LABELS[value] })]));
     });
 
@@ -2278,15 +2296,16 @@
     var topic = Core.findTopic(Store.view, topicId);
     if (!topic) { return screenMissing(); }
 
+    var open = openProposals(topic);
     var list = el("div", { class: "stack" });
-    if (!topic.proposals.length) {
+    if (!open.length) {
       list.appendChild(emptyState("idea", "Aucune proposition",
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
           "data-key": "create-proposal-first", onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
         [icon("plus", 18), el("span", { text: "Ajouter une proposition" })])));
     } else {
-      topic.proposals.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
+      open.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
     }
 
     var screen = el("div", { class: "screen" }, [
@@ -2300,7 +2319,7 @@
       el("div", { class: "content" }, [list])
     ]);
 
-    if (topic.proposals.length) {
+    if (open.length) {
       screen.appendChild(el("button", {
         class: "fab", type: "button", "aria-label": "Ajouter une proposition", "data-key": "create-proposal",
         onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); }
@@ -2309,85 +2328,46 @@
     return screen;
   }
 
-  /* --------------------------------------------------------- Conclusion --- */
+  /* ---------------------------------------------------------- Consensus --- */
 
+  /* Consensus (route « conclusion », nom historique) : les propositions sur lesquelles TOUTE l'équipe a voté la même
+   * chose, pour ou contre (Core.unanimousVote). Elles y arrivent seules, au vote qui fait l'unanimité, et y restent
+   * figées : on ne vote pas ici. Les anciennes « formulations » libres ne s'affichent plus (données conservées). */
   function screenConclusion(topicId) {
     var topic = Core.findTopic(Store.view, topicId);
     if (!topic) { return screenMissing(); }
 
-    var scores = Core.conclusionScores(topic);
-    var myVote = topic.conclusionVotes[App.user.id] || null;
-
+    var agreed = agreedProposals(topic);
     var list = el("div", { class: "stack" });
-
-    topic.conclusions.forEach(function (conclusion, i) {
-      var count = scores.scores[conclusion.id] || 0;
-      var isLead = scores.best > 0 && count === scores.best;
-      var mine = App.ownsItem(conclusion.id, conclusion.authorId);
-      var chosen = myVote === conclusion.id;
-      list.appendChild(reveal(el("article", { class: "card card-static stack" + (isLead ? " is-lead" : ""), "data-motion-key": "c:" + conclusion.id }, [
+    agreed.forEach(function (proposal, i) {
+      var accepted = consensusOf(proposal) === "for";
+      var count = Object.keys(proposal.votes || {}).length;
+      list.appendChild(reveal(el("article", { class: "card card-static stack consensus-card", "data-motion-key": "k:" + proposal.id,
+        "data-consensus": accepted ? "for" : "against" }, [
         el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
-          el("div", { class: "pre-wrap", style: { flex: "1" }, text: conclusion.text }),
-          isLead ? el("span", { class: "badge badge-ink lead" }, [icon("star", 13), el("span", { text: "En tête" })]) : null
+          el("div", { class: "card-title", style: { flex: "1" }, text: proposal.title }),
+          toneBadge(accepted ? "Acceptée" : "Rejetée", accepted ? "tone-accord" : "tone-voix")
         ]),
-        /* Épure : ni auteur ni date. Le décompte ne paraît que s'il y a des votes ; « En tête » dit le reste. */
-        el("div", { class: "card-foot row-wrap" }, [
-          el("button", {
-            class: "btn btn-sm " + (chosen ? "btn-primary" : "btn-outline"), type: "button",
-            "aria-pressed": chosen ? "true" : "false",
-            "data-key": "conclusion-" + conclusion.id + "-choose", onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
-          }, [icon("check", 15), el("span", { text: chosen ? "Mon choix" : "Choisir" })]),
-          count ? el("span", { class: "hint", text: Utils.plural(count, "vote", "votes") }) : null,
-          el("div", { class: "spacer" }),
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la formulation du consensus",
-            "data-key": "conclusion-" + conclusion.id + "-edit", onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
-          [icon("edit", 15), el("span", { text: "Modifier" })]) : null,
-          mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Supprimer la formulation du consensus",
-            "data-key": "conclusion-" + conclusion.id + "-delete", onclick: function () { UI.set({ modal: { type: "deleteConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
-          [icon("trash", 15)]) : null
-        ])
+        proposal.description ? el("div", { class: "pre-wrap", style: { fontSize: "14px", color: "var(--muted)" }, text: proposal.description }) : null,
+        el("div", { class: "hint", text: (accepted ? "Toute l'équipe est pour" : "Toute l'équipe est contre")
+          + (count ? " (" + Utils.plural(count, "vote", "votes") + ")" : "") + "." })
       ]), i));
     });
 
-    if (!topic.conclusions.length) {
-      list.appendChild(emptyState("checkCircle", "Pas encore de conclusion",
-        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée."));
+    if (!agreed.length) {
+      list.appendChild(emptyState("checkCircle", "Pas encore de consensus",
+        "Une proposition arrive ici quand toute l'équipe a voté la même chose, pour ou contre."));
     }
-
-    var textarea = bindCounter(el("textarea", {
-      class: "textarea", placeholder: "Nouvelle conclusion…", maxlength: Core.LIMITS.conclusion, rows: "2",
-      "aria-label": "Nouvelle formulation du consensus", "aria-required": "true",
-      "data-draft": "conclusion:" + topic.id
-    }), "conclusion:" + topic.id, Core.LIMITS.conclusion);
-
-    /* Ajout : le même champ que Pandore, l'envoi dans son coin. Plus de carte, de surtitre ni de bandeau « Choix
-     * unique » : « Choisir » / « Mon choix » le disent en un geste. */
-    var addBlock = el("div", { class: "inline-composer" }, [
-      textarea,
-      el("div", { class: "inline-composer-bar" }, [
-        counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
-        el("div", { class: "spacer" }),
-        el("button", {
-          class: "send-btn", type: "button", "aria-label": "Ajouter", "data-key": "conclusion-add",
-          onclick: function () {
-            var text = Utils.trim(textarea.value);
-            if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
-            textarea.value = "";
-            App.actions.addConclusion(topic.id, text);
-          }
-        }, [icon("send", 20)])
-      ])
-    ]);
 
     return el("div", { class: "screen" }, [
       topbar({
-        title: "Conclusion",
+        title: "Consensus",
         sub: topic.title,
         back: App.remonter,
         backLabel: "Discussion",
         actions: [statusPill()]
       }),
-      el("div", { class: "content stack-lg" }, [list, addBlock])
+      el("div", { class: "content" }, [list])
     ]);
   }
 
@@ -2641,10 +2621,11 @@
         el("h2", { class: "print-h2", text: topic.title })
       ]), i);
 
-      if (topic.proposals.length) {
+      var open = openProposals(topic);
+      if (open.length) {
         block.appendChild(el("h3", { class: "print-h3", text: "Propositions" }));
         var pl = el("ul", { class: "print-list" });
-        topic.proposals.forEach(function (proposal) {
+        open.forEach(function (proposal) {
           /* Lecture de la carte (§8), réduite aux positions : « 3 pour, 1 contre » (l'abstention si elle existe). Le
            * statut ne se dit que s'il n'est pas l'état normal « En vote ». */
           var reading = ProductView.voteReading(proposal, state.participants);
@@ -2657,17 +2638,15 @@
         block.appendChild(pl);
       }
 
-      if (topic.conclusions.length) {
-        var scores = Core.conclusionScores(topic);
-        block.appendChild(el("h3", { class: "print-h3", text: "Conclusions" }));
+      /* Consensus : ce que toute l'équipe a accepté ou rejeté, à l'unanimité. */
+      var agreed = agreedProposals(topic);
+      if (agreed.length) {
+        block.appendChild(el("h3", { class: "print-h3", text: "Consensus" }));
         var cl = el("ul", { class: "print-list" });
-        topic.conclusions.slice().sort(function (a, b) {
-          return (scores.scores[b.id] || 0) - (scores.scores[a.id] || 0);
-        }).forEach(function (conclusion) {
-          var count = scores.scores[conclusion.id] || 0;
+        agreed.forEach(function (proposal) {
           cl.appendChild(el("li", {}, [
-            el("span", { class: "pre-wrap", text: conclusion.text }),
-            scores.best > 0 && count === scores.best ? el("span", { class: "hint", text: " · en tête" }) : null
+            el("strong", { text: proposal.title }),
+            el("span", { text: consensusOf(proposal) === "for" ? " : acceptée par toute l'équipe" : " : rejetée par toute l'équipe" })
           ]));
         });
         block.appendChild(cl);
@@ -3261,28 +3240,6 @@
     ]);
   }
 
-  function editConclusionModal(spec) {
-    var topic = Core.findTopic(Store.view, spec.topicId);
-    var conclusion = topic ? Core.findConclusion(topic, spec.conclusionId) : null;
-    if (!conclusion) { return null; }
-    var textarea = el("textarea", {
-      class: "textarea", maxlength: Core.LIMITS.conclusion,
-      "aria-label": "Texte de la formulation du consensus", "aria-required": "true",
-      value: conclusion.text, "data-draft": "editConclusion:" + conclusion.id
-    });
-    return modal("Modifier la conclusion", el("div", { class: "stack" }, [textarea]), [
-      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", onclick: closeOverlay }),
-      el("button", {
-        class: "btn btn-primary", type: "button", text: "Enregistrer",
-        onclick: function () {
-          var text = Utils.trim(textarea.value);
-          if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
-          App.actions.updateConclusion(topic.id, conclusion.id, text);
-        }
-      })
-    ]);
-  }
-
   /* Un changement de statut part vers toute l'équipe : il est toujours annoncé. Le libellé est lu AVANT
    * l'envoi, qui provoque un rendu détruisant le menu. */
   function applyProposalStatus(topic, proposal, status) {
@@ -3353,12 +3310,7 @@
       else if (m.type === "editTopic") { node = editTopicModal(m); }
       else if (m.type === "editMessage") { node = editMessageModal(m); }
       else if (m.type === "createProposal" || m.type === "editProposal") { node = proposalModal(m); }
-      else if (m.type === "editConclusion") { node = editConclusionModal(m); }
-      else if (m.type === "deleteConclusion") {
-        node = confirmModal("Supprimer la conclusion",
-          "La conclusion et les votes qui la visaient seront supprimés.",
-          "Supprimer", function () { App.actions.deleteConclusion(m.topicId, m.conclusionId); });
-      } else if (m.type === "logout") {
+      else if (m.type === "logout") {
         /* Une perte irréversible et invisible se confirme AVANT, elle ne s'explique pas
          * après. On nomme donc les trois conséquences, et on compte ce qui attend
          * d'être envoyé — c'est la seule qui détruit du travail. */
@@ -3700,11 +3652,11 @@
     },
     conclusion: {
       icon: "checkCircle",
-      eyebrow: "La conclusion",
-      title: "Ce que vous présenterez",
-      text: "Chaque sujet se referme sur une conclusion : chacun en choisit une, la "
-        + "mieux votée porte la mention En tête. Pour la réunion, l'onglet Réunion : "
-        + "tout tient sur une page."
+      eyebrow: "Le consensus",
+      title: "Quand toute l'équipe est d'accord",
+      text: "Une proposition votée de la même façon par toute l'équipe, pour ou contre, "
+        + "passe dans l'onglet Consensus. Pour la réunion, l'onglet Réunion : tout "
+        + "tient sur une page."
     },
     pandore: {
       icon: "inbox",

@@ -2,7 +2,7 @@
  *
  * Cette couche ne modifie jamais l'état partagé ni les actions envoyées au serveur.
  * Elle enrichit le DOM produit après le rendu historique : maturité sur l'accueil,
- * participation aux votes, statuts de proposition hérités, vocabulaire Consensus et
+ * participation aux votes, statuts de proposition hérités et
  * nouveautés locales depuis la dernière consultation.
  */
 (function (root) {
@@ -251,42 +251,6 @@
     }
   }
 
-  function renameConsensusScreen(route) {
-    if (!route || route.name !== "conclusion") { return; }
-    exact(document.querySelector(".topbar-title"), "Conclusion", "Consensus");
-    exact(document.querySelector(".empty-title"), "Pas encore de conclusion", "Pas encore de consensus");
-    exact(document.querySelector(".empty-text"),
-      "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée.",
-      "Formulez le cap que l'équipe souhaite porter en réunion. Chacun choisit ensuite le consensus qu'il préfère.");
-
-    var titles = document.querySelectorAll(".section-title span");
-    for (var i = 0; i < titles.length; i++) { exact(titles[i], "Ajouter une conclusion", "Ajouter un consensus"); }
-    var textarea = document.querySelector('textarea[placeholder="Nouvelle conclusion…"]');
-    if (textarea) { textarea.placeholder = "Nouveau consensus…"; }
-
-    var notes = document.querySelectorAll(".note span");
-    for (var n = 0; n < notes.length; n++) {
-      exact(notes[n],
-        "Vous avez choisi une conclusion. Choisir une autre déplace votre vote.",
-        "Vous avez choisi un consensus. Choisir un autre déplace votre vote.");
-      exact(notes[n], "Choix unique : une seule conclusion par personne.", "Choix unique : un seul consensus par personne.");
-    }
-  }
-
-  function renameConsensusOverlay() {
-    var modal = (UI.local || {}).modal;
-    if (!modal) { return; }
-    if (modal.type === "editConclusion") {
-      exact(document.querySelector(".modal-title"), "Modifier la conclusion", "Modifier le consensus");
-    }
-    if (modal.type === "deleteConclusion") {
-      exact(document.querySelector(".modal-title"), "Supprimer la conclusion", "Supprimer le consensus");
-      exact(document.querySelector(".modal .hint"),
-        "La conclusion et les votes qui la visaient seront supprimés.",
-        "Le consensus et les votes qui le visaient seront supprimés.");
-    }
-  }
-
   function replaceGeneratedVoteLanguage(value) {
     return String(value || "")
       .replace("Consensus favorable", "Avis exprimés favorables")
@@ -307,23 +271,6 @@
     for (var j = 0; j < generated.length; j++) {
       if (generated[j].classList.contains("pre-wrap")) { continue; }
       generated[j].textContent = replaceGeneratedVoteLanguage(generated[j].textContent);
-    }
-  }
-
-  function renameOnboarding() {
-    var rootNode = document.getElementById("onboarding-root");
-    if (!rootNode) { return; }
-    var map = {
-      "La conclusion": "Le consensus",
-      "Ce que vous présenterez": "Le cap que vous porterez",
-      /* ⚠️ Clé = texte EXACT de ONBOARD_TEXT.conclusion dans js/ui.js (tests/onboarding.test.js le vérifie). */
-      "Chaque sujet se referme sur une conclusion : chacun en choisit une, la mieux votée porte la mention En tête. Pour la réunion, l'onglet Réunion : tout tient sur une page.":
-        "Après le débat et les votes, l'équipe formule le cap qu'elle veut porter en réunion. Chacun choisit un consensus ; celui qui arrive en tête sert de repère. Pour la réunion, l'onglet Réunion : tout tient sur une page."
-    };
-    var walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, null);
-    var node;
-    while ((node = walker.nextNode())) {
-      if (Object.prototype.hasOwnProperty.call(map, node.nodeValue)) { node.nodeValue = map[node.nodeValue]; }
     }
   }
 
@@ -350,10 +297,7 @@
     var currentApp = app();
     var currentStore = store();
     if (!currentApp || !currentStore || !currentStore.view) { return; }
-    if (typeof currentApp.gate === "function" && currentApp.gate()) {
-      renameOnboarding();
-      return;
-    }
+    if (typeof currentApp.gate === "function" && currentApp.gate()) { return; }
 
     var focused = document.activeElement;
     var state = currentStore.view;
@@ -362,10 +306,7 @@
     enhanceTopics(state, route);
     enhanceProposals(state, route);
     renameQuickbar();
-    renameConsensusScreen(route);
-    renameConsensusOverlay();
     renameMeeting(route);
-    renameOnboarding();
     restoreFocus(focused);
   }
 
@@ -374,13 +315,6 @@
     enhance();
     return result;
   };
-
-  /* L'onboarding vit hors UI.render et mute son propre sous-arbre. */
-  var onboardingRoot = document.getElementById("onboarding-root");
-  if (onboardingRoot && root.MutationObserver) {
-    new MutationObserver(function () { renameOnboarding(); })
-      .observe(onboardingRoot, { childList: true, subtree: true, characterData: true });
-  }
 
   root.ProductUI = { enhance: enhance };
 })(typeof globalThis !== "undefined" ? globalThis : this);

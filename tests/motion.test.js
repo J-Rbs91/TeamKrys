@@ -252,7 +252,7 @@ check("les actions qui font apparaître un élément ailleurs l'annoncent", () =
   expect(/createProposal:[\s\S]*?expectMotion\("p:" \+ proposalId\)/.test(APP_JS), "createProposal n'annonce pas la carte créée");
   expect(/addConclusion:[\s\S]*?expectMotion\("c:" \+ conclusionId\)/.test(APP_JS), "addConclusion n'annonce pas la carte créée");
   expect(/function expectMotion\(key\) \{\s*try \{/.test(APP_JS), "l'annonce doit être facultative et ne jamais lever");
-  expect(/"data-motion-key": "p:" \+ proposal\.id/.test(UI_JS) && /"data-motion-key": "c:" \+ conclusion\.id/.test(UI_JS),
+  expect(/"data-motion-key": "p:" \+ proposal\.id/.test(UI_JS),
     "les cartes annoncées doivent porter la clé correspondante");
 });
 

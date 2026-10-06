@@ -481,9 +481,9 @@ check("BL-009 connexion, verrou et nom : champs nommés par un libellé relié, 
   });
 });
 
-check("BL-009 sujets (recherche), discussion (composeur), consensus et réglages : champs nommés", () => {
+check("BL-009 sujets (recherche), discussion (composeur) et réglages : champs nommés (le Consensus n'a plus de champ)", () => {
   const t = boot({ topics: manyTopics() });
-  [["sujets", TOPICS], ["discussion", topicRoute("t1")], ["consensus", conclusionRoute("t3")],
+  [["sujets", TOPICS], ["discussion", topicRoute("t1")],
     ["réglages", SETTINGS], ["propositions", proposalsRoute("t1")]].forEach(([name, route]) => {
     t.go(route);
     if (name === "propositions") { return; }   // aucun champ sans proposition : seulement le titre d'écran
@@ -491,14 +491,13 @@ check("BL-009 sujets (recherche), discussion (composeur), consensus et réglages
   });
 });
 
-check("BL-009 fenêtres et feuille (nouveau sujet, modifier le sujet, le message, le consensus, proposition, statut) : champs nommés", () => {
+check("BL-009 fenêtres et feuille (nouveau sujet, modifier le sujet, le message, proposition, statut) : champs nommés", () => {
   const t = boot();
   [
     ["Nouveau sujet", TOPICS, { modal: { type: "createTopic" } }],
     ["Modifier le sujet", topicRoute("t1"), { modal: { type: "editTopic", topicId: "t1" } }],
     ["Modifier le message", topicRoute("t1"), { modal: { type: "editMessage", topicId: "t1", messageId: "m1" } }],
     ["Nouvelle proposition", topicRoute("t1"), { modal: { type: "createProposal", topicId: "t1" } }],
-    ["Modifier la formulation", conclusionRoute("t3"), { modal: { type: "editConclusion", topicId: "t3", conclusionId: "c1" } }],
     ["Feuille d'informations", topicRoute("t1"), { sheet: { type: "topicInfo", topicId: "t1" } }],
   ].forEach(([name, route, layer]) => {
     t.set({ sheet: null, modal: null });

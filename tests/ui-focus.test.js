@@ -709,6 +709,38 @@ check("Détails du sujet : « Épingler pour toute l'équipe » envoie l'épingl
   assert(/mis à jour/.test(dialog(old).textContent), "la raison de l'indisponibilité n'est pas dite");
 });
 
+/* ============================================================== Consensus ==== */
+
+const consensusRoute = (id) => ({ name: "conclusion", topicId: id, raw: "#/topic/" + id + "/conclusion" });
+
+check("Consensus : quand toute l'équipe vote pareil, la proposition quitte Propositions pour Consensus (acceptée ou rejetée) ; une abstention l'en empêche", () => {
+  const cases = [["for", "Acceptée", /pour/], ["against", "Rejetée", /contre/]];
+  cases.forEach(([value, label, said]) => {
+    const t = boot();
+    const p1 = () => t.ctx.Core.findProposal(t.ctx.Core.findTopic(t.ctx.Store.view, "t1"), "p1");
+    p1().votes[t.ctx.Store.view.participants[1].id] = value;      // Bruno a voté
+    t.go(proposalsRoute("t1"));
+    assert(t.app().querySelector('[data-motion-key="p:p1"]'), "avant l'unanimité, la proposition est dans Propositions");
+    t.app().querySelector('[data-key="vote-p1-' + value + '"]').click();   // Alice vote pareil : toute l'équipe
+    assert(!t.app().querySelector('[data-motion-key="p:p1"]'), "la proposition doit quitter Propositions");
+    const toasts = t.toasts().querySelectorAll(".toast").map((n) => n.textContent);
+    assert(toasts.some((x) => /passe en Consensus/.test(x) && said.test(x)), "le passage en Consensus doit être dit : " + JSON.stringify(toasts));
+    t.go(consensusRoute("t1"));
+    const card = t.app().querySelector(".consensus-card");
+    assert(card && /Décaler la tournée/.test(card.textContent) && card.textContent.indexOf(label) >= 0, "carte Consensus : " + (card && card.textContent));
+    assert(!card.querySelector("button"), "on ne vote pas depuis Consensus");
+  });
+
+  const t = boot();
+  const p1 = t.ctx.Core.findProposal(t.ctx.Core.findTopic(t.ctx.Store.view, "t1"), "p1");
+  p1.votes[t.ctx.Store.view.participants[1].id] = "abstain";
+  t.go(proposalsRoute("t1"));
+  t.app().querySelector('[data-key="vote-p1-for"]').click();
+  assert(t.app().querySelector('[data-motion-key="p:p1"]'), "une abstention empêche le consensus : la proposition reste");
+  t.go(consensusRoute("t1"));
+  assert(/Pas encore de consensus/.test(t.app().textContent), "Consensus vide attendu");
+});
+
 /* ================================================================ Pandore ==== */
 
 const pandoreRoute = { name: "pandore", topicId: null, raw: "#/pandore" };
