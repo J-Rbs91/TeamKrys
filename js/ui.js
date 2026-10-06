@@ -1116,15 +1116,12 @@
       configured ? topbar({ title: "Invitation", back: App.remonter, backLabel: "Retour" }) : null,
       el("div", { class: "content stack-lg" }, [
         heroBlock("Préparer les réunions de l'équipe, ensemble.", !configured),
-        reveal(el("div", { class: "card card-static stack", "data-key": "invite-card" }, [
-          sectionTitle("users", "Rejoindre l'équipe"),
+        /* Épure : le champ du code et le bouton. Seule reste la conséquence qui compte : rejoindre une autre équipe
+         * remplace l'actuelle. */
+        reveal(el("div", { class: "stack", "data-key": "invite-card" }, [
           storageNote(),
-          el("p", { text: configured
-            ? "Cette invitation mène à une autre équipe que celle de cet appareil. La rejoindre remplace l'équipe actuelle sur ce téléphone."
-            : "Vous êtes invité dans l'espace de votre équipe. L'adresse est dans le lien : il ne reste que le code d'accès, reçu avec lui." }),
-          el("p", { class: "hint", text: "Code d'espace de l'équipe : " + Utils.fingerprint(invitation.url) }),
-          field("Code d'accès", codeInput,
-            "Laissez vide si le message n'en contient pas. Le code n'est jamais enregistré sur l'appareil."),
+          configured ? el("p", { text: "Rejoindre cette équipe remplace votre équipe actuelle sur ce téléphone." }) : null,
+          field("Code d'accès", codeInput),
           el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "invite-join", onclick: join },
             [el("span", { text: configured ? "Changer d'équipe" : "Rejoindre l'équipe" }), icon("forward", 18)])
         ]), 1),
@@ -1227,19 +1224,17 @@
   function screenLock() {
     var codeInput = el("input", {
       class: "input", type: "password", inputmode: "text", autocomplete: "off",
-      placeholder: "Code d'accès", "aria-required": "true", "data-draft": "lock:code",
+      placeholder: "Code d'accès", "aria-label": "Code d'accès", "aria-required": "true", "data-draft": "lock:code",
       onkeydown: function (e) { if (e.key === "Enter") { App.unlock(codeInput.value); } }
     });
 
+    /* Épure : le logo, une ligne, le champ, le bouton. Où le code est gardé et combien de temps l'accès reste
+     * ouvert ne servent pas à déverrouiller (docs/GUIDE_UTILISATEUR.md le dit). */
     return el("div", { class: "screen" }, [
       el("div", { class: "content stack-lg" }, [
-        heroBlock("Espace de l'équipe verrouillé", true),
-        reveal(el("div", { class: "card card-static stack" }, [
-          sectionTitle("lock", "Verrou de l'équipe"),
-          field("Code d'accès", codeInput,
-            "Le code vous est communiqué par l'équipe. Il n'est jamais enregistré sur cet appareil. "
-            + "Une fois déverrouillé, l'accès reste ouvert : le code n'est redemandé qu'après une "
-            + "heure sans activité."),
+        heroBlock("Espace verrouillé", true),
+        reveal(el("div", { class: "stack" }, [
+          codeInput,
           el("button", {
             class: "btn btn-primary btn-block", type: "button",
             onclick: function () { App.unlock(codeInput.value); }
@@ -2803,7 +2798,7 @@
       sectionTitle("link", "Connexion"),
       el("div", { class: "hint", text: connected
         ? "Connecté à l'espace de l'équipe."
-        : "Mode local : les données restent sur cet appareil." }),
+        : "Mode local : rien n'est partagé avec l'équipe." }),
       /* Le code d'espace se compare à l'œil d'un téléphone à l'autre : deux codes différents = deux scripts
        * différents, et c'est la première explication à « je ne vois pas les messages des autres ». */
       connected ? el("div", { class: "diag" }, [diagRow("Code d'espace", Utils.fingerprint(Sync.connection.url))]) : null,
@@ -3316,15 +3311,13 @@
          * d'être envoyé — c'est la seule qui détruit du travail. */
         var waiting = Sync.diagnostics().pending.length;
         node = confirmModal("Se déconnecter de l'équipe",
-          "L'adresse de l'équipe, le déverrouillage et votre nom seront oubliés sur cet "
-          + "appareil. Vous ne pourrez plus modifier vos messages anonymes depuis ce "
-          + "téléphone : c'est ce qui les rend anonymes."
+          "Votre nom et l'accès à l'équipe seront oubliés sur ce téléphone. Vous ne "
+          + "pourrez plus modifier vos messages anonymes."
           + (waiting
             ? " ⚠️ " + waiting + (waiting > 1 ? " actions attendent" : " action attend")
               + " d'être envoyée" + (waiting > 1 ? "s" : "") + (waiting > 1 ? " et seront" : " et sera")
               + " perdue" + (waiting > 1 ? "s" : "") + "."
-            : "")
-          + " Les données de l'équipe restent sur Google Drive.",
+            : ""),
           "Se déconnecter", function () { App.logout(); });
       }
     }
@@ -3628,7 +3621,7 @@
       text: "L'équipe dépose ici ce qu'il faut traiter en réunion, du plus récemment "
         + "actif au plus ancien. Le bouton + en ajoute un, signé ou anonyme. Épinglez "
         + "les plus importants : ils restent en tête, pour tous.",
-      textLocal: "En mode local, les données restent sur cet appareil. Le vote et les "
+      textLocal: "En mode local, rien n'est partagé avec l'équipe. Le vote et les "
         + "réactions prennent leur sens à plusieurs."
     },
     debate: {

@@ -265,7 +265,7 @@
     unlocked = true;
     App.editingConnection = false;
     Sync.setConnection({ url: "", token: "", localMode: true, unlocked: true });
-    UI.toast("Mode local activé : les données restent sur cet appareil.");
+    UI.toast("Mode local activé.");
     UI.force();
   };
 

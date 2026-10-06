@@ -1067,7 +1067,7 @@ check("invitation : « Rejoindre l'équipe » ne demande que le code ; l'adresse
   assert(card, "écran d'invitation absent");
   assert(!t.app().querySelector('[data-draft="setup:url"]'), "le champ d'adresse ne doit pas apparaître : l'adresse vient du lien");
   assert(t.app().textContent.indexOf(INVITED) < 0, "l'adresse du script ne doit jamais s'afficher");
-  assert(/Code d'espace de l'équipe : [0-9A-F]{4}-[0-9A-F]{4}/.test(card.textContent), "code d'espace pour comparer");
+  assert(!/Code d'espace|jamais enregistré/.test(card.textContent), "épure : ni code d'espace ni mention du stockage sur l'écran d'invitation (le code d'espace est dans Système)");
   t.app().querySelector('[data-draft="setup:code"]').value = "1234";
   t.app().querySelector('[data-key="invite-join"]').click();
   assert(JSON.stringify(joined) === JSON.stringify([[INVITED, "1234"]]), "rejoindre : " + JSON.stringify(joined));
@@ -1092,7 +1092,7 @@ check("invitation : un appareil d'une autre équipe est prévenu, et peut garder
   const t = boot();
   invited(t, true);
   const text = t.app().textContent;
-  assert(/autre équipe/.test(text) && /remplace l'équipe actuelle/.test(text), "avertissement de changement d'équipe");
+  assert(/remplace votre équipe actuelle/.test(text), "avertissement de changement d'équipe");
   assert(/Changer d'équipe/.test(t.app().querySelector('[data-key="invite-join"]').textContent), "libellé explicite");
   const keep = t.app().querySelector('[data-key="invite-dismiss"]');
   let went = null;
