@@ -38,7 +38,7 @@
     var name = currentApp.route && currentApp.route.name;
     if (name === "proposals" || name === "conclusion" || name === "branch") { return 2; }
     if (name === "topic" || name === "settings" || name === "meeting" || name === "pandore") { return 1; }
-    if (name === "system") { return 2; }
+    if (name === "system" || name === "pandoreSynthesis") { return 2; }
     return 0;
   }
 

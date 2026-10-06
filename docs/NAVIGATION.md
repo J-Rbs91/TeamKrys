@@ -73,6 +73,7 @@ Sujets  (racine, onglet)
 │   └── Conclusion
 ├── Réunion   (onglet)
 ├── Pandore   (onglet)
+│   └── Synthèse
 └── Réglages  (onglet)
     └── Système
 ```
@@ -84,6 +85,11 @@ directs de Sujets, donc frères entre eux.
 - Conséquence : depuis n'importe quel onglet, le geste retour du système ramène à
   Sujets, puis quitte l'application. C'est la convention d'Android, sans aucune
   interception. Les onglets n'ont pas de bouton retour : la barre en tient lieu.
+
+**Synthèse, sous Pandore.** La synthèse a son propre écran, à l'adresse
+`#/pandore/synthese`, ouvert par le bouton « Voir la synthèse ». Même règle que
+Système ci-dessous : l'atteindre empile, son bouton retour (« Pandore ») et le geste
+retour ramènent à Pandore, et il n'a pas de barre du bas.
 
 **Système, sous Réglages.** C'est le second niveau des réglages (connexion et
 synchronisation), à l'adresse `#/settings/system`.

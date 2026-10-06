@@ -714,6 +714,7 @@ check("Détails du sujet : « Épingler pour toute l'équipe » envoie l'épingl
 /* ================================================================ Pandore ==== */
 
 const pandoreRoute = { name: "pandore", topicId: null, raw: "#/pandore" };
+const synthesisRoute = { name: "pandoreSynthesis", topicId: null, raw: "#/pandore/synthese" };
 const tick = () => new Promise((r) => setImmediate(r));
 
 check("Pandore : entrée depuis l'accueil ; composeur épuré, dépôt anonyme, champ vidé, avertissement public ; vide refusé ; plus aucun « boîte à idées »", () => {
@@ -760,6 +761,27 @@ check("Pandore : mode local et serveur trop ancien désactivent le dépôt avec 
   assert(old.app().querySelector('[data-key="pandore-submit"]').disabled && /mis à jour/.test(old.app().textContent), "serveur sans « ideas »");
 });
 
+check("Pandore : la synthèse a son propre écran, ouvert par un bouton ; l'écran de dépôt ne lit pas le fichier", () => {
+  const t = boot();
+  let calls = 0;
+  const went = [];
+  t.ctx.fetch = () => { calls += 1; return new Promise(() => {}); };
+  const go = t.ctx.App.go;
+  t.ctx.App.go = (hash) => { went.push(hash); };
+  t.go(pandoreRoute);
+  assert(calls === 0 && !t.app().querySelector(".pandore-card, .skeleton-card"), "l'écran de dépôt ne doit montrer ni lire la synthèse");
+  const open = t.app().querySelector('[data-key="pandore-open-synthesis"]');
+  assert(open && /Voir la synthèse/.test(open.textContent), "bouton « Voir la synthèse » absent");
+  open.click();
+  assert(JSON.stringify(went) === '["#/pandore/synthese"]', "destination : " + JSON.stringify(went));
+  t.ctx.App.go = go;
+  t.go(synthesisRoute);
+  assert(calls === 1, "l'écran de synthèse doit lire le fichier");
+  const bar = t.app().querySelector(".topbar");
+  assert(bar.querySelector('[data-key="back"]') && /Synthèse/.test(bar.textContent), "écran enfant : titre « Synthèse » et bouton retour");
+  assert(!t.app().querySelector("nav.tabbar"), "écran de niveau 2 : pas de barre d'onglets");
+});
+
 check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'IA l'a choisi, en TEXTE (jamais en HTML) ; erreur avec « Réessayer »", async () => {
   const t = boot();
   let calls = 0;
@@ -774,7 +796,7 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
         { id: "p4", titre: "", texte: "sans titre" }
       ] }) });
   };
-  t.go(pandoreRoute);
+  t.go(synthesisRoute);
   await tick(); await tick();
   const cards = t.app().querySelectorAll(".pandore-card");
   assert(cards.length === 3, cards.length + " carte(s), 3 attendues (le point sans titre est écarté)");
@@ -789,14 +811,14 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   assert(/2 dépôts d'origine/.test(cards[0].textContent) && /03\/10\/2026/.test(text), "métadonnées");
   assert(/Deux sujets reviennent\./.test(text) && !/Classement choisi/.test(text), "résumé affiché, axe de classement masqué (épure)");
   assert(!t.app().querySelector('[data-key="pandore-reset-note"]'), "pas de remise à zéro : aucune note");
-  t.go(pandoreRoute);
+  t.go(synthesisRoute);
   assert(calls === 1, "un rendu de plus ne doit pas relire le fichier (" + calls + " lectures)");
 
   /* Sans catégorie : une liste simple, sans titre de groupe. */
   const flat = boot();
   flat.ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, date: "2026-10-03",
     points: [{ id: "p1", titre: "Un", texte: "x", sources: ["aaaaaa"] }, { id: "p2", titre: "Deux", texte: "y", sources: ["bbbbbb"] }] }) });
-  flat.go(pandoreRoute);
+  flat.go(synthesisRoute);
   await tick(); await tick();
   assert(flat.app().querySelectorAll(".pandore-card").length === 2 && !flat.app().querySelector("h2.pandore-group"), "liste sans catégorie");
 
@@ -804,7 +826,7 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
   const z = boot();
   z.ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ version: 1, date: "2026-10-03",
     remiseAZero: "2026-10-05", points: [{ id: "p1", titre: "Gardé", texte: "Toujours là", sources: ["aaaaaa"] }] }) });
-  z.go(pandoreRoute);
+  z.go(synthesisRoute);
   await tick(); await tick();
   const note = z.app().querySelector('[data-key="pandore-reset-note"]');
   assert(z.app().querySelectorAll(".pandore-card").length === 1, "après remise à zéro, la synthèse doit rester affichée");
@@ -812,7 +834,7 @@ check("synthèse automatique : lue dans pandore/synthese.json, classée comme l'
 
   const e = boot();
   e.ctx.fetch = () => Promise.reject(new TypeError("Failed to fetch"));
-  e.go(pandoreRoute);
+  e.go(synthesisRoute);
   await tick();
   assert(/Impossible de charger la synthèse/.test(e.app().textContent) && e.app().querySelector('[data-key="pandore-retry"]'), "erreur muette");
 });

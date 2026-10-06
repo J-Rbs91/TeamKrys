@@ -659,8 +659,9 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
 - [ ] Hors connexion : le dépôt part en file comme un message, puis au retour du réseau.
 - [ ] Après la collecte : le texte est dans `pandore/depots/<jour>.md`, sans nom, sans heure.
 - [ ] Après une synthèse publiée sur `main` et le déploiement de GitHub Pages (le cache
-      de Pages peut ajouter une dizaine de minutes) : en revenant sur l'écran, la
-      synthèse apparaît sans mise à jour de l'application ; « Synthèse » et sa date,
+      de Pages peut ajouter une dizaine de minutes) : **Voir la synthèse** ouvre l'écran
+      Synthèse (bouton retour « Pandore », sans barre du bas) ; la synthèse apparaît sans
+      mise à jour de l'application ; titre « Synthèse », sa date dessous,
       résumé s'il y en a un, catégories dans l'ordre du fichier (l'axe de classement
       n'est pas affiché), « N dépôts d'origine ».
 - [ ] Après une remise à zéro publiée : la même synthèse reste affichée, avec la note

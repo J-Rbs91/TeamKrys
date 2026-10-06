@@ -608,6 +608,8 @@
     if (parts[0] === "settings" && parts[1] === "system") { return { raw: raw, name: "system", topicId: null }; }
     if (parts[0] === "settings") { return { raw: raw, name: "settings", topicId: null }; }
     if (parts[0] === "meeting") { return { raw: raw, name: "meeting", topicId: null }; }
+    /* Niveau 2 de Pandore : la synthèse, sur son propre écran, pour garder celui du dépôt nu. */
+    if (parts[0] === "pandore" && parts[1] === "synthese") { return { raw: raw, name: "pandoreSynthesis", topicId: null }; }
     if (parts[0] === "pandore") { return { raw: raw, name: "pandore", topicId: null }; }
     /* Lien d'invitation (Utils.inviteLink) : le jeton porte l'adresse du script de l'équipe. */
     if (parts[0] === "invitation") { return { raw: raw, name: "invitation", topicId: null, invite: parts[1] || "" }; }
@@ -676,6 +678,7 @@
     settings: "topics",
     meeting: "topics",
     pandore: "topics",
+    pandoreSynthesis: "pandore",
     invitation: "topics",
     system: "settings",
     topic: "topics",
@@ -699,6 +702,7 @@
     if (!parent) { return "#/"; }
     if (parent === "topic") { return "#/topic/" + route.topicId; }
     if (parent === "settings") { return "#/settings"; }
+    if (parent === "pandore") { return "#/pandore"; }
     return "#/";
   }
 

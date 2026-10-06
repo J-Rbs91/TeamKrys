@@ -2484,7 +2484,7 @@
     if (pandoreFeed.status === "loading") { return; }
     if (typeof fetch !== "function") { pandoreFeed.status = "error"; return; }
     pandoreFeed.status = "loading";
-    var done = function () { if (App.route && App.route.name === "pandore") { UI.force(); } };
+    var done = function () { if (App.route && App.route.name === "pandoreSynthesis") { UI.force(); } };
     fetch(PANDORE_URL, { cache: "no-store" }).then(function (response) {
       if (!response.ok) { throw new Error("HTTP " + response.status); }
       return response.json();
@@ -2536,11 +2536,7 @@
   }
 
   function screenPandore() {
-    if (pandoreFeed.status === "idle" || (pandoreFeed.status !== "loading" && Utils.now() - pandoreFeed.loadedAt > PANDORE_STALE_MS)) {
-      loadSynthesis();
-    }
     var unavailable = pandoreUnavailableReason();
-
     /* Composeur à la façon d'une messagerie IA : un seul champ, l'envoi dans son coin, une seule ligne dessous.
      * Le principe et l'avertissement de publication publique vivent dans la feuille « i » de la barre du haut
      * (pandoreInfoSheet) : rien d'autre ne s'explique à l'écran. */
@@ -2592,6 +2588,24 @@
       ])
     ]);
 
+    return el("div", { class: "screen" }, [
+      topbar({ title: "Pandore", sub: "Dites ce que vous avez à dire", actions: [
+        el("button", { class: "btn-icon", type: "button", "aria-label": "Comment fonctionne Pandore", "aria-haspopup": "dialog",
+          "data-key": "pandore-info", onclick: function () { UI.set({ sheet: { type: "pandoreInfo" } }); } }, [icon("info", 20)])
+      ] }),
+      el("div", { class: "content stack-lg" }, [
+        reveal(deposit, 0),
+        el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "pandore-open-synthesis",
+          onclick: function () { App.go("#/pandore/synthese"); } }, [el("span", { text: "Voir la synthèse" }), icon("forward", 16)])
+      ])
+    ]);
+  }
+
+  /* La synthèse, sur un écran à elle (#/pandore/synthese). Le fichier n'est lu qu'ici. */
+  function screenPandoreSynthesis() {
+    if (pandoreFeed.status === "idle" || (pandoreFeed.status !== "loading" && Utils.now() - pandoreFeed.loadedAt > PANDORE_STALE_MS)) {
+      loadSynthesis();
+    }
     var list = el("div", { class: "stack" });
     var feed = pandoreFeed;
     if (feed.status === "loading" && !feed.points.length) {
@@ -2634,23 +2648,12 @@
     });
 
     return el("div", { class: "screen" }, [
-      topbar({ title: "Pandore", sub: "Dites ce que vous avez à dire", actions: [
-        el("button", { class: "btn-icon", type: "button", "aria-label": "Comment fonctionne Pandore", "aria-haspopup": "dialog",
-          "data-key": "pandore-info", onclick: function () { UI.set({ sheet: { type: "pandoreInfo" } }); } }, [icon("info", 20)])
-      ] }),
-      el("div", { class: "content stack-lg" }, [
-        reveal(deposit, 0),
-        el("section", { class: "stack" }, [
-          el("div", { class: "row" }, [
-            sectionTitle("doc", "Synthèse"),
-            el("div", { class: "spacer" }),
-            feed.date ? el("span", { class: "hint", text: dayLabel(feed.date) }) : null
-          ]),
-          feed.resetOn ? el("p", { class: "hint", "data-key": "pandore-reset-note",
-            text: "Remise à zéro le " + dayLabel(feed.resetOn) + ". Les nouveaux dépôts iront dans la prochaine synthèse." }) : null,
-          feed.resume ? el("p", { class: "pre-wrap pandore-resume", text: feed.resume }) : null,
-          list
-        ])
+      topbar({ title: "Synthèse", sub: feed.date ? "Du " + dayLabel(feed.date) : null, back: App.remonter, backLabel: "Pandore" }),
+      el("div", { class: "content stack" }, [
+        feed.resetOn ? el("p", { class: "hint", "data-key": "pandore-reset-note",
+          text: "Remise à zéro le " + dayLabel(feed.resetOn) + ". Les nouveaux dépôts iront dans la prochaine synthèse." }) : null,
+        feed.resume ? el("p", { class: "pre-wrap pandore-resume", text: feed.resume }) : null,
+        list
       ])
     ]);
   }
@@ -2662,7 +2665,7 @@
       el("p", { text: "Une idée, une plainte, une question, une remarque : déposez-la ici." }),
       el("p", { text: "Votre message part sans nom. Une fois envoyé, il ne peut être ni modifié ni retiré." }),
       el("p", { text: "Il est publié tel quel sur le GitHub public du projet. N'y mettez aucun nom ni rien de confidentiel." }),
-      el("p", { text: "Ce qui ressort des messages apparaît dans la synthèse, sous le champ." })
+      el("p", { text: "Ce qui ressort des messages est regroupé dans la synthèse." })
     ]));
   }
 
@@ -3492,6 +3495,7 @@
     if (route.name === "conclusion") { return screenConclusion(route.topicId); }
     if (route.name === "branch") { return screenBranch(route.topicId, route.messageId); }
     if (route.name === "system") { return screenSystem(); }
+    if (route.name === "pandoreSynthesis") { return screenPandoreSynthesis(); }
     var screen = route.name === "settings" ? screenSettings()
       : route.name === "meeting" ? screenMeeting()
       : route.name === "pandore" ? screenPandore()
@@ -3586,6 +3590,7 @@
     if (route.name === "meeting") { return "Synthèse de réunion" + tail; }
     if (route.name === "system") { return "Système" + tail; }
     if (route.name === "pandore") { return "Pandore" + tail; }
+    if (route.name === "pandoreSynthesis") { return "Synthèse de Pandore" + tail; }
     return "Sujets" + tail;
   }
 
