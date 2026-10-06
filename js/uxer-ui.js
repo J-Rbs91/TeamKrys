@@ -186,18 +186,13 @@
     if (!button || button.classList.contains("ux-topic-title-action")) { return; }
     button.classList.add("ux-topic-title-action");
     /* Pas d'aria-label : il remplaçait le titre visible par « Voir les détails du sujet » et le
-     * titre n'était lu nulle part (A11-008). Le nom est le texte visible, « Détails » compris ;
-     * la consigne est la description (aria-describedby posé par js/ui.js, hors du titre). */
-
-    var sub = button.querySelector(".topbar-sub");
-    if (sub) {
-      sub.appendChild(make("span", "ux-title-hint", "Détails"));
-    }
+     * titre n'était lu nulle part (A11-008). Le nom est le texte visible ; la consigne est la description
+     * (aria-describedby posé par js/ui.js, hors du titre). Plus de mention « Détails » : le chevron suffit (épure). */
   }
 
   /* Le repère « ••• » des bulles est retiré : il invitait à TOUCHER, et au doigt les actions d'un message s'ouvrent
    * désormais par un appui long (js/ui.js, « Gestes sur les bulles »). Un repère qui promet le mauvais geste est
-   * pire que pas de repère ; l'indice affiché une fois au-dessus du fil le remplace. */
+   * pire que pas de repère ; le mode d'emploi est dans la feuille de détails du sujet. */
 
   function enhanceProposals() {
     var currentApp = app();

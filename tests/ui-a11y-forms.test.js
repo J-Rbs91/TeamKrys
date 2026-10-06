@@ -624,7 +624,7 @@ check("BL-034 un seul titre de niveau 1 par écran, et une zone principale", () 
     "connexion de première fois : titre de niveau 1 attendu = nom de l'application (" + heads.length + ")");
 });
 
-check("BL-034 bouton-titre du sujet : nom = texte visible (Détails compris), la consigne en description", () => {
+check("BL-034 bouton-titre du sujet : nom = texte visible (le titre seul, épure), la consigne en description", () => {
   const t = boot();
   t.go(topicRoute("t1"));
   const button = t.app().querySelector(".topbar-titles > button");
@@ -632,7 +632,7 @@ check("BL-034 bouton-titre du sujet : nom = texte visible (Détails compris), la
   assert(!button.hasAttribute("aria-label"),
     "aria-label remplace le titre visible : « " + button.getAttribute("aria-label") + " »");
   const name = accessibleText(button);
-  ["Sujet t1", "En discussion", "Détails"].forEach((part) => {
+  ["Sujet t1"].forEach((part) => {
     assert(name.indexOf(part) >= 0, "le nom accessible doit contenir « " + part + " » : « " + name + " »");
   });
   assert(describedText(t.doc, button).indexOf("Voir les détails du sujet") >= 0,

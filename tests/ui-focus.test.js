@@ -578,7 +578,7 @@ check("BL-010 interrupteur Anonyme : le focus reste sur la commande, l'état cou
   assert(toggle, "interrupteur sans clé data-key=composer-anon");
   assert(toggle.getAttribute("role") === "switch" && toggle.getAttribute("aria-checked") === "false",
     "un vrai interrupteur est attendu, éteint au départ : role=" + toggle.getAttribute("role") + ", aria-checked=" + toggle.getAttribute("aria-checked"));
-  const label = toggle.querySelector(".sig-label").textContent;
+  const label = toggle.getAttribute("aria-label");
   assert(label === "Publier en anonyme", "libellé de l'interrupteur : « " + label + " »");
   toggle.focus();
   toggle.click();
@@ -586,7 +586,7 @@ check("BL-010 interrupteur Anonyme : le focus reste sur la commande, l'état cou
   assert(t.ctx.UI.local.composerAnon === true, "la bascule n'a pas basculé");
   assert(now !== toggle && now.getAttribute("data-key") === "composer-anon", "focus après la bascule sur " + describe(now));
   assert(now.getAttribute("aria-checked") === "true", "interrupteur allumé : aria-checked=" + now.getAttribute("aria-checked"));
-  assert(now.querySelector(".sig-label").textContent === label, "le libellé de l'interrupteur a changé avec son état : « " + now.querySelector(".sig-label").textContent + " »");
+  assert(now.getAttribute("aria-label") === label, "le libellé de l'interrupteur a changé avec son état : « " + now.getAttribute("aria-label") + " »");
   let state = t.doc.getElementById(now.getAttribute("aria-describedby") || "-");
   assert(state && state.textContent === "Anonyme", "état non exposé par la commande : " + (state ? state.textContent : "aucune description"));
 
@@ -598,19 +598,17 @@ check("BL-010 interrupteur Anonyme : le focus reste sur la commande, l'état cou
   assert(state && state.textContent === "Signé : Alice", "état signé non exposé : " + (state ? state.textContent : "aucune description"));
 });
 
-check("interrupteur Anonyme : le nom affiché devient « Anonyme », et l'animation n'est posée que par le geste, jamais par un rendu de plus", () => {
+check("interrupteur Anonyme : un bouton masque dans la ligne d'écriture, plus de ligne « Signé : … » au-dessus ; l'état reste exposé", () => {
   const t = boot();
   t.go(topicRoute("t1"));
-  const row = () => t.app().querySelector(".signature-toggle");
-  assert(!row().classes().has("is-flip") && !row().classes().has("is-anon"), "état de départ : " + row().className);
-  assert(t.doc.getElementById("composer-who").textContent === "Signé : Alice", "nom de départ : « " + t.doc.getElementById("composer-who").textContent + " »");
-  t.app().querySelector('[data-key="composer-anon"]').click();
-  assert(row().classes().has("is-anon") && row().classes().has("is-flip"), "après le geste : " + row().className);
-  assert(t.doc.getElementById("composer-who").textContent === "Anonyme", "nom après la bascule : « " + t.doc.getElementById("composer-who").textContent + " »");
-  t.ctx.UI.force();   // données reçues, nouveau rendu : l'état tient, l'animation ne se rejoue pas
-  assert(row().classes().has("is-anon") && !row().classes().has("is-flip"), "rendu suivant : " + row().className);
-  t.app().querySelector('[data-key="composer-anon"]').click();
-  assert(!row().classes().has("is-anon") && row().classes().has("is-flip"), "retour au nom signé : " + row().className);
+  const btn = () => t.app().querySelector('[data-key="composer-anon"]');
+  assert(!t.app().querySelector(".composer .signature-toggle"), "la ligne « Signé / Publier en anonyme » doit disparaître du composeur");
+  assert(btn().parentNode.classList.contains("composer-inner"), "la bascule doit être dans la ligne d'écriture");
+  assert(t.doc.getElementById("composer-who").textContent === "Signé : Alice", "état de départ : « " + t.doc.getElementById("composer-who").textContent + " »");
+  btn().click();
+  assert(btn().classes().has("is-anon") && t.doc.getElementById("composer-who").textContent === "Anonyme", "après la bascule : " + btn().className);
+  t.ctx.UI.force();
+  assert(btn().classes().has("is-anon"), "l'état tient au rendu suivant");
 });
 
 check("écriture anonyme : le champ, le composeur et l'envoi portent un repère qui n'est pas la teinte seule", () => {
@@ -1202,19 +1200,17 @@ check("glisser une bulle vers la droite active la citation et met le focus dans 
   assert(t.app().querySelector(".quote-preview"), "l'aperçu « En réponse à » n'apparaît pas");
 });
 
-check("feuille d'un message : « Copier le texte » ; indice des gestes affiché une fois, « Compris » le retire pour de bon", () => {
+check("feuille d'un message : « Copier le texte » ; le mode d'emploi des gestes est dans les détails du sujet, plus au-dessus du fil", () => {
   const t = boot();
   t.go(topicRoute("t1"));
   bubble(t, "m1").click();
   const labels = dialog(t).querySelectorAll(".sheet-actions button").map((b) => b.textContent);
   assert(labels.includes("Copier le texte") && labels.includes("Citer"), "actions : " + JSON.stringify(labels));
   t.escape();
-  const hint = () => t.app().querySelector(".gesture-hint");
-  assert(hint() && /Appui long/.test(hint().textContent) && /droite/.test(hint().textContent), "indice des gestes absent ou incomplet");
-  t.app().querySelector('[data-key="gesture-hint-ok"]').click();
-  assert(!hint(), "« Compris » n'a pas retiré l'indice");
-  t.go(topicRoute("t1"));
-  assert(!hint(), "l'indice revient après un nouveau rendu");
+  assert(!t.app().querySelector(".gesture-hint"), "plus de bandeau d'aide au-dessus du fil");
+  t.ctx.UI.set({ sheet: { type: "topicInfo", topicId: "t1" } });
+  const help = dialog(t).querySelector('[data-key="gesture-help"]');
+  assert(help && /Appui long/.test(help.textContent) && /droite/.test(help.textContent), "mode d'emploi des gestes absent des détails");
 });
 
 /* ============================================================ BL-011 ==== */

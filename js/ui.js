@@ -831,8 +831,7 @@
         style: { padding: "0", textAlign: "left", width: "100%", minHeight: "auto", background: "transparent", border: "0", cursor: "pointer" },
         "data-key": "topic-info", "aria-describedby": "topic-info-description", onclick: options.onTitle
       }, [
-        el("div", { class: "topbar-title", text: options.title }),
-        el("div", { class: "topbar-sub" }, [el("span", { text: options.sub || "" }), icon("info", 13)])
+        el("div", { class: "topbar-title topbar-title-action" }, [el("span", { text: options.title }), icon("down", 14)])
       ]);
       titles.appendChild(titleBtn);
     } else {
@@ -1758,19 +1757,6 @@
     document.addEventListener("click", onClickAfterLongPress, true);
   }
 
-  /* Indice affiché une seule fois : un geste invisible ne se devine pas. Retenu sur l'appareil, rien d'identitaire. */
-  var GESTURE_HINT_KEY = "brainsto.hint.gestures.v1";
-
-  function gestureHint() {
-    if (Utils.storage.get(GESTURE_HINT_KEY, false) === true) { return null; }
-    return el("div", { class: "note gesture-hint" }, [
-      icon("info", 14),
-      el("span", { class: "note-body", text: "Appui long sur un message : réagir, citer, explorer l'idée, modifier. Glissez-le vers la droite pour le citer." }),
-      el("button", { class: "btn btn-sm btn-ghost", type: "button", text: "Compris", "data-key": "gesture-hint-ok",
-        onclick: function () { Utils.storage.set(GESTURE_HINT_KEY, true); UI.force(); } })
-    ]);
-  }
-
   function messageRow(topic, message, previous) {
     /* Deux notions distinctes, à ne pas confondre :
      *   `owns`  — mes droits sur le message (modifier, signer / anonymiser) ;
@@ -1833,10 +1819,15 @@
       el("span", { class: "visually-hidden", text: (mine ? "Vous" : message.authorName) + ". " }),
       message.quoteId ? quoteBlock(topic, message) : null,
       el("div", { class: "bubble-text", text: message.text }),
-      el("div", { class: "bubble-meta" }, [
-        el("span", { text: metaBits.join(" · ") }),
-        locked ? icon("lock", 12) : null
-      ]),
+      /* Épure : l'heure n'est plus posée sur chaque bulle (elle est dans la feuille du message, à l'appui long, et
+       * reste lue au lecteur d'écran). Ne s'affichent que les états qui changent la lecture : « envoi… », « modifié ». */
+      sending || metaBits.length > 1 || locked
+        ? el("div", { class: "bubble-meta" }, [
+          sending || metaBits.length > 1 ? el("span", { text: sending ? "envoi…" : "modifié" }) : null,
+          locked ? icon("lock", 12) : null
+        ])
+        : null,
+      sending ? null : el("span", { class: "visually-hidden", text: ", " + metaBits[0] }),
       locked ? el("span", { class: "visually-hidden", text: ", verrouillé" }) : null,
       el("span", { class: "visually-hidden", text: ". Actions du message." })
     ]);
@@ -2055,21 +2046,26 @@
       sendBtn.appendChild(el("span", { class: "send-mark", "aria-hidden": "true" }, [icon("mask", 11)]));
     }
 
-    parts.push(signatureRow({
-      anon: anon, key: "composer-anon", whoId: "composer-who",
-      whoText: anon ? "Anonyme" : "Signé : " + (App.user.name || "moi"),
-      onToggle: function () {
+    /* Bascule signé / anonyme : un bouton masque dans la ligne d'écriture, comme les boutons d'outil d'une messagerie
+     * IA. Plus de ligne « Signé : … » au-dessus du champ : l'état se lit dans le champ (masque, tirets, « Message
+     * anonyme… ») et sur l'envoi, là où le regard est pendant la frappe. Libellé stable, état porté par aria-checked. */
+    var anonBtn = el("button", {
+      class: "anon-btn" + (anon ? " is-anon" : ""), type: "button", role: "switch", "aria-checked": anon ? "true" : "false",
+      "aria-label": "Publier en anonyme", "data-key": "composer-anon", "aria-describedby": "composer-who",
+      onmousedown: keepTypingFocus,
+      onclick: function () {
         var next = !UI.local.composerAnon;
         dismissNote(draftKey);
         /* Geste explicite : le choix du brouillon suit (sinon un rechargement le rétablirait ou le perdrait). */
         if (composerDrafts[draftKey]) { stageDraft(draftKey, composerDrafts[draftKey], next); }
         UI.set({ composerAnon: next });
       }
-    }));
+    }, [icon("mask", 20), el("span", { class: "visually-hidden", id: "composer-who", text: anon ? "Anonyme" : "Signé : " + (App.user.name || "moi") })]);
 
     /* Le champ est enveloppé pour porter son repère à côté de lui (frère du <textarea>) : le champ garde sa clé de
      * brouillon et son rôle, et l'icône ne reçoit ni focus ni saisie (aria-hidden, pointer-events: none). */
     parts.push(el("div", { class: "composer-inner" }, [
+      anonBtn,
       el("div", { class: "composer-field" }, [
         textarea,
         anon ? el("span", { class: "field-mark", "aria-hidden": "true" }, [icon("mask", 16)]) : null
@@ -2105,7 +2101,6 @@
     return el("div", { class: "screen chat" }, [
       topbar({
         title: topic.title,
-        sub: Core.TOPIC_STATUS_LABELS[topic.status],
         back: App.remonter,
         backLabel: "Sujets",
         onTitle: function () { UI.set({ sheet: { type: "topicInfo", topicId: topic.id } }); },
@@ -2129,7 +2124,6 @@
           topic.conclusions.length ? el("span", { class: "badge tone-neutral", text: String(topic.conclusions.length) }) : null
         ])
       ]),
-      main.length ? gestureHint() : null,
       thread,
       composer(topic, null)
     ]);
@@ -3172,12 +3166,14 @@
       ]),
       topic.description
         ? el("div", { class: "pre-wrap", style: { fontSize: "var(--fs-sm)" }, text: topic.description })
-        : el("div", { class: "hint", text: "Aucune description." }),
+        : null,
       field("Statut", selectWrap(statusSelect, true)),
       pinControl(topic),
       el("button", { class: "btn btn-outline btn-block", type: "button",
         onclick: function () { UI.set({ sheet: null, modal: { type: "editTopic", topicId: topic.id } }); } },
-      [icon("edit", 16), el("span", { text: "Modifier le sujet" })])
+      [icon("edit", 16), el("span", { text: "Modifier le sujet" })]),
+      /* Le mode d'emploi des bulles vit ici, à la demande, et plus au-dessus du fil. */
+      el("p", { class: "hint", "data-key": "gesture-help", text: "Appui long sur un message : réagir, citer, explorer l'idée, modifier. Glissez-le vers la droite pour le citer." })
     ]));
   }
 

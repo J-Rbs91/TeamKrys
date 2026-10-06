@@ -1968,6 +1968,25 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 /* ============================================================ Composeur ==== */
 
+/* Bascule signé / anonyme, dans la ligne d'écriture (épure : plus de ligne « Signé : … » au-dessus). Discrète en
+   signé ; en anonyme, elle prend l'encre pleine — l'état se lit aussi dans le champ (tirets, masque, indication). */
+.anon-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) linear, color var(--dur-fast) linear;
+}
+.anon-btn:active { background: var(--surface-sunken); }
+.anon-btn.is-anon { background: var(--ink); color: var(--on-ink); }
+
 .composer {
   position: sticky;
   bottom: 0;
@@ -1979,7 +1998,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   border-top: 1px solid var(--glass-line);
 }
 
-.composer-inner { max-width: var(--measure); margin: 0 auto; display: flex; align-items: flex-end; gap: 9px; }
+.composer-inner { max-width: var(--measure); margin: 0 auto; display: flex; align-items: flex-end; gap: 6px; }
 
 .composer .textarea {
   min-height: var(--tap);
@@ -2948,3 +2967,8 @@ html.has-layer body { overflow: hidden; }
   .topics-grid > .hint,
   .topics-grid > .empty { grid-column: 1 / -1; }
 }
+
+/* Titre d'un sujet : il ouvre la feuille de détails. Un chevron le dit, sans mot ni sous-titre. */
+.topbar-title-action { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.topbar-title-action > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.topbar-title-action > .icon { color: var(--muted); }
