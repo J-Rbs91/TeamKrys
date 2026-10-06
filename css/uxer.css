@@ -45,9 +45,10 @@
   flex: 1 1 0%;
   min-height: var(--tap);
   padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-soft);
+  /* Contrôle segmenté à la façon iOS : pas de contour, l'étape courante est un aplat. */
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: var(--fs-xs);
@@ -67,9 +68,8 @@
 }
 
 .ux-flow-step.is-current {
-  border-color: var(--accord);
-  background: var(--accord-bg);
-  color: var(--accord);
+  background: var(--fill-press);
+  color: var(--text);
 }
 
 /* Le trait de l'étape courante est un ÉLÉMENT (posé par js/uxer-ui.js), et non plus une ombre interne : pendant un
@@ -84,6 +84,8 @@
   border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) / 0 0 2px 2px;
   background: var(--accord);
   pointer-events: none;
+  /* Gardé pour View Transitions, mais invisible : l'aplat de l'étape suffit (douceur). */
+  opacity: 0;
 }
 
 .ux-flow-step .icon { flex: 0 0 auto; }
@@ -108,14 +110,13 @@
 }
 
 .ux-flow-step.is-current .ux-flow-count {
-  background: var(--surface);
-  color: var(--accord);
+  background: var(--fill);
+  color: var(--text);
 }
 
 /* ============================================= Signifiants persistants ==== */
 
 .ux-topic-card {
-  border-color: var(--line-strong);
   transition:
     border-color var(--dur-fast) linear,
     box-shadow var(--dur-base) var(--ease-out),
@@ -200,18 +201,8 @@
     background var(--dur-base) var(--ease-out);
 }
 
-.ux-proposal-card.ux-has-my-vote {
-  box-shadow: inset 3px 0 0 var(--accord), var(--shadow-card);
-}
-
-.ux-choice-selected {
-  border-color: var(--accord);
-  box-shadow: inset 3px 0 0 var(--accord), var(--shadow-card);
-}
-
-.ux-pressed {
-  border-color: var(--accord) !important;
-}
+/* Plus de liseré ni de contour d'accent sur la carte ou le bouton choisis : le bouton plein (« Pour », « Mon
+   choix ») dit déjà le choix. Une seule marque, douce. */
 
 /* ========================================================== Micro-états ==== */
 
@@ -220,13 +211,7 @@
    la propriété oubliée cesse de s'animer sans que personne l'ait décidé. */
 
 @media (hover: hover) and (pointer: fine) {
-  .ux-flow-step:not(:disabled):hover,
-  .ux-topic-card:hover {
-    border-color: var(--accord);
-  }
-
-  .ux-flow-step:not(:disabled):hover { background: var(--accord-bg); color: var(--accord); }
-  .ux-topic-card:hover { box-shadow: var(--shadow-1); }
+  .ux-flow-step:not(:disabled):hover { background: var(--fill); color: var(--text); }
   .ux-topic-card:hover .ux-card-action .icon { transform: translateX(2px); }
   .ux-topic-title-action:hover { background: var(--surface-soft) !important; }
   .bubble:hover { box-shadow: 0 0 0 1px var(--line-strong); }

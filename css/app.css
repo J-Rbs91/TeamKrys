@@ -223,7 +223,12 @@
   --shadow-1: 0 1px 2px rgba(33, 29, 24, 0.06), 0 1px 1px rgba(33, 29, 24, 0.04);
   --shadow-2: 0 8px 24px rgba(33, 29, 24, 0.12), 0 2px 6px rgba(33, 29, 24, 0.06);
   --shadow-card: var(--shadow-1);
-  --shadow-cta: 0 1px 2px rgba(33, 29, 24, 0.12);
+  --shadow-cta: none;
+  /* Élévation douce du seul élément qui flotte au-dessus du contenu (bouton « Nouveau sujet »). */
+  --shadow-float: 0 4px 16px rgba(33, 29, 24, 0.14);
+  /* Aplats des commandes secondaires, à la façon iOS : un voile de l'encre, sans contour ni ombre. */
+  --fill: rgba(33, 29, 24, 0.06);
+  --fill-press: rgba(33, 29, 24, 0.11);
   --scrim: rgba(18, 16, 13, 0.44);
 
   /* — Flou ------------------------------------------------------------ */
@@ -430,7 +435,10 @@
        luminance entre `--surface` et `--canvas`, doublé du liseré clair. */
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
-    --shadow-cta: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-cta: none;
+    --shadow-float: 0 6px 20px rgba(0, 0, 0, 0.4);
+    --fill: rgba(238, 234, 227, 0.08);
+    --fill-press: rgba(238, 234, 227, 0.14);
     --scrim: rgba(6, 5, 4, 0.66);
   }
 }
@@ -746,9 +754,11 @@ p { margin: 0; }
   gap: 8px;
   min-height: var(--tap);
   padding: 0 20px;
-  border: 1px solid var(--line-field);
-  border-radius: var(--radius);
-  background: var(--surface);
+  /* Douceur « Apple » : ni contour ni ombre. Le bouton se lit à son aplat et à son libellé (le bord transparent
+     garde la même géométrie que les états qui en ont besoin, et reste visible en contraste élevé). */
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--fill);
   color: var(--text);
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -768,30 +778,30 @@ p { margin: 0; }
    plus qu'on lui prêtait. Sans l'enfoncement, l'interface paraissait ne pas
    avoir entendu sur les commandes compactes, où le changement de fond est
    presque invisible sous le doigt. */
-.btn:active { background: var(--surface-sunken); }
+.btn:active { background: var(--fill-press); }
 /* L'état désactivé est celui qu'on affaiblit sans y penser. 0,4 d'opacité
    mettait le libellé à 2,4:1 — sous le seuil, alors qu'un bouton désactivé
    doit rester lisible pour qu'on comprenne ce qui est indisponible. */
-.btn:disabled { opacity: 1; color: var(--faint); background: var(--surface-sunken); border-color: var(--line); cursor: default; }
+.btn:disabled { opacity: 1; color: var(--faint); background: var(--fill); border-color: transparent; cursor: default; }
 
 /* L'action principale est la première dépense d'accent. Une seule par écran. */
 .btn-primary {
   background: var(--accord-surface);
   color: var(--on-accord);
   border-color: transparent;
-  box-shadow: var(--shadow-cta);
 }
 
 .btn-primary:not(:disabled):hover { background: var(--accord-surface-hover); }
 .btn-primary:not(:disabled):active { background: var(--accord-surface-hover); }
-.btn-primary:disabled { background: var(--surface-sunken); color: var(--faint); }
+.btn-primary:disabled { background: var(--fill); color: var(--faint); }
 
+/* Ancien bouton « à contour » : devenu un aplat discret, comme tout bouton secondaire. */
 .btn-outline {
-  background: transparent;
-  border-color: var(--line-field);
+  background: var(--fill);
+  border-color: transparent;
 }
 
-.btn-outline:not(:disabled):hover { background: var(--surface-soft); }
+.btn-outline:not(:disabled):hover { background: var(--fill-press); }
 
 .btn-ghost {
   background: transparent;
@@ -801,7 +811,7 @@ p { margin: 0; }
   border-color: transparent;
 }
 
-.btn-ghost:not(:disabled):hover { color: var(--text); background: var(--surface-soft); }
+.btn-ghost:not(:disabled):hover { color: var(--text); background: var(--fill); }
 
 .btn-danger {
   background: var(--danger-bg);
@@ -814,6 +824,7 @@ p { margin: 0; }
 .btn-sm {
   min-height: 36px;
   padding: 0 14px;
+  border-radius: 10px;
   font-size: var(--fs-xs);
   gap: 6px;
 }
@@ -890,7 +901,7 @@ p { margin: 0; }
      contenu qui défile : il garde donc l'élévation de niveau 2, et il est le
      seul à la porter en permanence. Le halo lumineux, lui, est parti — il
      n'indiquait aucun empilement, il faisait joli. */
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-float);
   transition: background var(--dur-fast) linear;
 }
 
@@ -1026,12 +1037,13 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   width: 100%;
   text-align: left;
   padding: 14px 16px;
-  border: 1px solid var(--line);
+  /* Un liseré à peine visible, sans ombre : la carte se détache par sa surface, pas par un relief. */
+  border: 1px solid var(--glass-line);
   border-radius: var(--radius-card);
   background: var(--surface);
   color: inherit;
   cursor: pointer;
-  box-shadow: var(--shadow-1);
+  box-shadow: none;
   transition:
     border-color var(--dur-fast) linear,
     background var(--dur-fast) linear;
@@ -1041,7 +1053,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
    au-dessus de ses voisines parce qu'on la pointe : elle est désignée. Le
    déplacement de 2 px décalait aussi la ligne suivante du regard, sur une
    liste qu'on parcourt de haut en bas. */
-.card:not(.card-static):hover { border-color: var(--line-strong); background: var(--surface-soft); }
+.card:not(.card-static):hover { background: var(--surface-soft); }
 .card:not(.card-static):active { background: var(--surface-sunken); }
 
 .card-static { cursor: default; }
@@ -2035,12 +2047,11 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   background: var(--accord-surface);
   color: var(--on-accord);
   cursor: pointer;
-  box-shadow: var(--shadow-cta);
   transition: background var(--dur-fast) linear;
 }
 
 .send-btn:active { background: var(--accord-surface-hover); }
-.send-btn:disabled { background: var(--surface-sunken); color: var(--faint); box-shadow: none; }
+.send-btn:disabled { background: var(--fill); color: var(--faint); }
 
 /* Le champ est enveloppé pour porter son repère d'anonymat (frère du <textarea>, voir js/ui.js). */
 .composer-field { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
@@ -2167,7 +2178,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .sig-switch:focus-visible { border-radius: var(--radius-chip); }
 
 /* Piste 44 × 26 (bord compris), bouton 18 px, 2 px de jeu : course = 44 − 2 × 2 (bord) − 2 × 2 (jeu) − 18 = 18 px.
-   Éteint : piste claire au bord `--line-field` (3:1 sur la ligne) et bouton `--muted` (couples texte mesurés).
+   Éteint : piste en aplat, sans contour, et bouton `--muted` (couples texte mesurés) qui porte l'état.
    Allumé : piste encrée, bouton papier — le couple `--on-ink` / `--ink` des bulles à soi. */
 .sig-track {
   --sw-travel: 18px;
@@ -2176,9 +2187,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   box-sizing: border-box;
   width: 44px;
   height: 26px;
-  border: 2px solid var(--line-field);
+  /* Comme un interrupteur iOS : éteint, une piste en aplat sans contour ; le bouton (--muted) porte l'état. */
+  border: 2px solid transparent;
   border-radius: var(--radius-chip);
-  background: var(--surface);
+  background: var(--fill-press);
 }
 
 .sig-thumb {
@@ -2205,7 +2217,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
    final est simplement là. */
 @keyframes sig-thumb-on { from { transform: translateX(0); background: var(--muted); color: var(--surface); } }
 @keyframes sig-thumb-off { from { transform: translateX(var(--sw-travel)); background: var(--on-ink); color: var(--ink); } }
-@keyframes sig-track-on { from { border-color: var(--line-field); background: var(--surface); } }
+@keyframes sig-track-on { from { border-color: transparent; background: var(--fill-press); } }
 @keyframes sig-track-off { from { border-color: var(--ink); background: var(--ink); } }
 @keyframes sig-name-up { from { opacity: 0; transform: translateY(8px); } }
 @keyframes sig-name-down { from { opacity: 0; transform: translateY(-8px); } }
@@ -2788,7 +2800,7 @@ html.has-layer body { overflow: hidden; }
 .vote-actions .btn.active { border-color: transparent; font-weight: 700; }
 .vote-actions .btn.active[data-vote="for"] { background: var(--accord-surface); color: var(--on-accord); }
 .vote-actions .btn.active[data-vote="against"] { background: var(--voix-strong); color: var(--on-voix); }
-.vote-actions .btn.active[data-vote="abstain"] { background: var(--n-200); color: var(--text); border-color: var(--line-field); }
+.vote-actions .btn.active[data-vote="abstain"] { background: var(--fill-press); color: var(--text); }
 
 .pre-wrap { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
 
@@ -2797,9 +2809,8 @@ html.has-layer body { overflow: hidden; }
 /* Conclusion en tête : liseré d'accent à gauche, la carte se distingue sans
    crier. Liseré INTERNE plutôt qu'un `border-left` : sur un coin arrondi, une
    bordure latérale déborde en croissant et ressemble à un défaut de rendu. */
-.card.is-lead {
-  box-shadow: inset 3px 0 0 var(--accord), var(--shadow-1);
-}
+/* Plus de liseré : le badge « En tête » suffit (douceur). */
+.card.is-lead { box-shadow: none; }
 
 /* ============================================================== Réunion ==== */
 
@@ -2813,7 +2824,7 @@ html.has-layer body { overflow: hidden; }
   border: 1px solid var(--glass-line);
   border-radius: var(--radius-card);
   background: var(--surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .print-h1 { font-size: var(--display); letter-spacing: -0.035em; margin-bottom: 6px; }
