@@ -682,7 +682,7 @@ check("BL-029 accueil, cartes, noms accessibles et toasts du consensus : jamais 
   const names = t.app().querySelectorAll("button").map((b) => b.getAttribute("aria-label")).filter(Boolean);
   assert(names.includes("Modifier la formulation du consensus") && names.includes("Supprimer la formulation du consensus"),
     "noms accessibles : " + JSON.stringify(names));
-  const add = t.app().querySelectorAll("button").find((b) => b.textContent === "Ajouter");
+  const add = t.app().querySelector('[data-key="conclusion-add"]');
   assert(add, "bouton « Ajouter » introuvable");
   add.click();
   t.set({ modal: { type: "editConclusion", topicId: "t3", conclusionId: "c1" } });

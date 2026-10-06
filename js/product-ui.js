@@ -221,7 +221,7 @@
        * complément ne sert que si elle manque, et ne compose aucun texte lui-même. */
       var reading = ProductView.voteReading(proposal, state.participants || []);
       var legend = card.querySelector(".vote-legend");
-      if (legend && reading.participation && !legend.querySelector(".product-participation")) {
+      if (legend && reading.participation && !card.querySelector(".product-participation")) {
         var chip = document.createElement("span");
         chip.className = "legend-chip product-participation";
         chip.textContent = reading.participation;

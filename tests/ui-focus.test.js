@@ -872,7 +872,7 @@ check("propositions : statut, Modifier et Retirer mon vote repliés sous « Stat
   const more = () => t.app().querySelector("details.proposal-more");
   assert(more() && !more().hasAttribute("open"), "le volet doit être replié par défaut");
   assert(more().querySelector("select") && more().querySelector('[data-key="vote-p1-remove"]'), "statut et retrait du vote dans le volet");
-  assert(more().querySelector("summary").textContent === "Statut et actions", "libellé du volet");
+  assert(more().querySelector("summary .visually-hidden").textContent === "Statut et actions", "libellé du volet");
   assert(!t.app().querySelector(".vote-actions").closest("details"), "les boutons de vote restent visibles, hors du volet");
   const d = more();
   d.open = true;

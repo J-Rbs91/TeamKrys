@@ -1230,7 +1230,9 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .proposal-card { gap: 10px; }
 .proposal-card .vote-legend { gap: 2px 12px; margin-top: 8px; }
 .proposal-card .vote-legend .legend-chip { background: transparent; padding: 0; font-size: var(--fs-xs); }
-.proposal-more { border-top: 1px solid var(--line); padding-top: 4px; }
+.proposal-more { padding-top: 0; }
+.proposal-more-dots { letter-spacing: 2px; font-size: var(--fs-xs); }
+.proposal-facts { display: grid; gap: 2px; margin-top: 2px; }
 .proposal-more-summary {
   list-style: none;
   display: flex;
@@ -1248,6 +1250,8 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .proposal-more[open] > .proposal-more-summary .icon { transform: rotate(180deg); }
 .proposal-more-summary:focus-visible { outline: 2px solid var(--accord); outline-offset: 2px; }
 .proposal-more > .card-foot { margin-top: 4px; padding-top: 0; border-top: 0; }
+/* Le volet s'ouvre par « ••• », discret, à droite : le statut et les actions rares ne concurrencent pas le vote. */
+.proposal-card .proposal-more-summary { justify-content: flex-end; color: var(--muted); min-height: 32px; }
 @media (prefers-reduced-motion: reduce) { .proposal-more-summary .icon { transition: none; } }
 @media print { .proposal-more { display: none; } }
 .diag-more { border-top: 1px solid var(--line); padding-top: 4px; }
@@ -1335,10 +1339,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .pandore-point { display: grid; gap: 2px; }
 .pandore-point-title { font-size: var(--fs-body); font-weight: 650; letter-spacing: -0.011em; overflow-wrap: anywhere; }
 
-/* Pandore : composeur à la façon d'une messagerie IA. Une seule boîte arrondie, le champ sans bord propre,
+/* Composeur en ligne (Pandore, ajout d'un consensus), à la façon d'une messagerie IA. Une seule boîte arrondie, le champ sans bord propre,
    l'envoi rond dans le coin bas-droit. Le bord de la boîte porte le repère du champ (`--line-field`, 3:1). */
 .pandore-deposit { display: grid; gap: 8px; }
-.pandore-composer {
+.inline-composer {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line-field);
@@ -1348,8 +1352,8 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   transition: border-color var(--dur-fast) linear, box-shadow var(--dur-base) var(--ease-out);
 }
 /* L'anneau du champ passe sur la boîte entière : c'est elle que l'œil lit comme le champ. */
-.pandore-composer:focus-within { border-color: var(--accord); box-shadow: 0 0 0 3px var(--accord-bg); }
-.pandore-composer .textarea {
+.inline-composer:focus-within { border-color: var(--accord); box-shadow: 0 0 0 3px var(--accord-bg); }
+.inline-composer .textarea {
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -1360,10 +1364,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   /* 16 px minimum : en dessous, iOS zoome au focus (voir .composer .textarea). */
   font-size: var(--fs-body);
 }
-.pandore-composer .textarea:focus { outline: none; box-shadow: none; background: transparent; }
-.pandore-composer .field-error { padding: 0 10px; }
-.pandore-composer-bar { display: flex; align-items: center; gap: 8px; padding-left: 10px; }
-.pandore-composer .counter { margin: 0; }
+.inline-composer .textarea:focus { outline: none; box-shadow: none; background: transparent; }
+.inline-composer .field-error { padding: 0 10px; }
+.inline-composer-bar { display: flex; align-items: center; gap: 8px; padding-left: 10px; }
+.inline-composer .counter { margin: 0; }
 .pandore-notice {
   display: flex;
   gap: 6px;

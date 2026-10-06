@@ -2249,9 +2249,14 @@
     var legend = el("div", { class: "vote-legend" }, [
       el("span", { class: "legend-chip legend-for" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[0] })]),
       el("span", { class: "legend-chip legend-against" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[1] })]),
-      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[2] })]),
-      reading.favorable ? el("span", { class: "legend-chip", text: reading.favorable }) : null,
-      reading.participation ? el("span", { class: "legend-chip product-participation", text: reading.participation }) : null
+      el("span", { class: "legend-chip legend-abstain" }, [el("span", { class: "swatch" }), el("span", { text: reading.positions[2] })])
+    ]);
+    /* Épure : le pourcentage favorable, la participation, l'auteur et la date ne servent pas à voter. Ils vivent
+     * dans le volet « ⋯ », avec le statut et les actions rares. */
+    var details = el("div", { class: "hint proposal-facts" }, [
+      reading.favorable ? el("div", { text: reading.favorable }) : null,
+      reading.participation ? el("div", { class: "product-participation", text: reading.participation }) : null,
+      el("div", { text: "Proposée par " + proposal.authorName + (Utils.formatDateTime(proposal.createdAt) ? ", le " + Utils.formatDateTime(proposal.createdAt) : "") })
     ]);
 
     /* Statut, « Modifier » et « Retirer mon vote » se replient sous « Statut et actions » (refonte B) : on vote
@@ -2264,22 +2269,18 @@
       /* Un identifiant, pas une clé de repère : le focus posé ici survit au rendu (keyOf lit l'id), sans que le
        * volet devienne l'ancre de repli de « Retirer mon vote » (BL-012 : le focus revient au dernier vote). */
       el("summary", { class: "proposal-more-summary", id: "proposal-" + proposal.id + "-more" }, [
-        el("span", { text: "Statut et actions" }), icon("down", 15)
+        el("span", { class: "visually-hidden", text: "Statut et actions" }),
+        el("span", { class: "proposal-more-dots", "aria-hidden": "true", text: "•••" })
       ])
     ]);
 
     return el("article", { class: "card card-static stack proposal-card", "data-motion-key": "p:" + proposal.id }, [
       el("div", { class: "row", style: { alignItems: "flex-start", gap: "10px" } }, [
         el("div", { class: "card-title", style: { flex: "1" }, text: proposal.title }),
-        toneBadge(Core.PROPOSAL_STATUS_LABELS[proposal.status], PROPOSAL_TONES[proposal.status])
+        /* « En vote » est l'état normal : il ne se signale pas. Les autres états changent la lecture. */
+        proposal.status !== "voting" ? toneBadge(Core.PROPOSAL_STATUS_LABELS[proposal.status], PROPOSAL_TONES[proposal.status]) : null
       ]),
       proposal.description ? el("div", { class: "pre-wrap", style: { fontSize: "14px", color: "var(--muted)" }, text: proposal.description }) : null,
-      el("div", { class: "card-meta" }, [
-        icon("user", 13),
-        el("span", { text: proposal.authorName }),
-        el("span", { class: "meta-dot" }),
-        el("span", { text: Utils.formatDateTime(proposal.createdAt) })
-      ]),
       el("div", {}, [
         el("div", { class: "vote-bar", role: "img", "aria-label": reading.aria }, [
           el("span", { class: "vote-for", style: { width: (summary.counts.for / total * 100) + "%" } }),
@@ -2289,7 +2290,7 @@
         legend
       ]),
       voteButtons,
-      Utils.append(more, el("div", { class: "card-foot row-wrap" }, [
+      Utils.append(more, [details, el("div", { class: "card-foot row-wrap" }, [
         myVote ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "data-key": "vote-" + proposal.id + "-remove",
           onclick: function () { App.actions.removeVote(topic.id, proposal.id); } },
         [icon("close", 15), el("span", { text: "Retirer mon vote" })]) : null,
@@ -2300,7 +2301,7 @@
           : null,
         el("div", { class: "spacer" }),
         selectWrap(statusSelect)
-      ]))
+      ])])
     ]);
   }
 
@@ -2364,20 +2365,14 @@
           el("div", { class: "pre-wrap", style: { flex: "1" }, text: conclusion.text }),
           isLead ? el("span", { class: "badge badge-ink lead" }, [icon("star", 13), el("span", { text: "En tête" })]) : null
         ]),
-        el("div", { class: "card-meta" }, [
-          icon("user", 13),
-          el("span", { text: conclusion.authorName }),
-          el("span", { class: "meta-dot" }),
-          el("span", { text: Utils.formatDateTime(conclusion.createdAt) }),
-          el("span", { class: "meta-dot" }),
-          el("span", { text: Utils.plural(count, "vote", "votes") })
-        ]),
+        /* Épure : ni auteur ni date. Le décompte ne paraît que s'il y a des votes ; « En tête » dit le reste. */
         el("div", { class: "card-foot row-wrap" }, [
           el("button", {
             class: "btn btn-sm " + (chosen ? "btn-primary" : "btn-outline"), type: "button",
             "aria-pressed": chosen ? "true" : "false",
             "data-key": "conclusion-" + conclusion.id + "-choose", onclick: function () { App.actions.setConclusionVote(topic.id, conclusion.id); }
           }, [icon("check", 15), el("span", { text: chosen ? "Mon choix" : "Choisir" })]),
+          count ? el("span", { class: "hint", text: Utils.plural(count, "vote", "votes") }) : null,
           el("div", { class: "spacer" }),
           mine ? el("button", { class: "btn btn-sm btn-ghost", type: "button", "aria-label": "Modifier la formulation du consensus",
             "data-key": "conclusion-" + conclusion.id + "-edit", onclick: function () { UI.set({ modal: { type: "editConclusion", topicId: topic.id, conclusionId: conclusion.id } }); } },
@@ -2391,37 +2386,32 @@
 
     if (!topic.conclusions.length) {
       list.appendChild(emptyState("checkCircle", "Pas encore de conclusion",
-        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée.",
-        null,
-        "Ensuite : la conclusion retenue part dans la synthèse de réunion."));
+        "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée."));
     }
 
     var textarea = bindCounter(el("textarea", {
-      class: "textarea", placeholder: "Nouvelle conclusion…", maxlength: Core.LIMITS.conclusion,
+      class: "textarea", placeholder: "Nouvelle conclusion…", maxlength: Core.LIMITS.conclusion, rows: "2",
       "aria-label": "Nouvelle formulation du consensus", "aria-required": "true",
       "data-draft": "conclusion:" + topic.id
     }), "conclusion:" + topic.id, Core.LIMITS.conclusion);
 
-    var addBlock = el("div", { class: "card card-static stack" }, [
-      sectionTitle("edit", "Ajouter une conclusion"),
+    /* Ajout : le même champ que Pandore, l'envoi dans son coin. Plus de carte, de surtitre ni de bandeau « Choix
+     * unique » : « Choisir » / « Mon choix » le disent en un geste. */
+    var addBlock = el("div", { class: "inline-composer" }, [
       textarea,
-      counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
-      el("button", {
-        class: "btn btn-primary btn-block", type: "button", text: "Ajouter", "data-key": "conclusion-add",
-        onclick: function () {
-          var text = Utils.trim(textarea.value);
-          if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
-          textarea.value = "";
-          App.actions.addConclusion(topic.id, text);
-        }
-      })
-    ]);
-
-    var myVoteHint = el("div", { class: "note" }, [
-      icon("info", 14),
-      el("span", { text: myVote
-        ? "Vous avez choisi une conclusion. Choisir une autre déplace votre vote."
-        : "Choix unique : une seule conclusion par personne." })
+      el("div", { class: "inline-composer-bar" }, [
+        counterFor("conclusion:" + topic.id, Core.LIMITS.conclusion),
+        el("div", { class: "spacer" }),
+        el("button", {
+          class: "send-btn", type: "button", "aria-label": "Ajouter", "data-key": "conclusion-add",
+          onclick: function () {
+            var text = Utils.trim(textarea.value);
+            if (!text) { invalid(textarea, "La formulation du consensus est vide."); return; }
+            textarea.value = "";
+            App.actions.addConclusion(topic.id, text);
+          }
+        }, [icon("send", 20)])
+      ])
     ]);
 
     return el("div", { class: "screen" }, [
@@ -2432,7 +2422,7 @@
         backLabel: "Discussion",
         actions: [statusPill()]
       }),
-      el("div", { class: "content stack-lg" }, [myVoteHint, list, el("hr", { class: "divider" }), addBlock])
+      el("div", { class: "content stack-lg" }, [list, addBlock])
     ]);
   }
 
@@ -2569,9 +2559,9 @@
     }
 
     var deposit = el("div", { class: "pandore-deposit" }, [
-      el("div", { class: "pandore-composer" }, [
+      el("div", { class: "inline-composer" }, [
         area,
-        el("div", { class: "pandore-composer-bar" }, [
+        el("div", { class: "inline-composer-bar" }, [
           counter,
           el("div", { class: "spacer" }),
           el("button", { class: "send-btn", type: "button", "aria-label": "Déposer anonymement", "data-key": "pandore-submit",

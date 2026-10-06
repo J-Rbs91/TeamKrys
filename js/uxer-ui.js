@@ -203,10 +203,7 @@
       card.classList.add("ux-proposal-card");
 
       var voteActions = card.querySelector(".vote-actions");
-      var previous = voteActions ? voteActions.previousElementSibling : null;
-      if (voteActions && !(previous && previous.classList && previous.classList.contains("ux-vote-label"))) {
-        voteActions.parentNode.insertBefore(make("div", "ux-vote-label", "Votre vote"), voteActions);
-      }
+      /* Plus de libellé « Votre vote » au-dessus des boutons : Pour / Contre / Abstention se lisent seuls (épure). */
       if (voteActions && voteActions.querySelector('[aria-pressed="true"]')) {
         card.classList.add("ux-has-my-vote");
       }
@@ -231,12 +228,8 @@
       if (cards[i].querySelector('[aria-pressed="true"]')) { cards[i].classList.add("ux-choice-selected"); }
     }
 
-    var textarea = document.querySelector('textarea[placeholder="Nouveau consensus…"], textarea[placeholder="Nouvelle conclusion…"]');
-    if (textarea) {
-      var block = textarea.closest ? textarea.closest(".card") : null;
-      var button = block ? block.querySelector(".btn-primary") : null;
-      if (button && button.textContent.trim() === "Ajouter") { button.textContent = "Ajouter le consensus"; }
-    }
+    var add = document.querySelector('[data-key="conclusion-add"]');
+    if (add && add.getAttribute("aria-label") === "Ajouter") { add.setAttribute("aria-label", "Ajouter le consensus"); }
   }
 
   function enhancePressedState() {
