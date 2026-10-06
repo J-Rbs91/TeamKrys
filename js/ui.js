@@ -3810,7 +3810,7 @@
       title: "Ce qui ne se dit pas en réunion",
       text: "Pandore n'est pas une discussion : c'est une zone d'expression libre et "
         + "anonyme. Une idée, une plainte, une question : déposez-la depuis l'onglet "
-        + "Pandore. Une IA en tire une synthèse que tous peuvent lire. Vous pourrez "
+        + "Pandore. Une synthèse, lisible par tous, regroupe ce qui en ressort. Vous pourrez "
         + "revoir cette présentation depuis les Réglages.",
       extra: "logo"
     }

@@ -104,6 +104,13 @@ check("la migration ne propose aucun panneau", () => {
 
 /* --------------------------------------------------------- Les segments --- */
 
+check("présentation de Pandore : aucune mention de l'IA", () => {
+  const ui = require("fs").readFileSync(path.join(__dirname, "..", "js/ui.js"), "utf8");
+  const start = ui.indexOf("    pandore: {", ui.indexOf("ONBOARD_TEXT"));
+  const block = ui.slice(start, ui.indexOf("}", start));
+  assert(start > 0 && /synthèse/.test(block) && !/\bIA\b|intelligence/i.test(block), "texte de présentation : " + block);
+});
+
 check("espace vide : les cinq parties, Pandore en dernier", () => {
   const plan = due(null, NEUF);
   assert(plan.segment === "full", "un espace vide relève du segment complet");
