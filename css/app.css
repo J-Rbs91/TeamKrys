@@ -229,6 +229,12 @@
   /* Aplats des commandes secondaires, à la façon iOS : un voile de l'encre, sans contour ni ombre. */
   --fill: rgba(33, 29, 24, 0.06);
   --fill-press: rgba(33, 29, 24, 0.11);
+  /* Surface PLEINE portée par une grande zone (bulle à soi, toast). En clair, l'encre ; en sombre, un gris élevé —
+     jamais un aplat presque blanc (voir le bloc sombre). */
+  --raised: var(--ink);
+  --raised-press: var(--n-800);
+  --on-raised: var(--on-ink);
+  --on-raised-soft: var(--on-ink-soft);
   --scrim: rgba(18, 16, 13, 0.44);
 
   /* — Flou ------------------------------------------------------------ */
@@ -439,6 +445,13 @@
     --shadow-float: 0 6px 20px rgba(0, 0, 0, 0.4);
     --fill: rgba(238, 234, 227, 0.08);
     --fill-press: rgba(238, 234, 227, 0.14);
+    /* Règles d'un vrai mode sombre : aucune grande surface claire (elle éblouit et écrase la hiérarchie) ; on
+       élève par paliers de gris, pas par inversion ; le texte reste clair sur gris. La bulle à soi et le toast
+       sont donc un gris élevé, à faible contraste avec le fond, et non l'encre presque blanche du clair. */
+    --raised: #38332c;
+    --raised-press: #433d35;
+    --on-raised: #eeeae3;
+    --on-raised-soft: #b3aa9c;
     --scrim: rgba(6, 5, 4, 0.66);
   }
 }
@@ -1708,7 +1721,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 /* Retour pendant l'appui long : la bulle se tasse sur toute la durée du geste, l'œil voit que quelque chose se
    prépare. Mouvement réduit : le fond change seul. */
 .bubble.is-pressing { background: var(--surface-sunken); }
-.msg-row.mine .bubble.is-pressing { background: var(--ink); }
+.msg-row.mine .bubble.is-pressing { background: var(--raised); }
 
 @media (prefers-reduced-motion: no-preference) {
   /* Progression LINÉAIRE sur toute la durée de l'appui long (450 ms, LONG_PRESS_MS) : c'est un geste qu'on tient,
@@ -1757,16 +1770,16 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
    L'information reste portée deux fois — remplissage ET alignement à droite —
    donc elle ne dépend ni de la couleur ni d'une seule dimension. */
 .msg-row.mine .bubble {
-  background: var(--ink);
+  background: var(--raised);
   border-color: transparent;
-  color: var(--on-ink);
+  color: var(--on-raised);
   border-bottom-right-radius: 4px;
 }
 
 .msg-row:not(.mine) .bubble { border-bottom-left-radius: 4px; }
 .msg-row.grouped .bubble { border-radius: 14px; }
 .bubble:active { background: var(--surface-sunken); }
-.msg-row.mine .bubble:active { background: var(--n-800); }
+.msg-row.mine .bubble:active { background: var(--raised-press); }
 
 /* En rem (BL-044) : 15,5 px et 10,5 px d'avant, identiques à la racine par défaut ; ils suivent
    maintenant le réglage de police de la personne, comme le reste du texte. */
@@ -1786,7 +1799,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 /* Sur une bulle d'encre, l'encre secondaire est un jeton dédié : `--faint`
    est calibré pour les fonds clairs et deviendrait illisible ici. */
-.msg-row.mine .bubble-meta { color: var(--on-ink-soft); }
+.msg-row.mine .bubble-meta { color: var(--on-raised-soft); }
 
 .quote {
   position: relative;
@@ -2450,8 +2463,8 @@ html.has-layer body { overflow: hidden; }
 .toast {
   padding: 11px 16px;
   border-radius: var(--radius);
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--raised);
+  color: var(--on-raised);
   font-size: var(--fs-sm);
   font-weight: 550;
   text-align: center;

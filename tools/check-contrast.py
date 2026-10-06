@@ -59,8 +59,9 @@ COUPLES = [
     # --- Encre posée sur un aplat ------------------------------------------
     ("--on-accord", "--accord-surface", TEXTE, "encre sur l'accord en aplat"),
     ("--on-accord-soft", "--accord-surface", TEXTE, "encre secondaire sur l'accord"),
-    ("--on-ink", "--ink", TEXTE, "encre sur une bulle à soi"),
-    ("--on-ink-soft", "--ink", TEXTE, "horodatage d'une bulle à soi"),
+    ("--on-raised", "--raised", TEXTE, "encre sur une bulle à soi et sur un toast"),
+    ("--on-raised-soft", "--raised", TEXTE, "« modifié », « envoi… » d'une bulle à soi"),
+    ("--on-raised", "--raised-press", TEXTE, "encre sur une bulle à soi pressée"),
     ("--on-danger", "--danger", TEXTE, "encre sur une action destructive"),
     ("--on-voix", "--voix-strong", TEXTE, "encre sur un « contre » exprimé"),
     ("--text", "--n-200", TEXTE, "encre sur une abstention exprimée"),
