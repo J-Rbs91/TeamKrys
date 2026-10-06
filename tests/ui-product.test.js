@@ -567,7 +567,7 @@ check("BL-064 : window.print absent (WebView) : message clair, aucune exception,
   const t = boot({ route: MEETING, print: "absent" });
   pressPrint(t);
   assert(t.toasts().textContent.indexOf(PRINT_MESSAGE) >= 0, "message attendu : « " + t.toasts().textContent + " »");
-  assert(t.app().textContent.indexOf("Synthèse imprimable") >= 0, "l'écran doit rester la synthèse");
+  assert(t.app().querySelector(".print-doc"), "l'écran doit rester la synthèse");
 });
 
 check("BL-064 : window.print qui lève : même message, aucune exception", () => {

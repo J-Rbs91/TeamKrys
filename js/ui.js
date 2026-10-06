@@ -64,17 +64,14 @@
     return node;
   }
 
-  /* `next` répond à « et ensuite ? ». Un état vide de PREMIER USAGE est le premier
-   * écran que voit un nouvel arrivant : dire quoi faire ne suffit pas, il faut dire
-   * où cela mène. C'est aussi ce qui permet à la présentation initiale de rester
-   * courte — le reste du cycle s'enseigne ici, au moment de l'usage. */
-  function emptyState(iconName, title, text, action, next) {
+  /* État vide : une icône, un titre, une phrase, au plus une action. Plus de ligne « Ensuite : … » (épure) : la
+   * présentation initiale enseigne le cycle, l'écran ne dit que quoi faire maintenant. */
+  function emptyState(iconName, title, text, action) {
     return el("div", { class: "empty" }, [
       el("div", { class: "empty-art" }, [icon(iconName, 32)]),
       el("div", { class: "empty-title", text: title }),
       text ? el("div", { class: "empty-text", text: text }) : null,
-      action || null,
-      next ? el("div", { class: "empty-next", text: next }) : null
+      action || null
     ]);
   }
 
@@ -1250,17 +1247,6 @@
 
   /* -------------------------------------------------------- Liste des sujets --- */
 
-  /* Compteur illustré : une icône + un nombre se lisent plus vite qu'une
-   * énumération en toutes lettres, et la carte reste calme. */
-  function countChip(iconName, count, label) {
-    return el("span", { class: "legend-chip", title: Utils.plural(count, label, label + "s") }, [
-      icon(iconName, 13),
-      el("span", { text: String(count) }),
-      /* Lu avec le nombre : « 1 message », pas « 1 1 1 » (le `title` n'entre pas dans le nom d'un bouton) (REC-RUI-007). */
-      el("span", { class: "visually-hidden", text: " " + (count > 1 ? label + "s" : label) })
-    ]);
-  }
-
   /* Dernière activité du sujet (§3), en relatif court : « Actif il y a 2 h ». La date exacte est
    * dans la feuille d'informations (« Dernière activité le … »). Une date illisible ne dit rien ;
    * une date dans le futur (horloges décalées) se lit « à l'instant ». */
@@ -1284,18 +1270,10 @@
     return text ? el("div", { class: "card-meta card-activity", text: text }) : null;
   }
 
+  /* Carte de sujet, à la façon d'une liste de conversations : le titre et sa dernière activité. Compteurs,
+   * extrait, auteur et flèche sont retirés (épure) : ils se lisent dans le sujet lui-même. Le badge de statut reste
+   * posé ici pour les couches produit (groupes de l'accueil), qui le retirent d'elles-mêmes. */
   function topicCard(topic) {
-    /* Un compteur à zéro n'apprend rien : on ne montre que ce qui existe, et
-     * un sujet encore vide le dit avec des mots. */
-    var counts = el("div", { class: "row-wrap", style: { gap: "6px" } }, [
-      topic.messages.length ? countChip("message", topic.messages.length, "message") : null,
-      topic.proposals.length ? countChip("idea", topic.proposals.length, "proposition") : null,
-      topic.conclusions.length ? countChip("checkCircle", topic.conclusions.length, "formulation") : null
-    ]);
-    if (!counts.childNodes.length) {
-      counts.appendChild(el("span", { class: "legend-chip", text: "Rien encore" }));
-    }
-
     return el("button", {
       class: "card", type: "button", "data-key": "topic-" + topic.id, "data-motion-key": "t:" + topic.id,
       onclick: function () { App.go("#/topic/" + topic.id); }
@@ -1304,14 +1282,8 @@
         el("div", { class: "card-title", style: { flex: "1" }, text: topic.title }),
         toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status])
       ]),
-      topic.description ? el("div", { class: "card-desc", text: topic.description }) : null,
-      activityNote(topic),
-      el("div", { class: "card-foot" }, [
-        counts,
-        el("div", { class: "spacer" }),
-        el("span", { class: "card-meta", style: { marginTop: "0" }, text: topic.createdBy.name }),
-        icon("forward", 16)
-      ])
+      /* Le pied ne porte plus que l'activité ; js/product-ui.js y glisse « Nouveau : … » quand il y a du neuf. */
+      el("div", { class: "card-foot" }, [el("div", { class: "row-wrap", style: { gap: "6px" } }, [activityNote(topic)])])
     ]);
   }
 
@@ -1344,8 +1316,7 @@
         el("button", {
           class: "btn btn-primary", type: "button", "data-key": "create-topic-first",
           onclick: function () { UI.set({ modal: { type: "createTopic" } }); }
-        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]),
-        "Ensuite : on en discute, on en tire des propositions, on vote, et on dégage un consensus.");
+        }, [icon("plus", 18), el("span", { text: "Ajouter un sujet" })]));
     } else {
       var list = el("div", { class: "stack topics-grid" });
       var index = 0;
@@ -2091,9 +2062,7 @@
 
     if (!main.length) {
       threadInner.appendChild(emptyState("message", "La discussion démarre ici",
-        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer.",
-        null,
-        "Ensuite : une idée qui mûrit devient une proposition, depuis l'onglet Propositions."));
+        "Partagez un constat, une idée, une question. Chacun peut réagir, citer et proposer."));
     }
 
     var thread = el("div", { class: "thread", dataset: { thread: topic.id } }, [threadInner]);
@@ -2155,9 +2124,7 @@
       inner.appendChild(list);
     } else {
       inner.appendChild(emptyState("explore", "Explorez cette idée",
-        "Ce qui s'écrit ici reste attaché à ce message, sans encombrer la discussion du sujet.",
-        null,
-        "Ensuite : une idée qui mûrit devient une proposition, depuis la feuille d'actions d'un message."));
+        "Ce qui s'écrit ici reste attaché à ce message, sans encombrer la discussion du sujet."));
     }
 
     return el("div", { class: "screen chat branch" }, [
@@ -2318,8 +2285,7 @@
         "Transformez les idées de la discussion en propositions concrètes à soumettre au vote.",
         el("button", { class: "btn btn-primary", type: "button",
           "data-key": "create-proposal-first", onclick: function () { UI.set({ modal: { type: "createProposal", topicId: topic.id } }); } },
-        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })]),
-        "Ensuite : chacun vote pour, contre ou abstention, un vote par personne."));
+        [icon("plus", 18), el("span", { text: "Ajouter une proposition" })])));
     } else {
       topic.proposals.forEach(function (proposal, i) { list.appendChild(reveal(proposalCard(topic, proposal), i)); });
     }
@@ -2659,11 +2625,11 @@
     /* Même ordre de maturité que l'accueil (prêts, en discussion, clôturés), archivés exclus. */
     var topics = ProductView.meetingTopics(state.topics);
 
+    /* Épure : un titre, puis les sujets. La date d'édition ne sert que sur papier (print-only). */
     var doc = el("div", { class: "print-doc stack" }, [
       el("div", { class: "stack", style: { gap: "6px", marginBottom: "10px" } }, [
-        sectionTitle("doc", "Synthèse d'équipe"),
-        el("h1", { class: "print-h1", text: CONFIG.APP_NAME + " : préparation de réunion" }),
-        el("p", { class: "hint", text: "Édité le " + Utils.formatDateTime(Utils.nowISO()) + " · " + Utils.plural(topics.length, "sujet", "sujets") })
+        el("h1", { class: "print-h1", text: "Préparation de réunion" }),
+        el("p", { class: "hint print-only", text: "Édité le " + Utils.formatDateTime(Utils.nowISO()) })
       ])
     ]);
 
@@ -2673,28 +2639,20 @@
 
     topics.forEach(function (topic, i) {
       var block = reveal(el("section", { class: "print-topic" }, [
-        el("h2", { class: "print-h2", text: topic.title }),
-        el("div", { class: "card-meta" }, [
-          toneBadge(Core.TOPIC_STATUS_LABELS[topic.status], TOPIC_TONES[topic.status]),
-          el("span", { text: "proposé par " + topic.createdBy.name }),
-          el("span", { class: "meta-dot" }),
-          el("span", { text: Utils.plural(topic.messages.length, "message", "messages") })
-        ])
+        el("h2", { class: "print-h2", text: topic.title })
       ]), i);
-      if (topic.description) {
-        block.appendChild(el("p", { class: "pre-wrap", text: topic.description }));
-      }
 
       if (topic.proposals.length) {
         block.appendChild(el("h3", { class: "print-h3", text: "Propositions" }));
         var pl = el("ul", { class: "print-list" });
         topic.proposals.forEach(function (proposal) {
-          /* Lecture de la carte (§8) : positions, pourcentage avec ses avis exprimés et participation. */
+          /* Lecture de la carte (§8), réduite aux positions : « 3 pour, 1 contre » (l'abstention si elle existe). Le
+           * statut ne se dit que s'il n'est pas l'état normal « En vote ». */
           var reading = ProductView.voteReading(proposal, state.participants);
+          var positions = reading.positions.slice(0, reading.counts.abstain ? 3 : 2).join(", ");
           pl.appendChild(el("li", {}, [
             el("strong", { text: proposal.title }),
-            el("span", { text: " : " + Core.PROPOSAL_STATUS_LABELS[proposal.status] + " · " + reading.line }),
-            proposal.description ? el("div", { class: "hint pre-wrap", text: proposal.description }) : null
+            el("span", { text: " : " + positions + (proposal.status !== "voting" ? " (" + Core.PROPOSAL_STATUS_LABELS[proposal.status] + ")" : "") })
           ]));
         });
         block.appendChild(pl);
@@ -2710,8 +2668,7 @@
           var count = scores.scores[conclusion.id] || 0;
           cl.appendChild(el("li", {}, [
             el("span", { class: "pre-wrap", text: conclusion.text }),
-            el("span", { class: "hint", text: " : " + Utils.plural(count, "vote", "votes") +
-              (scores.best > 0 && count === scores.best ? " · en tête" : "") })
+            scores.best > 0 && count === scores.best ? el("span", { class: "hint", text: " · en tête" }) : null
           ]));
         });
         block.appendChild(cl);
@@ -2724,7 +2681,6 @@
       topbar({
         title: "Réunion",
         heading: false,   // le h1 de la synthèse est celui du document imprimable
-        sub: "Synthèse imprimable",
         actions: [el("button", { class: "btn btn-sm btn-outline no-print", type: "button",
           onclick: printMeeting }, [icon("print", 16), el("span", { text: "Imprimer" })])]
       }),

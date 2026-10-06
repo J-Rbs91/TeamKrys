@@ -256,7 +256,7 @@ check("Lecture des votes : la carte, la synthèse et la couche produit utilisent
   ["reading.positions[0]", "reading.positions[1]", "reading.positions[2]", "reading.favorable", "reading.participation", "\"aria-label\": reading.aria"]
     .forEach((needle) => assert(card.indexOf(needle) >= 0, "carte : " + needle + " absent"));
   assert(card.indexOf("% favorables") < 0 && card.indexOf("summary.label") < 0, "la carte compose encore ses propres textes de vote");
-  assert(meeting.indexOf("ProductView.voteReading(") >= 0 && meeting.indexOf("reading.line") >= 0, "la synthèse ne lit pas ProductView.voteReading");
+  assert(meeting.indexOf("ProductView.voteReading(") >= 0 && meeting.indexOf("reading.positions") >= 0, "la synthèse ne lit pas ProductView.voteReading");
   assert(meeting.indexOf("abst.") < 0 && meeting.indexOf("summary.label") < 0, "la synthèse compose encore ses propres textes de vote");
   assert(meeting.indexOf("ProductView.meetingTopics(") >= 0, "la synthèse ne suit pas l'ordre de maturité");
   const productUi = read("js/product-ui.js");

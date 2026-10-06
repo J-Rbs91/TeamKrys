@@ -671,8 +671,6 @@ check("BL-029 accueil, cartes, noms accessibles et toasts du consensus : jamais 
   t.go(TOPICS);
   let leaks = conclusionLeaks(t.app(), true);
   assert(!leaks.length, "accueil : " + JSON.stringify(leaks));
-  const chip = t.app().querySelectorAll(".legend-chip").find((n) => /formulation/.test(n.getAttribute("title") || ""));
-  assert(chip && chip.getAttribute("title") === "2 formulations", "info-bulle du compteur de consensus : « " + (chip && chip.getAttribute("title")) + " »");
 
   t.go(conclusionRoute("t3"));
   /* Le placeholder « Nouvelle conclusion… » est un texte VISIBLE que product-ui.js
@@ -696,7 +694,7 @@ check("BL-029 accueil, cartes, noms accessibles et toasts du consensus : jamais 
   e.go(TOPICS);
   leaks = conclusionLeaks(e.app(), true);
   assert(!leaks.length, "accueil vide : " + JSON.stringify(leaks));
-  assert(/consensus/.test(e.app().textContent), "l'état vide de l'accueil doit parler de consensus");
+  assert(!/conclusion/i.test(e.app().textContent), "l'état vide de l'accueil ne parle jamais de « conclusion »");
 });
 
 /* ============================================================ BL-030 ==== */

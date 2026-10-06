@@ -9,7 +9,7 @@
  *  - REC-RUI-002 : App.logout efface le marqueur des nouveautés, avec la MÊME chaîne que js/product-ui.js ;
  *  - REC-RUI-005 : les quatre fenêtres « Modifier » ne se ferment que si l'action est acceptée ;
  *  - REC-RUI-006 : le nom accessible d'un bouton flottant contient son texte visible (WCAG 2.5.3) ;
- *  - REC-RUI-007 : le compteur d'une carte est lu avec son unité (le code livré de countChip est exécuté).
+ *  - REC-RUI-007 : caduc depuis l'épure (plus de compteurs sur les cartes de sujet).
  * (Le choix anonyme des brouillons, REC-RUI-001 et 008 : tests/drafts.test.js ; REC-RUI-009 : tests/css-contract.test.js.)
  *
  * `UI_REVIEW_ROOT` : racine alternative (par exemple une copie de HEAD) pour prouver que le test échoue sur l'ancien code. */
@@ -157,16 +157,8 @@ check("REC-RUI-006 boutons flottants : le nom accessible contient le texte visib
 
 /* ============================================================ REC-RUI-007 : « 1 message », pas « 1 1 1 » === */
 
-check("REC-RUI-007 compteurs d'une carte : le nombre est suivi de son unité, accord juste, masquée à la vue", () => {
-  const code = functionSource("js/ui.js", "countChip");
-  const make = (tag, attrs, kids) => ({ tag, attrs: attrs || {}, kids: kids || [] });
-  const sandbox = { Utils: { plural: (n, s, p) => n + " " + (n > 1 ? p : s) }, icon: (name) => make("svg", { name }), el: make };
-  vm.runInNewContext(code + "\nthis.out = [countChip('message', 1, 'message'), countChip('idea', 2, 'proposition'), countChip('checkCircle', 3, 'formulation')];", sandbox);
-  const hidden = (chip) => chip.kids.filter((k) => k.attrs.class === "visually-hidden").map((k) => k.attrs.text).join("");
-  const shown = (chip) => chip.kids.filter((k) => k.tag === "span" && !k.attrs.class).map((k) => k.attrs.text).join("");
-  assert(JSON.stringify(sandbox.out.map(hidden)) === JSON.stringify([" message", " propositions", " formulations"]), "unité lue : " + JSON.stringify(sandbox.out.map(hidden)));
-  assert(JSON.stringify(sandbox.out.map(shown)) === JSON.stringify(["1", "2", "3"]), "nombre affiché : " + JSON.stringify(sandbox.out.map(shown)));
-  assert(sandbox.out[1].attrs.title === "2 propositions", "l'info-bulle a changé : " + sandbox.out[1].attrs.title);
+check("REC-RUI-007 (caduc) épure : les cartes de sujet n'affichent plus de compteurs, countChip a disparu", () => {
+  assert(!/\n  function countChip\(/.test(read("js/ui.js")), "countChip existe encore : les cartes de sujet ne portent plus de compteurs");
 });
 
 const failures = [];

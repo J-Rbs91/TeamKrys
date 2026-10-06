@@ -165,17 +165,7 @@
       var card = cards[i];
       if (card.classList.contains("ux-topic-card")) { continue; }
       card.classList.add("ux-topic-card");
-
-      var foot = card.querySelector(".card-foot");
-      if (!foot) { continue; }
-      var icons = foot.querySelectorAll(":scope > .icon");
-      if (icons.length) { icons[icons.length - 1].classList.add("ux-legacy-forward"); }
-
-      var cue = make("span", "ux-card-action");
-      cue.setAttribute("aria-hidden", "true");
-      cue.appendChild(make("span", "", "Ouvrir"));
-      cue.appendChild(root.Utils.icon("forward", 15));
-      foot.appendChild(cue);
+      /* Plus de repère « Ouvrir › » : une carte de liste se touche, comme une conversation (épure). */
     }
   }
 

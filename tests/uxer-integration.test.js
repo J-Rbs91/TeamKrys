@@ -33,8 +33,8 @@ assert(js.indexOf("prefers-reduced-motion: reduce") >= 0,
   "le JS doit éviter View Transitions quand le mouvement est réduit");
 assert(css.indexOf("prefers-reduced-motion: reduce") >= 0,
   "la feuille UXER doit définir un repli reduced-motion");
-assert(css.indexOf(".ux-card-action") >= 0 && js.indexOf("Ouvrir") >= 0,
-  "les cartes de sujet doivent porter un signifiant persistant");
+assert(js.indexOf("make(\"span\", \"ux-card-action\")") < 0,
+  "épure : les cartes de sujet ne portent plus de repère « Ouvrir › »");
 /* Les bulles ne portent plus « ••• » : au doigt, les actions s'ouvrent par un appui long, et le repère promettait
  * un toucher. Le signifiant devient l'indice des gestes, affiché une fois par js/ui.js. */
 assert(css.indexOf(".ux-bubble-cue") < 0 && js.indexOf("make(\"span\", \"ux-bubble-cue\"") < 0,

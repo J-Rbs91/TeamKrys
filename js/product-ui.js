@@ -258,9 +258,6 @@
     exact(document.querySelector(".empty-text"),
       "Rédigez la synthèse à présenter en réunion. Chacun vote ensuite pour sa préférée.",
       "Formulez le cap que l'équipe souhaite porter en réunion. Chacun choisit ensuite le consensus qu'il préfère.");
-    exact(document.querySelector(".empty-next"),
-      "Ensuite : la conclusion retenue part dans la synthèse de réunion.",
-      "Ensuite : le consensus en tête porte le cap préparé par l'équipe.");
 
     var titles = document.querySelectorAll(".section-title span");
     for (var i = 0; i < titles.length; i++) { exact(titles[i], "Ajouter une conclusion", "Ajouter un consensus"); }

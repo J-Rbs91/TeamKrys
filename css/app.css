@@ -2976,3 +2976,7 @@ html.has-layer body { overflow: hidden; }
 .topbar-title-action { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .topbar-title-action > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .topbar-title-action > .icon { color: var(--muted); }
+
+/* Ce qui ne sert que sur papier (date d'édition de la synthèse de réunion). */
+.print-only { display: none; }
+@media print { .print-only { display: block; } }
