@@ -216,6 +216,18 @@ async function run() {
     assert(keys.indexOf("brainsto-idees-v1") < 0, "l'ancien cache d'avant Pandore doit être purgé : " + JSON.stringify(keys));
   });
 
+  await test("Mise à jour manuelle : le worker dit sa version sur le port fourni, et seulement là", async () => {
+    const sw = boot(never);
+    const replies = [];
+    sw.handlers.message({ data: { type: "GET_VERSION" }, ports: [{ postMessage: (m) => replies.push(m) }] });
+    const expected = sw.version.replace(/^brainsto-v/, "");
+    assert(replies.length === 1 && replies[0].type === "VERSION" && replies[0].version === expected,
+      "réponse attendue " + expected + " : " + JSON.stringify(replies));
+    assert(expected === /APP_VERSION:\s*"([^"]+)"/.exec(fs.readFileSync(path.join(ROOT, "js/config.js"), "utf8"))[1],
+      "la version annoncée doit être celle de l'application (CACHE_VERSION et APP_VERSION alignés)");
+    sw.handlers.message({ data: { type: "GET_VERSION" } });   // sans port : rien, et aucune exception
+  });
+
   await test("BL-051 purge : seuls les anciens caches « brainsto- » sont supprimés", async () => {
     const sw = boot(never);
     sw.caches.seed("autre-application-v7", { "/autre/index.html": "autre" });

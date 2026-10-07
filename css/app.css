@@ -1314,10 +1314,14 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 @media print { .proposal-more { display: none; } }
 .diag-more { border-top: 1px solid var(--line); padding-top: 4px; }
 .diag-more[open] > .proposal-more-summary .icon { transform: rotate(180deg); }
+/* « Rechercher une mise à jour », sous les lignes du diagnostic. Pendant la recherche, le bouton reste focalisable
+   (aria-disabled) : seul le curseur dit qu'il travaille, le libellé « Recherche en cours… » le dit à tous. */
+.diag-more > [data-key="check-update"] { margin-top: 12px; }
+.diag-more > [data-key="check-update"][aria-busy="true"] { cursor: progress; }
 
 /* ======================================================= Barre de navigation ==== */
 
-/* Quatre onglets fixés en bas des écrans de premier niveau (js/ui.js, tabBar). L'onglet courant se reconnaît par la
+/* Trois onglets fixés en bas des écrans de premier niveau (js/ui.js, tabBar). L'onglet courant se reconnaît par la
    couleur de l'accord ET par un trait au-dessus de l'icône : jamais la teinte seule. */
 :root { --tabbar-h: 60px; }
 .tabbar {

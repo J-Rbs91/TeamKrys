@@ -8,7 +8,7 @@
  *  - les appels à l'API (autre origine) ne sont JAMAIS mis en cache ;
  *  - IndexedDB n'est jamais touchée par le service worker.
  */
-var CACHE_VERSION = "brainsto-v1.27.0";
+var CACHE_VERSION = "brainsto-v1.28.0";
 /* Synthèse automatique de Pandore : publiée par l'IA dans le dépôt, elle change SANS nouvelle version de
  * l'application. Réseau d'abord ; la dernière copie reçue sert hors ligne, dans un cache à part qui survit aux mises
  * à jour (il ne contient que ce fichier, public). L'ancien cache « brainsto-idees-v1 » est purgé comme les autres. */
@@ -78,6 +78,11 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("message", function (event) {
   if (event.data && event.data.type === "SKIP_WAITING") { self.skipWaiting(); }
+  /* « Rechercher une mise à jour » (Réglages → Système) demande sa version au worker EN ATTENTE, pour l'afficher
+   * avant l'installation. Réponse sur le port fourni : rien n'est diffusé aux autres pages. */
+  if (event.data && event.data.type === "GET_VERSION" && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({ type: "VERSION", version: CACHE_VERSION.replace(/^brainsto-v/, "") });
+  }
 });
 
 function isShellRequest(url) {

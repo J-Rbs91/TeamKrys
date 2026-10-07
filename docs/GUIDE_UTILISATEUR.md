@@ -552,6 +552,15 @@ version) est replié sous **Diagnostic technique** ; l'ouvrir ne change rien. La
 dernière erreur de synchronisation, elle, reste toujours visible. Le bouton retour
 ramène aux Réglages.
 
+**Rechercher une mise à jour** (dans **Diagnostic technique**) : à utiliser quand une
+nouvelle version est sortie mais que le téléphone ne propose rien, par exemple parce
+que l'application n'a pas été fermée depuis des jours. L'application vérifie en ligne :
+- une version plus récente existe : une fenêtre **Mise à jour disponible** donne son
+  numéro et le vôtre. **Installer** redémarre l'application sur la nouvelle version
+  (ce que vous écriviez est conservé) ; **Plus tard** ne change rien ;
+- sinon, un message dit que l'application est à jour, avec son numéro de version ;
+- sans réseau, ou si la vérification échoue, un message le dit : réessayez plus tard.
+
 **Inviter des collaborateurs.** Un seul bouton : **Partager le lien d'invitation**. Le
 téléphone propose de lui-même les applications possibles (SMS, mail, WhatsApp…), avec
 un message déjà écrit qui contient le lien. Sans feuille de partage (ordinateur,

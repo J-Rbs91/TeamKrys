@@ -119,9 +119,13 @@ function makeNavigator(spec) {
 function fakeWorker(name, state) {
   const worker = {
     name, state: state || "installed", posted: [], listeners: {},
-    postMessage(message) {
+    postMessage(message, ports) {
       if (worker.state === "redundant") { throw domError("ServiceWorker is in redundant state"); }
       worker.posted.push(message);
+      /* Un worker qui connaît sa version répond sur le port fourni, comme service-worker.js. */
+      if (message && message.type === "GET_VERSION" && worker.version && ports && ports[0]) {
+        ports[0].postMessage({ type: "VERSION", version: worker.version });
+      }
     },
     addEventListener(type, fn) { (worker.listeners[type] = worker.listeners[type] || []).push(fn); },
     emit(type) { (worker.listeners[type] || []).slice().forEach((fn) => fn({ type })); }
@@ -132,6 +136,9 @@ function fakeWorker(name, state) {
 function fakeRegistration(spec) {
   const registration = {
     waiting: (spec && spec.waiting) || null, installing: (spec && spec.installing) || null, listeners: {},
+    active: (spec && spec.active) || null, updates: 0,
+    /* `onUpdate` simule ce que le navigateur trouve en relisant service-worker.js. */
+    update() { registration.updates += 1; return spec && spec.onUpdate ? spec.onUpdate(registration) : Promise.resolve(registration); },
     addEventListener(type, fn) { (registration.listeners[type] = registration.listeners[type] || []).push(fn); },
     emit(type) { (registration.listeners[type] || []).slice().forEach((fn) => fn({ type })); }
   };
@@ -210,6 +217,7 @@ function makeWorld(options) {
    * <link rel="manifest"> de la page, pour l'arrêt « installer d'abord ». */
   const navigator = makeNavigator(opts.serviceWorker);
   if (opts.userAgent) { navigator.userAgent = opts.userAgent; }
+  if (opts.offline) { navigator.onLine = false; }
   if (opts.standalone) { navigator.standalone = true; }
   const location = Object.assign({ hash: "#/", search: "", reload() { w.reloads += 1; } }, opts.location || {});
   const manifestLink = { href: "manifest.webmanifest", setAttribute(name, value) { manifestLink[name] = value; } };
@@ -219,6 +227,7 @@ function makeWorld(options) {
     /* Le jeton d'invitation est du base64 : sans atob/btoa, Utils.inviteToken rend "" en silence. */
     atob, btoa,
     setInterval: () => 0, clearInterval() {},
+    setTimeout, clearTimeout, MessageChannel,
     window: { location, history: w.history, addEventListener() {} },
     document: {
       readyState: "complete", hidden: false, addEventListener() {},
@@ -362,6 +371,89 @@ test("BL-055 V4 : un autre onglet a déjà mis à jour (rien en attente) : le cl
   await settle();
   assert(w.reloads === 1, "rechargement simple attendu une fois : " + w.reloads);
   assert(v2.posted.length === 0, "message envoyé à un worker qui n'attend plus");
+});
+
+/* --------------------------------------------- Rechercher une mise à jour --- */
+
+test("Mise à jour manuelle : une nouvelle version trouvée en ligne est proposée avec son numéro, sans bandeau en double", async () => {
+  const fresh = fakeWorker("v-neuve", "installing");
+  fresh.version = "9.9.9";
+  const registration = fakeRegistration({
+    onUpdate(reg) {
+      reg.installing = fresh;
+      reg.emit("updatefound");
+      setTimeout(() => { fresh.state = "installed"; reg.installing = null; reg.waiting = fresh; fresh.emit("statechange"); }, 5);
+      return Promise.resolve(reg);
+    }
+  });
+  const w = makeWorld({ serviceWorker: fakeContainer({ registration }) });
+  await settle();
+  const result = await w.App.checkForUpdate();
+  assert(registration.updates === 1, "registration.update() doit être appelé une fois : " + registration.updates);
+  assert(result.status === "available" && result.version === "9.9.9", "résultat : " + JSON.stringify(result));
+  assert(w.banners.length === 0, "le bandeau automatique s'est ajouté à la recherche manuelle");
+  w.App.applyUpdate();
+  await settle();
+  assert(fresh.posted.some((m) => m.type === "SKIP_WAITING"), "« Installer » doit activer le worker en attente : " + JSON.stringify(fresh.posted));
+});
+
+test("Mise à jour manuelle : rien de neuf en ligne → à jour ; une version déjà en attente est proposée sans relire le réseau", async () => {
+  const none = fakeRegistration({});
+  const w = makeWorld({ serviceWorker: fakeContainer({ registration: none }) });
+  await settle();
+  const current = await w.App.checkForUpdate();
+  assert(current.status === "current" && none.updates === 1, "aucune version en ligne : " + JSON.stringify(current));
+  const waiting = fakeWorker("v-attente", "installed");
+  waiting.version = "9.9.8";
+  const held = fakeRegistration({ waiting });
+  const w2 = makeWorld({ serviceWorker: fakeContainer({ registration: held }) });
+  await settle();
+  const found = await w2.App.checkForUpdate();
+  assert(found.status === "available" && found.version === "9.9.8" && held.updates === 0, "version en attente (bandeau écarté) : " + JSON.stringify(found));
+});
+
+test("Mise à jour manuelle : même numéro que l'application → à jour ; worker muet → proposée sans numéro", async () => {
+  const same = fakeWorker("v-meme", "installed");
+  same.version = CONFIG.APP_VERSION;
+  const w = makeWorld({ serviceWorker: fakeContainer({ registration: fakeRegistration({ waiting: same }) }) });
+  await settle();
+  const r = await w.App.checkForUpdate();
+  assert(r.status === "current", "même version : " + JSON.stringify(r));
+  const mute = fakeWorker("v-muet", "installed");   // ancien worker : ne répond pas à GET_VERSION
+  const w2 = makeWorld({ serviceWorker: fakeContainer({ registration: fakeRegistration({ waiting: mute }) }) });
+  await settle();
+  const r2 = await w2.App.checkForUpdate();
+  assert(r2.status === "available" && r2.version === null, "worker muet : " + JSON.stringify(r2));
+});
+
+test("Mise à jour manuelle : hors ligne, échec réseau, installation ratée, sans service worker — un résultat, jamais une exception", async () => {
+  const offline = fakeRegistration({});
+  const w = makeWorld({ offline: true, serviceWorker: fakeContainer({ registration: offline }) });
+  await settle();
+  const r1 = await w.App.checkForUpdate();
+  assert(r1.status === "offline" && offline.updates === 0, "hors ligne : " + JSON.stringify(r1));
+  const failing = fakeRegistration({ onUpdate: () => Promise.reject(new TypeError("Failed to fetch")) });
+  const w2 = makeWorld({ serviceWorker: fakeContainer({ registration: failing }) });
+  await settle();
+  const r2 = await w2.App.checkForUpdate();
+  assert(r2.status === "error", "échec de update() : " + JSON.stringify(r2));
+  const broken = fakeWorker("v-cassee", "installing");
+  const redundant = fakeRegistration({
+    onUpdate(reg) {
+      reg.installing = broken;
+      setTimeout(() => { broken.state = "redundant"; reg.installing = null; broken.emit("statechange"); }, 5);
+      return Promise.resolve(reg);
+    }
+  });
+  const w3 = makeWorld({ serviceWorker: fakeContainer({ registration: redundant }) });
+  await settle();
+  const r3 = await w3.App.checkForUpdate();
+  assert(r3.status === "error", "installation ratée : " + JSON.stringify(r3));
+  const w4 = makeWorld({});
+  await settle();
+  const r4 = await w4.App.checkForUpdate();
+  assert(r4.status === "unsupported", "sans service worker : " + JSON.stringify(r4));
+  assert(unhandled.length === 0, "rejet non rattrapé : " + unhandled.map(String).join(" | "));
 });
 
 test("BL-055 l'enregistrement est RELU au clic (getRegistration) quand l'objet d'origine est périmé", async () => {

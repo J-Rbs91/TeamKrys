@@ -1142,40 +1142,45 @@
     } catch (e) { return null; }
   }
 
+  /* ⚠️ Le bandeau n'est posé qu'UNE fois (UI.showUpdateBanner ignore un second appel tant que
+   * le premier est affiché) : son rappel ne doit donc JAMAIS retenir un worker. Au clic, on
+   * relit l'enregistrement COURANT. Un autre onglet a pu appliquer la mise à jour entre-temps
+   * (plus rien n'attend : on recharge simplement), ou une version plus récente a remplacé celle
+   * qui attendait (l'ancienne est obsolète : un message qui lui serait envoyé n'aurait aucun
+   * effet, et le bouton resterait muet). */
+  function applyUpdate(known) {
+    var container = serviceWorkerContainer();
+    updateRequested = true;
+    function conclude(registration) {
+      /* Le rechargement, ou le changement de worker qui le provoque, détruit la page : les brouillons d'abord. */
+      saveDrafts();
+      var waiting = registration && registration.waiting;
+      if (waiting) {
+        try { waiting.postMessage({ type: "SKIP_WAITING" }); return; }
+        catch (e) { /* devenu obsolète entre la lecture et l'envoi : on recharge */ }
+      }
+      window.location.reload();
+    }
+    var asking = null;
+    try { asking = container && typeof container.getRegistration === "function" ? container.getRegistration() : null; }
+    catch (e) { asking = null; }
+    if (!asking || typeof asking.then !== "function") { conclude(known); return; }
+    asking.then(function (found) { conclude(found || known); }, function () { conclude(known); });
+  }
+
+  /* Pendant une recherche MANUELLE, le bandeau automatique se tait : la recherche ouvre sa propre fenêtre, et
+   * les deux ensemble proposeraient deux fois la même chose. */
+  var manualUpdateCheck = false;
+
   function registerServiceWorker() {
     var container = serviceWorkerContainer();
     if (!container) { return; }
-
-    /* ⚠️ Le bandeau n'est posé qu'UNE fois (UI.showUpdateBanner ignore un second appel tant que
-     * le premier est affiché) : son rappel ne doit donc JAMAIS retenir un worker. Au clic, on
-     * relit l'enregistrement COURANT. Un autre onglet a pu appliquer la mise à jour entre-temps
-     * (plus rien n'attend : on recharge simplement), ou une version plus récente a remplacé celle
-     * qui attendait (l'ancienne est obsolète : un message qui lui serait envoyé n'aurait aucun
-     * effet, et le bouton resterait muet). */
-    function applyUpdate(known) {
-      updateRequested = true;
-      function conclude(registration) {
-        /* Le rechargement, ou le changement de worker qui le provoque, détruit la page : les brouillons d'abord. */
-        saveDrafts();
-        var waiting = registration && registration.waiting;
-        if (waiting) {
-          try { waiting.postMessage({ type: "SKIP_WAITING" }); return; }
-          catch (e) { /* devenu obsolète entre la lecture et l'envoi : on recharge */ }
-        }
-        window.location.reload();
-      }
-      var asking = null;
-      try { asking = typeof container.getRegistration === "function" ? container.getRegistration() : null; }
-      catch (e) { asking = null; }
-      if (!asking || typeof asking.then !== "function") { conclude(known); return; }
-      asking.then(function (found) { conclude(found || known); }, function () { conclude(known); });
-    }
-
     var registering;
     try { registering = Promise.resolve(container.register("service-worker.js")); }
     catch (e) { return; }
     registering.then(function (registration) {
       function offer() {
+        if (manualUpdateCheck) { return; }
         UI.showUpdateBanner(function () { applyUpdate(registration); });
       }
       function watch(worker) {
@@ -1199,6 +1204,101 @@
       if (updateRequested) { saveDrafts(); window.location.reload(); }
     });
   }
+
+  /* Recherche MANUELLE d'une mise à jour (Réglages → Système → Diagnostic technique). Elle sert quand le téléphone
+   * ne propose rien : le navigateur ne revérifie le service worker qu'à la navigation, et une application installée
+   * qu'on ne ferme jamais peut rester des jours sur une ancienne version.
+   *
+   * Elle demande au navigateur de relire service-worker.js (registration.update()). Si le fichier a changé, une
+   * nouvelle version s'installe EN ATTENTE, sans rien remplacer : rien ne s'applique tant que la personne n'a pas
+   * choisi « Installer ». Résultat :
+   *   available   une version attend ; `version` est son numéro, quand le worker sait le dire
+   *   current     rien de plus récent en ligne
+   *   offline     pas de réseau
+   *   unsupported pas de service worker (navigation privée, navigateur intégré…) : recharger suffit alors
+   *   error       échec ou délai dépassé
+   * Ne rejette jamais : l'écran n'a qu'un résultat à dire. */
+  var UPDATE_CHECK_TIMEOUT_MS = 20000;
+  var VERSION_ASK_TIMEOUT_MS = 2000;
+
+  /* Le numéro de la version en attente, demandé au worker lui-même. Un worker d'avant cette fonction ne répond
+   * pas : on attend peu, et la fenêtre s'en passe. */
+  function askVersion(worker) {
+    return new Promise(function (resolve) {
+      if (!worker || typeof MessageChannel !== "function") { resolve(null); return; }
+      var channel = null;
+      var done = false;
+      function finish(version) {
+        if (done) { return; }
+        done = true;
+        clearTimeout(timer);
+        try { if (channel) { channel.port1.close(); } } catch (e) { /* déjà fermé */ }
+        resolve(version);
+      }
+      var timer = setTimeout(function () { finish(null); }, VERSION_ASK_TIMEOUT_MS);
+      try {
+        channel = new MessageChannel();
+        channel.port1.onmessage = function (event) {
+          finish(event && event.data && typeof event.data.version === "string" ? event.data.version : null);
+        };
+        worker.postMessage({ type: "GET_VERSION" }, [channel.port2]);
+      } catch (e) { finish(null); }
+    });
+  }
+
+  /* Attend que la version téléchargée soit prête : « installed » (elle attend), ou activée d'emblée (aucune page
+   * ne la contrôlait). « redundant » : l'installation a échoué. */
+  function settleInstalling(registration) {
+    if (registration.waiting) { return Promise.resolve("ready"); }
+    var worker = registration.installing;
+    if (!worker) { return Promise.resolve("none"); }
+    return new Promise(function (resolve) {
+      function look() {
+        if (worker.state === "installed" || worker.state === "activating" || worker.state === "activated") { resolve("ready"); return true; }
+        if (worker.state === "redundant") { resolve(registration.waiting ? "ready" : "failed"); return true; }
+        return false;
+      }
+      if (!look()) { worker.addEventListener("statechange", look); }
+    });
+  }
+
+  App.checkForUpdate = function () {
+    var container = serviceWorkerContainer();
+    if (!container || typeof container.getRegistration !== "function") { return Promise.resolve({ status: "unsupported" }); }
+    if (navigator.onLine === false) { return Promise.resolve({ status: "offline" }); }
+    manualUpdateCheck = true;
+    var search = Promise.resolve(container.getRegistration()).then(function (registration) {
+      if (!registration || typeof registration.update !== "function") { return { status: "unsupported" }; }
+      var already = registration.waiting ? Promise.resolve() : Promise.resolve(registration.update());
+      return already.then(function () { return settleInstalling(registration); }).then(function (outcome) {
+        if (outcome === "failed") { return { status: "error" }; }
+        if (outcome === "none") { return { status: "current" }; }
+        return askVersion(registration.waiting || registration.installing || registration.active).then(function (version) {
+          /* Même numéro que l'application en cours : rien de neuf pour la personne, même si le worker a changé. */
+          if (version && version === CONFIG.APP_VERSION) { return { status: "current" }; }
+          return { status: "available", version: version };
+        });
+      });
+    }).catch(function () {
+      return { status: navigator.onLine === false ? "offline" : "error" };
+    });
+    /* Délai maximal : un réseau connecté mais muet ne doit pas laisser « Recherche en cours… » indéfiniment. */
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish(result) {
+        if (done) { return; }
+        done = true;
+        clearTimeout(timer);
+        manualUpdateCheck = false;
+        resolve(result);
+      }
+      var timer = setTimeout(function () { finish({ status: "error" }); }, UPDATE_CHECK_TIMEOUT_MS);
+      search.then(finish);
+    });
+  };
+
+  /* « Installer » de la fenêtre de mise à jour : le même chemin que le bandeau. */
+  App.applyUpdate = function () { applyUpdate(null); };
 
   /* --------------------------------------------------------- Démarrage --- */
 

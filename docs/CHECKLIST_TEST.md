@@ -851,6 +851,13 @@ jamais sur les données de l'équipe.
 - [ ] Réseau connecté mais muet (lie-fi) ou réponse 503 du site : l'application
       installée **démarre depuis le cache** sans écran blanc ; HTML et scripts sont
       toujours de la même version.
+- [ ] Réglages → Système → Diagnostic technique → **Rechercher une mise à jour** :
+      sans nouvelle version, message « Application à jour » avec le numéro ; après une
+      publication (application restée ouverte, bandeau absent ou écarté), fenêtre
+      **Mise à jour disponible** avec les deux numéros ; **Plus tard** ne change rien,
+      **Installer** redémarre sur la nouvelle version, brouillon conservé. Mode avion :
+      message « Pas de connexion ». Pendant la recherche, le bouton dit « Recherche en
+      cours… » et un second appui ne relance rien.
 - [ ] Nouvelle version publiée → bandeau « nouvelle version disponible » ;
       « Mettre à jour » recharge ; **aucune boucle de rechargement** au premier
       chargement.

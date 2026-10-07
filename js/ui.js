@@ -3011,7 +3011,8 @@
             : "mémoire : non persistant",
           !diagnostics.persistent || diagnostics.durability === "évinçable"),
           diagRow("Version", CONFIG.APP_VERSION)
-        ])
+        ]),
+        updateCheckButton()
       ])
     ]);
 
@@ -3046,6 +3047,66 @@
     } catch (e) { share = null; }
     if (!share || typeof share.then !== "function") { copy(); return; }
     share.then(null, function (error) { if (!error || error.name !== "AbortError") { copy(); } });
+  }
+
+  /* « Rechercher une mise à jour » : pour le téléphone qui ne propose rien (application jamais fermée, bandeau
+   * écarté). Ce n'est pas une action à confirmer — chercher ne change rien —, c'est sa fenêtre qui l'est : rien
+   * ne s'installe sans « Installer ». Pendant la recherche, le bouton reste en place et focalisable (aria-disabled,
+   * pas disabled : un bouton désactivé perd le focus au rendu), et un second appui ne relance rien. */
+  var updateChecking = false;
+
+  /* Vrai pendant une recherche manuelle ou quand sa fenêtre est ouverte : le bandeau automatique se tait alors. */
+  UI.updateOffered = function () {
+    return updateChecking || !!(UI.local.modal && UI.local.modal.type === "update");
+  };
+
+  function updateCheckButton() {
+    if (typeof App.checkForUpdate !== "function") { return null; }
+    return el("button", {
+      class: "btn btn-outline btn-block", type: "button", "data-key": "check-update",
+      "aria-disabled": updateChecking ? "true" : null, "aria-busy": updateChecking ? "true" : null,
+      onclick: checkForUpdate
+    }, [icon("download", 16), el("span", { text: updateChecking ? "Recherche en cours…" : "Rechercher une mise à jour" })]);
+  }
+
+  function checkForUpdate() {
+    if (updateChecking) { return; }
+    updateChecking = true;
+    UI.force();
+    var done = function (result) {
+      updateChecking = false;
+      var status = result && result.status;
+      if (status === "available") {
+        /* Un bandeau déjà posé (version vue au démarrage) ferait doublon avec la fenêtre : il cède la place. */
+        var banner = document.querySelector(".update-banner");
+        if (banner) { bannerUpdate = null; bannerSaid = false; banner.parentNode.removeChild(banner); }
+        UI.set({ modal: { type: "update", version: result.version || null } });
+        return;
+      }
+      UI.force();
+      if (status === "current") { UI.toast("Application à jour : vous avez la dernière version (" + CONFIG.APP_VERSION + ")."); }
+      else if (status === "offline") { UI.toast("Pas de connexion : impossible de vérifier les mises à jour.", "error"); }
+      else if (status === "unsupported") { UI.toast("Ce navigateur ne gère pas la mise à jour depuis l'application : rechargez la page pour obtenir la dernière version.", "error"); }
+      else { UI.toast("La recherche n'a pas abouti. Réessayez dans un moment.", "error"); }
+    };
+    var asked;
+    try { asked = App.checkForUpdate(); } catch (e) { asked = null; }
+    if (!asked || typeof asked.then !== "function") { done(null); return; }
+    asked.then(done, function () { done(null); });
+  }
+
+  /* La proposition d'installation. Elle dit ce qui va se passer — l'application redémarre — et ce qui ne se perd
+   * pas : les brouillons sont enregistrés avant (App.applyUpdate), et ce qui attend d'être envoyé reste en file. */
+  function updateModal(m) {
+    var text = (m.version
+      ? "La version " + m.version + " est prête. Vous avez la " + CONFIG.APP_VERSION + "."
+      : "Une nouvelle version est prête. Vous avez la " + CONFIG.APP_VERSION + ".")
+      + " L'application va redémarrer ; ce que vous êtes en train d'écrire est conservé.";
+    return modal("Mise à jour disponible", el("p", { class: "hint", text: text }), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Plus tard", "data-key": "update-later", onclick: closeOverlay }),
+      el("button", { class: "btn btn-primary", type: "button", text: "Installer", "data-key": "update-install",
+        onclick: function () { closeOverlay(); App.applyUpdate(); } })
+    ]);
   }
 
   /* Volet « Diagnostic technique » des Réglages ouvert ou non, retenu d'un rendu à l'autre. */
@@ -3435,6 +3496,7 @@
       else if (m.type === "confirmStatus") { node = confirmStatusModal(m); }
       else if (m.type === "confirmSystem") { node = confirmSystemModal(m); }
       else if (m.type === "pandoreConfirm") { node = pandoreConfirmModal(m); }
+      else if (m.type === "update") { node = updateModal(m); }
       else if (m.type === "signMessage") { node = signMessageModal(m); }
       else if (m.type === "editTopic") { node = editTopicModal(m); }
       else if (m.type === "editMessage") { node = editMessageModal(m); }
@@ -4240,6 +4302,10 @@
      * sous les commandes du calque. Il apparaît dès le démontage. */
     if (onboard) { pendingUpdate = onUpdate; return; }
     if (document.querySelector(".update-banner")) { return; }
+    /* Recherche manuelle en cours, ou sa fenêtre ouverte : elle propose déjà cette version. Le navigateur annonce
+     * la fin de l'installation par un événement qui peut arriver APRÈS la réponse de la recherche : sans ce
+     * garde, le bandeau s'ajoutait sous la fenêtre, constaté dans Chromium. */
+    if (typeof UI.updateOffered === "function" && UI.updateOffered()) { return; }
     bannerUpdate = onUpdate;
     var banner = el("div", { class: "update-banner" }, [
       icon("sync", 17),

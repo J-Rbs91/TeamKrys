@@ -1026,6 +1026,52 @@ check("Réglages, niveau 1 : sans window.Theme (cache mixte), aucune Apparence p
   assert(t.app().querySelector('[data-key="open-system"]'), "le reste des Réglages doit s'afficher");
 });
 
+check("Système, diagnostic technique : « Rechercher une mise à jour » propose l'installation, ou dit que tout est à jour", async () => {
+  const t = boot();
+  let answer = null;
+  let asked = 0;
+  let installs = 0;
+  t.ctx.App.checkForUpdate = () => { asked += 1; return new Promise((resolve) => { answer = resolve; }); };
+  t.ctx.App.applyUpdate = () => { installs += 1; };
+  t.go(SYSTEM);
+  const button = () => t.app().querySelector('[data-key="check-update"]');
+  assert(button() && button().closest("details.diag-more"), "le bouton doit vivre dans le diagnostic technique");
+  assert(/Rechercher une mise à jour/.test(button().textContent), "libellé : " + button().textContent);
+  button().click();
+  assert(asked === 1 && button().getAttribute("aria-busy") === "true" && /Recherche en cours/.test(button().textContent),
+    "pendant la recherche, le bouton le dit");
+  button().click();
+  assert(asked === 1, "un second appui ne relance pas la recherche");
+  const banners = () => t.ctx.document.querySelectorAll(".update-banner").length;
+  t.ctx.UI.showUpdateBanner(() => {});
+  assert(banners() === 0, "pendant la recherche, le bandeau automatique se tait (constaté en double dans Chromium)");
+  answer({ status: "available", version: "9.9.9" });
+  await tick();
+  t.ctx.UI.showUpdateBanner(() => {});
+  assert(banners() === 0, "fenêtre de mise à jour ouverte : pas de bandeau en plus");
+  const box = dialog(t);
+  assert(box && /Mise à jour disponible/.test(box.textContent) && /9\.9\.9/.test(box.textContent), "fenêtre de proposition attendue, avec le numéro");
+  assert(box.textContent.indexOf(t.ctx.CONFIG.APP_VERSION) >= 0, "la fenêtre dit aussi la version en cours");
+  box.querySelector('[data-key="update-later"]').click();
+  assert(!dialog(t) && installs === 0, "Plus tard n'installe rien");
+  button().click();
+  answer({ status: "available", version: null });
+  await tick();
+  dialog(t).querySelector('[data-key="update-install"]').click();
+  assert(installs === 1 && !dialog(t), "Installer passe par App.applyUpdate");
+  const said = (status) => {
+    button().click();
+    answer({ status });
+    return tick().then(() => t.toasts().querySelectorAll(".toast").map((n) => n.textContent).pop() || "");
+  };
+  assert(/à jour/.test(await said("current")) && !dialog(t), "aucune version : message « à jour », pas de fenêtre");
+  assert((await said("current")).indexOf(t.ctx.CONFIG.APP_VERSION) >= 0, "le message « à jour » donne la version");
+  assert(/connexion/.test(await said("offline")), "hors ligne : le dire");
+  assert(/rechargez/.test(await said("unsupported")), "sans service worker : recharger");
+  assert(/Réessayez/.test(await said("error")), "échec : réessayer");
+  assert(button().getAttribute("aria-busy") === null && /Rechercher/.test(button().textContent), "le bouton revient à l'état normal");
+});
+
 check("Système, niveau 2 : retour vers Réglages, sans barre de navigation ; code d'espace visible ; diagnostic replié, dernière erreur toujours visible", () => {
   const t = boot();
   let up = 0;
