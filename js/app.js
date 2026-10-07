@@ -728,8 +728,8 @@
   /* Parent déclaré de chaque écran, en UN SEUL endroit. Ajouter un écran, c'est
    * ajouter une ligne ici ; les liens qui y mènent se comportent alors
    * correctement sans que personne ait à y penser. `null` marque la racine. */
-  /* Sujets, Réunion, Pandore et Réglages sont les quatre onglets de la barre du bas (js/ui.js, tabBar) : Sujets est la
-   * racine, les trois autres en sont les enfants directs, donc frères entre eux. */
+  /* Discussion, Pandore et Réglages sont les trois onglets de la barre du bas (js/ui.js, tabBar) ; Discussion montre
+   * Sujets ou Réunion. Sujets est la racine ; Réunion, Pandore et Réglages en sont les enfants directs, donc frères. */
   var PARENT = {
     topics: null,
     settings: "topics",

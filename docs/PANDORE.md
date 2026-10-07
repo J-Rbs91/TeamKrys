@@ -99,7 +99,7 @@ Le contrôle refuse une source inventée, du HTML, une balise Liquid et un lien 
 
 | Limite | Cause | Conséquence |
 |---|---|---|
-| Le **contenu** peut trahir l'auteur | le dépôt est publié tel quel | un prénom, un poste unique ou une tournure reconnaissable restent publics. L'application le dit avant le dépôt. L'IA les retire de la synthèse, pas du texte brut |
+| Le **contenu** peut trahir l'auteur | le dépôt est publié tel quel | un prénom, un poste unique ou une tournure reconnaissable restent publics. L'application le dit avant le dépôt, dans la fenêtre de confirmation. L'IA les retire de la synthèse, pas du texte brut |
 | Le **jour** de collecte est public | le nom du fichier | dans une petite équipe, « un seul dépôt ce jour-là » peut suffire à recouper |
 | La personne qui **administre le script** n'est pas tenue à l'écart | elle contrôle le serveur et le Drive | l'historique des versions de `brainsto-idees.json` sur Drive montre quand le fichier a changé. Plus largement, elle pourrait modifier le code. L'anonymat protège des autres membres, pas d'elle |
 | Une publication est **définitive** | dépôt GitHub public et historique Git | supprimer un fichier ne l'efface pas de l'historique, ni des copies faites entre-temps |

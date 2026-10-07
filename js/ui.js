@@ -1468,7 +1468,7 @@
         sub: App.user.name ? "Bonjour " + App.user.name : null,
         actions: [statusPill()]
       }),
-      el("div", { class: "content" }, [body])
+      el("div", { class: "content" }, [discussionTabs("topics"), body])
     ]);
 
     if (all.length) {
@@ -2552,23 +2552,12 @@
     }), "pandore:new", Core.LIMITS.idea);
     var counter = counterFor("pandore:new", Core.LIMITS.idea);
 
+    /* Rien ne part sans confirmation : un dépôt est définitif, et ses quatre conséquences se lisent AVANT
+     * (pandoreConfirmModal). Le texte reste dans le champ tant que la fenêtre est ouverte : Annuler n'efface rien. */
     function submit() {
       var text = Utils.trim(area.value);
       if (!text) { invalid(area, "Écrivez quelque chose avant de déposer."); return; }
-      var typed = area.value;
-      /* Vidé AVANT l'envoi : le rendu qui suit réinjecterait sinon le texte déjà parti (même piège que le composeur). */
-      area.value = "";
-      setCounter(counter, 0, Core.LIMITS.idea);
-      var sent = App.actions.submitIdea(text);
-      var settle = function (result) {
-        if (result && result.ok === false) {
-          var node = findDraftNode("pandore:new");
-          if (node) { node.value = typed; }
-          return;
-        }
-        UI.toast("Déposé anonymement.");
-      };
-      if (sent && typeof sent.then === "function") { sent.then(settle, function () { settle(null); }); } else { settle(sent); }
+      UI.set({ modal: { type: "pandoreConfirm", text: text } });
     }
 
     var deposit = el("div", { class: "pandore-deposit" }, [
@@ -2598,6 +2587,44 @@
           onclick: function () { App.go("#/pandore/synthese"); } }, [el("span", { text: "Voir la synthèse" }), icon("forward", 16)])
       ])
     ]);
+  }
+
+  /* Confirmation d'un dépôt. Quatre conséquences, chacune nommée d'un mot puis expliquée : c'est ce qu'il faut
+   * savoir pour déposer sans regret, et ce qu'on ne peut plus rattraper après. « Non reconsultable » dit ce qui est
+   * vrai DANS l'application — le texte brut est publié à part (docs/PANDORE.md), on ne promet donc pas que
+   * personne ne le relira. Confirmer n'est pas un geste dangereux : bouton principal, pas rouge. */
+  var PANDORE_TERMS = [
+    ["Non modifiable", "une fois envoyé, il ne peut être ni corrigé ni retiré."],
+    ["Anonyme", "il part sans votre nom. Évitez ce qui vous désignerait : prénom, poste, tournure."],
+    ["Non reconsultable", "vous ne pourrez plus le relire dans l'application, qui n'affiche que la synthèse."],
+    ["Reformulé", "un algorithme le reformule dans la synthèse, publiée à date fixe."]
+  ];
+
+  function pandoreConfirmModal(m) {
+    return modal("Envoyer dans Pandore ?", el("ul", { class: "pandore-terms" }, PANDORE_TERMS.map(function (term) {
+      return el("li", {}, [el("strong", { text: term[0] }), el("span", { text: " : " + term[1] })]);
+    })), [
+      el("button", { class: "btn btn-outline", type: "button", text: "Annuler", "data-key": "pandore-cancel", onclick: closeOverlay }),
+      el("button", { class: "btn btn-primary", type: "button", text: "Envoyer", "data-key": "pandore-confirm",
+        onclick: function () { closeOverlay(); sendPandore(m.text); } })
+    ]);
+  }
+
+  function sendPandore(text) {
+    var area = findDraftNode("pandore:new");
+    var typed = area ? area.value : text;
+    /* Vidé AVANT l'envoi : le rendu qui suit réinjecterait sinon le texte déjà parti (même piège que le composeur). */
+    if (area) { area.value = ""; refreshCounter("pandore:new", area); }
+    var sent = App.actions.submitIdea(text);
+    var settle = function (result) {
+      if (result && result.ok === false) {
+        var node = findDraftNode("pandore:new");
+        if (node) { node.value = typed; refreshCounter("pandore:new", node); }
+        return;
+      }
+      UI.toast("Déposé anonymement.");
+    };
+    if (sent && typeof sent.then === "function") { sent.then(settle, function () { settle(null); }); } else { settle(sent); }
   }
 
   /* La synthèse, sur un écran à elle (#/pandore/synthese). Le fichier n'est lu qu'ici. */
@@ -2731,6 +2758,7 @@
           onclick: printMeeting }, [icon("print", 16), el("span", { text: "Imprimer" })])]
       }),
       el("div", { class: "content" }, [
+        discussionTabs("meeting"),
         /* ⚠️ La pastille d'état (BL-066) est dans le contenu et non dans la barre : celle-ci porte déjà
          * « Imprimer », et mesurée à 390 px une pastille de plus réduisait le titre à « Ré… ».
          * `no-print` la retire de la page imprimée, comme la barre. */
@@ -3406,6 +3434,7 @@
       if (m.type === "createTopic") { node = createTopicModal(m); }
       else if (m.type === "confirmStatus") { node = confirmStatusModal(m); }
       else if (m.type === "confirmSystem") { node = confirmSystemModal(m); }
+      else if (m.type === "pandoreConfirm") { node = pandoreConfirmModal(m); }
       else if (m.type === "signMessage") { node = signMessageModal(m); }
       else if (m.type === "editTopic") { node = editTopicModal(m); }
       else if (m.type === "editMessage") { node = editMessageModal(m); }
@@ -3460,22 +3489,43 @@
 
   /* ================================================== Barre de navigation ==== */
 
-  /* Quatre destinations, toujours visibles sur les écrans de premier niveau : Sujets, Réunion, Pandore, Réglages.
+  /* Trois destinations, toujours visibles sur les écrans de premier niveau : Discussion, Pandore, Réglages.
+   * Réunion n'est plus un onglet du bas : c'est la seconde vue de Discussion (discussionTabs), parce qu'elle n'est
+   * que la mise au propre des sujets — sa place est à côté d'eux, pas au même rang que Pandore ou les Réglages.
+   * Sur l'écran Réunion, l'onglet du bas courant reste donc Discussion.
    * Pandore y a sa place à part entière : ce n'est pas un espace de discussion mais une zone d'expression libre et
    * anonyme, qui ne dépend d'aucun sujet. Dans un sujet (discussion, propositions, consensus), la barre disparaît :
    * l'écran appartient au sujet, et le bouton retour ramène à la liste.
    *
-   * Sujets reste la SEULE racine (voir PARENT dans js/app.js) : les trois autres onglets en sont des enfants directs.
+   * Sujets reste la SEULE racine (voir PARENT dans js/app.js) : Réunion, Pandore et Réglages en sont des enfants directs.
    * Passer de l'un à l'autre remplace l'entrée d'historique (même profondeur) ; le geste retour du système ramène
    * donc toujours à Sujets, puis sort de l'application. C'est la convention d'Android, et elle ne demande aucune
    * interception. */
   var TABS = [
-    { name: "topics", hash: "#/", icon: "message", label: "Sujets" },
-    { name: "meeting", hash: "#/meeting", icon: "doc", label: "Réunion" },
-    { name: "pandore", hash: "#/pandore", icon: "inbox", label: "Pandore" },
+    { name: "topics", hash: "#/", icon: "message", label: "Discussion" },
+    { name: "pandore", hash: "#/pandore", icon: "safe", label: "Pandore" },
     { name: "settings", hash: "#/settings", icon: "settings", label: "Réglages" }
   ];
-  var TAB_OF = { topics: "topics", meeting: "meeting", pandore: "pandore", settings: "settings" };
+  var TAB_OF = { topics: "topics", meeting: "topics", pandore: "pandore", settings: "settings" };
+
+  /* Les deux vues de l'onglet Discussion : les sujets, et leur mise au propre pour la réunion. Ce sont des liens de
+   * navigation (aria-current), pas des boutons radio : chacune a son adresse, son titre de page et son retour. */
+  var DISCUSSION_VIEWS = [
+    { name: "topics", hash: "#/", label: "Sujets" },
+    { name: "meeting", hash: "#/meeting", label: "Réunion" }
+  ];
+
+  function discussionTabs(current) {
+    return el("nav", { class: "segmented subtabs no-print", "aria-label": "Discussion", "data-key": "discussion-tabs" },
+      DISCUSSION_VIEWS.map(function (view) {
+        var here = view.name === current;
+        return el("button", {
+          class: "segmented-link", type: "button", "data-key": "view-" + view.name, text: view.label,
+          "aria-current": here ? "page" : null,
+          onclick: function () { if (!here) { App.go(view.hash); } }
+        });
+      }));
+  }
 
   function tabBar(current) {
     return el("nav", { class: "tabbar no-print", "aria-label": "Navigation principale" }, [
@@ -3757,10 +3807,10 @@
       eyebrow: "Le consensus",
       title: "Quand toute l'équipe est d'accord",
       text: "Si toute l'équipe vote la même chose, pour ou contre, la proposition "
-        + "passe dans Consensus. L'onglet Réunion rassemble tout sur une page."
+        + "passe dans Consensus. Dans Discussion, Réunion rassemble tout sur une page."
     },
     pandore: {
-      icon: "inbox",
+      icon: "safe",
       eyebrow: "Pandore",
       title: "Ce qui ne se dit pas en réunion",
       text: "Une idée, une plainte, une question : déposez-la, anonymement. Un message "

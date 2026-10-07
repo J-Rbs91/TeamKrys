@@ -1334,7 +1334,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   max-width: var(--measure);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Autant de colonnes égales que d'onglets (trois depuis que Réunion vit dans Discussion) : le nombre n'est
+     écrit qu'à un endroit, la liste TABS de js/ui.js. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
 }
 .tabbar-item {
   min-height: var(--tabbar-h);
@@ -1428,6 +1431,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
   color: var(--muted);
 }
 .pandore-notice svg { flex: 0 0 auto; margin-top: 2px; }
+
+/* Confirmation d'un dépôt : quatre conséquences, le mot qui la nomme en tête de ligne. */
+.pandore-terms { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; }
+.pandore-terms strong { color: var(--text); font-weight: 650; }
 
 .divider { height: 1px; background: var(--line); border: 0; margin: 6px 0; }
 
@@ -3068,7 +3075,8 @@ html.has-layer body { overflow: hidden; }
 .appearance > legend { padding: 0; margin-bottom: 6px; }
 .segmented {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -3076,7 +3084,11 @@ html.has-layer body { overflow: hidden; }
   background: var(--surface-sunken);
 }
 .segmented-option { position: relative; display: block; min-width: 0; cursor: pointer; }
-.segmented-option > span {
+/* Même piste pour les deux vues de Discussion (Sujets, Réunion), en liens : la vue courante porte aria-current. */
+.subtabs { margin-bottom: 14px; }
+.segmented-link { cursor: pointer; background: transparent; min-width: 0; }
+.segmented-option > span,
+.segmented-link {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3090,7 +3102,8 @@ html.has-layer body { overflow: hidden; }
   text-align: center;
   overflow-wrap: anywhere;
 }
-.segmented-option > input:checked + span {
+.segmented-option > input:checked + span,
+.segmented-link[aria-current="page"] {
   background: var(--surface);
   border-color: var(--line-field);
   color: var(--text);

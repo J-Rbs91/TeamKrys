@@ -72,9 +72,10 @@ collectives prennent naturellement leur sens une fois connecté à l'équipe.
 
 ## Se déplacer
 
-En bas de l'écran, quatre onglets : **Sujets** (la liste, l'accueil), **Réunion** (la
-synthèse à projeter), **Pandore** (l'expression libre et anonyme) et **Réglages**. Dans
-un sujet, la barre disparaît : le bouton retour, en haut à gauche, ramène à la liste.
+En bas de l'écran, trois onglets : **Discussion**, **Pandore** (l'expression libre et
+anonyme) et **Réglages**. En haut de Discussion, deux vues : **Sujets** (la liste,
+l'accueil) et **Réunion** (la synthèse à projeter). Dans un sujet, la barre
+disparaît : le bouton retour, en haut à gauche, ramène à la liste.
 Le geste retour du téléphone ramène toujours à **Sujets**, puis quitte l'application.
 Pendant la saisie d'un texte, la barre s'efface pour laisser la place au clavier.
 
@@ -395,7 +396,7 @@ modifier.
 
 ## Synthèse à projeter ou imprimer
 
-Dans l'onglet **Réunion**, BrainstO. rassemble les sujets non archivés,
+Dans **Discussion**, vue **Réunion**, BrainstO. rassemble les sujets non archivés,
 leurs propositions encore en vote et leurs Consensus (acceptés ou rejetés par toute
 l'équipe).
 
@@ -429,7 +430,10 @@ une question, une remarque, sans attendre de réponse. On l'ouvre avec l'onglet
 **Pandore**, dans la barre du bas. Le bouton **i**, en haut à droite, en rappelle le
 principe.
 
-**Déposer.** Écrivez votre texte, puis touchez la flèche ronde (**Déposer anonymement**). Il part **sans nom ni
+**Déposer.** Écrivez votre texte, puis touchez la flèche ronde (**Déposer anonymement**). Une
+fenêtre rappelle, avant l'envoi, que le message sera **non modifiable**, **anonyme**,
+**non reconsultable** et **reformulé** par un algorithme dans la synthèse, à date fixe :
+**Envoyer** le dépose, **Annuler** le laisse dans le champ. Il part **sans nom ni
 identifiant**, même si vous signez vos messages ailleurs. C'est une boîte aux lettres :
 personne ne relit un dépôt dans l'application, pas même vous, et il ne se retire pas.
 

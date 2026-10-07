@@ -22,7 +22,7 @@ publicité ni service payant : les données restent sur le Google Drive de l'éq
 
 | | |
 |---|---|
-| **Navigation** | Quatre onglets en bas de l'écran : Sujets, Réunion, Pandore, Réglages. |
+| **Navigation** | Trois onglets en bas de l'écran : Discussion, Pandore, Réglages. Discussion a deux vues, **Sujets** et **Réunion**. |
 | **Sujets** | Un sujet par point à traiter, classé par avancement : prêt pour la réunion, en discussion, clôturé. Les plus importants s'**épinglent** en tête, pour toute l'équipe. |
 | **Discussion** | Un fil de messages par sujet. **Appui long** sur un message pour réagir, copier ou en faire une proposition ; **glisser vers la droite** pour le citer. |
 | **Explorer** | Depuis un message, **Explorer cette idée** ouvre un espace d'exploration de cette idée à l'intérieur du sujet : les réponses y restent attachées au message, sans encombrer la discussion, qui n'en montre que le nombre (« 3 réponses »). Un seul niveau. |

@@ -811,6 +811,19 @@ check("Pandore : entrée depuis l'accueil ; composeur épuré, dépôt anonyme, 
   assert(sent.length === 0 && area().getAttribute("aria-invalid") === "true", "un dépôt vide est parti, ou le refus n'est pas relié au champ");
   area().value = "  La réunion du lundi déborde  ";
   submit().click();
+  assert(sent.length === 0, "rien ne part sans confirmation");
+  let box = dialog(t);
+  assert(box && /Envoyer dans Pandore/.test(box.textContent), "la confirmation de dépôt doit s'ouvrir");
+  ["Non modifiable", "Anonyme", "Non reconsultable", "Reformulé"].forEach((word) => {
+    assert(box.textContent.indexOf(word) >= 0, "la confirmation doit rappeler : " + word);
+  });
+  assert(/algorithme/.test(box.textContent) && /date fixe/.test(box.textContent), "la reformulation par un algorithme, à date fixe, doit être dite");
+  box.querySelector('[data-key="pandore-cancel"]').click();
+  assert(!dialog(t) && sent.length === 0, "Annuler n'envoie rien");
+  assert(area().value === "  La réunion du lundi déborde  ", "Annuler garde le texte dans le champ : " + JSON.stringify(area().value));
+  submit().click();
+  dialog(t).querySelector('[data-key="pandore-confirm"]').click();
+  assert(!dialog(t), "la confirmation se ferme à l'envoi");
   assert(JSON.stringify(sent) === '["La réunion du lundi déborde"]', "dépôt : " + JSON.stringify(sent));
   assert(area().value === "", "le champ doit être vidé après le dépôt");
 });
@@ -1077,18 +1090,34 @@ check("Système : chaque action demande confirmation ; Annuler n'exécute rien ;
 
 /* ================================================== Barre de navigation ==== */
 
-check("barre de navigation : quatre onglets sur les écrans de premier niveau, l'onglet courant signalé ; absente dans un sujet", () => {
+check("barre de navigation : trois onglets (Discussion, Pandore, Réglages), l'onglet courant signalé ; Réunion vit dans Discussion ; absente dans un sujet", () => {
   const t = boot();
-  const screens = [[TOPICS, "topics"], [{ name: "meeting", raw: "#/meeting" }, "meeting"], [pandoreRoute, "pandore"], [SETTINGS, "settings"]];
+  const MEETING = { name: "meeting", raw: "#/meeting" };
+  const screens = [[TOPICS, "topics"], [MEETING, "topics"], [pandoreRoute, "pandore"], [SETTINGS, "settings"]];
   screens.forEach(([route, tab]) => {
     t.go(route);
     const nav = t.app().querySelector("nav.tabbar");
     assert(nav && nav.getAttribute("aria-label") === "Navigation principale", "barre absente sur " + route.raw);
     const items = nav.querySelectorAll(".tabbar-item");
-    assert(items.length === 4 && items.map((b) => b.textContent).join(",") === "Sujets,Réunion,Pandore,Réglages", "onglets : " + items.map((b) => b.textContent));
+    assert(items.length === 3 && items.map((b) => b.textContent).join(",") === "Discussion,Pandore,Réglages", "onglets : " + items.map((b) => b.textContent));
     const current = nav.querySelectorAll('[aria-current="page"]');
     assert(current.length === 1 && current[0].getAttribute("data-key") === "tab-" + tab, "onglet courant sur " + route.raw);
     assert(!t.app().querySelector('[data-key="back"]'), "un onglet n'a pas de bouton retour : " + route.raw);
+  });
+  /* Les deux vues de Discussion, en tête de contenu, sur Sujets et sur Réunion seulement. */
+  [[TOPICS, "topics"], [MEETING, "meeting"]].forEach(([route, view]) => {
+    t.go(route);
+    const views = t.app().querySelector('nav[data-key="discussion-tabs"]');
+    assert(views && views.getAttribute("aria-label") === "Discussion", "vues Sujets / Réunion absentes sur " + route.raw);
+    const links = views.querySelectorAll(".segmented-link");
+    assert(links.map((b) => b.textContent).join(",") === "Sujets,Réunion", "vues : " + links.map((b) => b.textContent));
+    const here = views.querySelectorAll('[aria-current="page"]');
+    assert(here.length === 1 && here[0].getAttribute("data-key") === "view-" + view, "vue courante sur " + route.raw);
+    assert(/no-print/.test(views.className), "les vues ne s'impriment pas avec la synthèse");
+  });
+  [pandoreRoute, SETTINGS].forEach((route) => {
+    t.go(route);
+    assert(!t.app().querySelector('nav[data-key="discussion-tabs"]'), "Réunion n'existe que dans Discussion : vues présentes sur " + route.raw);
   });
   t.go(topicRoute("t1"));
   assert(!t.app().querySelector("nav.tabbar"), "dans un sujet, la barre doit disparaître");
@@ -1101,6 +1130,11 @@ check("barre de navigation : quatre onglets sur les écrans de premier niveau, l
   went = null;
   t.app().querySelector('[data-key="tab-topics"]').click();
   assert(went === null, "toucher l'onglet courant ne navigue pas");
+  t.app().querySelector('[data-key="view-meeting"]').click();
+  assert(went === "#/meeting", "la vue Réunion mène à #/meeting : " + went);
+  went = null;
+  t.app().querySelector('[data-key="view-topics"]').click();
+  assert(went === null, "toucher la vue courante ne navigue pas");
 });
 
 check("Pandore : section à part, titre et invitation, bouton « i », l'anonymat dit sous le champ", () => {

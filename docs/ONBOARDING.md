@@ -531,7 +531,7 @@ flèche vers l'écran.
 **4 / 5 — LE CONSENSUS**
 Titre : « Quand toute l'équipe est d'accord »
 Corps : « Si toute l'équipe vote la même chose, pour ou contre, la proposition
-passe dans Consensus. L'onglet Réunion rassemble tout sur une page. »
+passe dans Consensus. Dans Discussion, Réunion rassemble tout sur une page. »
 
 **5 / 5 — PANDORE**
 Titre : « Ce qui ne se dit pas en réunion »

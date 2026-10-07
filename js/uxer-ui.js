@@ -46,8 +46,9 @@
     return !!(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
-  /* Les quatre onglets sont des pairs à l'écran, même si Sujets reste la racine de la pile (js/app.js, PARENT) : passer
-   * de Sujets à Réunion ne « pousse » pas un écran plus profond, cela change de rubrique. Le mouvement suit ce que l'on
+  /* Sujets, Réunion (les deux vues de Discussion), Pandore et Réglages sont des pairs à l'écran, même si Sujets reste
+   * la racine de la pile (js/app.js, PARENT) : passer de Sujets à Réunion ne « pousse » pas un écran plus profond,
+   * cela change de vue. Le mouvement suit ce que l'on
    * voit — la barre d'onglets —, pas la profondeur d'historique. */
   var TAB_PLACES = ["route:topics:", "route:meeting:", "route:pandore:", "route:settings:"];
 

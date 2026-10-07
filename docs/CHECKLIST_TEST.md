@@ -337,7 +337,7 @@ agrandie.
 - [ ] Lecteur d'écran (VoiceOver ou TalkBack) sur l'accueil : le bouton flottant est lu
       « Nouveau sujet » ; chaque compteur d'une carte est lu avec son unité (« 1 message,
       1 proposition, 1 formulation »), jamais « 1 1 1 ».
-- [ ] Appareil en **thème sombre** : onglet Réunion → Imprimer (aperçu ou
+- [ ] Appareil en **thème sombre** : Discussion → Réunion → Imprimer (aperçu ou
       enregistrement en PDF) : le document est en couleurs claires sur fond blanc, tous
       les textes sont lisibles (badges « Prêt pour la réunion » et « En discussion »,
       mentions « proposé par… » comprises) ; l'écran, lui, reste sombre. À faire sur une
@@ -570,7 +570,7 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
 
 ## 7. Réunion
 
-- [ ] Onglet **Réunion** : tous les sujets non archivés.
+- [ ] Discussion, vue **Réunion** : tous les sujets non archivés.
 - [ ] Propositions avec statut, indicateur et détail des votes.
 - [ ] Conclusions triées par nombre de votes, mention « en tête ».
 - [ ] Aperçu avant impression : barres, boutons et bandeaux masqués.
@@ -584,10 +584,13 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
 
 ## 5 bis. Barre de navigation et densité
 
-- [ ] Sujets, Réunion, Pandore, Réglages : la barre est en bas de ces quatre écrans,
-      l'onglet courant en bleu avec un trait au-dessus de l'icône.
+- [ ] Barre du bas à trois onglets : Discussion (bulle), Pandore (coffre-fort), Réglages.
+      Elle est en bas de Sujets, Réunion, Pandore et Réglages, l'onglet courant en bleu
+      avec un trait au-dessus de l'icône ; sur Réunion, c'est Discussion qui est allumé.
+- [ ] Discussion : sélecteur « Sujets / Réunion » en tête, sur ces deux vues seulement ;
+      absent de Pandore et des Réglages, absent de l'impression.
 - [ ] Dans un sujet (discussion, propositions, consensus) : pas de barre, un bouton retour.
-- [ ] Android : Sujets → Pandore → Réunion → Réglages, puis geste retour : on revient à
+- [ ] Android : Sujets → Pandore → Discussion → Réunion → Réglages, puis geste retour : on revient à
       **Sujets** ; un second retour quitte l'application.
 - [ ] Toucher un champ (Pandore, nom dans Réglages, recherche) : la barre et le bouton
       « Nouveau sujet » s'effacent pendant la saisie et reviennent ensuite.
@@ -691,6 +694,9 @@ Prérequis : backend 1.2.0 déployé. La collecte quotidienne se recette à part
       que le message part sans nom et ne peut être ni modifié ni retiré.
 - [ ] Compteur de caractères invisible sous 1 800 caractères, visible au-delà.
 - [ ] Champ vide → la flèche (**Déposer anonymement**) affiche l'erreur sous le champ, rien ne part.
+- [ ] Flèche avec un texte → fenêtre « Envoyer dans Pandore ? » : non modifiable, anonyme,
+      non reconsultable, reformulé par un algorithme à date fixe. **Annuler** : rien ne
+      part, le texte reste dans le champ. **Envoyer** : la suite ci-dessous.
 - [ ] Dépôt → bandeau « Déposé anonymement. » ; champ vidé ; le texte **n'apparaît nulle part** dans
       l'application, ni chez soi ni sur un autre téléphone.
 - [ ] Hors connexion : le dépôt part en file comme un message, puis au retour du réseau.

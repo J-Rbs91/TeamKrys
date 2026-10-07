@@ -66,20 +66,23 @@ C'est la ligne du milieu qu'on oublie, et c'est elle qui produisait le défaut.
 ### L'arbre de BrainstO.
 
 ```
-Sujets  (racine, onglet)
+Sujets  (racine, onglet Discussion)
 ├── Sujet
 │   ├── Exploration
 │   ├── Propositions
 │   └── Conclusion
-├── Réunion   (onglet)
+├── Réunion   (seconde vue de Discussion)
 ├── Pandore   (onglet)
 │   └── Synthèse
 └── Réglages  (onglet)
     └── Système
 ```
 
-**Les onglets de la barre du bas.** Réunion, Pandore et Réglages sont des enfants
-directs de Sujets, donc frères entre eux.
+**Les onglets de la barre du bas.** Trois : Discussion, Pandore, Réglages. Réunion
+n'est plus un onglet du bas : c'est la seconde vue de Discussion, atteinte par le
+sélecteur « Sujets / Réunion » en tête de l'écran, et l'onglet Discussion reste
+allumé sur elle. Dans l'arbre, rien ne change : Réunion, Pandore et Réglages sont des
+enfants directs de Sujets, donc frères entre eux.
 - Cause : passer d'un onglet à l'autre se fait à profondeur égale, donc **remplace**
   l'entrée d'historique ; quitter Sujets vers un onglet empile une seule entrée.
 - Conséquence : depuis n'importe quel onglet, le geste retour du système ramène à

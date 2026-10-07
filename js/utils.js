@@ -104,7 +104,12 @@
     eye: ["M2.8 12S6.5 6.5 12 6.5 21.2 12 21.2 12 17.5 17.5 12 17.5 2.8 12 2.8 12z", "M12 9.7a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z"],
     flag: ["M6 20V4.5", "M6 5.2c3.5-1.6 7-1.6 10.5 0v7c-3.5 1.6-7 1.6-10.5 0z"],
     pin: ["M9 3.5h6", "M10 3.5v5.2L7 12.5v1.5h10v-1.5l-3-3.8V3.5", "M12 14v6.5"],
-    inbox: ["M3.5 13.5 6 5.5h12l2.5 8", "M3.5 13.5v5h17v-5h-5l-1.2 2.2h-4.6L8.5 13.5z"],
+    /* Pandore : un coffre-fort. Ce qu'on y dépose est gardé fermé — personne ne le rouvre pour le relire — et
+     * n'en ressort que reformulé. La porte et sa molette, la poignée à droite, deux pieds : un coffre, pas une
+     * boîte aux lettres ni un cadenas, déjà pris par l'anonymat. */
+    safe: ["M5.5 4h13a2 2 0 0 1 2 2v10.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+      "M14.25 11.25a3.25 3.25 0 1 1-6.5 0 3.25 3.25 0 1 1 6.5 0z", "M11 11.25l1.4-1.4", "M17.25 9v4.5",
+      "M6.5 18.5v1.75", "M17.5 18.5v1.75"],
     mail: ["M4 6.5h16v11H4z", "m4.5 7 7.5 6 7.5-6"],
     copy: ["M9 9h10.5v10.5H9z", "M15 9V4.5H4.5V15H9"],
     share: ["M12 3.5v11", "M8 7.2 12 3.5l4 3.7", "M8.5 10.5H6v9.5h12v-9.5h-2.5"],
