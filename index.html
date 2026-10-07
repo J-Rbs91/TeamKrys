@@ -6,13 +6,52 @@
 <!-- CSP : 'unsafe-inline' ne sert qu'aux navigateurs qui ignorent les empreintes
      (CSP 1) ; les autres l'ignorent puisqu'une empreinte est présente. connect-src
      laisse libre l'adresse https du backend et les serveurs locaux de test. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UacpFeIRd1IIVO8FnZoW0bHVKshiCSWE+m9tMWhYYjQ=' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:* http://127.0.0.1:* http://127.0.0.2:*; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-WVlQEyQHGIiyJeuuAYxVT9g9iTyX0uITE1U0pk4BE2I=' 'sha256-UacpFeIRd1IIVO8FnZoW0bHVKshiCSWE+m9tMWhYYjQ=' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:* http://127.0.0.1:* http://127.0.0.2:*; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>BrainstO.</title>
 <meta name="description" content="BrainstO. : préparer les réunions de l'équipe, ensemble.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f2ede4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f0d0b" media="(prefers-color-scheme: dark)">
+<!-- Thème, AVANT les feuilles de style : posé après, l'écran s'afficherait une image dans le thème du
+     téléphone avant de basculer. « auto » suit le téléphone ; « light » et « dark » l'imposent sur cet appareil
+     (Réglages). Une seule source : l'attribut data-theme, que app.css lit. -->
+<script>
+(function (root) {
+  var KEY = "brainsto.theme";
+  var CANVAS = { light: "#f2ede4", dark: "#0f0d0b" };
+  var doc = root.document;
+  var query = null;
+  try { query = root.matchMedia ? root.matchMedia("(prefers-color-scheme: dark)") : null; } catch (e) { query = null; }
+  var valid = function (v) { return v === "light" || v === "dark" ? v : "auto"; };
+  var choice = "auto";
+  try { choice = valid(JSON.parse(root.localStorage.getItem(KEY))); } catch (e) { choice = "auto"; }
+  var resolved = function () { return choice === "auto" ? (query && query.matches ? "dark" : "light") : choice; };
+  var apply = function () {
+    var theme = resolved();
+    doc.documentElement.setAttribute("data-theme", theme);
+    var metas = doc.querySelectorAll('meta[name="theme-color"]');
+    for (var i = 0; i < metas.length; i++) { metas[i].setAttribute("content", CANVAS[theme]); }
+  };
+  apply();
+  if (query) {
+    var follow = function () { if (choice === "auto") { apply(); } };
+    if (query.addEventListener) { query.addEventListener("change", follow); } else if (query.addListener) { query.addListener(follow); }
+  }
+  root.Theme = {
+    get: function () { return choice; },
+    resolved: resolved,
+    set: function (value) {
+      choice = valid(value);
+      try {
+        if (choice === "auto") { root.localStorage.removeItem(KEY); } else { root.localStorage.setItem(KEY, JSON.stringify(choice)); }
+      } catch (e) { /* stockage indisponible : le choix vaut pour cette ouverture seulement */ }
+      apply();
+      return choice;
+    }
+  };
+})(window);
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="BrainstO.">
@@ -27,8 +66,9 @@
 <link rel="stylesheet" href="css/motion.css">
 <!-- Le fond avant la feuille de style. Sans ces deux règles, l'agent
      utilisateur peint entre le premier rendu et le chargement de app.css :
-     un flash blanc le jour, noir la nuit. Aucune requête réseau. -->
-<style>html{background:#f2ede4}@media(prefers-color-scheme:dark){html{background:#0f0d0b}}</style>
+     un flash blanc le jour, noir la nuit. Il suit data-theme, posé plus haut,
+     et non le téléphone : le choix des Réglages vaut dès la première image. -->
+<style>html{background:#f2ede4}html[data-theme=dark]{background:#0f0d0b}</style>
 </head>
 <body>
   <noscript>BrainstO. a besoin de JavaScript. Activez-le ou ouvrez l'adresse dans un navigateur récent.</noscript>

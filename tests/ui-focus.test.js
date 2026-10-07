@@ -976,6 +976,43 @@ check("Réglages, niveau 1 : nom, invitation, présentation, puis l'entrée Syst
   assert(!dialog(t), "entrer dans Système ne demande aucune confirmation : ce n'est pas une action");
 });
 
+check("Réglages, niveau 1 : Apparence Auto / Clair / Sombre, en boutons radio, appliquée sans rendu et sans confirmation", () => {
+  const t = boot();
+  const calls = [];
+  let choice = "auto";
+  t.ctx.Theme = { get: () => choice, set: (v) => { calls.push(v); choice = v; return v; }, resolved: () => "light" };
+  t.go(SETTINGS);
+  const group = t.app().querySelector('[data-key="appearance"]');
+  assert(group && group.tagName.toLowerCase() === "fieldset", "Apparence attendue au niveau 1, dans un fieldset");
+  assert(/Apparence/.test(group.querySelector("legend").textContent), "le groupe doit être nommé par sa légende");
+  const radios = group.querySelectorAll('input[type="radio"]');
+  assert(radios.length === 3 && radios.every((r) => r.getAttribute("name") === "appearance"), "trois boutons radio d'un même groupe attendus");
+  assert(["auto", "light", "dark"].join() === radios.map((r) => r.getAttribute("value")).join(), "ordre : Auto, Clair, Sombre");
+  assert(group.textContent.indexOf("Auto") >= 0 && group.textContent.indexOf("Clair") >= 0 && group.textContent.indexOf("Sombre") >= 0, "libellés absents");
+  assert(radios[0].hasAttribute("checked") && !radios[2].hasAttribute("checked"), "le choix courant (Auto) doit être coché");
+  const before = t.app().querySelector(".settings-list");
+  const dark = radios[2];
+  dark.checked = true;
+  dark.dispatchEvent({ type: "change", target: dark });
+  assert(calls.join() === "dark", "choisir Sombre doit appeler Theme.set(\"dark\") une fois : " + JSON.stringify(calls));
+  assert(!dialog(t), "changer d'apparence ne demande aucune confirmation");
+  assert(t.app().querySelector(".settings-list") === before, "changer d'apparence ne reconstruit pas l'écran : le focus reste sur l'option");
+  t.ctx.UI.force();
+  const again = t.app().querySelectorAll('[data-key="appearance"] input[type="radio"]');
+  assert(again[2].hasAttribute("checked") && !again[0].hasAttribute("checked"), "au rendu suivant, Sombre reste coché");
+  const blocks = Array.prototype.slice.call(t.app().querySelector(".content").childNodes);
+  const at = blocks.findIndex((n) => n.getAttribute("data-key") === "appearance" || !!n.querySelector('[data-key="appearance"]'));
+  assert(at === 1, "Apparence vient juste après le nom, avant la liste : rang " + at);
+});
+
+check("Réglages, niveau 1 : sans window.Theme (cache mixte), aucune Apparence plutôt qu'un choix sans effet", () => {
+  const t = boot();
+  t.ctx.Theme = undefined;
+  t.go(SETTINGS);
+  assert(!t.app().querySelector('[data-key="appearance"]'), "un choix d'apparence affiché sans moyen de l'appliquer");
+  assert(t.app().querySelector('[data-key="open-system"]'), "le reste des Réglages doit s'afficher");
+});
+
 check("Système, niveau 2 : retour vers Réglages, sans barre de navigation ; code d'espace visible ; diagnostic replié, dernière erreur toujours visible", () => {
   const t = boot();
   let up = 0;

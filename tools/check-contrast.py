@@ -120,6 +120,9 @@ COUPLES = [
     ("--muted", "--surface-sunken", COMPOSANT, "masque à l'entrée du champ d'écriture anonyme"),
     ("--on-ink", "--ink", TEXTE, "masque de la pastille d'envoi anonyme"),
     ("--ink", "--surface", COMPOSANT, "pastille d'envoi anonyme sur son anneau"),
+    ("--muted", "--surface-sunken", TEXTE, "Réglages, Apparence : option non choisie sur sa piste"),
+    ("--text", "--surface", TEXTE, "Réglages, Apparence : option choisie"),
+    ("--line-field", "--surface-sunken", COMPOSANT, "Réglages, Apparence : filet de l'option choisie sur sa piste"),
 ]
 
 
@@ -147,14 +150,13 @@ def lire_themes(chemin):
     """Renvoie (clair, sombre). Le sombre est le clair surchargé par le média."""
     css = open(chemin, encoding="utf-8").read()
     clair = _jetons(_bloc_racine(css))
-    # Le bloc sombre est limité à l'écran (`@media screen and (prefers-color-scheme: dark)`, REC-UI-043) :
-    # on accepte aussi la forme sans `screen and`, et on prend le PREMIER bloc, celui des jetons.
-    debut = re.search(r"@media\s+(?:screen\s+and\s+)?\(prefers-color-scheme:\s*dark\)", css)
+    # Le bloc sombre est `:root[data-theme="dark"]`, dans un `@media screen` (REC-UI-043) : le thème est posé
+    # par le script en ligne d'index.html, qui suit le téléphone ou le choix des Réglages.
+    debut = re.search(r":root\[data-theme=\"dark\"\]\s*\{", css)
     if debut is None:
         raise ValueError("bloc des jetons sombres introuvable dans %s" % chemin)
-    media = debut.start()
     sombre = dict(clair)
-    sombre.update(_jetons(_bloc_racine(css, media)))
+    sombre.update(_jetons(_bloc_racine(css, debut.start())))
     return clair, sombre
 
 

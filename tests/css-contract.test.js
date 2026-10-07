@@ -608,22 +608,15 @@ check("REC-UI-040 pied de carte : il passe à la ligne dès 384 px (24rem), le n
   expect(declFor(meta, "min-width", BASE) === "0", ".card-meta garde min-width: 0 (un nom sans espace ne pousse pas « Ouvrir » hors de la carte)");
 });
 
-check("REC-UI-043 jetons sombres : limités à l'écran, la palette claire reste en vigueur à l'impression", function () {
-  var css = APP_TEXT.replace(/\/\*[\s\S]*?\*\//g, "");
-  var re = /@media\s+([^{]*prefers-color-scheme:\s*dark[^{]*)\{/g;
-  var hit;
-  var token = [];
-  while ((hit = re.exec(css))) {
-    var depth = 1;
-    var i = hit.index + hit[0].length;
-    while (i < css.length && depth) {
-      if (css.charAt(i) === "{") { depth++; } else if (css.charAt(i) === "}") { depth--; }
-      i++;
-    }
-    if (/--canvas\s*:/.test(css.slice(hit.index + hit[0].length, i - 1))) { token.push(hit[1].trim()); }
-  }
-  expect(token.length === 1, "le bloc des jetons sombres (--canvas) doit exister une seule fois : " + token.length);
-  expect(/^screen\s+and\s+\(prefers-color-scheme:\s*dark\)$/.test(token[0]), "les jetons sombres doivent être limités à l'écran (@media screen and (prefers-color-scheme: dark)) ; trouvé « @media " + token[0] + " » : imprimée depuis un appareil en thème sombre, la synthèse sortirait en textes clairs sur papier blanc (REC-UI-043)");
+check("REC-UI-043 jetons sombres : posés par data-theme, limités à l'écran, la palette claire reste en vigueur à l'impression", function () {
+  var dark = RULES.filter(function (r) { return r.decls["--canvas"] !== undefined && r.media.length; });
+  expect(dark.length === 1, "le bloc des jetons sombres (--canvas) doit exister une seule fois : " + dark.length);
+  expect(dark[0].selectors.length === 1 && dark[0].selectors[0] === ':root[data-theme="dark"]',
+    "les jetons sombres doivent dépendre du thème choisi (:root[data-theme=\"dark\"]), trouvé « " + dark[0].selectors.join(", ") + " »");
+  expect(dark[0].media.length === 1 && /^screen$/.test(dark[0].media[0].trim()),
+    "les jetons sombres doivent être limités à l'écran (@media screen) ; trouvé « @media " + dark[0].media.join(" / ") + " » : imprimée depuis un appareil en thème sombre, la synthèse sortirait en textes clairs sur papier blanc (REC-UI-043)");
+  expect(!/prefers-color-scheme/.test(APP_TEXT.replace(/\/\*[\s\S]*?\*\//g, "")),
+    "plus aucune règle ne doit lire prefers-color-scheme : le téléphone est suivi par le script de thème (index.html), sinon le choix « Clair » des Réglages serait contredit");
   RULES.forEach(function (r) {
     if (r.decls["--canvas"] === undefined || !r.media.length) { return; }
     expect(r.media.some(function (c) { return /(^|\s)screen(\s|$)/.test(c); }), "« " + r.selectors.join(", ") + " » redéfinit --canvas hors d'un @media screen : il s'appliquerait à l'impression");

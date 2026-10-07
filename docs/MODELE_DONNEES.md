@@ -484,6 +484,7 @@ locaux, pas un second exemplaire à synchroniser.
 | `brainsto.localMode` | choix du mode local | oui |
 | `brainsto.showArchived` | choix « Afficher les sujets archivés » | non |
 | `brainsto.onboarding` | état de la présentation initiale (étape atteinte, terminée ou passée) | non |
+| `brainsto.theme` (`index.html`) | apparence choisie dans les Réglages, `"light"` ou `"dark"` ; absente en Auto | non |
 | `brainsto.seenTopics.v1` (`js/product-ui.js`) | ce que l'appareil a déjà consulté, pour signaler les nouveautés (porte un condensat de l'identifiant de la personne) | oui |
 | `brainsto.drafts.v1` (`js/ui.js`) | brouillons des messages en cours d'écriture | oui |
 | `brainsto.probe` (`js/utils.js`) | sonde d'écriture du stockage, écrite puis retirée aussitôt | sans objet |

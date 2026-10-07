@@ -859,6 +859,11 @@ jamais sur les données de l'équipe.
 ## 10. Finition
 
 - [ ] Thèmes clair et sombre corrects (sombre en vrai noir).
+- [ ] Réglages → Apparence : **Sombre** sur un téléphone en clair, puis **Clair** sur
+      un téléphone en sombre : tout l'écran bascule aussitôt, barre d'état et clavier
+      compris, et le choix tient après fermeture et réouverture de l'application.
+      **Auto** : changer le thème du téléphone l'application ouverte, elle suit.
+      Aucun éclair de l'autre thème au démarrage.
 - [ ] Cibles tactiles : 24 px au minimum dans les deux sens (WCAG 2.5.8, la règle
       tenue). La plupart des commandes atteignent 44 px (`--tap`) ; les plus petites
       (réactions, boutons `btn-sm`) mesurent de 24 à 36 px de haut, délibérément.

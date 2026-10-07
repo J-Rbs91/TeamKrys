@@ -32,7 +32,7 @@ publicité ni service payant : les données restent sur le Google Drive de l'éq
 | **Réunion** | Une synthèse de tous les sujets, prête à projeter ou à imprimer. |
 | **Pandore** | Une section à part : la zone d'**expression libre et anonyme**, où l'on dépose ce qui ne se dit pas en réunion (idées, plaintes, questions). Ce n'est pas une discussion : une IA en écrit une **synthèse automatique**, lisible par tous. |
 | **Invitation** | Dans les Réglages, un bouton **Partager** : le téléphone propose SMS, mail, WhatsApp… Le lien ouvre l'application déjà réglée sur l'équipe : il ne reste qu'à saisir le code d'accès. |
-| **Réglages** | Deux niveaux. Réglages : nom, réunion, invitation, présentation. **Système** : connexion et synchronisation, chaque action y demande une confirmation. |
+| **Réglages** | Deux niveaux. Réglages : nom, **apparence** (Auto, Clair, Sombre), invitation, présentation. **Système** : connexion et synchronisation, chaque action y demande une confirmation. |
 | **Hors connexion** | L'application s'ouvre sans réseau ; ce qu'on écrit part tout seul au retour de la connexion. |
 
 ## Démarrer
@@ -119,7 +119,7 @@ n'est jamais stocké (voir « Verrou » ci-dessous).
 
 ```
 index.html                 coquille de l'application
-css/app.css                thème unique, clair et sombre automatiques ; jetons de mouvement
+css/app.css                thème unique, clair et sombre (data-theme, posé par index.html) ; jetons de mouvement
 css/motion.css             continuité : appui, calques, apparitions, réponses, repère
 js/config.js               constantes (version, rythmes, clés de stockage)
 js/utils.js                DOM sûr (texte brut), dates, SHA-256, stockage

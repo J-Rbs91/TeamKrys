@@ -2766,6 +2766,7 @@
     /* Actions de plus de 30 jours retenues (BL-004) : le message de démarrage renvoie ici. Le bouton qui les
      * envoie est au niveau Système ; la ligne Système le signale seulement. */
     var staleCount = typeof Sync.staleCount === "function" ? Number(Sync.staleCount()) || 0 : 0;
+    var appearance = appearanceChoice();
 
     /* Épure : une liste de lignes, comme les réglages d'une messagerie IA. Plus de cartes, de surtitres ni de
      * paragraphes ; la synthèse de réunion a son onglet et n'est plus doublée ici. */
@@ -2777,6 +2778,7 @@
           el("button", { class: "btn btn-primary", type: "button", text: "Enregistrer",
             "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
         ])), 0),
+        appearance ? reveal(appearance, 1) : null,
         reveal(el("div", { class: "settings-list" }, [
           /* Rien à installer quand l'application est déjà ouverte depuis son icône. */
           isInstalledApp() ? null : settingsRow("download", "Installer l'application", "install-app", installApp),
@@ -2793,8 +2795,35 @@
             settingsRow("settings", "Système", "open-system", function () { App.go("#/settings/system"); },
               staleCount > 0 ? Utils.plural(staleCount, "action de plus de 30 jours en attente", "actions de plus de 30 jours en attente") : null, true)
           ])
-        ]), 1)
+        ]), 2)
       ])
+    ]);
+  }
+
+  /* Apparence : Automatique (suit le téléphone), Clair, Sombre. Le choix vaut pour CET appareil — c'est un réglage
+   * d'écran, pas de l'équipe — et s'applique sur-le-champ : le script en ligne d'index.html (window.Theme) change
+   * l'attribut que lit app.css, sans rendu. Trois boutons radio natifs, et non trois boutons : les flèches passent
+   * d'une option à l'autre et le lecteur d'écran annonce « 2 sur 3, coché » sans rien à réimplémenter.
+   * Rien à afficher sans window.Theme (cache mixte, ancien index.html) : un choix qui ne s'appliquerait pas. */
+  var APPEARANCES = [["auto", "Auto"], ["light", "Clair"], ["dark", "Sombre"]];
+
+  function appearanceChoice() {
+    var theme = root.Theme;
+    if (!theme || typeof theme.get !== "function" || typeof theme.set !== "function") { return null; }
+    var current = theme.get();
+    return el("fieldset", { class: "appearance", "data-key": "appearance" }, [
+      el("legend", { class: "label", text: "Apparence" }),
+      el("div", { class: "segmented" }, APPEARANCES.map(function (option) {
+        return el("label", { class: "segmented-option" }, [
+          el("input", {
+            class: "visually-hidden", type: "radio", name: "appearance", value: option[0],
+            checked: current === option[0], "data-key": "appearance-" + option[0],
+            onchange: function (e) { if (e.target.checked) { theme.set(option[0]); } }
+          }),
+          el("span", { text: option[1] })
+        ]);
+      })),
+      el("div", { class: "hint", text: "Auto suit le réglage du téléphone." })
     ]);
   }
 

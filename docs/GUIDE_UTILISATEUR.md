@@ -524,8 +524,14 @@ synchronisée.
 Les réglages ont deux niveaux, pour éviter les fausses manœuvres.
 
 **Réglages** (l'onglet) contient ce qui sert à chacun, sans risque : votre nom,
-**Installer l'application**, l'invitation des collaborateurs et la présentation, à
-revoir. Rien n'y coupe l'appareil de l'équipe.
+l'apparence, **Installer l'application**, l'invitation des collaborateurs et la
+présentation, à revoir. Rien n'y coupe l'appareil de l'équipe.
+
+**Apparence** : **Auto** suit le réglage du téléphone (clair le jour, sombre la nuit
+si le téléphone le fait). **Clair** et **Sombre** l'imposent, quel que soit le
+téléphone. Le choix s'applique tout de suite, sans confirmation, et vaut pour cet
+appareil seulement : il ne change rien chez les autres. À l'impression, la synthèse
+sort toujours en clair.
 
 **Installer l'application** (absent quand l'application est déjà ouverte depuis son
 icône — donc toujours absent sur iPhone, où l'application s'installe avant tout) : sur

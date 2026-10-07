@@ -236,6 +236,9 @@ async function run() {
   const head = HTML.slice(0, HTML.indexOf("</head>"));
   const inline = [];
   HTML.replace(/<script>([\s\S]*?)<\/script>/g, (m, code) => { inline.push(code); return m; });
+  /* Deux scripts en ligne : le thème, dans <head>, puis la garde, dans <body>. La garde se reconnaît à son texte. */
+  const GUARD = inline.find((code) => code.indexOf("trop ancien") >= 0) || "";
+  const THEME = inline.find((code) => code.indexOf("brainsto.theme") >= 0) || "";
 
   function runGuard(globals) {
     const appended = [];
@@ -244,15 +247,15 @@ async function run() {
       document: { body: { appendChild: (el) => appended.push(el) }, createElement: make, createTextNode: (t) => ({ text: t }), querySelector: () => null },
       window: { addEventListener: () => {} }
     }, globals || {});
-    vm.runInNewContext(inline[0], sandbox);
+    vm.runInNewContext(GUARD, sandbox);
     return appended;
   }
   const textOf = (el) => el.children.map((c) => c.text || "").join("");
   const OLD = "Ce navigateur est trop ancien pour BrainstO. Ouvrez l'adresse dans un navigateur récent (Chrome, Safari, Firefox ou Samsung Internet).";
 
   await test("BL-052 garde de démarrage en ligne AVANT le premier script", async () => {
-    assert(inline.length >= 1, "aucune garde en ligne dans index.html");
-    const guardAt = HTML.indexOf("<script>");
+    assert(GUARD, "aucune garde en ligne dans index.html");
+    const guardAt = HTML.indexOf(GUARD);
     const firstSrc = HTML.indexOf("<script src=");
     assert(guardAt > HTML.indexOf("<body") && guardAt < firstSrc, "la garde doit précéder le premier <script src>");
   });
@@ -260,7 +263,7 @@ async function run() {
   await test("BL-052 la garde ne bloque pas un navigateur récent et ne teste aucune API qui a un repli", async () => {
     assert(runGuard().length === 0, "la garde affiche un bandeau sur un navigateur complet");
     ["indexedDB", "localStorage", "sessionStorage", "randomUUID", "crypto", "serviceWorker", "fetch", "AbortController"].forEach((api) => {
-      assert(inline[0].indexOf(api) < 0, "la garde teste " + api + ", qui a un repli ou une garde dans le code");
+      assert(GUARD.indexOf(api) < 0, "la garde teste " + api + ", qui a un repli ou une garde dans le code");
     });
   });
 
@@ -271,6 +274,67 @@ async function run() {
       assert(textOf(banner[0]) === OLD, "texte du bandeau : " + JSON.stringify(textOf(banner[0])));
       assert(/position:\s*fixed/.test(banner[0].style.cssText || banner[0].attrs.style || ""), "le bandeau n'est pas plein écran");
     });
+  });
+
+  /* ------------------------------------------------------------ Thème --- */
+
+  function runTheme(opts) {
+    const o = opts || {};
+    const store = Object.assign({}, o.store || {});
+    const listeners = [];
+    const query = { matches: !!o.systemDark, addEventListener: (type, fn) => { listeners.push(fn); } };
+    const html = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+    const metas = [{ attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }, { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }];
+    const win = {
+      document: { documentElement: html, querySelectorAll: () => metas },
+      matchMedia: () => query,
+      localStorage: o.noStorage ? null : {
+        getItem: (k) => (k in store ? store[k] : null),
+        setItem: (k, v) => { store[k] = String(v); },
+        removeItem: (k) => { delete store[k]; }
+      }
+    };
+    vm.runInNewContext(THEME, { window: win, JSON });
+    return { win, html, metas, store, query, flip: (dark) => { query.matches = dark; listeners.forEach((fn) => fn()); } };
+  }
+
+  await test("Thème : script en ligne dans <head>, AVANT les feuilles de style (aucune image dans le mauvais thème)", async () => {
+    assert(THEME, "aucun script de thème en ligne dans index.html");
+    const at = HTML.indexOf(THEME);
+    assert(at < HTML.indexOf("</head>") && at < HTML.indexOf('<link rel="stylesheet"'), "le script de thème doit précéder les feuilles de style, dans <head>");
+    assert(/html\[data-theme=dark\]\{background:#0f0d0b\}/.test(head), "le fond d'avant feuille de style doit suivre data-theme, pas le téléphone");
+  });
+
+  await test("Thème : Auto suit le téléphone, y compris quand il change en cours d'ouverture", async () => {
+    const t = runTheme({ systemDark: false });
+    assert(t.html.attrs["data-theme"] === "light", "Auto sur un téléphone en clair : " + t.html.attrs["data-theme"]);
+    t.flip(true);
+    assert(t.html.attrs["data-theme"] === "dark", "le téléphone passe en sombre, l'application ne suit pas");
+    assert(t.metas.every((m) => m.attrs.content === "#0f0d0b"), "la barre du navigateur (theme-color) ne suit pas");
+    assert(t.win.Theme.get() === "auto", "choix par défaut : " + t.win.Theme.get());
+  });
+
+  await test("Thème : un choix imposé tient contre le téléphone, et se retient", async () => {
+    const t = runTheme({ systemDark: false });
+    t.win.Theme.set("dark");
+    assert(t.html.attrs["data-theme"] === "dark", "Sombre choisi sur un téléphone en clair : " + t.html.attrs["data-theme"]);
+    assert(t.store["brainsto.theme"] === '"dark"', "le choix n'est pas enregistré : " + JSON.stringify(t.store));
+    t.flip(false);
+    assert(t.html.attrs["data-theme"] === "dark", "un changement du téléphone a écrasé le choix");
+    const again = runTheme({ systemDark: true, store: { "brainsto.theme": '"light"' } });
+    assert(again.html.attrs["data-theme"] === "light", "Clair retenu, rouvert sur un téléphone en sombre : " + again.html.attrs["data-theme"]);
+    assert(again.metas.every((m) => m.attrs.content === "#f2ede4"), "theme-color ne suit pas le choix retenu");
+    again.win.Theme.set("auto");
+    assert(!("brainsto.theme" in again.store), "revenir à Auto doit effacer la clé, pas l'écrire");
+    assert(again.html.attrs["data-theme"] === "dark", "retour à Auto : le téléphone est en sombre");
+  });
+
+  await test("Thème : valeur inconnue ou stockage indisponible, repli sur Auto sans exception", async () => {
+    const odd = runTheme({ systemDark: true, store: { "brainsto.theme": "{pas du json" } });
+    assert(odd.win.Theme.get() === "auto" && odd.html.attrs["data-theme"] === "dark", "valeur illisible : " + odd.win.Theme.get());
+    const none = runTheme({ systemDark: false, noStorage: true });
+    assert(none.win.Theme.set("dark") === "dark" && none.html.attrs["data-theme"] === "dark", "sans stockage, le choix doit au moins valoir pour l'ouverture");
+    assert(none.win.Theme.set("violet") === "auto", "valeur inconnue acceptée");
   });
 
   await test("BL-052 <noscript> dit quoi faire", async () => {
@@ -296,7 +360,7 @@ async function run() {
     const scriptSrc = (/(?:^|;)\s*script-src([^;]*)/.exec(m[1]) || [])[1] || "";
     inline.forEach((code) => {
       const hash = "'sha256-" + crypto.createHash("sha256").update(code, "utf8").digest("base64") + "'";
-      assert(scriptSrc.indexOf(hash) >= 0, "empreinte de la garde absente de script-src (mettre à jour " + hash + ")");
+      assert(scriptSrc.indexOf(hash) >= 0, "empreinte d'un script en ligne absente de script-src (mettre à jour " + hash + ")");
     });
     const connect = (/(?:^|;)\s*connect-src([^;]*)/.exec(m[1]) || [])[1] || "";
     ["'self'", "https:", "http://localhost:*", "http://127.0.0.1:*"].forEach((src) => {
