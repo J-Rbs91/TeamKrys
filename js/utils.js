@@ -108,6 +108,8 @@
     mail: ["M4 6.5h16v11H4z", "m4.5 7 7.5 6 7.5-6"],
     copy: ["M9 9h10.5v10.5H9z", "M15 9V4.5H4.5V15H9"],
     share: ["M12 3.5v11", "M8 7.2 12 3.5l4 3.7", "M8.5 10.5H6v9.5h12v-9.5h-2.5"],
+    download: ["M12 3.5v11", "M8 10.5l4 4 4-4", "M5 19.5h14"],
+    addSquare: ["M5 5h14v14H5z", "M12 8.5v7", "M8.5 12h7"],
     /* Explorer : le trait part du message et s'en écarte (↳) — un sous-fil, pas un nouveau sujet. */
     explore: ["M6.5 4v7.5a4.5 4.5 0 0 0 4.5 4.5h8", "M15.5 12.5 19 16l-3.5 3.5"]
   };

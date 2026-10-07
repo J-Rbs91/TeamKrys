@@ -1077,6 +1077,77 @@
     } catch (e) { fail(); }
   }
 
+  /* ------------------------------------------------- Installer l'application --- */
+
+  /* Un seul bouton pour tous les téléphones (Réglages). Là où le navigateur sait installer de lui-même (Chrome, Edge,
+   * Samsung Internet sur Android, Chrome sur ordinateur), il annonce `beforeinstallprompt` : on garde l'événement, et le
+   * bouton ouvre directement la fenêtre d'installation du système. Ailleurs (Safari sur iPhone, Firefox…), aucun site ne
+   * peut installer lui-même : le bouton ouvre une feuille qui montre les deux gestes à faire. */
+  var installPrompt = null;
+
+  UI.installPromptReady = function (event) {
+    if (event && typeof event.preventDefault === "function") { event.preventDefault(); }
+    installPrompt = event || null;
+    if (App.route && App.route.name === "settings") { UI.force(); }
+  };
+
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("beforeinstallprompt", UI.installPromptReady);
+    window.addEventListener("appinstalled", function () {
+      installPrompt = null;
+      UI.toast("Application installée : ouvrez-la depuis son icône.");
+    });
+  }
+
+  function installApp() {
+    var prompt = installPrompt;
+    if (prompt && typeof prompt.prompt === "function") {
+      installPrompt = null;   // un événement ne sert qu'une fois
+      try {
+        prompt.prompt();
+        if (prompt.userChoice && typeof prompt.userChoice.then === "function") {
+          prompt.userChoice.then(function () { UI.force(); }, function () { UI.force(); });
+        }
+        return;
+      } catch (e) { /* fenêtre refusée : la feuille prend le relais */ }
+    }
+    UI.set({ sheet: { type: "install" } });
+  }
+
+  function installSheet() {
+    var platform = devicePlatform();
+    var steps;
+    if (inAppBrowser()) {
+      steps = [
+        ["share", "Ouvrez cette page dans Safari ou Chrome : menu ⋯, puis « Ouvrir dans le navigateur »."],
+        ["download", "Revenez dans Réglages et touchez « Installer l'application »."]
+      ];
+    } else if (platform === "ios") {
+      steps = [
+        ["share", "Touchez Partager, en bas de Safari."],
+        ["addSquare", "Choisissez « Sur l'écran d'accueil », puis « Ajouter »."]
+      ];
+    } else {
+      steps = [
+        ["down", "Ouvrez le menu ⋮ du navigateur."],
+        ["addSquare", "Touchez « Installer l'application » ou « Ajouter à l'écran d'accueil »."]
+      ];
+    }
+    /* ⚠️ Sur iPhone, l'application installée ne voit rien de ce que Safari a gardé : elle redemande l'équipe. Copier
+     * l'invitation AVANT d'installer permet de la coller à la première ouverture (« Coller l'invitation »). */
+    var connected = !(Sync.connection.localMode || !Sync.connection.url);
+    var invite = platform === "ios" && connected && typeof App.inviteLink === "function" ? App.inviteLink() : "";
+    return sheet("Installer l'application", el("div", { class: "stack" }, [
+      el("ol", { class: "install-guide" }, steps.map(function (step) {
+        return el("li", {}, [el("span", { class: "install-guide-icon", "aria-hidden": "true" }, [icon(step[0], 20)]),
+          el("span", { text: step[1] })]);
+      })),
+      invite ? el("p", { class: "hint", text: "L'application installée vous redemandera l'équipe : copiez l'invitation avant, vous la collerez à l'ouverture." }) : null,
+      invite ? el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "install-copy-invite",
+        onclick: function () { copyText(invite, "Invitation copiée."); } }, [icon("copy", 16), el("span", { text: "Copier l'invitation" })]) : null
+    ]));
+  }
+
   function installCard(platform) {
     var steps = platform === "ios" ? [
       "Dans Safari, touchez Partager, puis « Sur l'écran d'accueil ».",
@@ -2705,6 +2776,8 @@
             "data-key": "save-name", onclick: function () { App.saveName(nameInput.value, true); } })
         ])), 0),
         reveal(el("div", { class: "settings-list" }, [
+          /* Rien à installer quand l'application est déjà ouverte depuis son icône. */
+          isInstalledApp() ? null : settingsRow("download", "Installer l'application", "install-app", installApp),
           inviteLink ? el("div", { "data-key": "invite-settings" }, [
             settingsRow("share", "Inviter des collaborateurs", "invite-share", function () { shareInvitation(inviteLink, withCode); },
               withCode ? "Ajoutez le code d'accès à la fin du message." : null)
@@ -3296,6 +3369,7 @@
       if (spec.type === "message") { node = messageSheet(spec); }
       else if (spec.type === "topicInfo") { node = topicInfoSheet(spec); }
       else if (spec.type === "pandoreInfo") { node = pandoreInfoSheet(); }
+      else if (spec.type === "install") { node = installSheet(); }
     } else if (UI.local.modal) {
       var m = UI.local.modal;
       if (m.type === "createTopic") { node = createTopicModal(m); }

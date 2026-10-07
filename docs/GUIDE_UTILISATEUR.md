@@ -518,9 +518,17 @@ synchronisée.
 
 Les réglages ont deux niveaux, pour éviter les fausses manœuvres.
 
-**Réglages** (l'onglet) contient ce qui sert à chacun, sans risque : votre nom, la
-synthèse de **Réunion**, l'invitation des collaborateurs et la présentation, à revoir.
-Rien n'y coupe l'appareil de l'équipe.
+**Réglages** (l'onglet) contient ce qui sert à chacun, sans risque : votre nom,
+**Installer l'application**, l'invitation des collaborateurs et la présentation, à
+revoir. Rien n'y coupe l'appareil de l'équipe.
+
+**Installer l'application** (absent quand l'application est déjà ouverte depuis son
+icône) : sur Android avec Chrome, Edge ou Samsung Internet, la fenêtre d'installation
+du téléphone s'ouvre directement. Sur iPhone, aucun site ne peut s'installer seul :
+une fenêtre montre les deux gestes (**Partager**, puis **Sur l'écran d'accueil**).
+L'application installée sur iPhone redemande l'équipe : copiez l'invitation avant
+(bouton proposé dans la même fenêtre), puis touchez « Coller l'invitation » à
+l'ouverture.
 
 **Système** (en bas des Réglages) contient la connexion et la synchronisation. On n'y
 va que pour dépanner. Aucun mot de passe n'en garde l'entrée, mais **chaque action y

@@ -3020,7 +3020,6 @@ html.has-layer body { overflow: hidden; }
   background: var(--surface);
   overflow: hidden;
 }
-.settings-list > * + * { border-top: 1px solid var(--line); }
 .settings-row {
   display: flex;
   align-items: center;
@@ -3038,6 +3037,23 @@ html.has-layer body { overflow: hidden; }
 .settings-row > .icon { color: var(--muted); }
 .settings-row:active { background: var(--surface-sunken); }
 .settings-row-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+/* Après .settings-row (qui remet son bord à zéro) : sinon deux lignes-boutons voisines perdaient leur filet. */
+.settings-list > * + * { border-top: 1px solid var(--line); }
 
 /* Écran « Votre nom » : la question tient lieu de titre. */
 .setup-question { font-size: var(--page-title); margin: 12px 0 4px; }
+
+/* Feuille « Installer l'application » : chaque geste avec l'icône que la personne va chercher à l'écran. */
+.install-guide { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: step; }
+.install-guide li { display: flex; align-items: center; gap: 12px; }
+.install-guide-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--text);
+}

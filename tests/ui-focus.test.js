@@ -709,6 +709,41 @@ check("Détails du sujet : « Épingler pour toute l'équipe » envoie l'épingl
   assert(/mis à jour/.test(dialog(old).textContent), "la raison de l'indisponibilité n'est pas dite");
 });
 
+/* ================================================ Installer l'application ==== */
+
+check("Réglages : un seul bouton « Installer l'application » ; fenêtre du système quand le navigateur la propose, sinon les gestes (iPhone : Partager puis Sur l'écran d'accueil) ; absent une fois installée", () => {
+  const t = boot();
+  t.go(SETTINGS);
+  const row = () => t.app().querySelector('[data-key="install-app"]');
+  assert(row() && /Installer l'application/.test(row().textContent), "bouton d'installation absent des Réglages");
+
+  /* Android (Chrome, Edge, Samsung) : le navigateur a annoncé l'installation, le bouton ouvre SA fenêtre. */
+  let prompted = 0;
+  t.ctx.UI.installPromptReady({ preventDefault() {}, prompt() { prompted += 1; }, userChoice: Promise.resolve({ outcome: "accepted" }) });
+  row().click();
+  assert(prompted === 1 && !dialog(t), "la fenêtre d'installation du système doit s'ouvrir, sans feuille");
+
+  /* iPhone : aucune installation automatique possible, la feuille montre les deux gestes et propose de copier l'invitation. */
+  t.ctx.navigator.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+  t.ctx.App.inviteLink = () => "https://exemple.invalid/#/invitation/abc";
+  row().click();
+  const sheet = dialog(t);
+  assert(sheet && /Partager/.test(sheet.textContent) && /Sur l'écran d'accueil/.test(sheet.textContent), "gestes iPhone attendus : " + (sheet && sheet.textContent));
+  assert(sheet.querySelector('[data-key="install-copy-invite"]'), "sur iPhone, l'invitation se copie avant d'installer");
+  t.escape();
+
+  /* Android sans fenêtre du système (Firefox…) : le menu du navigateur. */
+  t.ctx.navigator.userAgent = "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0";
+  row().click();
+  assert(/menu ⋮/.test(dialog(t).textContent) && !dialog(t).querySelector('[data-key="install-copy-invite"]'), "gestes Android attendus");
+  t.escape();
+
+  /* Déjà installée (ouverte depuis l'icône) : rien à proposer. */
+  t.ctx.matchMedia = (q) => ({ matches: /standalone/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  t.go(SETTINGS);
+  assert(!row(), "le bouton ne doit pas apparaître dans l'application installée");
+});
+
 /* ============================================================== Consensus ==== */
 
 const consensusRoute = (id) => ({ name: "conclusion", topicId: id, raw: "#/topic/" + id + "/conclusion" });
