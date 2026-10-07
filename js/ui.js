@@ -118,11 +118,14 @@
   var forceNext = false;
   /* Instant de la dernière entrée sur un écran, et durée pendant laquelle un
    * rendu qui retombe au même endroit doit REPRENDRE l'animation au lieu de la
-   * perdre. 1400 ms couvre la séquence la plus longue du thème — l'accueil,
-   * dont la signature se pose à 1060 ms — avec de la marge. Au-delà, l'entrée est finie : un rendu tardif
-   * ne doit surtout rien rejouer. */
+   * perdre. 1400 ms couvre toutes les entrées d'écran du thème avec de la
+   * marge. Les écrans du monogramme (accueil, verrou : ceux qui portent un
+   * `.hero`) ont la leur, plus longue : leur signature se pose à 2950 ms, et un
+   * rendu de synchronisation tombé entre-temps figeait la séquence à mi-tour.
+   * Au-delà, l'entrée est finie : un rendu tardif ne doit surtout rien rejouer. */
   var enterAt = 0;
   var ENTER_WINDOW_MS = 1400;
+  var HERO_WINDOW_MS = 3400;
 
   /* État d'interface local (jamais partagé). */
   UI.local = {
@@ -3582,7 +3585,6 @@
       enterAt = Utils.now();
     } else if (enterAt !== 0) {
       elapsed = Utils.now() - enterAt;
-      if (elapsed < ENTER_WINDOW_MS) { entering = true; } else { enterAt = 0; elapsed = 0; }
     }
 
     var drafts = captureDrafts();
@@ -3597,6 +3599,11 @@
 
     Utils.clear(appRoot);
     var screen = currentScreen();
+    /* La fenêtre dépend de l'écran construit : on ne sait qu'ici s'il porte le monogramme. */
+    if (!entering && enterAt !== 0) {
+      if (elapsed < (screen.querySelector(".hero") ? HERO_WINDOW_MS : ENTER_WINDOW_MS)) { entering = true; }
+      else { enterAt = 0; elapsed = 0; }
+    }
     if (entering) {
       screen.classList.add("screen--enter");
       screen.style.setProperty("--enter-elapsed", elapsed + "ms");

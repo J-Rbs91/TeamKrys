@@ -220,10 +220,10 @@
    * Pourquoi du SVG et non deux <div> comme avant : un anneau en `border` ne
    * sait pas se tracer. Le trait, lui, s'anime par `stroke-dashoffset`.
    *
-   * Le geste raconte le produit en trois temps : quatre points CONVERGENT vers
-   * le centre et s'y fondent (les idées qui arrivent), le cercle se referme
-   * pendant qu'ils disparaissent (la discussion les absorbe), puis un point
-   * unique apparaît à côté (la décision qui en sort).
+   * Le geste raconte le produit comme un tour de table : le trait fait le tour
+   * de l'anneau à vitesse constante, quatre idées arrivent chacune à sa place
+   * et s'y fondent au moment où il passe (chacun son tour), un silence, puis un
+   * point unique apparaît à côté (la décision qui en sort).
    *
    * Les quatre points de convergence n'appartiennent pas à la marque : ils
    * n'existent QUE pendant l'animation. Au repos ils sont à opacité nulle, et
@@ -254,20 +254,35 @@
     svg.setAttribute("focusable", "false");
     svg.setAttribute("class", "logo-mark");
 
-    /* Positions de départ, en unités du viewBox, relatives au centre de
-     * l'anneau. Réparties sur les quatre quadrants et à des distances
-     * inégales : quatre points équidistants forment une croix, et une croix se
-     * lit comme un motif décoratif, pas comme des idées qui arrivent. */
-    var SEMENCES = [[-26, -20], [24, -26], [-30, 14], [10, 26]];
+    /* Le tour de table. Chaque idée a sa PLACE autour de l'anneau — un angle,
+     * compté en degrés depuis midi dans le sens du tracé — et une distance de
+     * départ. Elle rejoint l'anneau à sa place, et elle y arrive à l'instant
+     * précis où le trait passe : le cercle ramasse les idées une à une, comme
+     * un tour de table donne la parole à chacun son tour.
+     * Places inégalement espacées, distances inégales : quatre points
+     * réguliers forment une croix, et une croix se lit comme un motif
+     * décoratif, pas comme des idées qui arrivent. Aucune place à midi : le
+     * trait y passe dès le départ, l'idée n'aurait pas le temps d'arriver. */
+    var SEMENCES = [[60, 46], [145, 40], [225, 44], [310, 38]];
     for (var i = 0; i < SEMENCES.length; i++) {
+      var angle = SEMENCES[i][0] * Math.PI / 180;
+      var sin = Math.sin(angle);
+      var cos = Math.cos(angle);
       var semence = document.createElementNS(SVG_NS, "circle");
       semence.setAttribute("cx", String(LOGO.cx));
       semence.setAttribute("cy", String(LOGO.cy));
       semence.setAttribute("r", "4.2");
       semence.setAttribute("fill", "currentColor");
       semence.setAttribute("class", "logo-seed");
-      semence.style.setProperty("--sx", SEMENCES[i][0] + "px");
-      semence.style.setProperty("--sy", SEMENCES[i][1] + "px");
+      /* Départ au large, arrivée SUR le trait (au rayon de l'anneau), dans la
+       * même direction : l'idée glisse droit vers sa place. */
+      semence.style.setProperty("--sx", (SEMENCES[i][1] * sin).toFixed(2) + "px");
+      semence.style.setProperty("--sy", (-SEMENCES[i][1] * cos).toFixed(2) + "px");
+      semence.style.setProperty("--ex", (LOGO.r * sin).toFixed(2) + "px");
+      semence.style.setProperty("--ey", (-LOGO.r * cos).toFixed(2) + "px");
+      /* Fraction du tour à laquelle le trait atteint cette place. app.css en
+       * tire le délai : le rendez-vous se calcule, il ne se règle pas à l'œil. */
+      semence.style.setProperty("--catch", (SEMENCES[i][0] / 360).toFixed(4));
       /* Même raison que pour le point : une origine en pourcentage exigerait
        * `transform-box: fill-box`. En unités utilisateur, elle est juste
        * partout, sans propriété supplémentaire. */
@@ -292,6 +307,11 @@
      * elles se rejoignent au pixel près. */
     ring.setAttribute("class", "logo-ring");
     ring.style.setProperty("--logo-c", LOGO_C.toFixed(2));
+    /* La rotation de -90° (app.css) tourne autour du CENTRE DE L'ANNEAU, en
+     * unités utilisateur. Elle tournait autour de `50% 50%`, qui se résout
+     * contre le viewBox entier : l'anneau était déplacé de 6,5 unités vers le
+     * bas et la droite, loin du point et de l'icône de l'application. */
+    ring.style.transformOrigin = LOGO.cx + "px " + LOGO.cy + "px";
     svg.appendChild(ring);
 
     /* Le point est le seul froid de la marque au repos : l'anneau diverge, le

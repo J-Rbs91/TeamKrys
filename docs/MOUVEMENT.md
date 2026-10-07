@@ -68,7 +68,7 @@ Une courbe par **nature** de mouvement, pas par composant :
 | `--ease-move` | ce qui est déjà là et se déplace ou change de forme | départ doux : un objet posé ne bondit pas |
 | `--ease-drawer` | une surface qui arrive d'un bord (feuille du bas) | très longue décélération, arrivée sans à-coup |
 | `--ease-in-out` | une oscillation (pastille de synchronisation, chatoiement) | symétrique, parce que le mouvement l'est |
-| `--ease-mark`, `--ease-spring`, `--ease-in` | la séquence du monogramme, seulement | sa chorégraphie a été réglée avec elles |
+| `--ease-mark`, `--ease-spring`, `--ease-in` | la séquence du monogramme, seulement | sa chorégraphie a été réglée avec elles ; son tracé, lui, est linéaire (un tour de table donne le même temps à chacun) |
 
 Les durées sont bornées par la règle de fréquence. Rien de ce qui appartient à
 l'interface ne dépasse 300 ms, et une **sortie est toujours plus courte que

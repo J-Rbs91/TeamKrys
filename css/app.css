@@ -272,11 +272,10 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-mark: cubic-bezier(0.2, 0, 0, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  /* Accélération. Elle ne sert QU'aux points de convergence du monogramme, et
-     c'est la seule chose du fichier qui ARRIVE quelque part au lieu de se
-     poser. Avec --ease-out, ils parcouraient 80 % du trajet dans les 150
-     premières millisecondes puis stagnaient : la convergence ne se lisait
-     plus, on voyait quatre pastilles clignoter au centre. */
+  /* Accélération. Elle ne sert QU'aux quatre idées du monogramme, et c'est la
+     seule chose du fichier qui ARRIVE quelque part au lieu de se poser. Avec
+     --ease-out, elles parcouraient presque tout le trajet au départ puis
+     stagnaient : on ne voyait plus d'arrivée, seulement des pastilles. */
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   /* Durées, bornées par la règle de fréquence : ce qui se répète plusieurs
      fois par minute (appui, survol) reste sous 100 ms ; rien de ce qui
@@ -640,62 +639,81 @@ p { margin: 0; }
    Il ne retarde rien : sur l'écran de verrou, le champ de code est saisissable
    dès le premier rendu, l'animation se joue derrière.
 
-   CE QU'IL RACONTE, en trois temps qui se chevauchent :
+   CE QU'IL RACONTE : UN TOUR DE TABLE.
 
-     0 → 520 ms   quatre points convergent vers le centre et s'y fondent
-                  — les idées qui arrivent ;
-   220 → 740 ms   le cercle se referme pendant qu'ils disparaissent
-                  — la discussion les absorbe ;
-   660 → 980 ms   un point unique apparaît à côté
-                  — la décision qui en sort.
-   700 → 980 ms   le logotype monte d'un bloc.
-   820 → 1060 ms  la signature se révèle, en fondu seul.
+      0 → 450 ms    la première idée approche, l'anneau n'existe pas encore ;
+    450 → 2050 ms   le trait fait le tour de l'anneau, à vitesse constante,
+                    depuis midi. Quatre idées arrivent du large, chacune vers
+                    sa place, et s'y fondent À L'INSTANT où le trait passe
+                    — chacun son tour, comme un tour de table ;
+   2050 → 2250 ms   rien ne bouge. C'est voulu : la délibération ;
+   2250 → 2650 ms   un point unique apparaît à côté et « atterrit »
+                    — la décision qui en sort.
+   2150 → 2650 ms   le logotype monte d'un bloc.
+   2550 → 2950 ms   la signature se révèle, en fondu seul.
 
-   Le point et le logotype se terminent SUR LE MÊME INSTANT. C'est délibéré :
-   joués l'un après l'autre, le monogramme et le logotype se lisaient comme
-   deux séquences successives ; résolus ensemble, ils n'en font qu'une.
+   Pourquoi presque trois secondes. La séquence précédente tenait en une
+   seconde : tout s'y chevauchait, et on ne voyait qu'un éclair — ni les idées,
+   ni le cercle, ni la décision. Ce rythme est celui d'une ouverture, vue une
+   fois par session, jamais celui de l'interface (qui reste sous 300 ms).
 
-   La signature ferme la marche, et elle n'a PAS toujours été animée — c'est
-   une correction. Immobile, elle s'affichait dès la première image et restait
-   seule sous un logo en train de se dessiner, à annoncer un nom qui n'était
-   pas encore arrivé. Un élément non animé au milieu d'une séquence n'est pas
-   neutre : il la contredit.
+   Le trait est LINÉAIRE, et c'est la seule animation linéaire en mouvement du
+   thème. Un tour de table donne le même temps à chacun : une courbe qui freine
+   tasserait les dernières places en fin de tour. C'est aussi ce qui rend le
+   rendez-vous calculable — le trait atteint la place p (fraction du tour) à
+   début + durée × p, et chaque idée part juste assez tôt pour y être.
 
-   Le chevauchement est ce qui tient la durée totale à 980 ms alors que la
-   somme des trois temps dépasse 1,3 s. Enchaînés bout à bout, ce serait un
-   diaporama.
+   Le point et le logotype se terminent SUR LE MÊME INSTANT, et la durée du
+   logotype est retranchée de cet instant au lieu d'être réglée à part :
+   joués l'un après l'autre, ils se lisaient comme deux séquences.
+
+   Le silence avant la décision est la seule pause du thème. Sans elle, le
+   point sortait du cercle comme une conséquence mécanique du tracé ; avec
+   elle, il se lit comme une conclusion.
 
    Coût de rendu : `stroke-dashoffset`, `transform` et `opacity` uniquement.
    Aucun filtre, aucune ombre animée, aucune bibliothèque. */
 
+/* La chorégraphie entière tient dans ces cinq valeurs : tous les délais en
+   sont DÉRIVÉS. Ralentir ou accélérer le tour garde les rendez-vous justes. */
+.hero {
+  --mark-ring-start: 0.45s;  /* le trait part de midi */
+  --mark-ring-dur: 1.6s;     /* un tour complet */
+  --mark-seed-dur: 0.7s;     /* trajet d'une idée vers sa place */
+  --mark-hold: 0.2s;         /* le silence avant la décision */
+  --mark-dot-dur: 0.4s;      /* le point atterrit */
+}
+
 /* Le cercle part du haut. Sans cette rotation, un <circle> commence son tracé
    à 3 h et le geste devient illisible. Rotation posée sur l'élément, pas dans
-   l'animation : elle doit tenir aussi quand l'animation ne se joue pas. */
+   l'animation : elle doit tenir aussi quand l'animation ne se joue pas. Son
+   origine — le centre de l'anneau, en unités utilisateur — est posée par
+   Utils.logoMark : un `50% 50%` se résolvait contre le viewBox entier et
+   déplaçait l'anneau. */
 .logo-ring {
   transform: rotate(-90deg);
-  transform-origin: 50% 50%;
 }
 
 /* ÉTAT AU REPOS = ÉTAT FINAL. Rien n'est masqué ni décalé ici : sans
    animation — mouvement réduit activé, ou moteur qui ignore la requête — le
    monogramme est complet et bien placé. C'est le mode de panne à ne jamais
    produire : un logo figé à moitié tracé, sans message d'erreur.
-   Les quatre points de convergence, eux, sont à opacité nulle au repos (posée
-   en ligne par Utils.logoMark) : sans mouvement ils ne s'affichent jamais, ce
-   qui est le bon repli pour un élément purement décoratif. */
+   Les quatre idées, elles, sont à opacité nulle au repos (posée en ligne par
+   Utils.logoMark) : sans mouvement elles ne s'affichent jamais, ce qui est le
+   bon repli pour un élément purement décoratif. */
 @keyframes logo-ring-draw {
   from { stroke-dashoffset: var(--logo-c); }
   to { stroke-dashoffset: 0; }
 }
 
-/* Les idées convergent. Elles ARRIVENT invisibles, se montrent en chemin, puis
-   s'éteignent au centre : le point d'arrivée n'est pas une accumulation de
-   quatre pastilles au milieu de l'anneau, c'est leur disparition dedans. */
+/* Une idée arrive. Elle naît petite et transparente au large, grandit en
+   chemin, et finit SUR le trait, à pleine opacité, de la couleur de l'anneau :
+   à l'instant où le trait la recouvre, elle n'est plus distincte de lui. Son
+   opacité de repos (nulle) reprend la main sous le trait — aucun saut visible. */
 @keyframes logo-seed-in {
-  from { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.4); }
-  25% { opacity: 0.85; }
-  80% { opacity: 0.85; }
-  to { opacity: 0; transform: none; }
+  from { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0.5); }
+  35% { opacity: 0.7; }
+  to { opacity: 1; transform: translate(var(--ex), var(--ey)); }
 }
 
 /* La décision. Elle n'arrive de nulle part — elle apparaît, et c'est le sens :
@@ -706,15 +724,17 @@ p { margin: 0; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Elles accélèrent (--ease-in) : une idée ATTIRÉE par sa place, pas posée
+     dessus. Le départ de chacune est le rendez-vous moins le trajet. */
   .screen--enter .logo-seed {
-    animation: logo-seed-in 0.52s var(--ease-in) backwards;
-    animation-delay: calc(0s - var(--enter-elapsed, 0ms));
+    animation: logo-seed-in var(--mark-seed-dur) var(--ease-in) backwards;
+    animation-delay: calc(var(--mark-ring-start) + var(--mark-ring-dur) * var(--catch, 0) - var(--mark-seed-dur) - var(--enter-elapsed, 0ms));
   }
 
   .screen--enter .logo-ring {
     stroke-dasharray: var(--logo-c);
-    animation: logo-ring-draw 0.52s var(--ease-mark) backwards;
-    animation-delay: calc(0.22s - var(--enter-elapsed, 0ms));
+    animation: logo-ring-draw var(--mark-ring-dur) linear backwards;
+    animation-delay: calc(var(--mark-ring-start) - var(--enter-elapsed, 0ms));
   }
 
   /* L'origine de transformation est posée en unités utilisateur par
@@ -723,8 +743,8 @@ p { margin: 0; }
   .screen--enter .logo-dot {
     /* La courbe dépasse puis revient : le point « atterrit ». C'est le seul
        usage de --ease-spring du fichier. */
-    animation: logo-dot-pop 0.32s var(--ease-spring) backwards;
-    animation-delay: calc(0.66s - var(--enter-elapsed, 0ms));
+    animation: logo-dot-pop var(--mark-dot-dur) var(--ease-spring) backwards;
+    animation-delay: calc(var(--mark-ring-start) + var(--mark-ring-dur) + var(--mark-hold) - var(--enter-elapsed, 0ms));
   }
 }
 
@@ -746,14 +766,16 @@ p { margin: 0; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Fin du logotype = fin du point : son départ est cet instant moins sa
+     propre durée. */
   .screen--enter .wordmark {
-    animation: wordmark-rise 0.28s var(--ease-mark) backwards;
-    animation-delay: calc(0.7s - var(--enter-elapsed, 0ms));
+    animation: wordmark-rise 0.5s var(--ease-mark) backwards;
+    animation-delay: calc(var(--mark-ring-start) + var(--mark-ring-dur) + var(--mark-hold) + var(--mark-dot-dur) - 0.5s - var(--enter-elapsed, 0ms));
   }
 
   .screen--enter .tagline {
-    animation: tagline-in 0.24s linear backwards;
-    animation-delay: calc(0.82s - var(--enter-elapsed, 0ms));
+    animation: tagline-in 0.4s linear backwards;
+    animation-delay: calc(var(--mark-ring-start) + var(--mark-ring-dur) + var(--mark-hold) + var(--mark-dot-dur) - 0.1s - var(--enter-elapsed, 0ms));
   }
 }
 

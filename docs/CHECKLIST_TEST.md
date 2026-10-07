@@ -132,6 +132,9 @@ présentation ne s'affiche pas — c'est le comportement voulu.
       retour en haut du document. (Le bouton se masque alors qu'il peut porter le focus.)
 - [ ] Police système à **130 %** en plus de 200 % : la rangée de commandes ne déborde
       pas, et **aucun défilement horizontal** n'apparaît dans la feuille.
+- [ ] Accueil et verrou : le monogramme se trace en ~3 s ; chaque idée touche
+      l'anneau **au passage du trait**, un temps d'arrêt, puis le point atterrit en
+      même temps que le logotype finit de monter. Anneau centré, aligné sur l'icône.
 - [ ] Panneau 5 sous mouvement réduit : anneau du monogramme **complet** et point
       présent — c'est le seul composant réutilisé que le test statique ne couvre pas.
 - [ ] Geste de retour du système pendant la séquence : il **ferme** le panneau. Il ne

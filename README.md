@@ -382,31 +382,43 @@ qu'une séquence de cette longueur reste supportable : la même animation sur un
 bouton serait interdite par la règle ci-dessus. Il ne retarde rien — sur l'écran
 de verrou, le champ de code est saisissable dès le premier rendu.
 
-Ce qu'il raconte, en quatre temps qui **se chevauchent** :
+Ce qu'il raconte : **un tour de table**, en un peu moins de trois secondes.
 
 | | Quand | Ce qui se passe | Ce que ça dit |
 |---|---|---|---|
-| 1 | 0 → 520 ms | quatre points convergent vers le centre et s'y fondent | les idées qui arrivent |
-| 2 | 220 → 740 ms | le cercle se referme pendant qu'ils disparaissent | la discussion les absorbe |
-| 3 | 660 → 980 ms | un point unique apparaît à côté | la décision qui en sort |
-| 4 | 700 → 980 ms · 820 → 1060 ms | le logotype monte d'un bloc, puis la signature se révèle | — |
+| 1 | 450 → 2050 ms | le trait fait le tour de l'anneau à vitesse constante, depuis midi | le tour de table |
+| 2 | 0 → 1830 ms | quatre idées arrivent du large, chacune vers sa place, et s'y fondent **à l'instant où le trait passe** | chacun son tour |
+| 3 | 2050 → 2250 ms | rien ne bouge | la délibération |
+| 4 | 2250 → 2650 ms | un point unique apparaît à côté et « atterrit » | la décision qui en sort |
+| 5 | 2150 → 2650 ms · 2550 → 2950 ms | le logotype monte d'un bloc, puis la signature se révèle | — |
 
-Le point (3) et le logotype (4) se terminent **sur le même instant**. C'est
-délibéré : joués l'un après l'autre, le monogramme et le logotype se lisaient
-comme deux séquences successives ; résolus ensemble, ils n'en font qu'une. Et
-c'est le chevauchement qui tient le total à 1060 ms alors que la somme des temps
-dépasse 1,8 s — enchaînés bout à bout, ce serait un diaporama.
+La séquence tenait auparavant en une seconde : tout s'y chevauchait, et on ne
+voyait qu'un éclair. Ce rythme est celui d'une ouverture, vue une fois par
+session — jamais celui de l'interface, qui reste sous 300 ms.
+
+Le trait est **linéaire** : un tour de table donne le même temps à chacun, et une
+courbe qui freine tasserait les dernières places. C'est aussi ce qui rend le
+rendez-vous calculable : chaque idée porte sa place (`--catch`, fraction du tour)
+et `css/app.css` en déduit son départ. Toute la chorégraphie dérive de cinq
+valeurs posées sur `.hero` (`--mark-*`) ; changer la durée du tour garde les
+rendez-vous justes. Le point (4) et le logotype (5) se terminent **sur le même
+instant**, et le silence (3) est la seule pause du thème : sans lui, la décision
+sortait du cercle comme une conséquence mécanique du tracé.
+
+Un rendu de synchronisation tombé pendant la séquence la **reprend** où elle en
+était : les écrans du monogramme ont une fenêtre de reprise de 3400 ms
+(`HERO_WINDOW_MS`, `js/ui.js`), les autres gardent 1400 ms.
 
 Trois décisions moins évidentes :
 
-- **Les quatre points n'appartiennent pas à la marque.** Ils n'existent que
-  pendant l'animation : au repos leur opacité est nulle, et leur animation s'y
-  termine aussi. Sans mouvement ils ne s'affichent jamais, et le monogramme
-  reste l'anneau et son point.
-- **Ils accélèrent au lieu de freiner** (`--ease-in`, la seule occurrence du
-  fichier). Avec la courbe amortie du reste du thème, ils parcouraient 80 % du
-  trajet dans les 150 premières millisecondes puis stagnaient : on ne voyait
-  plus une convergence mais quatre pastilles clignoter au centre.
+- **Les quatre idées n'appartiennent pas à la marque.** Elles n'existent que
+  pendant l'animation : au repos leur opacité est nulle, et elles finissent sous
+  le trait, de sa couleur. Sans mouvement elles ne s'affichent jamais, et le
+  monogramme reste l'anneau et son point.
+- **Elles accélèrent au lieu de freiner** (`--ease-in`, la seule occurrence du
+  fichier) : une idée attirée par sa place, pas posée dessus. Avec la courbe
+  amortie du reste du thème, elles parcouraient presque tout le trajet au début
+  puis stagnaient, et on ne voyait plus d'arrivée.
 - **La signature est animée**, alors qu'elle ne l'était pas. Immobile, elle
   s'affichait dès la première image et restait seule sous un logo en train de se
   dessiner, à annoncer un nom pas encore arrivé. Un élément non animé au milieu
@@ -417,7 +429,9 @@ Et trois points d'implémentation :
 - Le monogramme est construit en **SVG inline** par `Utils.logoMark` : un anneau
   en `border` ne sait pas se tracer, un trait SVG oui (`stroke-dashoffset`). Le
   cercle est tourné de -90° pour que le tracé parte du haut — sans quoi un
-  `<circle>` commence à 3 h et le geste devient illisible.
+  `<circle>` commence à 3 h et le geste devient illisible. Cette rotation tourne
+  autour du centre de l'anneau, en unités utilisateur : en `50% 50%`, elle
+  tournait autour du centre du viewBox et décalait l'anneau par rapport à l'icône.
 - Les bouts du trait sont **droits**, seul écart au jeu d'icônes : le tiret vaut
   exactement une circonférence, et des bouts arrondis se recouvriraient d'un
   demi-trait une fois le cercle refermé, laissant un épaississement en haut.

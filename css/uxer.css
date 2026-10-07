@@ -289,6 +289,13 @@ html.ux-route-fallback[data-ux-direction="branch-out"] .screen--enter {
   animation: ux-route-fallback-lateral var(--dur-base) var(--ease-out) both;
 }
 
+/* Un rendu qui retombe sur le même écran pendant son entrée repose `.screen--enter` (js/ui.js) : sans le temps écoulé
+   retranché, le glissement de page se rejouait depuis le début. Même sélecteur à attribut que les trois règles du
+   dessus, placé après : il l'emporte sur le délai nul de leur raccourci. */
+html.ux-route-fallback[data-ux-direction] .screen--enter {
+  animation-delay: calc(0s - var(--enter-elapsed, 0ms));
+}
+
 html.ux-route-fallback .screen--enter .reveal {
   animation: none !important;
   opacity: 1 !important;
