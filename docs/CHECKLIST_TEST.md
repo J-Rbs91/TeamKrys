@@ -645,20 +645,34 @@ section 9) ; ce qui suit ne se vérifie que sur un appareil réel ou à deux.
       termine par « Code d'accès : ». Fermer la feuille sans choisir : rien ne se passe.
 - [ ] Ordinateur, ou Firefox Android (sans feuille de partage) : le message est copié et
       « Message d'invitation copié : collez-le où vous voulez. » s'affiche.
-- [ ] iPhone, appareil neuf : le lien ouvert dans Safari montre **Rejoindre l'équipe**,
-      sans champ d'adresse, avec le code d'espace. Les étapes Safari et **Copier
-      l'invitation** sont là.
-- [ ] iPhone : copier l'invitation, ajouter à l'écran d'accueil, ouvrir l'icône →
-      **Coller l'invitation** → écran **Rejoindre l'équipe** → code → prénom → accueil.
-- [ ] Android (Chrome) : rejoindre dans le navigateur, puis installer. L'application
-      installée s'ouvre déjà réglée. Sinon, **Coller l'invitation** fonctionne.
-- [ ] Lien ouvert sur un téléphone déjà dans l'équipe → accueil et « Cet appareil fait
-      déjà partie de cette équipe. ». Sur un téléphone d'une autre équipe →
-      avertissement ; **Garder mon équipe actuelle** ne change rien.
+- [ ] iPhone, Safari (ou fenêtre intégrée de WhatsApp) : le lien ouvert ne montre que
+      l'écran **Installez l'application pour rejoindre l'équipe** — trois gestes, l'icône
+      de l'application en dernier, aucun champ, aucun « continuer ». Titre de page
+      « Installer l'application ». L'adresse de la page porte `?invitation=…` et
+      `#/invitation/…` (visible en touchant la barre d'adresse).
+- [ ] iPhone : Partager → Sur l'écran d'accueil → Ajouter, ouvrir l'icône → écran
+      **Rejoindre l'équipe** (le code seulement) → prénom → accueil. Rien à copier ni à
+      coller. Fermer l'application et la rouvrir : accueil direct, sans message « déjà
+      partie de cette équipe ».
+- [ ] iPhone déjà réglé dans Safari (ancienne version) : l'écran « installer d'abord »
+      s'impose aussi ; l'icône créée s'ouvre sur **Rejoindre l'équipe** de la même équipe.
+- [ ] iPhone, icône créée pour une équipe, puis changement d'équipe depuis l'application
+      (Système → Connexion) : l'icône s'ouvre sur l'accueil de la nouvelle équipe, sans
+      redemander l'ancienne.
+- [ ] iPhone, Instagram ou Facebook : l'écran demande d'ouvrir le lien dans Safari (menu
+      ⋯) et propose **Copier le lien** ; collé dans Safari, le lien montre l'écran
+      « installer d'abord ».
+- [ ] Android (Chrome) : rejoindre dans le navigateur, puis installer depuis Réglages.
+      L'application installée s'ouvre déjà réglée. Sinon, **Coller l'invitation**
+      fonctionne.
+- [ ] Lien ouvert sur un téléphone déjà dans l'équipe (Android, ordinateur, ou icône
+      iPhone) → accueil et « Cet appareil fait déjà partie de cette équipe. ». Sur un
+      téléphone d'une autre équipe → avertissement ; **Garder mon équipe actuelle** ne
+      change rien.
 - [ ] Lien tronqué → « Ce lien d'invitation est incomplet… ». Coller le message entier
       dans le champ d'adresse fonctionne aussi.
-- [ ] Ouvert dans Instagram ou Facebook : l'écran demande d'ouvrir le lien dans le
-      navigateur.
+- [ ] Android, ouvert dans Instagram ou Facebook : une ligne demande d'ouvrir le lien dans
+      le navigateur ; le code reste saisissable.
 
 ## 7 bis. Pandore
 

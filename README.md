@@ -132,6 +132,8 @@ js/motion.js               continuité : rejoue la différence entre deux rendus
 js/app.js                  démarrage, navigation, verrou, actions utilisateur
 service-worker.js          hors ligne : précache de la coquille, critique et optionnel
 manifest.webmanifest       installation sur l'écran d'accueil
+manifest-ios.webmanifest   le même, sans start_url : servi sur iPhone/iPad dans un
+                           navigateur, pour que l'icône ouvre l'invitation
 assets/icons/              monogramme « O. » (SVG + PNG 192/512/maskable)
 docs/IDENTITE_VISUELLE.md  le noyau d'identité : pourquoi le produit est ainsi
 docs/MOUVEMENT.md          ce qui bouge, quand, et pourquoi ; ce qui ne bouge pas

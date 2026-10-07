@@ -1344,14 +1344,6 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .is-typing .tabbar { display: none; }
 .is-typing .has-tabbar .fab { display: none; }
 
-/* Invitation : consignes d'installation numérotées, sur la page d'arrivée. */
-.install-steps {
-  margin: 0;
-  padding-left: 1.4em;
-  display: grid;
-  gap: 6px;
-}
-
 /* Pandore : la synthèse est UN bloc de texte (une seule carte). Les catégories (libellés venus de l'IA) et les titres
    de points n'y sont que des repères de lecture : un cran au-dessus du corps, sans carte ni bordure propre. */
 .pandore-card { display: grid; gap: 14px; }
@@ -3057,3 +3049,7 @@ html.has-layer body { overflow: hidden; }
   background: var(--fill);
   color: var(--text);
 }
+/* Écran « installer d'abord » (iPhone) : la dernière étape montre l'icône telle qu'elle apparaîtra sur l'écran
+   d'accueil — c'est elle que la personne cherchera, pas un pictogramme. */
+.install-guide-icon--app { background: none; overflow: hidden; box-shadow: 0 0 0 1px var(--line); border-radius: 10px; }
+.install-guide-icon--app img { display: block; width: 40px; height: 40px; border-radius: 10px; }

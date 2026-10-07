@@ -13,40 +13,45 @@ après la réunion.
 
 ## Démarrer
 
-**Avec un lien d'invitation** (le cas le plus courant) : ouvrez le lien reçu dans
-Safari (iPhone) ou Chrome (Android). L'écran **Rejoindre l'équipe** ne demande que le
-**code d'accès**, écrit dans le même message, puis votre **prénom**. L'écran donne
-aussi les étapes pour installer l'application.
+**Avec un lien d'invitation** (le cas le plus courant) : ouvrez le lien reçu.
 
-- Sur iPhone, l'application installée ne voit rien de ce que Safari a ouvert. Touchez
-  **Copier l'invitation** avant d'installer. Ouvrez ensuite l'application depuis son
-  icône et touchez **Coller l'invitation**.
+- **iPhone et iPad** : l'écran ne montre que les gestes d'installation — **Partager**,
+  puis **Sur l'écran d'accueil**, puis **Ajouter**. Rien d'autre n'y est possible :
+  l'application installée a sa propre mémoire, séparée de Safari, et tout ce qu'on
+  saisirait dans Safari serait à refaire. Ouvrez ensuite BrainstO. depuis la nouvelle
+  icône : elle connaît déjà l'équipe, il ne reste que le **code d'accès**, écrit dans
+  le même message, puis votre **prénom**. Si le menu Partager n'a pas « Sur l'écran
+  d'accueil » (fenêtre intégrée à une autre application, iPhone plus ancien), ouvrez
+  d'abord le lien dans Safari ; l'écran propose de copier le lien.
+- **Android et ordinateur** : l'écran **Rejoindre l'équipe** ne demande que le **code
+  d'accès**, puis votre **prénom**. Sur Android, **Installer l'application** (dans les
+  Réglages) ajoute l'icône quand on le souhaite : l'application installée garde ce qui
+  a été saisi.
 - Si le téléphone fait déjà partie d'une autre équipe, l'écran le dit. **Garder mon
   équipe actuelle** ne change rien.
 
 **Sans lien d'invitation :**
 
-1. Ouvrir l'adresse communiquée par l'équipe **dans le navigateur** (Safari sur
-   iPhone ; Chrome, Samsung Internet ou Firefox sur Android). Si le lien arrive
-   dans WhatsApp, Instagram, Messenger, Gmail ou Teams, il s'ouvre dans une
-   fenêtre intégrée à cette application, où l'on ne peut rien installer : en
-   sortir avec le menu de la fenêtre (« Ouvrir dans le navigateur »).
-2. Ajouter BrainstO. à l'**écran d'accueil** du téléphone (recommandé), puis
-   ouvrir l'application depuis son icône. Les étapes, navigateur par navigateur,
+1. Ouvrir l'adresse communiquée par l'équipe. Sur iPhone, l'écran demande d'installer
+   d'abord (voir ci-dessus). Sur Android, l'ouvrir **dans le navigateur** (Chrome,
+   Samsung Internet ou Firefox) : un lien reçu dans Instagram, Messenger, Gmail ou
+   Teams s'ouvre dans une fenêtre intégrée à cette application, où rien n'est gardé ;
+   en sortir avec le menu de la fenêtre (« Ouvrir dans le navigateur »).
+2. Coller l'**adresse de l'équipe** (elle se termine par `/exec`), ou le lien
+   d'invitation entier, et saisir le **code d'accès** s'il y en a un.
+3. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
+4. Sur Android, ajouter BrainstO. à l'**écran d'accueil** si vous le souhaitez
+   (Réglages → **Installer l'application**). Les étapes, navigateur par navigateur,
    sont dans [`INSTALLATION.md`](INSTALLATION.md).
-3. **Dans l'application installée**, coller l'**adresse de l'équipe** (elle se
-   termine par `/exec`), ou le lien d'invitation entier, et saisir le
-   **code d'accès** s'il y en a un.
-4. Choisir votre **nom** : il apparaîtra à côté de vos contenus signés.
 
-Pourquoi dans cet ordre ? Une application installée garde ses données à part de
-celles du navigateur : ce qu'on a saisi dans Safari ou Chrome avant d'installer n'y
-est pas retrouvé. Sur iPhone, Safari peut en plus effacer ce qu'un site a
-enregistré après sept jours d'utilisation de Safari sans visite de ce site ;
-d'après WebKit, l'application installée n'est pas concernée par ce délai. Si
-cela arrive quand même, l'écran de connexion revient : ressaisissez l'adresse, le code et le nom.
-Les données de l'équipe ne sont pas touchées, mais les actions qui n'avaient pas
-encore été envoyées sont perdues.
+Pourquoi installer d'abord sur iPhone ? Une application installée y garde ses données
+à part de celles de Safari : ce qu'on y aurait saisi n'est pas retrouvé. Safari peut
+en plus effacer ce qu'un site a enregistré après sept jours d'utilisation de Safari
+sans visite de ce site ; d'après WebKit, l'application installée n'est pas concernée
+par ce délai. Si cela arrive quand même, l'écran de connexion revient : ressaisissez
+le code et le nom. Les données de l'équipe ne sont pas touchées, mais les actions qui
+n'avaient pas encore été envoyées sont perdues. Sur Android, l'application installée
+partage la mémoire du navigateur : l'ordre n'a pas d'importance.
 
 Si l'application répond « Ce navigateur refuse d'enregistrer des données sur
 l'appareil : ouvrez BrainstO. dans votre navigateur habituel. » ou « Ce navigateur ne
@@ -523,12 +528,9 @@ Les réglages ont deux niveaux, pour éviter les fausses manœuvres.
 revoir. Rien n'y coupe l'appareil de l'équipe.
 
 **Installer l'application** (absent quand l'application est déjà ouverte depuis son
-icône) : sur Android avec Chrome, Edge ou Samsung Internet, la fenêtre d'installation
-du téléphone s'ouvre directement. Sur iPhone, aucun site ne peut s'installer seul :
-une fenêtre montre les deux gestes (**Partager**, puis **Sur l'écran d'accueil**).
-L'application installée sur iPhone redemande l'équipe : copiez l'invitation avant
-(bouton proposé dans la même fenêtre), puis touchez « Coller l'invitation » à
-l'ouverture.
+icône — donc toujours absent sur iPhone, où l'application s'installe avant tout) : sur
+Android avec Chrome, Edge ou Samsung Internet, la fenêtre d'installation du téléphone
+s'ouvre directement. Ailleurs, une fenêtre montre les gestes du navigateur.
 
 **Système** (en bas des Réglages) contient la connexion et la synchronisation. On n'y
 va que pour dépanner. Aucun mot de passe n'en garde l'entrée, mais **chaque action y

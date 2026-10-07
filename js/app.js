@@ -232,14 +232,52 @@
   };
 
   /* Un appareil déjà dans l'équipe, ou un lien abîmé sur un appareil réglé : rien à rejoindre, on rentre à
-   * l'accueil en le disant. Rend le message à afficher, ou "". */
-  function settleInvitation() {
+   * l'accueil en le disant. Rend le message à afficher, ou "". `fromLaunch` : le jeton vient de l'adresse que
+   * l'icône installée ouvre à CHAQUE lancement (Utils.installUrl) — retrouver son équipe n'est alors pas une
+   * nouvelle, on se tait. */
+  function settleInvitation(fromLaunch) {
     var invitation = App.invitation();
     if (!invitation || !App.connectionConfigured()) { return ""; }
-    if (invitation.url && !invitation.sameTeam) { return ""; }
+    /* Lien touché vers une AUTRE équipe : l'écran d'invitation le dit, et la personne choisit. Mais l'invitation
+     * gravée dans l'icône d'un appareil passé depuis à une autre équipe est périmée : la rejouer à chaque ouverture
+     * serait une question sans fin. On l'ignore ; une nouvelle équipe se rejoint par un nouveau lien. */
+    if (invitation.url && !invitation.sameTeam && !fromLaunch) { return ""; }
     App.route = parseRoute("#/");
     remplacer("#/");
+    if (fromLaunch) { return ""; }
     return invitation.url ? "Cet appareil fait déjà partie de cette équipe." : "Ce lien d'invitation est incomplet : demandez-en un nouveau.";
+  }
+
+  /* Jeton d'invitation porté par les paramètres de l'adresse d'ouverture (…/?invitation=<jeton>) : c'est ainsi
+   * que l'icône installée sur iPhone connaît l'équipe. "" si l'adresse n'en porte pas. */
+  function launchInvitation() {
+    if (typeof Utils.inviteTokenInQuery !== "function") { return ""; }
+    try { return Utils.inviteTokenInQuery(window.location.search); } catch (e) { return ""; }
+  }
+
+  /* iPhone dans un navigateur : préparer ce que l'icône ouvrira. Deux gestes, tous deux sans effet ailleurs :
+   *  - l'adresse de la page reçoit le jeton de l'équipe — celui du lien ouvert, ou celui de l'équipe déjà réglée
+   *    dans ce navigateur — dans ses paramètres et son fragment (Utils.installUrl) ;
+   *  - le manifeste devient celui SANS `start_url` (manifest-ios.webmanifest). Cause : avec un `start_url`, iOS
+   *    ouvre l'icône sur cette adresse-là, fixe, et l'invitation est perdue ; sans, il ouvre l'adresse de la page
+   *    telle qu'elle est au moment d'« Ajouter ». Chrome, lui, garde le manifeste complet : il en exige le
+   *    `start_url` pour proposer l'installation, et son application installée partage la mémoire du navigateur. */
+  function preparerInstallation() {
+    if (typeof Utils.installRequired !== "function" || !Utils.installRequired()) { return; }
+    var invitation = App.invitation();
+    var token = invitation && invitation.url ? invitation.token
+      : (Sync.connection.url && !Sync.connection.localMode && typeof Utils.inviteToken === "function"
+        ? Utils.inviteToken(Sync.connection.url) : "");
+    var url = token && typeof Utils.installUrl === "function" ? Utils.installUrl(token) : "";
+    if (url) {
+      App.route = parseRoute("#/invitation/" + token);
+      try { window.history.replaceState({ tkIndex: entreesSousNous() }, "", url); }
+      catch (e) { /* historique refusé : le fragment courant reste la seule trace */ }
+    }
+    try {
+      var link = document.querySelector ? document.querySelector('link[rel="manifest"]') : null;
+      if (link) { link.setAttribute("href", "manifest-ios.webmanifest"); }
+    } catch (e) { /* document sans manifeste : rien à changer */ }
   }
 
   /* Lien à envoyer aux collaborateurs : l'adresse de CETTE application, réglée sur l'équipe de cet appareil. */
@@ -424,6 +462,9 @@
   };
 
   App.gate = function () {
+    /* iPhone dans Safari (ou une fenêtre intégrée) : rien d'autre que les gestes d'installation. L'icône
+     * installée reprendra l'invitation elle-même (préparerInstallation). */
+    if (typeof Utils.installRequired === "function" && Utils.installRequired()) { return "install"; }
     var invitation = App.invitation();
     if (invitation && invitation.url && !invitation.sameTeam) { return "connection"; }
     if (!App.connectionConfigured() || App.editingConnection) { return "connection"; }
@@ -1237,7 +1278,11 @@
     loadOnboarding();
     UI.local.showArchived = Utils.storage.get(CONFIG.KEYS.showArchived, false) === true;
     App.route = parseRoute(window.location.hash);
-    var invitationNotice = settleInvitation();
+    /* Icône installée sur iPhone : l'invitation arrive par les paramètres de l'adresse, le fragment peut manquer. */
+    var launched = launchInvitation();
+    if (launched && App.route.name !== "invitation") { App.route = parseRoute("#/invitation/" + launched); }
+    var invitationNotice = Utils.installRequired && Utils.installRequired() ? "" : settleInvitation(!!launched);
+    preparerInstallation();
     /* La trace repart de zéro : sous l'entrée courante, la pile ne contient
      * rien qui nous appartienne — qu'on arrive par un lien partagé, par un
      * rechargement ou par la reprise d'une application mise en veille. C'est ce

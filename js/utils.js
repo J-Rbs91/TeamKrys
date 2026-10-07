@@ -110,6 +110,8 @@
     share: ["M12 3.5v11", "M8 7.2 12 3.5l4 3.7", "M8.5 10.5H6v9.5h12v-9.5h-2.5"],
     download: ["M12 3.5v11", "M8 10.5l4 4 4-4", "M5 19.5h14"],
     addSquare: ["M5 5h14v14H5z", "M12 8.5v7", "M8.5 12h7"],
+    /* Safari : la boussole, telle que l'icône du navigateur la dessine. */
+    compass: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M15.6 8.4l-2.2 5-5 2.2 2.2-5z"],
     /* Explorer : le trait part du message et s'en écarte (↳) — un sous-fil, pas un nouveau sujet. */
     explore: ["M6.5 4v7.5a4.5 4.5 0 0 0 4.5 4.5h8", "M15.5 12.5 19 16l-3.5 3.5"]
   };
@@ -556,6 +558,60 @@
   Utils.inviteLink = function (base, url) {
     var token = Utils.inviteToken(url);
     return token ? String(base).split("#")[0].split("?")[0].replace(/index\.html$/, "") + "#/invitation/" + token : "";
+  };
+
+  /* Jeton porté par les PARAMÈTRES de l'adresse (…/?invitation=<jeton>). C'est l'adresse que l'icône installée
+   * sur iPhone ouvre (voir Utils.installUrl) : le fragment seul ne suffit pas, parce qu'on ne sait pas si iOS le
+   * garde en créant l'icône, alors qu'il garde les paramètres. "" si absent ou abîmé. */
+  var INVITE_IN_QUERY_RX = /[?&]invitation=([A-Za-z0-9_-]+)/;
+  Utils.inviteTokenInQuery = function (search) {
+    var m = INVITE_IN_QUERY_RX.exec(String(search == null ? "" : search));
+    return m && Utils.inviteUrl(m[1]) ? m[1] : "";
+  };
+
+  /* Adresse relative à poser dans l'historique AVANT que la personne touche « Sur l'écran d'accueil » : le jeton
+   * dans les paramètres ET dans le fragment, pour que l'icône l'ouvre quelle que soit la partie qu'iOS conserve.
+   * Un seul envoi de ces paramètres quitte l'appareil : la première ouverture de l'icône, vers l'hébergeur de la
+   * page (le fragment, lui, n'y part jamais) — le prix pour que l'application installée connaisse l'équipe. */
+  Utils.installUrl = function (token) {
+    var clean = Utils.inviteUrl(token) ? token : "";
+    return clean ? "?invitation=" + clean + "#/invitation/" + clean : "";
+  };
+
+  /* ----------------------------------------------- Téléphone et installation --- */
+
+  /* Téléphone, d'après l'agent utilisateur : seulement pour adapter des consignes, jamais pour décider d'un droit. Une
+   * détection fausse ne coûte qu'une consigne moins précise. iPadOS se présente comme un Mac tactile. */
+  Utils.devicePlatform = function () {
+    var nav = typeof navigator !== "undefined" ? navigator : null;
+    var ua = String((nav && nav.userAgent) || "");
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && nav && nav.maxTouchPoints > 1)) { return "ios"; }
+    if (/Android/.test(ua)) { return "android"; }
+    return "other";
+  };
+
+  /* Ouverte depuis son icône (plein écran, sans barre de navigateur) : `display-mode: standalone` partout,
+   * `navigator.standalone` sur les iPhone plus anciens. */
+  Utils.isInstalledApp = function () {
+    try {
+      if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) { return true; }
+    } catch (e) { /* requête média refusée : on suppose le navigateur */ }
+    return typeof navigator !== "undefined" && navigator.standalone === true;
+  };
+
+  /* Fenêtre intégrée à une application (Instagram, Facebook, LinkedIn…) : rien n'y est gardé durablement et rien
+   * ne s'y installe. Le navigateur intégré de WhatsApp ne se signale pas : il passe pour Safari. */
+  Utils.inAppBrowser = function () {
+    var nav = typeof navigator !== "undefined" ? navigator : null;
+    return /FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Snapchat|Line\/|MicroMessenger|WhatsApp/.test(String((nav && nav.userAgent) || ""));
+  };
+
+  /* iPhone et iPad dans un navigateur : l'application ne s'y utilise pas, elle s'installe d'abord. Cause : l'icône
+   * installée a sa propre mémoire, séparée de Safari — ce qu'on y aurait saisi (équipe, code, prénom) serait à
+   * refaire. Conséquence : on arrête la personne AVANT, sur un écran qui ne montre que les gestes d'installation,
+   * et l'icône ouvre l'invitation elle-même (Utils.installUrl). */
+  Utils.installRequired = function () {
+    return Utils.devicePlatform() === "ios" && !Utils.isInstalledApp();
   };
 
   Utils.clone = function (value) {

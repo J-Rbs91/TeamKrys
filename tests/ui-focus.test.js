@@ -723,19 +723,19 @@ check("Réglages : un seul bouton « Installer l'application » ; fenêtre du sy
   row().click();
   assert(prompted === 1 && !dialog(t), "la fenêtre d'installation du système doit s'ouvrir, sans feuille");
 
-  /* iPhone : aucune installation automatique possible, la feuille montre les deux gestes et propose de copier l'invitation. */
+  /* iPhone (la feuille n'y est atteignable que si l'arrêt « installer d'abord » était levé) : les deux gestes, et rien
+   * à copier — l'icône installée ouvre l'invitation elle-même. */
   t.ctx.navigator.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
-  t.ctx.App.inviteLink = () => "https://exemple.invalid/#/invitation/abc";
   row().click();
   const sheet = dialog(t);
   assert(sheet && /Partager/.test(sheet.textContent) && /Sur l'écran d'accueil/.test(sheet.textContent), "gestes iPhone attendus : " + (sheet && sheet.textContent));
-  assert(sheet.querySelector('[data-key="install-copy-invite"]'), "sur iPhone, l'invitation se copie avant d'installer");
+  assert(!/Copier l'invitation|Coller l'invitation/.test(sheet.textContent), "plus rien à copier ni à coller : l'icône porte l'invitation");
   t.escape();
 
   /* Android sans fenêtre du système (Firefox…) : le menu du navigateur. */
   t.ctx.navigator.userAgent = "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0";
   row().click();
-  assert(/menu ⋮/.test(dialog(t).textContent) && !dialog(t).querySelector('[data-key="install-copy-invite"]'), "gestes Android attendus");
+  assert(/menu ⋮/.test(dialog(t).textContent), "gestes Android attendus");
   t.escape();
 
   /* Déjà installée (ouverte depuis l'icône) : rien à proposer. */
@@ -1107,20 +1107,72 @@ check("invitation : « Rejoindre l'équipe » ne demande que le code ; l'adresse
   t.app().querySelector('[data-key="invite-join"]').click();
   assert(JSON.stringify(joined) === JSON.stringify([[INVITED, "1234"]]), "rejoindre : " + JSON.stringify(joined));
   assert(/Rejoindre l'équipe/.test(t.app().querySelector('[data-key="invite-join"]').textContent), "libellé du bouton");
-  assert(t.app().querySelector('[data-key="invite-install"]'), "consignes d'installation absentes dans le navigateur");
+  /* Épure : plus de carte « Installer sur votre téléphone ». Sur iPhone, l'arrêt « installer d'abord » précède cet
+   * écran ; sur Android, le bouton des Réglages suffit et l'application installée garde ce qui a été saisi. */
+  assert(!/Installer sur votre téléphone|Coller l'invitation|Copier l'invitation/.test(t.app().textContent), "consignes d'installation encore présentes sur l'écran d'invitation");
+  assert(!t.app().querySelector('[data-key="invite-inapp"]'), "note « fenêtre intégrée » affichée hors d'une application");
 });
 
-check("invitation : sur iPhone, consignes Safari et « Copier l'invitation » ; dans l'application installée, aucune consigne", () => {
+check("invitation dans la fenêtre intégrée d'Instagram (Android) : une ligne demande d'ouvrir le lien dans le navigateur", () => {
+  const t = boot();
+  t.ctx.navigator.userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 Instagram 330.0.0.0";
+  invited(t, false);
+  const note = t.app().querySelector('[data-key="invite-inapp"]');
+  assert(note && /Ouvrir dans le navigateur/.test(note.textContent), "note « fenêtre intégrée » absente");
+  assert(t.app().querySelector('[data-draft="setup:code"]'), "le code reste saisissable : la note prévient, elle ne bloque pas");
+});
+
+/* ============================================ iPhone : installer d'abord ==== */
+
+/* Le choix est pris par App.gate (« install », testé dans startup-robust) ; ici, l'écran qu'il affiche. */
+check("iPhone dans Safari : l'écran « installer d'abord » ne montre que les gestes — ni code, ni adresse, ni « continuer ici »", () => {
   const t = boot();
   t.ctx.navigator.userAgent = IPHONE;
-  invited(t, false);
-  const install = t.app().querySelector('[data-key="invite-install"]');
-  assert(install && /Sur l'écran d'accueil/.test(install.textContent) && /Coller l'invitation/.test(install.textContent), "consignes iPhone");
-  assert(t.app().querySelector('[data-key="invite-copy"]'), "« Copier l'invitation » absent sur iPhone");
+  t.ctx.App.gate = () => "install";
+  t.ctx.App.invitation = () => ({ url: INVITED, token: "x", sameTeam: false });
+  t.go(TOPICS);
+  const gate = t.app().querySelector('[data-key="install-gate"]');
+  assert(gate, "écran « installer d'abord » absent");
+  const text = gate.textContent;
+  assert(/Installez l'application pour rejoindre l'équipe/.test(text), "titre de l'écran : " + text);
+  assert(/Partager/.test(text) && /Sur l'écran d'accueil/.test(text) && /Ajouter/.test(text), "les deux gestes Safari manquent : " + text);
+  assert(/depuis la nouvelle icône/.test(text), "la dernière étape (ouvrir l'icône) manque");
+  assert(gate.querySelector('.install-guide-icon--app img'), "l'icône de l'application, telle qu'elle apparaîtra, n'est pas montrée");
+  assert(!gate.querySelector("input") && !gate.querySelector('[data-draft]'), "aucun champ : le code et le prénom se saisissent dans l'application installée");
+  assert(!/Continuer|mode local|Coller l'invitation|Copier l'invitation|GitHub|stock/i.test(text), "l'écran laisse une porte vers la version navigateur, ou explique trop : " + text);
+  assert(!gate.querySelector(".tabbar"), "pas de barre d'onglets sur l'écran d'arrêt");
+  assert(/Pas de « Sur l'écran d'accueil »/.test(text), "l'issue de secours (ouvrir dans Safari) manque pour les fenêtres qui n'ont pas l'option");
+  assert(t.ctx.document.title.indexOf("Installer l'application") === 0, "titre de page : " + t.ctx.document.title);
+});
+
+check("iPhone dans la fenêtre intégrée d'Instagram : l'écran demande d'ouvrir le lien dans Safari et propose de copier le lien", () => {
+  const t = boot();
+  t.ctx.navigator.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 330.0.0.0";
+  t.ctx.App.gate = () => "install";
+  t.go(TOPICS);
+  const gate = t.app().querySelector('[data-key="install-gate"]');
+  assert(gate && /Ouvrir dans Safari/.test(gate.textContent), "consigne « Ouvrir dans Safari » absente : " + (gate && gate.textContent));
+  assert(gate.querySelector('[data-key="install-copy-link"]'), "« Copier le lien » absent dans une fenêtre intégrée");
+  assert(!gate.querySelector("input"), "aucun champ dans une fenêtre intégrée non plus");
+});
+
+check("application installée sur iPhone (ouverte depuis l'icône) : pas d'arrêt, l'invitation se rejoint normalement", () => {
   const app = boot();
-  app.ctx.matchMedia = (q) => ({ matches: /standalone/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  app.ctx.navigator.userAgent = IPHONE;
+  app.ctx.navigator.standalone = true;
+  assert(app.ctx.Utils.installRequired() === false, "l'application installée ne doit jamais être arrêtée");
   invited(app, false);
-  assert(!app.app().querySelector('[data-key="invite-install"]'), "dans l'application installée, pas de consigne d'installation");
+  assert(app.app().querySelector('[data-key="invite-card"]') && app.app().querySelector('[data-draft="setup:code"]'), "écran « Rejoindre l'équipe » attendu dans l'application installée");
+  assert(!app.app().querySelector('[data-key="install-gate"]'), "écran « installer d'abord » affiché dans l'application installée");
+
+  /* Android et ordinateur : jamais d'arrêt, l'application installée y partage la mémoire du navigateur. */
+  const android = boot();
+  android.ctx.navigator.userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36";
+  assert(android.ctx.Utils.installRequired() === false, "Android ne doit pas être arrêté");
+  assert(boot().ctx.Utils.installRequired() === false, "un ordinateur ne doit pas être arrêté");
+  const safari = boot();
+  safari.ctx.navigator.userAgent = IPHONE;
+  assert(safari.ctx.Utils.installRequired() === true, "iPhone dans Safari : l'arrêt doit s'imposer");
 });
 
 check("invitation : un appareil d'une autre équipe est prévenu, et peut garder son équipe", () => {

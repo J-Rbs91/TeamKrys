@@ -206,12 +206,25 @@ function makeWorld(options) {
   };
   const DB = { clearQueue() { return Promise.resolve(); }, clearState() { return Promise.resolve(); } };
 
+  /* Téléphone simulé (iPhone : userAgent, standalone), adresse d'ouverture (location : hash, search) et le
+   * <link rel="manifest"> de la page, pour l'arrêt « installer d'abord ». */
+  const navigator = makeNavigator(opts.serviceWorker);
+  if (opts.userAgent) { navigator.userAgent = opts.userAgent; }
+  if (opts.standalone) { navigator.standalone = true; }
+  const location = Object.assign({ hash: "#/", search: "", reload() { w.reloads += 1; } }, opts.location || {});
+  const manifestLink = { href: "manifest.webmanifest", setAttribute(name, value) { manifestLink[name] = value; } };
+  w.manifestLink = manifestLink;
   const sandbox = {
     Api, Sync, UI, DB, TextEncoder, console,
+    /* Le jeton d'invitation est du base64 : sans atob/btoa, Utils.inviteToken rend "" en silence. */
+    atob, btoa,
     setInterval: () => 0, clearInterval() {},
-    window: { location: { hash: "#/", reload() { w.reloads += 1; } }, history: w.history, addEventListener() {} },
-    document: { readyState: "complete", hidden: false, addEventListener() {} },
-    navigator: makeNavigator(opts.serviceWorker)
+    window: { location, history: w.history, addEventListener() {} },
+    document: {
+      readyState: "complete", hidden: false, addEventListener() {},
+      querySelector(selector) { return /manifest/.test(selector) ? manifestLink : null; }
+    },
+    navigator
   };
   defineStorage(sandbox, opts.storage || "ok", w.mem);
   if (opts.crypto === "none") { sandbox.crypto = {}; }
@@ -623,6 +636,111 @@ test("BL-028 Utils.limit ne coupe jamais une paire de substitution (même règle
           "écart avec Core.cut : " + JSON.stringify(text) + ", max " + max);
       }
     });
+});
+
+/* ======================================================= iPhone : installer d'abord === */
+
+/* Sur iPhone, l'icône installée a sa propre mémoire : ce qu'on saisit dans Safari est à refaire dedans. L'application
+ * arrête donc la personne AVANT (gate « install ») et prépare l'adresse que l'icône ouvrira : le jeton de l'équipe
+ * dans les paramètres et le fragment, et le manifeste sans start_url, sans quoi iOS ouvrirait l'icône sur une
+ * adresse fixe, sans l'invitation. */
+const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+const ANDROID_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36";
+const INVITE_EXEC = "https://script.google.com/macros/s/AKfycb_INVITE_TEST/exec";
+const inviteToken = () => makeWorld().Utils.inviteToken(INVITE_EXEC);
+const installUrl = (token) => "?invitation=" + token + "#/invitation/" + token;
+
+test("iPhone dans Safari, lien d'invitation ouvert : arrêt « install », jeton posé en paramètre ET en fragment, manifeste iOS sans start_url", () => {
+  const token = inviteToken();
+  const w = makeWorld({ userAgent: IPHONE_UA, location: { hash: "#/invitation/" + token } });
+  assert(w.App.gate() === "install", "gate attendu « install », reçu " + w.App.gate());
+  const urls = w.history.replaced.map((r) => r.url);
+  assert(urls.indexOf(installUrl(token)) >= 0, "adresse d'installation non posée : " + JSON.stringify(urls));
+  /* Le marquage de la trace vient APRÈS, en fragment seul : il garde les paramètres. */
+  assert(urls[urls.length - 1] === "#/invitation/" + token, "dernière réécriture : " + urls[urls.length - 1]);
+  assert(w.manifestLink.href === "manifest-ios.webmanifest", "manifeste iOS non servi : " + w.manifestLink.href);
+  assert(w.App.route.name === "invitation" && w.App.route.invite === token, "la route reste l'invitation");
+  assert(!w.toasts.length, "aucun message sous l'écran d'arrêt : " + JSON.stringify(w.toasts));
+});
+
+test("iPhone dans Safari, appareil déjà réglé sur l'équipe (ancienne version navigateur) : le jeton de SON équipe est posé, en silence", async () => {
+  const token = inviteToken();
+  const w = makeWorld({ userAgent: IPHONE_UA, stored: { [KEYS.apiUrl]: INVITE_EXEC, [KEYS.user]: ME } });
+  await delay(10);
+  assert(w.App.gate() === "install", "l'arrêt vaut aussi pour un appareil déjà réglé dans Safari");
+  assert(w.history.replaced.some((r) => r.url === installUrl(token)), "le jeton de l'équipe réglée n'est pas posé : " + JSON.stringify(w.history.replaced.map((r) => r.url)));
+  assert(!w.toasts.some((t) => /déjà partie/.test(t.text)), "« déjà partie de cette équipe » sous l'écran d'arrêt");
+
+  /* Lien d'une AUTRE équipe ouvert sur cet appareil : c'est le lien qui gagne, l'icône portera la nouvelle équipe. */
+  const other = makeWorld({ userAgent: IPHONE_UA, stored: { [KEYS.apiUrl]: URL_EXEC, [KEYS.user]: ME }, location: { hash: "#/invitation/" + token } });
+  assert(other.history.replaced.some((r) => r.url === installUrl(token)), "le lien ouvert doit l'emporter sur l'équipe réglée");
+});
+
+test("iPhone dans Safari, ni équipe ni lien : arrêt quand même, adresse laissée telle quelle, manifeste iOS", () => {
+  const w = makeWorld({ userAgent: IPHONE_UA });
+  assert(w.App.gate() === "install", "arrêt attendu");
+  assert(!w.history.replaced.some((r) => /invitation=/.test(String(r.url))), "aucun jeton à poser sans équipe");
+  assert(w.manifestLink.href === "manifest-ios.webmanifest", "manifeste iOS attendu même sans invitation");
+});
+
+test("icône installée sur iPhone, ouverte sur ?invitation=<jeton> sans fragment : écran « Rejoindre l'équipe », pas d'arrêt, manifeste intact", () => {
+  const token = inviteToken();
+  const w = makeWorld({ userAgent: IPHONE_UA, standalone: true, location: { hash: "", search: "?invitation=" + token } });
+  assert(w.App.gate() === "connection", "gate attendu « connection », reçu " + w.App.gate());
+  assert(w.App.route.name === "invitation" && w.App.route.invite === token, "l'invitation des paramètres n'est pas reprise : " + JSON.stringify(w.App.route));
+  assert(w.App.invitation().url === INVITE_EXEC, "adresse de l'équipe non retrouvée depuis le jeton");
+  assert(w.manifestLink.href === "manifest.webmanifest", "le manifeste ne change que dans un navigateur iOS");
+  /* Les deux parties présentes (iOS a tout gardé) : même résultat, sans doublon. */
+  const both = makeWorld({ userAgent: IPHONE_UA, standalone: true, location: { hash: "#/invitation/" + token, search: "?invitation=" + token } });
+  assert(both.App.route.invite === token && both.App.gate() === "connection", "paramètres + fragment : invitation attendue");
+});
+
+test("icône installée, appareil déjà dans l'équipe : l'invitation portée par l'adresse d'ouverture est digérée en silence, à chaque lancement", async () => {
+  const token = inviteToken();
+  const w = makeWorld({ userAgent: IPHONE_UA, standalone: true, location: { hash: "", search: "?invitation=" + token }, stored: { [KEYS.apiUrl]: INVITE_EXEC, [KEYS.user]: ME } });
+  await delay(10);
+  assert(w.App.route.raw === "#/", "retour à l'accueil attendu, route : " + JSON.stringify(w.App.route));
+  assert(!w.toasts.some((t) => /déjà partie/.test(t.text)), "l'icône porte l'invitation à chaque ouverture : rien à annoncer");
+
+  /* Un lien TOUCHÉ (fragment, sans paramètres) sur un appareil déjà dans l'équipe le dit encore. */
+  const tapped = makeWorld({ location: { hash: "#/invitation/" + token }, stored: { [KEYS.apiUrl]: INVITE_EXEC, [KEYS.user]: ME } });
+  await delay(10);
+  assert(tapped.App.route.raw === "#/" && tapped.toasts.some((t) => /déjà partie de cette équipe/.test(t.text)), "lien touché : « déjà partie » attendu : " + JSON.stringify(tapped.toasts));
+});
+
+test("icône créée pour une équipe, appareil passé depuis à une AUTRE équipe : l'invitation gravée est périmée, ignorée en silence", async () => {
+  const token = inviteToken();
+  const w = makeWorld({ userAgent: IPHONE_UA, standalone: true, location: { hash: "", search: "?invitation=" + token }, stored: { [KEYS.apiUrl]: URL_EXEC, [KEYS.user]: ME } });
+  await delay(10);
+  assert(w.App.route.raw === "#/" && w.App.gate() === null, "accueil attendu sans question, reçu route " + w.App.route.raw + ", gate " + w.App.gate());
+  assert(!w.toasts.length, "aucun message attendu : " + JSON.stringify(w.toasts));
+  assert(w.Sync.connection.url === URL_EXEC, "l'équipe réglée ne doit pas changer toute seule");
+  /* Le même jeton TOUCHÉ (lien reçu) sur cet appareil pose bien la question, lui. */
+  const tapped = makeWorld({ location: { hash: "#/invitation/" + token }, stored: { [KEYS.apiUrl]: URL_EXEC, [KEYS.user]: ME } });
+  assert(tapped.App.gate() === "connection" && tapped.App.invitation().url === INVITE_EXEC, "lien touché vers une autre équipe : l'écran d'invitation doit s'afficher");
+});
+
+test("jeton abîmé ou étranger dans les paramètres : ignoré, l'application démarre normalement", () => {
+  const broken = makeWorld({ userAgent: IPHONE_UA, standalone: true, location: { hash: "", search: "?invitation=%%%" } });
+  assert(broken.App.route.name === "topics", "jeton abîmé : route " + broken.App.route.name);
+  const foreign = makeWorld({ standalone: true, location: { hash: "", search: "?invitation=" + makeWorld().Utils.inviteToken("https://script.google.com/macros/s/AKfycb_X/exec").replace(/^./, "Z") } });
+  assert(foreign.App.route.name !== "invitation" || foreign.App.invitation().url !== "", "un jeton altéré ne doit pas mener à une adresse arbitraire");
+  const tracking = makeWorld({ location: { hash: "#/", search: "?fbclid=abc" } });
+  assert(tracking.App.route.name === "topics", "un paramètre étranger ne change rien");
+});
+
+test("Android et ordinateur : jamais d'arrêt, adresse et manifeste intacts, l'invitation se rejoint dans le navigateur", () => {
+  const token = inviteToken();
+  const android = makeWorld({ userAgent: ANDROID_UA, location: { hash: "#/invitation/" + token } });
+  assert(android.App.gate() === "connection", "Android : gate " + android.App.gate());
+  assert(android.manifestLink.href === "manifest.webmanifest", "Android garde le manifeste complet (start_url exigé par Chrome)");
+  assert(!android.history.replaced.some((r) => /invitation=/.test(String(r.url))), "Android : aucune réécriture de l'adresse");
+  const desktop = makeWorld({ location: { hash: "#/invitation/" + token } });
+  assert(desktop.App.gate() === "connection" && desktop.manifestLink.href === "manifest.webmanifest", "ordinateur : pas d'arrêt");
+  /* iPad en mode « site de bureau » : Macintosh tactile. */
+  const ipad = makeWorld({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15" });
+  ipad.ctx.navigator.maxTouchPoints = 5;
+  assert(ipad.Utils.devicePlatform() === "ios" && ipad.App.gate() === "install", "iPad en mode bureau : arrêt attendu");
 });
 
 /* ======================================================================= Texte === */

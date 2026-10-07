@@ -1033,26 +1033,11 @@
 
   /* ---------------------------------------------------- Accueil : invitation --- */
 
-  /* Téléphone et mode d'ouverture : seulement pour adapter les consignes d'installation, jamais pour décider d'un
-   * droit. Une détection fausse ne coûte qu'une consigne moins précise. */
-  function devicePlatform() {
-    var ua = String((navigator && navigator.userAgent) || "");
-    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) { return "ios"; }
-    if (/Android/.test(ua)) { return "android"; }
-    return "other";
-  }
-
-  function isInstalledApp() {
-    try {
-      if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) { return true; }
-    } catch (e) { /* requête média refusée : on suppose le navigateur */ }
-    return navigator.standalone === true;
-  }
-
-  /* Fenêtre intégrée à une application (Instagram, Facebook, LinkedIn…) : rien n'y est gardé durablement. */
-  function inAppBrowser() {
-    return /FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Snapchat|Line\/|MicroMessenger|WhatsApp/.test(String(navigator.userAgent || ""));
-  }
+  /* Téléphone et mode d'ouverture (Utils) : ici seulement pour adapter des consignes. Le seul droit qui en dépend,
+   * l'arrêt « installez d'abord » sur iPhone, est décidé par App.gate. */
+  function devicePlatform() { return Utils.devicePlatform(); }
+  function isInstalledApp() { return Utils.isInstalledApp(); }
+  function inAppBrowser() { return Utils.inAppBrowser(); }
 
   /* L'invitation reçue, depuis le presse-papiers. Sur iPhone, l'application installée ne voit rien de ce que Safari
    * a ouvert : coller l'invitation est le seul pont. Sans accès au presse-papiers, l'appui long dans le champ
@@ -1133,45 +1118,59 @@
         ["addSquare", "Touchez « Installer l'application » ou « Ajouter à l'écran d'accueil »."]
       ];
     }
-    /* ⚠️ Sur iPhone, l'application installée ne voit rien de ce que Safari a gardé : elle redemande l'équipe. Copier
-     * l'invitation AVANT d'installer permet de la coller à la première ouverture (« Coller l'invitation »). */
-    var connected = !(Sync.connection.localMode || !Sync.connection.url);
-    var invite = platform === "ios" && connected && typeof App.inviteLink === "function" ? App.inviteLink() : "";
-    return sheet("Installer l'application", el("div", { class: "stack" }, [
-      el("ol", { class: "install-guide" }, steps.map(function (step) {
-        return el("li", {}, [el("span", { class: "install-guide-icon", "aria-hidden": "true" }, [icon(step[0], 20)]),
-          el("span", { text: step[1] })]);
-      })),
-      invite ? el("p", { class: "hint", text: "L'application installée vous redemandera l'équipe : copiez l'invitation avant, vous la collerez à l'ouverture." }) : null,
-      invite ? el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "install-copy-invite",
-        onclick: function () { copyText(invite, "Invitation copiée."); } }, [icon("copy", 16), el("span", { text: "Copier l'invitation" })]) : null
-    ]));
+    return sheet("Installer l'application", installGuide(steps));
   }
 
-  function installCard(platform) {
-    var steps = platform === "ios" ? [
-      "Dans Safari, touchez Partager, puis « Sur l'écran d'accueil ».",
-      "Ouvrez BrainstO. depuis la nouvelle icône.",
-      "Touchez « Coller l'invitation », puis saisissez le code."
-    ] : platform === "android" ? [
-      "Rejoignez d'abord l'équipe ci-dessus.",
-      "Puis, dans le menu ⋮ du navigateur, touchez « Installer l'application » ou « Ajouter à l'écran d'accueil ».",
-      "L'application installée reste normalement réglée. Si elle redemande l'adresse : copiez le lien reçu, puis touchez « Coller l'invitation »."
+  /* Les gestes, chacun avec l'icône que la personne va chercher à l'écran. */
+  function installGuide(steps) {
+    return el("ol", { class: "install-guide" }, steps.map(function (step) {
+      return el("li", {}, [el("span", { class: "install-guide-icon", "aria-hidden": "true" }, [icon(step[0], 20)]),
+        el("span", { text: step[1] })]);
+    }));
+  }
+
+  /* ------------------------------------------------- iPhone : installer d'abord --- */
+
+  /* Écran unique sur iPhone et iPad dans un navigateur (App.gate « install ») : ni code, ni prénom, ni « continuer
+   * ici ». Cause : tout ce qu'on saisirait dans Safari serait à refaire dans l'application installée, qui a sa
+   * propre mémoire — et il faudrait en plus lui recoller l'invitation. Conséquence : la personne installe d'abord ;
+   * l'icône ouvre l'invitation elle-même, et le code puis le prénom ne sont saisis qu'une fois, dedans. Depuis iOS 17,
+   * « Sur l'écran d'accueil » existe aussi dans la fenêtre intégrée de WhatsApp (celle de Safari) ; les fenêtres qui
+   * ne l'ont pas (Instagram, Facebook…) demandent de passer par Safari. */
+  function screenInstall() {
+    var inApp = inAppBrowser();
+    var steps = inApp ? [
+      ["compass", "Ouvrez ce lien dans Safari : menu ⋯ de cette fenêtre, puis « Ouvrir dans Safari »."],
+      ["share", "Dans Safari, touchez Partager, puis « Sur l'écran d'accueil »."]
     ] : [
-      "Sur ordinateur, rien à installer : rejoignez l'équipe ci-dessus.",
-      "Sur téléphone, ouvrez ce même lien dans Safari (iPhone) ou Chrome (Android)."
+      ["share", "Touchez Partager."],
+      ["addSquare", "Faites défiler jusqu'à « Sur l'écran d'accueil », puis touchez « Ajouter »."]
     ];
-    return el("div", { class: "card card-static stack", "data-key": "invite-install" }, [
-      sectionTitle("inbox", "Installer sur votre téléphone"),
-      inAppBrowser() ? el("div", { class: "note" }, [icon("warning", 14), el("span", { class: "note-body",
-        text: "Ce lien s'est ouvert dans une application. Ouvrez-le dans Safari ou Chrome (menu ⋯, puis « Ouvrir dans le navigateur ») : ici, rien ne serait gardé." })]) : null,
-      el("ol", { class: "install-steps" }, steps.map(function (step) { return el("li", { text: step }); })),
-      platform === "ios" ? el("div", { class: "note" }, [icon("info", 14), el("span", { class: "note-body",
-        text: "Sur iPhone, l'application installée ne garde rien de ce que vous faites dans Safari. Copiez l'invitation avant d'installer : vous la collerez dans l'application." })]) : null,
-      platform === "ios" ? el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "invite-copy",
-        onclick: function () { copyText(window.location.href, "Invitation copiée : collez-la dans l'application installée."); } },
-      [icon("copy", 16), el("span", { text: "Copier l'invitation" })]) : null
+    var appIcon = el("li", {}, [
+      el("span", { class: "install-guide-icon install-guide-icon--app", "aria-hidden": "true" }, [
+        el("img", { src: "assets/icons/icon-192.png", alt: "", width: "40", height: "40" })]),
+      el("span", { text: "Ouvrez BrainstO. depuis la nouvelle icône." })
     ]);
+    var guide = installGuide(steps);
+    guide.appendChild(appIcon);
+    return el("div", { class: "screen", "data-key": "install-gate" }, [
+      el("div", { class: "content stack-lg" }, [
+        heroBlock("Installez l'application pour rejoindre l'équipe.", true),
+        reveal(guide, 1),
+        inApp ? reveal(el("button", { class: "btn btn-outline btn-block", type: "button", "data-key": "install-copy-link",
+          onclick: function () { copyText(window.location.href, "Lien copié : collez-le dans Safari."); } },
+        [icon("copy", 16), el("span", { text: "Copier le lien" })]), 2)
+          : reveal(el("p", { class: "hint", text: "Pas de « Sur l'écran d'accueil » dans le menu ? Ouvrez d'abord ce lien dans Safari." }), 2)
+      ])
+    ]);
+  }
+
+  /* Fenêtre intégrée à une application, hors iPhone (sur iPhone, l'écran « installer d'abord » le dit) : ce qu'on y
+   * saisit peut ne pas être gardé. Une ligne, seulement là où le risque existe. */
+  function inAppNote() {
+    if (!inAppBrowser()) { return null; }
+    return el("div", { class: "note", "data-key": "invite-inapp" }, [icon("warning", 14), el("span", { class: "note-body",
+      text: "Ce lien s'est ouvert dans une application : ouvrez-le dans votre navigateur (menu ⋯, puis « Ouvrir dans le navigateur ») pour que l'équipe reste enregistrée." })]);
   }
 
   /* Page d'arrivée d'un lien d'invitation : l'adresse vient du lien, il ne reste que le code. Sur un appareil déjà
@@ -1191,17 +1190,17 @@
          * remplace l'actuelle. */
         reveal(el("div", { class: "stack", "data-key": "invite-card" }, [
           storageNote(),
+          inAppNote(),
           configured ? el("p", { text: "Rejoindre cette équipe remplace votre équipe actuelle sur ce téléphone." }) : null,
           field("Code d'accès", codeInput),
           el("button", { class: "btn btn-primary btn-block", type: "button", "data-key": "invite-join", onclick: join },
             [el("span", { text: configured ? "Changer d'équipe" : "Rejoindre l'équipe" }), icon("forward", 18)])
         ]), 1),
-        isInstalledApp() ? null : reveal(installCard(devicePlatform()), 2),
         reveal(el("button", {
           class: "btn btn-ghost btn-block", type: "button", "data-key": "invite-dismiss",
           text: configured ? "Garder mon équipe actuelle" : "Saisir l'adresse à la main",
           onclick: function () { App.go("#/"); }
-        }), 3)
+        }), 2)
       ])
     ]);
   }
@@ -3406,6 +3405,7 @@
 
   function currentScreen() {
     var gate = App.gate();
+    if (gate === "install") { return screenInstall(); }
     if (gate === "connection") { return screenConnection(); }
     if (gate === "name") { return screenName(); }
     if (gate === "lock") { return screenLock(); }
@@ -3491,6 +3491,7 @@
   function pageTitle() {
     var tail = " - " + CONFIG.APP_NAME;
     var gate = App.gate();
+    if (gate === "install") { return "Installer l'application" + tail; }
     if (gate === "connection") { return "Connexion" + tail; }
     if (gate === "name") { return "Votre nom" + tail; }
     if (gate === "lock") { return "Espace verrouillé" + tail; }

@@ -274,9 +274,17 @@ invitée n'a plus qu'à saisir le code d'accès et son prénom.
   script Google d'un tiers pourrait donc recueillir ce jeton. N'ouvrez que les
   invitations reçues de la personne qui gère l'équipe, et ne publiez jamais le
   message.
-- **Sur iPhone**, l'application installée ne voit rien de ce que Safari a ouvert.
-  L'écran d'arrivée le dit : copier l'invitation, installer, ouvrir l'application,
-  puis **Coller l'invitation**. Le champ d'adresse accepte aussi le lien entier.
+- **Sur iPhone et iPad**, l'application installée ne voit rien de ce que Safari a
+  ouvert. Elle s'installe donc avant tout : le lien ouvert dans un navigateur ne
+  montre que les gestes d'installation, et l'icône créée ouvre l'invitation
+  elle-même. Mécanisme : au moment d'« Ajouter », l'adresse de la page porte le
+  jeton dans ses paramètres (`?invitation=…`) et son fragment, et le manifeste servi
+  à iOS (`manifest-ios.webmanifest`) n'a pas de `start_url` — avec, iOS ouvrirait
+  l'icône sur une adresse fixe, sans l'invitation. Conséquence sur la discrétion :
+  cette adresse, jeton compris, est demandée une fois à l'hébergeur de la page à la
+  première ouverture de l'icône, là où le fragment seul ne quittait jamais
+  l'appareil. Le champ d'adresse accepte toujours le lien entier, pour les cas où
+  l'icône a été créée sans invitation.
 
 Ce que l'application fait du code : elle ne l'envoie jamais tel quel, mais un
 jeton calculé à partir de lui. Pour les lectures, Apps Script n'accepte que des
@@ -325,29 +333,38 @@ Rien d'autre à faire : le site est statique, il n'y a ni build ni dépendance.
 
 ## 3. Sur le téléphone de chaque personne
 
-**Ordre à respecter : installer d'abord, configurer ensuite.** Cause : une
-application ajoutée à l'écran d'accueil garde ses données à part de celles du
-navigateur. Conséquence : ce qu'on a saisi dans le navigateur (adresse du script,
-code, nom) n'y est pas retrouvé, il faudrait tout ressaisir.
+**iPhone et iPad : installer d'abord, l'application l'impose.** Cause : une
+application ajoutée à l'écran d'accueil garde ses données à part de celles de
+Safari. Conséquence : ouvert dans un navigateur, BrainstO. ne montre que les gestes
+d'installation — rien à saisir, donc rien à ressaisir — et l'icône créée s'ouvre
+déjà sur l'invitation.
 
-1. Ouvrir l'adresse du site **dans le navigateur lui-même**. Un lien reçu dans
-   WhatsApp, Instagram, Messenger, Gmail ou Teams s'ouvre dans une fenêtre
-   intégrée à cette application : on n'y installe rien et le stockage peut n'y
-   être que provisoire. En sortir avec le menu de la fenêtre (« Ouvrir dans
-   Safari », « Ouvrir dans le navigateur » ou l'équivalent).
-2. **Installer l'application** (facultatif mais recommandé) :
-   - iPhone, Safari : bouton *Partager* → **Sur l'écran d'accueil** ;
-   - Android, Chrome : menu ⋮ → **Installer l'application** ;
-   - Android, Samsung Internet : menu ≡ → **Ajouter la page à** → **Écran
-     d'accueil** ;
-   - Android, Firefox : menu ⋮ → **Installer**.
+1. Ouvrir le lien d'invitation (ou l'adresse du site). Dans Safari, ou dans la
+   fenêtre intégrée de WhatsApp (iOS 17 et plus) : bouton *Partager* → **Sur l'écran
+   d'accueil** → **Ajouter**. Une fenêtre qui n'a pas cette option (Instagram,
+   Facebook, iPhone plus ancien) demande d'ouvrir d'abord le lien dans Safari ;
+   l'écran propose de copier le lien.
+2. **Ouvrir BrainstO. depuis la nouvelle icône** : saisir le **code d'accès** s'il
+   y en a un, puis son **nom**. Sans lien d'invitation, coller l'**adresse du
+   script** (celle qui se termine par `/exec`) à la place.
+
+**Android : dans le navigateur, puis installer si on le souhaite.** L'application
+installée partage la mémoire du navigateur : ce qui a été saisi y est retrouvé.
+
+1. Ouvrir le lien **dans le navigateur lui-même**. Un lien reçu dans Instagram,
+   Messenger, Gmail ou Teams s'ouvre dans une fenêtre intégrée à cette
+   application : rien ne s'y installe et le stockage peut n'y être que provisoire.
+   En sortir avec le menu de la fenêtre (« Ouvrir dans le navigateur » ou
+   l'équivalent).
+2. Saisir le **code d'accès** s'il y en a un, puis son **nom** (sans lien
+   d'invitation : coller d'abord l'adresse du script).
+3. **Installer l'application** (facultatif) : Réglages → **Installer
+   l'application**, ou dans le navigateur :
+   - Chrome : menu ⋮ → **Installer l'application** ;
+   - Samsung Internet : menu ≡ → **Ajouter la page à** → **Écran d'accueil** ;
+   - Firefox : menu ⋮ → **Installer**.
 
    Les libellés exacts varient d'une version de navigateur à l'autre.
-3. **Ouvrir l'application depuis son icône** sur l'écran d'accueil. Au premier
-   lancement, dans l'application installée :
-   - coller l'**adresse du script** (celle qui se termine par `/exec`) ;
-   - saisir le **code d'accès** s'il y en a un ;
-   - choisir son **nom**.
 
 L'application vérifie tout de suite l'adresse et le code : un code erroné est
 signalé immédiatement.
