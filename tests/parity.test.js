@@ -509,7 +509,7 @@ tests.push(() => check("Le rejeu d'un état complet est stable (ensureShape idem
 tests.push(() => check("Limites de saisie conformes à la spécification", () => {
   equal(Core.LIMITS, {
     name: 50, topicTitle: 150, topicDescription: 3000, message: 3000,
-    proposalTitle: 200, proposalDescription: 3000, conclusion: 5000, idea: 12000
+    proposalTitle: 200, proposalDescription: 3000, conclusion: 5000, idea: 2000
   });
 }));
 

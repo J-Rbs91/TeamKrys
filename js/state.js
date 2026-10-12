@@ -20,7 +20,7 @@
     proposalTitle: 200,
     proposalDescription: 3000,
     conclusion: 5000,
-    idea: 12000
+    idea: 2000
   };
 
   /* ⚠️ Liste partagée avec le backend : toute modification doit être reportée
