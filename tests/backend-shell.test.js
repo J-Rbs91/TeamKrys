@@ -769,6 +769,14 @@ check("boîte à idées : l'idée va dans un fichier À PART (référence + text
   assert(JSON.stringify(r).indexOf("Moins de réunions") < 0, "la réponse au dépôt ne doit pas renvoyer l'idée");
 });
 
+check("boîte à idées : un dépôt garde jusqu'à 12 000 caractères, le reste est coupé", () => {
+  const be = fresh();
+  equal(be.post(idea("a1", "idee-1", "x".repeat(12000))).ok, true, "dépôt de 12 000 caractères accepté");
+  equal(be.post(idea("a2", "idee-2", "y".repeat(12500))).ok, true, "dépôt plus long accepté puis coupé");
+  const box = boxOf(be);
+  equal(box.ideas.map(i => i.text.length), [12000, 12000], "chaque texte gardé fait 12 000 caractères au plus");
+});
+
 check("boîte à idées : une idée signée est refusée ; un renvoi (réponse perdue) n'ajoute rien ; une panne Drive de la boîte laisse l'action en file", () => {
   const be = fresh();
   const signed = be.post(idea("a1", "idee-1", "Signée", "u1"));

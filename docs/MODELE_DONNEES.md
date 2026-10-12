@@ -410,7 +410,7 @@ Trois scénarios, à ne pas confondre. Appliquer le premier qui suffit.
 | Titre de proposition | 200 |
 | Description de proposition | 3000 |
 | Conclusion | 5000 |
-| Dépôt dans Pandore | 2000 |
+| Dépôt dans Pandore | 12000 |
 
 Les identifiants (`actorId`, `participantId`, `topicId`, `messageId`, `proposalId`,
 `conclusionId`, `quoteId`, `branchRootId`, `ideaId` et l'`id` d'une action) ont **120 caractères au plus** : au

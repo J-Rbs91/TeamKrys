@@ -11,7 +11,7 @@
 var ACCESS_CODE = "";
 var DATA_FILE_ID = "";
 var PW_SALT = "brainsto.v1";
-var BACKEND_VERSION = "brainsto-backend-1.4.2";
+var BACKEND_VERSION = "brainsto-backend-1.4.3";
 
 var FILE_NAME = "brainsto-data.json";
 var FOLDER_NAME = "BrainstO.";
@@ -43,7 +43,7 @@ var LIMITS = {
   proposalTitle: 200,
   proposalDescription: 3000,
   conclusion: 5000,
-  idea: 2000
+  idea: 12000
 };
 var REACTIONS = ["👌", "💪", "🤏", "👎", "💩"];
 var TOPIC_STATUSES = ["open", "ready", "closed", "archived"];
