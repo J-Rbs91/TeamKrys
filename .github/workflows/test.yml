@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded PR runs; preserve every main validation for deployed state.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   node:
     runs-on: ubuntu-latest
